@@ -1,0 +1,7 @@
+/// Consent-gated local peer connectivity: authenticated envelopes,
+/// degraded-mode transport adapter, opt-in mesh message processing.
+library;
+
+export 'src/authenticated_envelope.dart';
+export 'src/device_link_adapter.dart';
+export 'src/media_frame.dart';

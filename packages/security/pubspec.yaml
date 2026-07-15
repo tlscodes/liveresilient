@@ -1,0 +1,9 @@
+name: security
+description: >-
+  Device identity (Ed25519 via an audited-crypto adapter, TOFU pinning,
+  safety numbers) and mandatory log redaction.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"

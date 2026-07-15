@@ -1,0 +1,18 @@
+name: voice_call_kit_v2_workspace
+description: >-
+  Melos-style Dart/Flutter monorepo for VoiceCallKit v2 — a
+  standards-based resilient calling stack. This root package only anchors
+  the workspace; all code lives in packages/ and apps/.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+# Workspace management (melos-style):
+#   dart pub global activate melos
+#   melos bootstrap        # links packages/* and apps/* via path deps
+#   melos run analyze      # dart analyze across all packages
+#   melos run guard        # dart run tool/architecture_guard.dart
+dev_dependencies:
+  melos: ^6.0.0
