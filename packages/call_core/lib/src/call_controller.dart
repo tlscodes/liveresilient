@@ -1031,10 +1031,7 @@ final class CallController {
           return;
         }
         await task();
-      }).catchError((Object e, StackTrace s) {
-        // ignore: avoid_print
-        print('DEBUG swallowed error: $e\n$s');
-      }),
+      }).catchError((Object _, StackTrace __) {}),
     );
   }
 
