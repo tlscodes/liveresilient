@@ -1,0 +1,26 @@
+name: loopback_integration
+description: >-
+  End-to-end tests exercising the full stack over REAL TLS WebSocket
+  sockets: two CallControllers, real SignalingClients, a real
+  SignalingRelayServer, and a handshaking fake media session. The first
+  place the stack meets real sockets instead of in-memory fakes.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dev_dependencies:
+  test: ^1.25.0
+  call_core:
+    path: ../packages/call_core
+  signaling:
+    path: ../packages/signaling
+  call_signaling_adapter:
+    path: ../packages/call_signaling_adapter
+  signaling_server:
+    path: ../server/signaling_server
+  security:
+    path: ../packages/security

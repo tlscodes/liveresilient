@@ -19,3 +19,6 @@ pubspec.lock
 .backups/
 *.bak
 *.tar.gz
+
+# Generated dev TLS certs (signaling_server)
+.dev-certs/
