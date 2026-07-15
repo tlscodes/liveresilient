@@ -1,0 +1,21 @@
+name: call_signaling_adapter
+description: >-
+  Bridges the transport-agnostic call_core interfaces (CallSignaling,
+  CallTransport) onto the concrete signaling package's SignalingClient,
+  keeping call_core and signaling free of any dependency on each other.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  call_core:
+    path: ../call_core
+  signaling:
+    path: ../signaling
+
+dev_dependencies:
+  test: ^1.25.0

@@ -14,9 +14,12 @@ environment:
 workspace:
   - packages/adaptive_transport
   - packages/call_core
+  - packages/call_signaling_adapter
   - packages/device_link
   - packages/media_webrtc
   - packages/privacy_telemetry
   - packages/security
   - packages/signaling
   - packages/signed_config
+  - server/signaling_server
+  - integration_test
