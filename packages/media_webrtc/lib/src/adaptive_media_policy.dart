@@ -130,7 +130,7 @@ class AdaptiveMediaPolicyConfig {
   /// bitrate by this headroom factor.
   final double upgradeBandwidthHeadroom;
 
-  const AdaptiveMediaPolicyConfig({
+  AdaptiveMediaPolicyConfig({
     this.lossDowngradeThreshold = 0.05,
     this.lossSevereThreshold = 0.20,
     this.rttDowngradeThresholdMs = 600,
@@ -138,7 +138,77 @@ class AdaptiveMediaPolicyConfig {
     this.cleanSamplesToUpgrade = 8,
     this.lossCleanThreshold = 0.02,
     this.upgradeBandwidthHeadroom = 1.25,
-  });
+  }) {
+    _validate();
+  }
+
+  /// Validates thresholds/counts are within sane bounds and that the loss
+  /// ladder is internally consistent: a sample must clear the "clean"
+  /// threshold before it can clear the (higher) "downgrade" threshold,
+  /// which in turn must not exceed the "severe" threshold — otherwise the
+  /// state machine in [AdaptiveMediaPolicy] could classify a sample as both
+  /// clean and bad, or skip the two-step severe downgrade entirely.
+  void _validate() {
+    if (lossDowngradeThreshold < 0 || lossDowngradeThreshold > 1) {
+      throw RangeError.range(
+        lossDowngradeThreshold,
+        0,
+        1,
+        'lossDowngradeThreshold',
+      );
+    }
+    if (lossSevereThreshold < 0 || lossSevereThreshold > 1) {
+      throw RangeError.range(lossSevereThreshold, 0, 1, 'lossSevereThreshold');
+    }
+    if (lossCleanThreshold < 0 || lossCleanThreshold > 1) {
+      throw RangeError.range(lossCleanThreshold, 0, 1, 'lossCleanThreshold');
+    }
+    if (rttDowngradeThresholdMs < 1) {
+      throw RangeError.range(
+        rttDowngradeThresholdMs,
+        1,
+        null,
+        'rttDowngradeThresholdMs',
+      );
+    }
+    if (badSamplesToDowngrade < 1) {
+      throw RangeError.range(
+        badSamplesToDowngrade,
+        1,
+        null,
+        'badSamplesToDowngrade',
+      );
+    }
+    if (cleanSamplesToUpgrade < 1) {
+      throw RangeError.range(
+        cleanSamplesToUpgrade,
+        1,
+        null,
+        'cleanSamplesToUpgrade',
+      );
+    }
+    if (upgradeBandwidthHeadroom <= 0) {
+      throw ArgumentError.value(
+        upgradeBandwidthHeadroom,
+        'upgradeBandwidthHeadroom',
+        'must be > 0',
+      );
+    }
+    if (lossCleanThreshold >= lossDowngradeThreshold) {
+      throw ArgumentError.value(
+        lossCleanThreshold,
+        'lossCleanThreshold',
+        'must be < lossDowngradeThreshold',
+      );
+    }
+    if (lossDowngradeThreshold > lossSevereThreshold) {
+      throw ArgumentError.value(
+        lossDowngradeThreshold,
+        'lossDowngradeThreshold',
+        'must be <= lossSevereThreshold',
+      );
+    }
+  }
 }
 
 /// A recommendation emitted by the policy when the profile changes.
@@ -169,8 +239,9 @@ class AdaptiveMediaPolicy {
 
   AdaptiveMediaPolicy({
     MediaProfile initialProfile = MediaProfile.medium,
-    this.config = const AdaptiveMediaPolicyConfig(),
-  }) : _profile = initialProfile;
+    AdaptiveMediaPolicyConfig? config,
+  }) : config = config ?? AdaptiveMediaPolicyConfig(),
+       _profile = initialProfile;
 
   MediaProfile get profile => _profile;
 

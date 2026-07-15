@@ -14,6 +14,8 @@ library;
 
 import 'dart:async';
 
+import 'package:clock/clock.dart' hide Clock;
+
 import 'circuit_breaker.dart';
 import 'transport_channel.dart';
 
@@ -133,7 +135,7 @@ class PathSelector {
       'rttMs': r?.rttMs ?? c.health.rttMs,
       'jitterMs': c.health.jitterMs,
       'status': r?.status.name,
-      'timestamp': DateTime.now().toIso8601String(),
+      'timestamp': clock.now().toIso8601String(),
     });
   }
 
@@ -160,7 +162,13 @@ class PathSelector {
       i < ranked.length && attempts < config.maxFailover;
       i += fanout
     ) {
-      final batch = ranked.skip(i).take(fanout).toList();
+      // Clamp the batch to the remaining attempt budget: fanout alone can
+      // overshoot maxFailover on the last round (e.g. maxFailover=3,
+      // fanout=2 would otherwise attempt 4). The documented contract is
+      // "at most maxFailover attempts total".
+      final remaining = config.maxFailover - attempts;
+      final batchSize = fanout < remaining ? fanout : remaining;
+      final batch = ranked.skip(i).take(batchSize).toList();
       attempts += batch.length;
 
       final outcomes = await Future.wait(
