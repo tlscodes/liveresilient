@@ -15,6 +15,8 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
+
 import 'signal_envelope.dart';
 
 /// Persistence contract for pending envelopes. Implementations must be
@@ -95,7 +97,7 @@ class ReliableOutbox {
     if (store == null) return;
     for (final envelope in await store.loadAll()) {
       if (_pending.containsKey(envelope.messageId)) continue;
-      final entry = _PendingEntry(envelope, DateTime.now());
+      final entry = _PendingEntry(envelope, clock.now());
       _pending[envelope.messageId] = entry;
       _scheduleAttempt(entry, delay: Duration.zero);
     }
@@ -117,7 +119,7 @@ class ReliableOutbox {
       return _pending[envelope.messageId]!.completer.future;
     }
 
-    final entry = _PendingEntry(envelope, DateTime.now());
+    final entry = _PendingEntry(envelope, clock.now());
     _pending[envelope.messageId] = entry;
     await _store?.save(envelope);
     _scheduleAttempt(entry, delay: Duration.zero);
@@ -164,7 +166,7 @@ class ReliableOutbox {
       return;
     }
 
-    final age = DateTime.now().difference(entry.enqueuedAt);
+    final age = clock.now().difference(entry.enqueuedAt);
     if (age >= config.messageLifetime) {
       _pending.remove(entry.envelope.messageId);
       await _store?.remove(entry.envelope.messageId);

@@ -20,6 +20,8 @@ library;
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
+
 import 'reliable_outbox.dart';
 import 'signal_envelope.dart';
 
@@ -145,7 +147,7 @@ class SignalingClient {
       callId: callId,
       senderKeyId: localKeyId,
       type: type,
-      createdAtMs: DateTime.now().millisecondsSinceEpoch,
+      createdAtMs: clock.now().millisecondsSinceEpoch,
       payload: payload,
     );
     return _outbox.enqueue(envelope);
@@ -235,7 +237,7 @@ class SignalingClient {
       return; // Malformed frames are dropped, never crash the session.
     }
 
-    final ageMs = DateTime.now().millisecondsSinceEpoch - envelope.createdAtMs;
+    final ageMs = clock.now().millisecondsSinceEpoch - envelope.createdAtMs;
     if (ageMs > config.maxEnvelopeAge.inMilliseconds) {
       return;
     }
@@ -267,7 +269,7 @@ class SignalingClient {
     final ack = received.buildAck(
       ackSenderKeyId: localKeyId,
       sequence: _outgoingSequence,
-      nowMs: DateTime.now().millisecondsSinceEpoch,
+      nowMs: clock.now().millisecondsSinceEpoch,
     );
     try {
       await _transmitFrame(ack); // Fire-and-forget; sender retries anyway.
@@ -288,7 +290,7 @@ class SignalingClient {
         callId: 'session',
         senderKeyId: localKeyId,
         type: SignalType.heartbeat,
-        createdAtMs: DateTime.now().millisecondsSinceEpoch,
+        createdAtMs: clock.now().millisecondsSinceEpoch,
         payload: const {},
       );
       _transmitFrame(heartbeat).catchError((Object _) => false);

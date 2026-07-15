@@ -22,6 +22,8 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:clock/clock.dart';
+
 import 'endpoint_manifest.dart';
 
 /// Adapter over an audited Ed25519 implementation.
@@ -156,7 +158,7 @@ class ManifestVerifier {
     required int lastAcceptedRevision,
     DateTime? now,
   }) async {
-    final clock = (now ?? DateTime.now()).toUtc();
+    final effectiveNow = (now ?? clock.now()).toUtc();
 
     final EndpointManifest manifest;
     try {
@@ -200,13 +202,13 @@ class ManifestVerifier {
 
     // Time-window checks run only after the signature is proven, so an
     // attacker cannot learn anything from differential timing of rejects.
-    if (clock.isBefore(manifest.issuedAt)) {
+    if (effectiveNow.isBefore(manifest.issuedAt)) {
       return const ManifestRejected(
         ManifestRejection.notYetValid,
         'Manifest issuedAt is in the future.',
       );
     }
-    if (manifest.isExpiredAt(clock)) {
+    if (manifest.isExpiredAt(effectiveNow)) {
       return const ManifestRejected(
         ManifestRejection.expired,
         'Manifest validity window has ended.',
