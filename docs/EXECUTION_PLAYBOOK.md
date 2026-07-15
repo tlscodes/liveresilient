@@ -111,6 +111,7 @@ Each row: the phase's disjoint targets (→ parallel surgeon+tester pairs) and t
 ### Phase 3 — First runnable vertical slice
 - Pairs: `apps/reference_app` · real `WebRtcMediaAdapter` · minimal signaling server · coturn config · call invite/accept/reject/hangup.
 - Gate: 100 setup/teardown cycles no leak · 10× 30-min calls no state lock · real 2-device call · TURN fallback proven · 0 SDP/token/key in logs.
+- **STATUS 2026-07-15 — loopback mode active; 2 dated blockers:** (1) full Xcode not installed (only CommandLineTools) → `flutter_webrtc` native build blocked; user action: install Xcode from the App Store, then `sudo xcode-select -s /Applications/Xcode.app`. (2) real-2-device gate item needs physical devices. Everything pure-Dart (signaling server, adapters, E2E signaling loopback, coturn config) proceeds now; media loopback + device call run in the scheduled slot after Xcode/devices arrive.
 
 ### Phase 4 — Security + identity base
 - Pairs: verifier · signer · identity key engine · manifest verification · anti-replay (nonce+window) · anti-rollback (one pair each). Keys in Keystore/Keychain.
