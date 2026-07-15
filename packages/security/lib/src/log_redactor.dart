@@ -31,10 +31,7 @@ class LogRedactor {
       RegExp(r'([a-zA-Z][a-zA-Z0-9+.-]*://)([^/@\s]+)@'),
       (m) => '${m[1]}[redacted-userinfo]@',
     ),
-    _RedactionRule(
-      RegExp(r'\?[^\s"]+'),
-      (_) => '?[redacted-query]',
-    ),
+    _RedactionRule(RegExp(r'\?[^\s"]+'), (_) => '?[redacted-query]'),
 
     // Bearer / token-style credentials.
     _RedactionRule(
@@ -52,31 +49,27 @@ class LogRedactor {
       (_) => '[email]',
     ),
 
-    // International phone numbers (7+ digits, optional +, separators).
-    _RedactionRule(
-      RegExp(r'\+?\d[\d\s().-]{6,}\d'),
-      (_) => '[phone]',
-    ),
+    // IPv4, including in candidate lines and host:port forms. Runs before
+    // the phone-number rule below so a dotted-quad (e.g. 192.168.1.42)
+    // is never mislabeled as a phone number.
+    _RedactionRule(RegExp(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'), (_) => '[ipv4]'),
 
-    // IPv4, including in candidate lines and host:port forms.
+    // IPv6 (compressed and full forms), bracketed or bare. Also runs
+    // before the phone-number rule for the same reason.
     _RedactionRule(
-      RegExp(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'),
-      (_) => '[ipv4]',
-    ),
-
-    // IPv6 (compressed and full forms), bracketed or bare.
-    _RedactionRule(
-      RegExp(
-        r'\[?\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{0,4}\b\]?',
-      ),
+      RegExp(r'\[?\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{0,4}\b\]?'),
       (_) => '[ipv6]',
     ),
 
+    // International phone numbers (7+ digits, optional +, separators).
+    // Excludes '.' from the separator class so a dotted-quad IPv4 address
+    // can never match here (it is already redacted by the IPv4 rule
+    // above); real phone formats like "+49 (30) 1234-5678" still match
+    // via spaces, parens, and hyphens.
+    _RedactionRule(RegExp(r'\+?\d[\d\s()-]{6,}\d'), (_) => '[phone]'),
+
     // Long base64/hex blobs (32+ chars): keys, signatures, session ids.
-    _RedactionRule(
-      RegExp(r'\b[A-Za-z0-9+/_-]{32,}={0,2}\b'),
-      (_) => '[blob]',
-    ),
+    _RedactionRule(RegExp(r'\b[A-Za-z0-9+/_-]{32,}={0,2}\b'), (_) => '[blob]'),
   ];
 
   /// Returns a redacted copy of [line]. Never throws: on any internal
@@ -130,10 +123,7 @@ class RedactingLogger {
   final LogSink _sink;
   final LogLevel minimumLevel;
 
-  const RedactingLogger(
-    this._sink, {
-    this.minimumLevel = LogLevel.info,
-  });
+  const RedactingLogger(this._sink, {this.minimumLevel = LogLevel.info});
 
   void debug(String message) => _log(LogLevel.debug, message);
   void info(String message) => _log(LogLevel.info, message);

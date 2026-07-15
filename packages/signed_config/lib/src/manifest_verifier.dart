@@ -137,8 +137,8 @@ class ManifestVerifier {
   ManifestVerifier({
     required List<PinnedManifestKey> pinnedKeys,
     required Ed25519Verifier crypto,
-  })  : _crypto = crypto,
-        _keysById = {for (final k in pinnedKeys) k.keyId: k} {
+  }) : _crypto = crypto,
+       _keysById = {for (final k in pinnedKeys) k.keyId: k} {
     if (pinnedKeys.isEmpty) {
       throw ArgumentError('At least one pinned key is required.');
     }

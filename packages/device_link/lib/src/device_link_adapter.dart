@@ -60,7 +60,8 @@ class DeviceLinkAdapter implements TransportChannel {
   final EnvelopeValidator _validator;
   final int Function() _nowMs;
 
-  final _inboundController = StreamController<AuthenticatedEnvelope>.broadcast();
+  final _inboundController =
+      StreamController<AuthenticatedEnvelope>.broadcast();
   StreamSubscription<List<int>>? _frameSubscription;
 
   bool _degradedModeActive = false;
@@ -75,19 +76,19 @@ class DeviceLinkAdapter implements TransportChannel {
     required EnvelopeSigner signer,
     required EnvelopeValidator validator,
     int Function()? nowMs,
-  })  : _link = link,
-        _consent = consent,
-        _signer = signer,
-        _validator = validator,
-        _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
-        health = ChannelHealth(
-          // Local links are short-range and lossy: modest prior, decent
-          // bandwidth, low starting RTT.
-          reliabilityPrior: 0.6,
-          bandwidth: 0.5,
-          rttMs: 40,
-          jitterMs: 15,
-        ) {
+  }) : _link = link,
+       _consent = consent,
+       _signer = signer,
+       _validator = validator,
+       _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
+       health = ChannelHealth(
+         // Local links are short-range and lossy: modest prior, decent
+         // bandwidth, low starting RTT.
+         reliabilityPrior: 0.6,
+         bandwidth: 0.5,
+         rttMs: 40,
+         jitterMs: 15,
+       ) {
     _frameSubscription = _link.incomingFrames.listen(
       _onFrame,
       onError: (Object _) {},
@@ -109,8 +110,7 @@ class DeviceLinkAdapter implements TransportChannel {
   }
 
   /// Whether policy currently allows this path to carry traffic.
-  bool get activated =>
-      !_disposed && _consent.granted && _degradedModeActive;
+  bool get activated => !_disposed && _consent.granted && _degradedModeActive;
 
   @override
   Future<bool> probe() async {
@@ -168,10 +168,7 @@ class DeviceLinkAdapter implements TransportChannel {
       return; // Malformed frames are dropped silently.
     }
 
-    final validation = await _validator.validate(
-      envelope,
-      nowMs: _nowMs(),
-    );
+    final validation = await _validator.validate(envelope, nowMs: _nowMs());
     if (validation != EnvelopeValidation.valid) {
       return; // Unauthenticated / replayed / stale frames never surface.
     }

@@ -7,12 +7,16 @@ version: 2.0.0
 publish_to: none
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ^3.12.0
 
-# Workspace management (melos-style):
-#   dart pub global activate melos
-#   melos bootstrap        # links packages/* and apps/* via path deps
-#   melos run analyze      # dart analyze across all packages
-#   melos run guard        # dart run tool/architecture_guard.dart
-dev_dependencies:
-  melos: ^6.0.0
+# Native pub workspace: root `dart pub get` (or `flutter pub get`)
+# resolves every member package below in one shared lockfile.
+workspace:
+  - packages/adaptive_transport
+  - packages/call_core
+  - packages/device_link
+  - packages/media_webrtc
+  - packages/privacy_telemetry
+  - packages/security
+  - packages/signaling
+  - packages/signed_config

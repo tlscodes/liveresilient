@@ -85,15 +85,19 @@ class CircuitBreaker {
   int _openCycles = 0;
   DateTime? _openedAt;
 
-  CircuitBreaker({
-    this.config = const CircuitBreakerConfig(),
-    Clock? clock,
-  }) : _clock = clock ?? DateTime.now {
+  CircuitBreaker({this.config = const CircuitBreakerConfig(), Clock? clock})
+    : _clock = clock ?? DateTime.now {
     config._validate();
   }
 
+  /// Current state as a pure view: reading it never mutates the breaker
+  /// (safe for telemetry/logging). When the open cool-down has elapsed the
+  /// state reads as [CircuitState.halfOpen]; the actual transition is
+  /// performed by [allowsRequest] / [recordSuccess] / [recordFailure].
   CircuitState get state {
-    _maybeTransitionToHalfOpen();
+    if (_state == CircuitState.open && _cooldownElapsed()) {
+      return CircuitState.halfOpen;
+    }
     return _state;
   }
 
@@ -145,14 +149,11 @@ class CircuitBreaker {
           _reset();
         }
       case CircuitState.open:
-        // A success while open (e.g. an in-flight request that started
-        // before the trip) is a strong recovery signal: move to half-open
-        // and count it.
-        _enterHalfOpen();
-        _halfOpenSuccesses = 1;
-        if (_halfOpenSuccesses >= config.halfOpenSuccessesToClose) {
-          _reset();
-        }
+        // A success while open comes from a request that started BEFORE the
+        // trip; it says nothing about the path after its rest period. It
+        // must not bypass the cool-down — recovery is proven only by
+        // half-open probes admitted through allowsRequest().
+        break;
     }
   }
 
@@ -199,11 +200,15 @@ class CircuitBreaker {
     _openedAt = null;
   }
 
+  bool _cooldownElapsed() {
+    final openedAt = _openedAt;
+    if (openedAt == null) return false;
+    return _clock().difference(openedAt) >= currentOpenDuration;
+  }
+
   void _maybeTransitionToHalfOpen() {
     if (_state != CircuitState.open) return;
-    final openedAt = _openedAt;
-    if (openedAt == null) return;
-    if (_clock().difference(openedAt) >= currentOpenDuration) {
+    if (_cooldownElapsed()) {
       _enterHalfOpen();
     }
   }

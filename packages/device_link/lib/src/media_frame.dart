@@ -40,8 +40,8 @@ class MediaFrame {
     required this.hopCount,
     required List<int> ciphertext,
     required List<int> signature,
-  })  : ciphertext = Uint8List.fromList(ciphertext),
-        signature = Uint8List.fromList(signature);
+  }) : ciphertext = Uint8List.fromList(ciphertext),
+       signature = Uint8List.fromList(signature);
 
   bool isExpiredAt(int nowMs) => nowMs >= expiresAtMs;
 
@@ -55,9 +55,7 @@ abstract interface class MediaFrameAuthenticator {
   Future<bool> verify(MediaFrame envelope);
 
   /// Returns a new authenticated envelope with hopCount incremented.
-  Future<MediaFrame> createForwardedEnvelope(
-    MediaFrame envelope,
-  );
+  Future<MediaFrame> createForwardedEnvelope(MediaFrame envelope);
 }
 
 abstract interface class MeshBroadcaster {
@@ -80,9 +78,7 @@ class MeshSeenCache {
   final LinkedHashMap<String, int> _expiresByMessageId =
       LinkedHashMap<String, int>();
 
-  MeshSeenCache({
-    this.maximumEntries = 8192,
-  }) : assert(maximumEntries > 0);
+  MeshSeenCache({this.maximumEntries = 8192}) : assert(maximumEntries > 0);
 
   /// Returns true when the message ID has not been seen.
   bool markIfNew({
@@ -102,9 +98,7 @@ class MeshSeenCache {
     _expiresByMessageId[messageId] = expiresAtMs;
 
     while (_expiresByMessageId.length > maximumEntries) {
-      _expiresByMessageId.remove(
-        _expiresByMessageId.keys.first,
-      );
+      _expiresByMessageId.remove(_expiresByMessageId.keys.first);
     }
 
     return true;
@@ -183,8 +177,7 @@ class MeshMessageProcessor {
       return MeshDisposition.hopLimitReached;
     }
 
-    final forwarded =
-        await authenticator.createForwardedEnvelope(envelope);
+    final forwarded = await authenticator.createForwardedEnvelope(envelope);
 
     if (forwarded.hopCount != envelope.hopCount + 1 ||
         forwarded.maxHops != envelope.maxHops ||
@@ -200,10 +193,7 @@ class MeshMessageProcessor {
     return MeshDisposition.deliveredAndForwarded;
   }
 
-  bool _hasValidBounds(
-    MediaFrame envelope,
-    int nowMs,
-  ) {
+  bool _hasValidBounds(MediaFrame envelope, int nowMs) {
     if (envelope.version != 1 ||
         envelope.messageId.isEmpty ||
         envelope.originKeyId.isEmpty ||
@@ -219,8 +209,7 @@ class MeshMessageProcessor {
       return false;
     }
 
-    if (envelope.expiresAtMs - envelope.createdAtMs >
-        maximumLifetimeMs) {
+    if (envelope.expiresAtMs - envelope.createdAtMs > maximumLifetimeMs) {
       return false;
     }
 
