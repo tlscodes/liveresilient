@@ -190,8 +190,8 @@ critical findings closed.
 - No domain fronting or non-standard proxy engine in core (fragile / policy-violating).
 - No custom cryptography.
 - No group-call E2EE claim before audited SFrame/MLS.
-- Dedicated censorship-resistant transport (DPI evasion) is **out of core** — if ever
-  built, it is a separate, independently reviewed plugin, not part of this plan.
+- A dedicated pluggable-transport plugin for heavily-filtered networks is **out of core**
+  — if ever built, it is a separate, independently reviewed module, not part of this plan.
 
 ## 9. Open gaps to close before Phase 3 (from the v3 review)
 1. **User addressing / discovery model** — how two users find each other (registration,
