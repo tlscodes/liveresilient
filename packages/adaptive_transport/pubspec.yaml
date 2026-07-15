@@ -1,0 +1,9 @@
+name: adaptive_transport
+description: >-
+  Multi-path transport abstraction with EWMA health scoring, adaptive
+  routing, fanout redundancy, and circuit breaking. Standards-based only.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"

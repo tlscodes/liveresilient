@@ -1,0 +1,9 @@
+name: privacy_telemetry
+description: >-
+  Opt-in telemetry with a fixed event allowlist, on-device aggregation,
+  and aggregate-only export. No identifiers, no raw events.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"

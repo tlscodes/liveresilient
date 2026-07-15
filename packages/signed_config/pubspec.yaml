@@ -1,0 +1,10 @@
+name: signed_config
+description: >-
+  Signed HTTPS endpoint manifest: model, Ed25519 signature verification
+  against build-pinned keys, and a verified cache with rollback protection
+  and last-known-good fallback.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"

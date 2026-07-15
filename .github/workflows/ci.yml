@@ -1,0 +1,66 @@
+name: CI
+
+# The mechanical gate every sandwich iteration passes through.
+# Runs Flutter in the cloud, so no local Dart/Flutter is required to verify a PR.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Resolve workspace (native pub workspace)
+        run: flutter pub get
+
+      # ── Phase-1 exit gate mirrored as CI ────────────────────────────
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Static analysis (infos are fatal)
+        run: dart analyze --fatal-infos --fatal-warnings
+
+      - name: Tests (per package that has a test/ dir)
+        run: |
+          set -e
+          found=0
+          for d in packages/*/ apps/*/; do
+            if [ -d "${d}test" ]; then
+              echo "== testing ${d}"
+              (cd "$d" && flutter test)
+              found=1
+            fi
+          done
+          if [ "$found" = "0" ]; then
+            echo "No test/ directories yet — gate stays green; testers add teeth per phase."
+          fi
+
+      - name: Architecture guard
+        run: |
+          if [ -f tool/architecture_guard.dart ]; then
+            dart run tool/architecture_guard.dart
+          else
+            echo "architecture_guard not present yet — skipped."
+          fi
+
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret scan (block obvious secrets in diff)
+        run: |
+          if grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|AKIA[0-9A-Z]{16}|-----BEGIN PRIVATE KEY-----)' \
+             --include='*.dart' --include='*.yaml' --include='*.json' . ; then
+            echo "::error::possible secret committed"; exit 1
+          fi
+          echo "no obvious secrets found"

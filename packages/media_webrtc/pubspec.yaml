@@ -1,0 +1,9 @@
+name: media_webrtc
+description: >-
+  WebRTC media engine (DTLS-SRTP via the platform WebRTC stack), adaptive
+  media quality policy, and RTC stats sampling.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
