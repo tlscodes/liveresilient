@@ -1,28 +1,10 @@
 import 'dart:async';
-import 'dart:math';
+
+import 'call_state.dart';
+import 'reconnect_policy.dart';
+import 'validation.dart';
 
 enum CallRole { initiator, receiver }
-
-enum CallPhase {
-  idle,
-  connecting,
-  negotiating,
-  connected,
-  reconnecting,
-  ending,
-  ended,
-  failed,
-}
-
-enum CallEndReason {
-  localHangup,
-  remoteHangup,
-  reconnectExhausted,
-  protocolError,
-  mediaFailure,
-  signalingFailure,
-  disposed,
-}
 
 enum SessionDescriptionType { offer, answer }
 
@@ -35,20 +17,12 @@ enum MediaConnectionState {
   closed,
 }
 
-enum MediaSignalingState {
-  stable,
-  haveLocalOffer,
-  haveRemoteOffer,
-  closed,
-}
+enum MediaSignalingState { stable, haveLocalOffer, haveRemoteOffer, closed }
 
 enum TransportStatus { connecting, connected, disconnected, closed }
 
 final class SessionDescription {
-  SessionDescription({
-    required this.type,
-    required this.sdp,
-  }) {
+  SessionDescription({required this.type, required this.sdp}) {
     if (sdp.isEmpty || sdp.length > 1024 * 1024) {
       throw ArgumentError.value(sdp.length, 'sdp.length');
     }
@@ -66,11 +40,7 @@ final class SessionDescription {
 }
 
 final class IceCandidate {
-  IceCandidate({
-    required this.candidate,
-    this.sdpMid,
-    this.sdpMLineIndex,
-  }) {
+  IceCandidate({required this.candidate, this.sdpMid, this.sdpMLineIndex}) {
     final value = candidate;
     if (value != null) {
       if (value.isEmpty || value.length > 16 * 1024) {
@@ -159,7 +129,8 @@ final class RemoteIceCandidateEvent extends SignalingEvent {
 final class RemoteHangupEvent extends SignalingEvent {
   RemoteHangupEvent([this.reason]) {
     final value = reason;
-    if (value != null && (value.length > 256 || _containsControl(value))) {
+    if (value != null &&
+        (value.length > 256 || containsControlCharacters(value))) {
       throw ArgumentError.value(value, 'reason');
     }
   }
@@ -197,7 +168,8 @@ final class SendIceCandidateCommand extends SignalingCommand {
 final class SendHangupCommand extends SignalingCommand {
   SendHangupCommand([this.reason]) {
     final value = reason;
-    if (value != null && (value.length > 256 || _containsControl(value))) {
+    if (value != null &&
+        (value.length > 256 || containsControlCharacters(value))) {
       throw ArgumentError.value(value, 'reason');
     }
   }
@@ -220,10 +192,7 @@ abstract interface class CallTransport {
 abstract interface class CallSignaling {
   Stream<SignalingEvent> get events;
 
-  Future<void> start({
-    required String callId,
-    required CallRole role,
-  });
+  Future<void> start({required String callId, required CallRole role});
 
   Future<void> send(SignalingCommand command);
 
@@ -254,167 +223,8 @@ abstract interface class CallMediaSession {
   Future<void> stop();
 }
 
-final class ReconnectContext {
-  ReconnectContext({
-    required this.attempt,
-    required this.elapsed,
-    required this.cause,
-  }) {
-    if (attempt < 1) {
-      throw ArgumentError.value(attempt, 'attempt');
-    }
-    if (elapsed.isNegative) {
-      throw ArgumentError.value(elapsed, 'elapsed');
-    }
-  }
-
-  final int attempt;
-  final Duration elapsed;
-  final Object cause;
-}
-
-final class ReconnectDecision {
-  ReconnectDecision.retry(this.delay)
-      : shouldRetry = true,
-        reason = null {
-    if (delay.isNegative) {
-      throw ArgumentError.value(delay, 'delay');
-    }
-  }
-
-  ReconnectDecision.giveUp([this.reason])
-      : shouldRetry = false,
-        delay = Duration.zero {
-    final value = reason;
-    if (value != null && (value.length > 256 || _containsControl(value))) {
-      throw ArgumentError.value(value, 'reason');
-    }
-  }
-
-  final bool shouldRetry;
-  final Duration delay;
-  final String? reason;
-}
-
-abstract interface class ReconnectPolicy {
-  ReconnectDecision evaluate(ReconnectContext context);
-}
-
-final class ExponentialBackoffReconnectPolicy implements ReconnectPolicy {
-  ExponentialBackoffReconnectPolicy({
-    this.maxAttempts = 8,
-    this.baseDelay = const Duration(milliseconds: 500),
-    this.maxDelay = const Duration(seconds: 20),
-    this.maxElapsed = const Duration(minutes: 2),
-    Random? random,
-  }) : _random = random ?? Random() {
-    if (maxAttempts < 1) {
-      throw ArgumentError.value(maxAttempts, 'maxAttempts');
-    }
-    if (baseDelay.isNegative) {
-      throw ArgumentError.value(baseDelay, 'baseDelay');
-    }
-    if (maxDelay.isNegative || maxDelay < baseDelay) {
-      throw ArgumentError.value(maxDelay, 'maxDelay');
-    }
-    if (maxElapsed <= Duration.zero) {
-      throw ArgumentError.value(maxElapsed, 'maxElapsed');
-    }
-  }
-
-  final int maxAttempts;
-  final Duration baseDelay;
-  final Duration maxDelay;
-  final Duration maxElapsed;
-  final Random _random;
-
-  @override
-  ReconnectDecision evaluate(ReconnectContext context) {
-    if (context.attempt > maxAttempts || context.elapsed >= maxElapsed) {
-      return ReconnectDecision.giveUp('Reconnect budget exhausted');
-    }
-
-    var capMilliseconds = baseDelay.inMilliseconds;
-    for (var i = 1; i < context.attempt; i++) {
-      if (capMilliseconds >= maxDelay.inMilliseconds) {
-        capMilliseconds = maxDelay.inMilliseconds;
-        break;
-      }
-      capMilliseconds = min(
-        maxDelay.inMilliseconds,
-        capMilliseconds * 2,
-      );
-    }
-
-    if (capMilliseconds <= 0) {
-      return ReconnectDecision.retry(Duration.zero);
-    }
-
-    return ReconnectDecision.retry(
-      Duration(milliseconds: _random.nextInt(capMilliseconds + 1)),
-    );
-  }
-}
-
-final class CallState {
-  CallState({
-    required this.phase,
-    required this.sequence,
-    required this.changedAt,
-    this.reconnectAttempt = 0,
-    this.nextRetryAt,
-    this.endReason,
-    this.error,
-  }) {
-    if (sequence < 0) {
-      throw ArgumentError.value(sequence, 'sequence');
-    }
-    if (reconnectAttempt < 0) {
-      throw ArgumentError.value(reconnectAttempt, 'reconnectAttempt');
-    }
-    if (phase == CallPhase.reconnecting && reconnectAttempt < 1) {
-      throw ArgumentError(
-        'A reconnecting state requires reconnectAttempt >= 1',
-      );
-    }
-    if (phase != CallPhase.reconnecting && nextRetryAt != null) {
-      throw ArgumentError(
-        'nextRetryAt is only valid for reconnecting states',
-      );
-    }
-    if ((phase == CallPhase.ended || phase == CallPhase.failed) &&
-        endReason == null) {
-      throw ArgumentError(
-        'Terminal states require an end reason',
-      );
-    }
-    if (phase != CallPhase.ended &&
-        phase != CallPhase.failed &&
-        endReason != null) {
-      throw ArgumentError(
-        'endReason is only valid for terminal states',
-      );
-    }
-  }
-
-  final CallPhase phase;
-  final int sequence;
-  final DateTime changedAt;
-  final int reconnectAttempt;
-  final DateTime? nextRetryAt;
-  final CallEndReason? endReason;
-  final Object? error;
-
-  bool get isTerminal =>
-      phase == CallPhase.ended || phase == CallPhase.failed;
-}
-
 final class CallControllerException implements Exception {
-  const CallControllerException(
-    this.code,
-    this.message, {
-    this.cause,
-  });
+  const CallControllerException(this.code, this.message, {this.cause});
 
   final String code;
   final String message;
@@ -425,10 +235,8 @@ final class CallControllerException implements Exception {
 }
 
 final class CallProtocolException extends CallControllerException {
-  const CallProtocolException(
-    String message, {
-    Object? cause,
-  }) : super('protocol_error', message, cause: cause);
+  const CallProtocolException(String message, {Object? cause})
+    : super('protocol_error', message, cause: cause);
 }
 
 final class CallController {
@@ -442,20 +250,19 @@ final class CallController {
     this.operationTimeout = const Duration(seconds: 15),
     this.connectionTimeout = const Duration(seconds: 20),
     this.maxBufferedIceCandidates = 256,
-  })  : callId = _validateCallId(callId),
-        _state = CallState(
-          phase: CallPhase.idle,
-          sequence: 0,
-          changedAt: DateTime.now().toUtc(),
-        ) {
+  }) : callId = _validateCallId(callId),
+       _state = CallState(
+         phase: CallPhase.idle,
+         sequence: 0,
+         changedAt: DateTime.now().toUtc(),
+       ) {
     if (operationTimeout <= Duration.zero) {
       throw ArgumentError.value(operationTimeout, 'operationTimeout');
     }
     if (connectionTimeout <= Duration.zero) {
       throw ArgumentError.value(connectionTimeout, 'connectionTimeout');
     }
-    if (maxBufferedIceCandidates < 1 ||
-        maxBufferedIceCandidates > 4096) {
+    if (maxBufferedIceCandidates < 1 || maxBufferedIceCandidates > 4096) {
       throw ArgumentError.value(
         maxBufferedIceCandidates,
         'maxBufferedIceCandidates',
@@ -534,10 +341,10 @@ final class CallController {
   }
 
   Future<void> hangUp({String reason = 'hangup'}) {
-    if (reason.isEmpty || reason.length > 256 || _containsControl(reason)) {
-      return Future<void>.error(
-        ArgumentError.value(reason, 'reason'),
-      );
+    if (reason.isEmpty ||
+        reason.length > 256 ||
+        containsControlCharacters(reason)) {
+      return Future<void>.error(ArgumentError.value(reason, 'reason'));
     }
 
     return _enqueue<void>(() async {
@@ -595,11 +402,7 @@ final class CallController {
         onError: (Object error, StackTrace stackTrace) {
           final suppressed = _suppressChannelEvents;
           _enqueueEvent(
-            () => _handleChannelStreamError(
-              error,
-              stackTrace,
-              suppressed,
-            ),
+            () => _handleChannelStreamError(error, stackTrace, suppressed),
           );
         },
         onDone: () {
@@ -624,11 +427,7 @@ final class CallController {
         onError: (Object error, StackTrace stackTrace) {
           final suppressed = _suppressChannelEvents;
           _enqueueEvent(
-            () => _handleChannelStreamError(
-              error,
-              stackTrace,
-              suppressed,
-            ),
+            () => _handleChannelStreamError(error, stackTrace, suppressed),
           );
         },
         onDone: () {
@@ -733,11 +532,7 @@ final class CallController {
           );
       }
     } on CallProtocolException catch (error, stackTrace) {
-      await _fail(
-        CallEndReason.protocolError,
-        error,
-        stackTrace,
-      );
+      await _fail(CallEndReason.protocolError, error, stackTrace);
     } catch (error, stackTrace) {
       await _beginRecovery(error, stackTrace);
     }
@@ -804,9 +599,7 @@ final class CallController {
     }
   }
 
-  Future<void> _handleRemoteDescription(
-    SessionDescription description,
-  ) async {
+  Future<void> _handleRemoteDescription(SessionDescription description) async {
     switch (description.type) {
       case SessionDescriptionType.offer:
         final collision =
@@ -826,20 +619,14 @@ final class CallController {
           media.setRemoteDescription(description),
           'set remote offer',
         );
-        final answer = await _bounded(
-          media.createAnswer(),
-          'create answer',
-        );
+        final answer = await _bounded(media.createAnswer(), 'create answer');
         if (answer.type != SessionDescriptionType.answer) {
           throw CallProtocolException(
             'Media adapter returned ${answer.type.name} from createAnswer',
           );
         }
 
-        await _bounded(
-          media.setLocalDescription(answer),
-          'set local answer',
-        );
+        await _bounded(media.setLocalDescription(answer), 'set local answer');
         await _bounded(
           signaling.send(SendDescriptionCommand(answer)),
           'send answer',
@@ -869,12 +656,8 @@ final class CallController {
 
     _makingOffer = true;
     try {
-      if (iceRestart &&
-          media.signalingState != MediaSignalingState.stable) {
-        await _bounded(
-          media.rollback(),
-          'rollback before ICE restart',
-        );
+      if (iceRestart && media.signalingState != MediaSignalingState.stable) {
+        await _bounded(media.rollback(), 'rollback before ICE restart');
       }
 
       final offer = await _bounded(
@@ -887,10 +670,7 @@ final class CallController {
         );
       }
 
-      await _bounded(
-        media.setLocalDescription(offer),
-        'set local offer',
-      );
+      await _bounded(media.setLocalDescription(offer), 'set local offer');
       await _bounded(
         signaling.send(SendDescriptionCommand(offer)),
         'send offer',
@@ -922,9 +702,7 @@ final class CallController {
     _suppressChannelEvents = true;
     try {
       if (_signalingStarted) {
-        await _bestEffort(
-          () => _bounded(signaling.stop(), 'stop signaling'),
-        );
+        await _bestEffort(() => _bounded(signaling.stop(), 'stop signaling'));
       }
       _signalingStarted = false;
       await _bestEffort(
@@ -935,10 +713,7 @@ final class CallController {
     }
   }
 
-  Future<void> _beginRecovery(
-    Object cause,
-    StackTrace stackTrace,
-  ) async {
+  Future<void> _beginRecovery(Object cause, StackTrace stackTrace) async {
     if (_terminal || !_started) {
       return;
     }
@@ -1027,9 +802,7 @@ final class CallController {
   }
 
   Future<void> _performRecoveryAttempt(int attempt) async {
-    if (_terminal ||
-        !_recoveryActive ||
-        attempt != _recoveryAttempt + 1) {
+    if (_terminal || !_recoveryActive || attempt != _recoveryAttempt + 1) {
       return;
     }
 
@@ -1066,9 +839,7 @@ final class CallController {
       _recoveryTimer = Timer(connectionTimeout, () {
         _recoveryTimer = null;
         _enqueueEvent(() async {
-          if (_terminal ||
-              !_recoveryActive ||
-              !_waitingForConnection) {
+          if (_terminal || !_recoveryActive || !_waitingForConnection) {
             return;
           }
           _waitingForConnection = false;
@@ -1144,11 +915,7 @@ final class CallController {
     _terminal = true;
     _completeRecovery();
     await _teardown();
-    _emit(
-      CallPhase.failed,
-      endReason: reason,
-      error: error,
-    );
+    _emit(CallPhase.failed, endReason: reason, error: error);
     _completeDone();
   }
 
@@ -1156,9 +923,7 @@ final class CallController {
     _suppressChannelEvents = true;
     try {
       if (_signalingStarted) {
-        await _bestEffort(
-          () => _bounded(signaling.stop(), 'stop signaling'),
-        );
+        await _bestEffort(() => _bounded(signaling.stop(), 'stop signaling'));
       }
       _signalingStarted = false;
 
@@ -1167,9 +932,7 @@ final class CallController {
       );
 
       if (_mediaStarted) {
-        await _bestEffort(
-          () => _bounded(media.stop(), 'stop media session'),
-        );
+        await _bestEffort(() => _bounded(media.stop(), 'stop media session'));
       }
       _mediaStarted = false;
       _pendingLocalCandidates.clear();
@@ -1184,8 +947,7 @@ final class CallController {
       return;
     }
 
-    final subscriptions =
-        List<StreamSubscription<Object?>>.of(_subscriptions);
+    final subscriptions = List<StreamSubscription<Object?>>.of(_subscriptions);
     _subscriptions.clear();
 
     for (final subscription in subscriptions) {
@@ -1308,8 +1070,7 @@ final class CallController {
             to == CallPhase.ending ||
             to == CallPhase.ended ||
             to == CallPhase.failed,
-      CallPhase.ending =>
-        to == CallPhase.ended || to == CallPhase.failed,
+      CallPhase.ending => to == CallPhase.ended || to == CallPhase.failed,
       CallPhase.ended => false,
       CallPhase.failed => false,
     };
@@ -1330,15 +1091,6 @@ final class CallController {
     }
     return value;
   }
-}
-
-bool _containsControl(String value) {
-  for (final codeUnit in value.codeUnits) {
-    if (codeUnit < 0x20 || codeUnit == 0x7f) {
-      return true;
-    }
-  }
-  return false;
 }
 
 // GAPS:

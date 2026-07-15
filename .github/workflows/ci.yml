@@ -1,23 +1,47 @@
 name: CI
 
-# The mechanical gate every sandwich iteration passes through.
-# Runs Flutter in the cloud, so no local Dart/Flutter is required to verify a PR.
+# The mechanical gate every sandwich wave passes through (EXECUTION_PLAYBOOK §1).
+# Layered: gate (format/analyze/test/guard) ∥ hygiene (secrets) ∥ deps (OSV scan).
+# Reproducible: Flutter is version-pinned to match the local toolchain.
+
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, 'phase-*/**']
   pull_request:
+  workflow_dispatch:
+
+# Never run two CI rounds on the same ref; newest wins.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.44.6'   # keep in lockstep with the local SDK (Dart 3.12.2)
 
 jobs:
   gate:
+    name: Gate — format · analyze · test · guard
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Flutter (stable)
+      - name: Set up Flutter (pinned, cached)
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('**/pubspec.yaml') }}
+          restore-keys: pub-${{ runner.os }}-
 
       - name: Resolve workspace (native pub workspace)
         run: flutter pub get
@@ -29,14 +53,14 @@ jobs:
       - name: Static analysis (infos are fatal)
         run: dart analyze --fatal-infos --fatal-warnings
 
-      - name: Tests (per package that has a test/ dir)
+      - name: Tests with coverage (per package that has a test/ dir)
         run: |
           set -e
           found=0
           for d in packages/*/ apps/*/; do
             if [ -d "${d}test" ]; then
               echo "== testing ${d}"
-              (cd "$d" && flutter test)
+              (cd "$d" && dart test --coverage=coverage)
               found=1
             fi
           done
@@ -44,23 +68,58 @@ jobs:
             echo "No test/ directories yet — gate stays green; testers add teeth per phase."
           fi
 
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: packages/*/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Architecture guard
+        run: dart run tool/architecture_guard.dart
+
+      - name: Gate summary
+        if: always()
         run: |
-          if [ -f tool/architecture_guard.dart ]; then
-            dart run tool/architecture_guard.dart
-          else
-            echo "architecture_guard not present yet — skipped."
-          fi
+          {
+            echo "## CI gate — ${{ job.status }}"
+            echo "- Flutter ${{ env.FLUTTER_VERSION }} (pinned)"
+            echo "- format · analyze(--fatal-infos) · test · architecture_guard"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   hygiene:
+    name: Hygiene — secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Secret scan (block obvious secrets in diff)
+      - name: Secret scan (block obvious secrets)
         run: |
-          if grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|AKIA[0-9A-Z]{16}|-----BEGIN PRIVATE KEY-----)' \
-             --include='*.dart' --include='*.yaml' --include='*.json' . ; then
+          if grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|AKIA[0-9A-Z]{16}|-----BEGIN PRIVATE KEY-----|xox[bpors]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{36}|sk-[A-Za-z0-9]{20,})' \
+             --include='*.dart' --include='*.yaml' --include='*.json' --include='*.md' \
+             --exclude-dir=.git --exclude-dir=.dart_tool --exclude-dir=.backups . ; then
             echo "::error::possible secret committed"; exit 1
           fi
           echo "no obvious secrets found"
+
+  deps:
+    name: Dependency audit — OSV
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Flutter (pinned, cached)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Generate lockfile
+        run: flutter pub get
+      - name: OSV vulnerability scan
+        uses: google/osv-scanner-action/osv-scanner-action@v2
+        with:
+          scan-args: --lockfile=pubspec.lock
+        continue-on-error: false

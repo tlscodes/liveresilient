@@ -108,10 +108,7 @@ class SignalingClient {
         'Signaling requires a wss:// endpoint.',
       );
     }
-    _outbox = ReliableOutbox(
-      transmit: _transmitFrame,
-      store: outboxStore,
-    );
+    _outbox = ReliableOutbox(transmit: _transmitFrame, store: outboxStore);
   }
 
   /// Application-facing inbound envelopes (acks and heartbeats are consumed
@@ -196,16 +193,14 @@ class SignalingClient {
       return;
     }
     _reconnectAttempts++;
-    final base = config.initialReconnectDelay.inMilliseconds *
+    final base =
+        config.initialReconnectDelay.inMilliseconds *
         math.pow(2, _reconnectAttempts - 1).toDouble();
     final capped = math.min(base, config.maxReconnectDelay.inMilliseconds);
     // Full jitter prevents synchronized reconnect storms after an outage.
     final delayMs = (_random.nextDouble() * capped).round();
     _setState(SignalingConnectionState.reconnecting);
-    _reconnectTimer = Timer(
-      Duration(milliseconds: delayMs),
-      _openSocket,
-    );
+    _reconnectTimer = Timer(Duration(milliseconds: delayMs), _openSocket);
   }
 
   void _teardownSocket() {
@@ -240,8 +235,7 @@ class SignalingClient {
       return; // Malformed frames are dropped, never crash the session.
     }
 
-    final ageMs =
-        DateTime.now().millisecondsSinceEpoch - envelope.createdAtMs;
+    final ageMs = DateTime.now().millisecondsSinceEpoch - envelope.createdAtMs;
     if (ageMs > config.maxEnvelopeAge.inMilliseconds) {
       return;
     }

@@ -119,6 +119,7 @@ class RtcStatsSampler {
   final _samplesController = StreamController<RtcStatsSample>.broadcast();
 
   Timer? _timer;
+  bool _tickInFlight = false;
   RawRtcCounters? _previous;
   int? _previousAtMs;
   double _rttMsEwma = 0;
@@ -130,9 +131,8 @@ class RtcStatsSampler {
     this.interval = const Duration(seconds: 2),
     this.alpha = 0.3,
     int Function()? nowMs,
-  })  : _read = reader,
-        _nowMs = nowMs ??
-            (() => DateTime.now().millisecondsSinceEpoch) {
+  }) : _read = reader,
+       _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch) {
     if (alpha <= 0 || alpha > 1) {
       throw RangeError.range(alpha, 0, 1, 'alpha');
     }
@@ -157,6 +157,18 @@ class RtcStatsSampler {
   }
 
   Future<void> _tick() async {
+    // Single-flight: Timer.periodic does not await async callbacks, so a slow
+    // poll must not overlap the next one (would corrupt _previous deltas).
+    if (_tickInFlight) return;
+    _tickInFlight = true;
+    try {
+      await _tickInner();
+    } finally {
+      _tickInFlight = false;
+    }
+  }
+
+  Future<void> _tickInner() async {
     final RawRtcCounters? current;
     try {
       current = await _read();
@@ -182,11 +194,11 @@ class RtcStatsSampler {
     // Counter resets (renegotiation) produce negative deltas: skip sample.
     if (deltaReceived < 0 || deltaLost < 0) return;
 
-    final loss =
-        deltaExpected <= 0 ? 0.0 : (deltaLost / deltaExpected).clamp(0.0, 1.0);
+    final loss = deltaExpected <= 0
+        ? 0.0
+        : (deltaLost / deltaExpected).clamp(0.0, 1.0);
 
-    final rttSampleMs =
-        (current.currentRoundTripTimeSeconds ?? 0) * 1000.0;
+    final rttSampleMs = (current.currentRoundTripTimeSeconds ?? 0) * 1000.0;
     final jitterSampleMs = current.jitterSeconds * 1000.0;
 
     if (!_hasEwma) {
@@ -207,11 +219,12 @@ class RtcStatsSampler {
       packetLossFraction: loss,
       rttMs: _rttMsEwma.round(),
       jitterMs: _jitterMsEwma.round(),
-      incomingBitrateBps:
-          bitrate(current.bytesReceived - previous.bytesReceived),
+      incomingBitrateBps: bitrate(
+        current.bytesReceived - previous.bytesReceived,
+      ),
       outgoingBitrateBps: bitrate(current.bytesSent - previous.bytesSent),
-      availableOutgoingBitrateBps:
-          (current.availableOutgoingBitrateBps ?? 0).round(),
+      availableOutgoingBitrateBps: (current.availableOutgoingBitrateBps ?? 0)
+          .round(),
       timestampMs: nowMs,
     );
 

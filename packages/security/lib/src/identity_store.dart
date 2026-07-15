@@ -89,8 +89,8 @@ class IdentityStore {
   IdentityStore({
     required IdentityKeyEngine engine,
     required SecureKeyValueStore store,
-  })  : _engine = engine,
-        _store = store;
+  }) : _engine = engine,
+       _store = store;
 
   /// Returns the device identity, generating it on first launch.
   Future<DeviceIdentity> localIdentity() async {
@@ -127,10 +127,7 @@ class IdentityStore {
   /// with the identity key, binding the media session to this identity.
   Future<Uint8List> signSessionFingerprint(Uint8List sessionDigest) async {
     await localIdentity(); // Ensures the key exists.
-    return _engine.sign(
-      keyHandle: _localKeyHandle,
-      message: sessionDigest,
-    );
+    return _engine.sign(keyHandle: _localKeyHandle, message: sessionDigest);
   }
 
   /// Verifies a peer's signed session fingerprint against their pinned
@@ -184,10 +181,7 @@ class IdentityStore {
     required String peerId,
     required Uint8List newPublicKey,
   }) async {
-    await _store.write(
-      '$_remoteKeyPrefix$peerId',
-      _hexEncode(newPublicKey),
-    );
+    await _store.write('$_remoteKeyPrefix$peerId', _hexEncode(newPublicKey));
   }
 
   /// Safety number for out-of-band comparison: a stable digest over both
@@ -200,9 +194,7 @@ class IdentityStore {
     final b = _hexEncode(remotePublicKey);
     // Order-independent: sort so both sides derive the same number.
     final combined = a.compareTo(b) <= 0 ? '$a$b' : '$b$a';
-    final digest = await _engine.sha256(
-      Uint8List.fromList(combined.codeUnits),
-    );
+    final digest = await _engine.sha256(Uint8List.fromList(combined.codeUnits));
     // 60 decimal digits in groups of 5, matching familiar safety-number UX.
     final digits = StringBuffer();
     for (var i = 0; i < digest.length && digits.length < 60; i++) {

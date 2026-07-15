@@ -93,12 +93,7 @@ class ChannelHealth {
     this.jitterMs = 50,
   }) {
     if (reliabilityPrior < 0.0 || reliabilityPrior > 1.0) {
-      throw RangeError.range(
-        reliabilityPrior,
-        0,
-        1,
-        'reliabilityPrior',
-      );
+      throw RangeError.range(reliabilityPrior, 0, 1, 'reliabilityPrior');
     }
     if (bandwidth < 0.0 || bandwidth > 1.0) {
       throw RangeError.range(bandwidth, 0, 1, 'bandwidth');

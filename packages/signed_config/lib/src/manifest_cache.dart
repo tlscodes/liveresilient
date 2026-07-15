@@ -93,11 +93,11 @@ class ManifestCache {
     required Uri bootstrapUri,
     this.config = const ManifestCacheConfig(),
     DateTime Function()? clock,
-  })  : _verifier = verifier,
-        _storage = storage,
-        _fetch = fetcher,
-        _bootstrapUri = bootstrapUri,
-        _clock = clock ?? DateTime.now {
+  }) : _verifier = verifier,
+       _storage = storage,
+       _fetch = fetcher,
+       _bootstrapUri = bootstrapUri,
+       _clock = clock ?? DateTime.now {
     if (bootstrapUri.scheme != 'https') {
       throw ArgumentError.value(
         bootstrapUri,
@@ -149,9 +149,8 @@ class ManifestCache {
     final now = _clock().toUtc();
     final current = _current;
 
-    final needsRefresh = forceRefresh ||
-        current == null ||
-        current.isExpiredAt(now);
+    final needsRefresh =
+        forceRefresh || current == null || current.isExpiredAt(now);
 
     if (needsRefresh && _cooldownElapsed(now)) {
       try {

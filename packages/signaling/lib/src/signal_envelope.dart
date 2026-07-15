@@ -127,15 +127,15 @@ class SignalEnvelope {
   }
 
   Map<String, Object?> toJson() => {
-        'v': version,
-        'id': messageId,
-        'seq': sequence,
-        'callId': callId,
-        'senderKeyId': senderKeyId,
-        'type': type.name,
-        'createdAtMs': createdAtMs,
-        'payload': payload,
-      };
+    'v': version,
+    'id': messageId,
+    'seq': sequence,
+    'callId': callId,
+    'senderKeyId': senderKeyId,
+    'type': type.name,
+    'createdAtMs': createdAtMs,
+    'payload': payload,
+  };
 
   /// Serializes to UTF-8 JSON bytes, enforcing [maxEnvelopeBytes].
   List<int> toBytes() {
@@ -171,9 +171,10 @@ class SignalEnvelope {
       throw const FormatException('Envelope has missing or mistyped fields.');
     }
 
-    final type = SignalType.values
-        .cast<SignalType?>()
-        .firstWhere((t) => t!.name == typeName, orElse: () => null);
+    final type = SignalType.values.cast<SignalType?>().firstWhere(
+      (t) => t!.name == typeName,
+      orElse: () => null,
+    );
     if (type == null) {
       throw FormatException('Unknown signal type: $typeName');
     }

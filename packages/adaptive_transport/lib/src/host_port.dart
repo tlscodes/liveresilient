@@ -2,19 +2,14 @@ class HostPort {
   final String host;
   final int port;
 
-  const HostPort({
-    required this.host,
-    required this.port,
-  });
+  const HostPort({required this.host, required this.port});
 
   factory HostPort.fromJson(Map<String, Object?> json) {
     final host = json['host'];
     final port = json['port'];
 
     if (host is! String || host.trim().isEmpty) {
-      throw const FormatException(
-        'Endpoint host must be a non-empty string.',
-      );
+      throw const FormatException('Endpoint host must be a non-empty string.');
     }
 
     if (port is! int || port < 1 || port > 65535) {
@@ -23,10 +18,7 @@ class HostPort {
       );
     }
 
-    return HostPort(
-      host: host.trim(),
-      port: port,
-    );
+    return HostPort(host: host.trim(), port: port);
   }
 
   /// Accepts:
@@ -74,15 +66,11 @@ class HostPort {
       throw FormatException('Invalid endpoint port: ${uri.port}');
     }
 
-    return HostPort(
-      host: uri.host,
-      port: uri.port,
-    );
+    return HostPort(host: uri.host, port: uri.port);
   }
 
   String get authority {
-    final formattedHost =
-        host.contains(':') ? '[$host]' : host;
+    final formattedHost = host.contains(':') ? '[$host]' : host;
 
     return '$formattedHost:$port';
   }
@@ -92,17 +80,10 @@ class HostPort {
       throw ArgumentError.value(scheme, 'scheme');
     }
 
-    return Uri(
-      scheme: scheme,
-      host: host,
-      port: port,
-    );
+    return Uri(scheme: scheme, host: host, port: port);
   }
 
-  Map<String, Object> toJson() => {
-        'host': host,
-        'port': port,
-      };
+  Map<String, Object> toJson() => {'host': host, 'port': port};
 
   @override
   String toString() => authority;
