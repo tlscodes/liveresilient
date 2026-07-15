@@ -20,12 +20,7 @@ class MediaPacket {
     required List<int> payload,
   }) : payload = Uint8List.fromList(payload) {
     if (sequenceNumber < 0 || sequenceNumber > 0xffff) {
-      throw RangeError.range(
-        sequenceNumber,
-        0,
-        0xffff,
-        'sequenceNumber',
-      );
+      throw RangeError.range(sequenceNumber, 0, 0xffff, 'sequenceNumber');
     }
   }
 }
@@ -75,10 +70,10 @@ class AdaptiveJitterBuffer {
     this.maximumDelayMs = 200,
     this.lateDropThresholdMs = 250,
     this.maximumPackets = 256,
-  })  : assert(minimumDelayMs >= 0),
-        assert(maximumDelayMs >= minimumDelayMs),
-        assert(lateDropThresholdMs >= 0),
-        assert(maximumPackets > 0);
+  }) : assert(minimumDelayMs >= 0),
+       assert(maximumDelayMs >= minimumDelayMs),
+       assert(lateDropThresholdMs >= 0),
+       assert(maximumPackets > 0);
 
   int get bufferedPacketCount => _queue.length;
 
@@ -90,10 +85,7 @@ class AdaptiveJitterBuffer {
   }
 
   /// Returns false when the packet is an old or duplicate packet.
-  bool addPacket(
-    MediaPacket packet, {
-    required int arrivalMs,
-  }) {
+  bool addPacket(MediaPacket packet, {required int arrivalMs}) {
     if (_lastTimingArrivalMs != null && arrivalMs < _lastTimingArrivalMs!) {
       throw ArgumentError.value(
         arrivalMs,
@@ -133,8 +125,7 @@ class AdaptiveJitterBuffer {
 
         // RFC 3550-style EWMA:
         // J(i) = J(i-1) + (D(i) - J(i-1)) / 16
-        _estimatedJitterMs +=
-            (variation - _estimatedJitterMs) / 16.0;
+        _estimatedJitterMs += (variation - _estimatedJitterMs) / 16.0;
       }
 
       _lastTimingArrivalMs = arrivalMs;
@@ -158,16 +149,14 @@ class AdaptiveJitterBuffer {
   }
 
   /// Returns the next playable packet or null when more buffering is needed.
-  MediaPacket? takeNext({
-    required int nowMs,
-  }) {
+  MediaPacket? takeNext({required int nowMs}) {
     while (_queue.isNotEmpty) {
       final firstEntry = _queue.entries.first;
       final queued = firstEntry.value;
 
-      final scheduledPlayoutMs = _firstArrivalMs! +
-          (queued.packet.senderTimestampMs -
-              _firstSenderTimestampMs!) +
+      final scheduledPlayoutMs =
+          _firstArrivalMs! +
+          (queued.packet.senderTimestampMs - _firstSenderTimestampMs!) +
           targetDelayMs;
 
       if (nowMs < scheduledPlayoutMs) {
@@ -246,8 +235,8 @@ class XorFecBlock {
     required this.blockId,
     required List<int> originalLengths,
     required List<int> parity,
-  })  : originalLengths = List<int>.unmodifiable(originalLengths),
-        parity = Uint8List.fromList(parity) {
+  }) : originalLengths = List<int>.unmodifiable(originalLengths),
+       parity = Uint8List.fromList(parity) {
     if (blockId < 0) {
       throw ArgumentError.value(blockId, 'blockId');
     }
@@ -255,18 +244,15 @@ class XorFecBlock {
 
   int get dataShardCount => originalLengths.length;
 
-  int get maximumShardLength =>
-      originalLengths.fold<int>(0, math.max);
+  int get maximumShardLength => originalLengths.fold<int>(0, math.max);
 }
 
 class RecoveredFecShard {
   final int index;
   final Uint8List data;
 
-  RecoveredFecShard({
-    required this.index,
-    required List<int> data,
-  }) : data = Uint8List.fromList(data);
+  RecoveredFecShard({required this.index, required List<int> data})
+    : data = Uint8List.fromList(data);
 }
 
 /// XOR FEC can recover exactly one missing shard.
@@ -286,11 +272,11 @@ class XorFec {
       );
     }
 
-    final originalLengths =
-        packets.map((packet) => packet.length).toList(growable: false);
+    final originalLengths = packets
+        .map((packet) => packet.length)
+        .toList(growable: false);
 
-    final maximumLength =
-        originalLengths.fold<int>(0, math.max);
+    final maximumLength = originalLengths.fold<int>(0, math.max);
 
     final parity = Uint8List(maximumLength);
 
@@ -326,9 +312,7 @@ class XorFec {
 
     final missing = <int>[];
 
-    for (var index = 0;
-        index < receivedDataShards.length;
-        index++) {
+    for (var index = 0; index < receivedDataShards.length; index++) {
       final shard = receivedDataShards[index];
 
       if (shard == null) {

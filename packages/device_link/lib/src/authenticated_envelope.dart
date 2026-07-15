@@ -77,8 +77,8 @@ class AuthenticatedEnvelope {
     required this.sentAtMs,
     required List<int> payload,
     required List<int> signature,
-  })  : payload = Uint8List.fromList(payload),
-        signature = Uint8List.fromList(signature) {
+  }) : payload = Uint8List.fromList(payload),
+       signature = Uint8List.fromList(signature) {
     if (version != authenticatedEnvelopeVersion) {
       throw FormatException('Unsupported envelope version: $version');
     }
@@ -141,13 +141,13 @@ class AuthenticatedEnvelope {
   }
 
   Map<String, Object?> toJson() => {
-        'v': version,
-        'nonce': nonce,
-        'senderKeyId': senderKeyId,
-        'sentAtMs': sentAtMs,
-        'payload': base64Encode(payload),
-        'signature': base64Encode(signature),
-      };
+    'v': version,
+    'nonce': nonce,
+    'senderKeyId': senderKeyId,
+    'sentAtMs': sentAtMs,
+    'payload': base64Encode(payload),
+    'signature': base64Encode(signature),
+  };
 
   List<int> toBytes() => utf8.encode(jsonEncode(toJson()));
 

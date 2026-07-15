@@ -132,12 +132,21 @@ class WebRtcMediaEngine {
   bool _negotiating = false;
   bool _disposed = false;
 
+  /// Upper bound for every negotiation-related port call. A hung platform
+  /// channel must fail the operation (and release the negotiation guard via
+  /// try/finally), never freeze the engine for the life of the call.
+  final Duration operationTimeout;
+
   WebRtcMediaEngine({
     required PeerConnectionPort port,
     AdaptiveMediaPolicy? policy,
     Duration statsInterval = const Duration(seconds: 2),
-  })  : _port = port,
-        _policy = policy ?? AdaptiveMediaPolicy() {
+    this.operationTimeout = const Duration(seconds: 15),
+  }) : _port = port,
+       _policy = policy ?? AdaptiveMediaPolicy() {
+    if (operationTimeout <= Duration.zero) {
+      throw ArgumentError.value(operationTimeout, 'operationTimeout');
+    }
     _sampler = RtcStatsSampler(
       reader: _port.readStatsCounters,
       interval: statsInterval,
@@ -173,12 +182,28 @@ class WebRtcMediaEngine {
     }
     _negotiating = true;
     try {
-      final offer = await _port.createOffer(iceRestart: iceRestart);
-      await _port.setLocalDescription(offer);
+      final offer = await _bounded(
+        _port.createOffer(iceRestart: iceRestart),
+        'create offer',
+      );
+      await _bounded(_port.setLocalDescription(offer), 'set local offer');
       return offer;
     } finally {
       _negotiating = false;
     }
+  }
+
+  /// Bounds a port operation with [operationTimeout].
+  Future<T> _bounded<T>(Future<T> future, String operation) {
+    return future.timeout(
+      operationTimeout,
+      onTimeout: () {
+        throw TimeoutException(
+          'Timed out while attempting to $operation',
+          operationTimeout,
+        );
+      },
+    );
   }
 
   /// Handles a remote offer and produces the local answer.
@@ -188,8 +213,8 @@ class WebRtcMediaEngine {
       throw ArgumentError.value(remoteOffer.type, 'remoteOffer.type');
     }
     await _applyRemoteDescription(remoteOffer);
-    final answer = await _port.createAnswer();
-    await _port.setLocalDescription(answer);
+    final answer = await _bounded(_port.createAnswer(), 'create answer');
+    await _bounded(_port.setLocalDescription(answer), 'set local answer');
     return answer;
   }
 
@@ -203,7 +228,10 @@ class WebRtcMediaEngine {
   }
 
   Future<void> _applyRemoteDescription(SdpDescription description) async {
-    await _port.setRemoteDescription(description);
+    await _bounded(
+      _port.setRemoteDescription(description),
+      'set remote description',
+    );
     _remoteDescriptionSet = true;
     for (final candidate in _pendingRemoteCandidates) {
       await _port.addRemoteCandidate(candidate);
@@ -259,12 +287,14 @@ class WebRtcMediaEngine {
 
     final p = decision.parameters;
     try {
-      await _port.setVideoSenderParameters(VideoSenderParameters(
-        enabled: p.videoEnabled,
-        maxBitrateBps: p.videoMaxBitrateBps,
-        maxFramerate: p.videoMaxFramerate,
-        scaleResolutionDownBy: p.videoScaleResolutionDownBy,
-      ));
+      await _port.setVideoSenderParameters(
+        VideoSenderParameters(
+          enabled: p.videoEnabled,
+          maxBitrateBps: p.videoMaxBitrateBps,
+          maxFramerate: p.videoMaxFramerate,
+          scaleResolutionDownBy: p.videoScaleResolutionDownBy,
+        ),
+      );
       await _port.setAudioMaxBitrate(p.audioMaxBitrateBps);
       if (!_eventsController.isClosed) {
         _eventsController.add(MediaProfileChanged(decision));

@@ -42,11 +42,7 @@ enum TelemetryEvent {
 }
 
 /// Histogram metrics with fixed, privacy-reviewed bucket boundaries.
-enum TelemetryMetric {
-  callSetupTimeMs,
-  callDurationSeconds,
-  reconnectTimeMs,
-}
+enum TelemetryMetric { callSetupTimeMs, callDurationSeconds, reconnectTimeMs }
 
 const Map<TelemetryMetric, List<int>> _bucketBoundaries = {
   TelemetryMetric.callSetupTimeMs: [500, 1000, 2000, 5000, 10000, 30000],
@@ -74,18 +70,18 @@ class TelemetrySnapshot {
     required this.appVersion,
     required Map<String, int> counters,
     required Map<String, Map<String, int>> histograms,
-  })  : counters = Map.unmodifiable(counters),
-        histograms = Map.unmodifiable({
-          for (final entry in histograms.entries)
-            entry.key: Map<String, int>.unmodifiable(entry.value),
-        });
+  }) : counters = Map.unmodifiable(counters),
+       histograms = Map.unmodifiable({
+         for (final entry in histograms.entries)
+           entry.key: Map<String, int>.unmodifiable(entry.value),
+       });
 
   Map<String, Object?> toJson() => {
-        'schemaVersion': schemaVersion,
-        'appVersion': appVersion,
-        'counters': counters,
-        'histograms': histograms,
-      };
+    'schemaVersion': schemaVersion,
+    'appVersion': appVersion,
+    'counters': counters,
+    'histograms': histograms,
+  };
 
   bool get isEmpty => counters.isEmpty && histograms.isEmpty;
 }
@@ -110,8 +106,8 @@ class PrivacyTelemetry {
     required TelemetryExporter exporter,
     required this.appVersion,
     this.exportInterval = const Duration(hours: 6),
-  })  : _consent = consent,
-        _exporter = exporter {
+  }) : _consent = consent,
+       _exporter = exporter {
     _exportTimer = Timer.periodic(exportInterval, (_) => exportNow());
   }
 

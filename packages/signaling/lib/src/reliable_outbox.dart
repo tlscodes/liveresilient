@@ -84,8 +84,8 @@ class ReliableOutbox {
     required OutboxTransmit transmit,
     OutboxStore? store,
     this.config = const OutboxConfig(),
-  })  : _transmit = transmit,
-        _store = store;
+  }) : _transmit = transmit,
+       _store = store;
 
   int get pendingCount => _pending.length;
 
