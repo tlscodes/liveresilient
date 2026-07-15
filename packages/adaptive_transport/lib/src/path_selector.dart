@@ -102,10 +102,10 @@ class PathSelector {
     List<TransportChannel> channels, {
     this.config = const RouterConfig(),
     CircuitBreakerConfig breakerConfig = const CircuitBreakerConfig(),
-  })  : _channels = List.unmodifiable(channels),
-        _breakers = {
-          for (final c in channels) c: CircuitBreaker(config: breakerConfig),
-        };
+  }) : _channels = List.unmodifiable(channels),
+       _breakers = {
+         for (final c in channels) c: CircuitBreaker(config: breakerConfig),
+       };
 
   /// Applies a redundancy recommendation, e.g. when the app detects that
   /// conditions moved from `stable` to `degraded`.
@@ -155,28 +155,32 @@ class PathSelector {
     final fanout = config.fanout < 1 ? 1 : config.fanout;
     var attempts = 0;
 
-    for (var i = 0;
-        i < ranked.length && attempts < config.maxFailover;
-        i += fanout) {
+    for (
+      var i = 0;
+      i < ranked.length && attempts < config.maxFailover;
+      i += fanout
+    ) {
       final batch = ranked.skip(i).take(fanout).toList();
       attempts += batch.length;
 
-      final outcomes = await Future.wait(batch.map((ch) async {
-        SendResult res;
-        try {
-          res = await ch.send(payload);
-        } catch (e) {
-          res = SendResult(SendStatus.transient, error: e);
-        }
-        ch.health.observe(res);
-        if (res.delivered) {
-          _breakers[ch]!.recordSuccess();
-        } else {
-          _breakers[ch]!.recordFailure();
-        }
-        _emit('send', ch, res);
-        return res.delivered;
-      }));
+      final outcomes = await Future.wait(
+        batch.map((ch) async {
+          SendResult res;
+          try {
+            res = await ch.send(payload);
+          } catch (e) {
+            res = SendResult(SendStatus.transient, error: e);
+          }
+          ch.health.observe(res);
+          if (res.delivered) {
+            _breakers[ch]!.recordSuccess();
+          } else {
+            _breakers[ch]!.recordFailure();
+          }
+          _emit('send', ch, res);
+          return res.delivered;
+        }),
+      );
 
       if (outcomes.any((delivered) => delivered)) return true;
     }
@@ -211,8 +215,8 @@ class PathSelector {
 
   /// Whether at least one path is currently usable.
   bool get online => _channels.any(
-        (c) => _breakers[c]!.allowsRequest() && c.health.score() > 0,
-      );
+    (c) => _breakers[c]!.allowsRequest() && c.health.score() > 0,
+  );
 
   Future<void> dispose() async {
     await _telemetryController.close();

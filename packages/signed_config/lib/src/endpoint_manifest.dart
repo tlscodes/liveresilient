@@ -47,8 +47,9 @@ class IceServerEntry {
         );
       }
     }
-    final needsCredentials =
-        urls.any((u) => u.scheme == 'turn' || u.scheme == 'turns');
+    final needsCredentials = urls.any(
+      (u) => u.scheme == 'turn' || u.scheme == 'turns',
+    );
     if (needsCredentials && (username.isEmpty || credential.isEmpty)) {
       throw const FormatException(
         'TURN entries require username and credential.',
@@ -78,10 +79,10 @@ class IceServerEntry {
   }
 
   Map<String, Object?> toJson() => {
-        'urls': urls.map((u) => u.toString()).toList(),
-        if (username.isNotEmpty) 'username': username,
-        if (credential.isNotEmpty) 'credential': credential,
-      };
+    'urls': urls.map((u) => u.toString()).toList(),
+    if (username.isNotEmpty) 'username': username,
+    if (credential.isNotEmpty) 'credential': credential,
+  };
 }
 
 /// The verified configuration consumed by the rest of the app.
@@ -122,8 +123,8 @@ class EndpointManifest {
     required List<IceServerEntry> iceServers,
     required this.configServiceUri,
     this.minimumAppVersion = '',
-  })  : signalingEndpoints = List.unmodifiable(signalingEndpoints),
-        iceServers = List.unmodifiable(iceServers) {
+  }) : signalingEndpoints = List.unmodifiable(signalingEndpoints),
+       iceServers = List.unmodifiable(iceServers) {
     if (schemaVersion != manifestSchemaVersion) {
       throw FormatException('Unsupported manifest schema: $schemaVersion');
     }
@@ -176,9 +177,7 @@ class EndpointManifest {
         signaling is! List ||
         ice is! List ||
         configService is! String) {
-      throw const FormatException(
-        'Manifest has missing or mistyped fields.',
-      );
+      throw const FormatException('Manifest has missing or mistyped fields.');
     }
 
     return EndpointManifest(
@@ -211,18 +210,16 @@ class EndpointManifest {
   }
 
   Map<String, Object?> toJson() => {
-        'schemaVersion': schemaVersion,
-        'revision': revision,
-        'signingKeyId': signingKeyId,
-        'issuedAt': issuedAt.toUtc().toIso8601String(),
-        'expiresAt': expiresAt.toUtc().toIso8601String(),
-        'signalingEndpoints':
-            signalingEndpoints.map((u) => u.toString()).toList(),
-        'iceServers': iceServers.map((s) => s.toJson()).toList(),
-        'configServiceUri': configServiceUri.toString(),
-        if (minimumAppVersion.isNotEmpty)
-          'minimumAppVersion': minimumAppVersion,
-      };
+    'schemaVersion': schemaVersion,
+    'revision': revision,
+    'signingKeyId': signingKeyId,
+    'issuedAt': issuedAt.toUtc().toIso8601String(),
+    'expiresAt': expiresAt.toUtc().toIso8601String(),
+    'signalingEndpoints': signalingEndpoints.map((u) => u.toString()).toList(),
+    'iceServers': iceServers.map((s) => s.toJson()).toList(),
+    'configServiceUri': configServiceUri.toString(),
+    if (minimumAppVersion.isNotEmpty) 'minimumAppVersion': minimumAppVersion,
+  };
 
   /// Canonical bytes that the manifest signature covers.
   ///

@@ -178,10 +178,12 @@ class AdaptiveMediaPolicy {
   /// otherwise.
   MediaPolicyDecision? onSample(RtcStatsSample sample) {
     final severe = sample.packetLossFraction >= config.lossSevereThreshold;
-    final bad = severe ||
+    final bad =
+        severe ||
         sample.packetLossFraction >= config.lossDowngradeThreshold ||
         sample.rttMs >= config.rttDowngradeThresholdMs;
-    final clean = sample.packetLossFraction < config.lossCleanThreshold &&
+    final clean =
+        sample.packetLossFraction < config.lossCleanThreshold &&
         sample.rttMs < config.rttDowngradeThresholdMs;
 
     if (severe) {
@@ -189,7 +191,8 @@ class AdaptiveMediaPolicy {
       _consecutiveClean = 0;
       return _shift(
         steps: 2,
-        reason: 'severe loss '
+        reason:
+            'severe loss '
             '${(sample.packetLossFraction * 100).toStringAsFixed(1)}%',
       );
     }
@@ -201,7 +204,8 @@ class AdaptiveMediaPolicy {
         _consecutiveBad = 0;
         return _shift(
           steps: 1,
-          reason: 'sustained loss/delay '
+          reason:
+              'sustained loss/delay '
               '(loss ${(sample.packetLossFraction * 100).toStringAsFixed(1)}%, '
               'rtt ${sample.rttMs}ms)',
         );
@@ -226,19 +230,21 @@ class AdaptiveMediaPolicy {
 
   bool _canUpgrade(RtcStatsSample sample) {
     if (_profile == MediaProfile.high) return false;
-    final target =
-        MediaProfile.values[_profile.index - 1]; // One step better.
+    final target = MediaProfile.values[_profile.index - 1]; // One step better.
     final estimate = sample.availableOutgoingBitrateBps;
     if (estimate <= 0) return true; // No estimate: rely on hysteresis alone.
-    final required = MediaProfileParameters.of(target).videoMaxBitrateBps *
+    final required =
+        MediaProfileParameters.of(target).videoMaxBitrateBps *
         config.upgradeBandwidthHeadroom;
     return estimate >= required;
   }
 
   /// Moves down the ladder for positive [steps], up for negative.
   MediaPolicyDecision? _shift({required int steps, required String reason}) {
-    final targetIndex = (_profile.index + steps)
-        .clamp(0, MediaProfile.values.length - 1);
+    final targetIndex = (_profile.index + steps).clamp(
+      0,
+      MediaProfile.values.length - 1,
+    );
     final target = MediaProfile.values[targetIndex];
     if (target == _profile) return null;
     final previous = _profile;
