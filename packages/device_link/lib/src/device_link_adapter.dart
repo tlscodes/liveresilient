@@ -26,6 +26,7 @@ library;
 import 'dart:async';
 
 import 'package:adaptive_transport/adaptive_transport.dart';
+import 'package:clock/clock.dart' hide Clock;
 
 import 'authenticated_envelope.dart';
 
@@ -80,7 +81,7 @@ class DeviceLinkAdapter implements TransportChannel {
        _consent = consent,
        _signer = signer,
        _validator = validator,
-       _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
+       _nowMs = nowMs ?? (() => clock.now().millisecondsSinceEpoch),
        health = ChannelHealth(
          // Local links are short-range and lossy: modest prior, decent
          // bandwidth, low starting RTT.

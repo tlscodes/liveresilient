@@ -14,6 +14,8 @@ library;
 
 import 'dart:async';
 
+import 'package:clock/clock.dart';
+
 /// Raw cumulative counters read from the platform WebRTC stats report.
 ///
 /// The app layer maps its WebRTC binding's `RTCStatsReport` (e.g. from
@@ -132,7 +134,7 @@ class RtcStatsSampler {
     this.alpha = 0.3,
     int Function()? nowMs,
   }) : _read = reader,
-       _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch) {
+       _nowMs = nowMs ?? (() => clock.now().millisecondsSinceEpoch) {
     if (alpha <= 0 || alpha > 1) {
       throw RangeError.range(alpha, 0, 1, 'alpha');
     }
