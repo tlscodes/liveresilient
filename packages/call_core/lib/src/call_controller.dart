@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
+
 import 'call_state.dart';
 import 'reconnect_policy.dart';
 import 'validation.dart';
@@ -254,7 +256,7 @@ final class CallController {
        _state = CallState(
          phase: CallPhase.idle,
          sequence: 0,
-         changedAt: DateTime.now().toUtc(),
+         changedAt: clock.now().toUtc(),
        ) {
     if (operationTimeout <= Duration.zero) {
       throw ArgumentError.value(operationTimeout, 'operationTimeout');
@@ -722,7 +724,7 @@ final class CallController {
     if (!_recoveryActive) {
       _recoveryActive = true;
       _recoveryAttempt = 0;
-      _recoveryStartedAt = DateTime.now().toUtc();
+      _recoveryStartedAt = clock.now().toUtc();
     }
 
     if (_recoveryAttemptInFlight) {
@@ -748,7 +750,7 @@ final class CallController {
       return;
     }
 
-    final startedAt = _recoveryStartedAt ?? DateTime.now().toUtc();
+    final startedAt = _recoveryStartedAt ?? clock.now().toUtc();
     final nextAttempt = _recoveryAttempt + 1;
     late final ReconnectDecision decision;
 
@@ -756,7 +758,7 @@ final class CallController {
       decision = reconnectPolicy.evaluate(
         ReconnectContext(
           attempt: nextAttempt,
-          elapsed: DateTime.now().toUtc().difference(startedAt),
+          elapsed: clock.now().toUtc().difference(startedAt),
           cause: cause,
         ),
       );
@@ -786,7 +788,7 @@ final class CallController {
       return;
     }
 
-    final retryAt = DateTime.now().toUtc().add(decision.delay);
+    final retryAt = clock.now().toUtc().add(decision.delay);
     _emit(
       CallPhase.reconnecting,
       reconnectAttempt: nextAttempt,
@@ -971,7 +973,7 @@ final class CallController {
     final next = CallState(
       phase: phase,
       sequence: ++_sequence,
-      changedAt: DateTime.now().toUtc(),
+      changedAt: clock.now().toUtc(),
       reconnectAttempt: reconnectAttempt,
       nextRetryAt: nextRetryAt,
       endReason: endReason,
