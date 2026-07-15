@@ -1,0 +1,18 @@
+# LOCAL DEV ONLY — see turnserver.conf header and README.md "Production differences".
+# macOS Docker Desktop has no host networking, so every port coturn needs must be
+# published explicitly. The relay port range below is intentionally narrow
+# (49160-49200 = 41 ports) to keep this cheap to publish and easy to reason about
+# for loopback-only testing; widen it only if you hit "no relay candidates" with
+# more than a couple of concurrent test calls.
+services:
+  coturn:
+    image: coturn/coturn:latest
+    container_name: voice_call_kit_turn_dev
+    restart: unless-stopped
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49160-49200:49160-49200/udp"
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]

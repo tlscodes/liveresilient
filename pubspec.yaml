@@ -22,3 +22,4 @@ workspace:
   - packages/signaling
   - packages/signed_config
   - server/signaling_server
+  - integration_test
