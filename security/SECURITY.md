@@ -14,13 +14,18 @@
 
 ## Cryptography inventory
 
-| Purpose | Primitive | Implementation rule |
-|---|---|---|
-| Media encryption | DTLS-SRTP | WebRTC platform stack only; never re-implemented |
-| Endpoint manifest signatures | Ed25519 | Audited library via `Ed25519Verifier` adapter; keys pinned in the app build |
-| Device identity / envelope auth | Ed25519 | Audited library via `IdentityKeyEngine` / `EnvelopeSigner` adapters; private keys in platform secure storage, hardware-backed where available |
-| Fingerprints / safety numbers | SHA-256 | Audited library via adapter |
-| Key agreement (future E2E signaling payloads) | X25519 | Audited library only |
+Status column reflects this review (2026-07-16, `phase-4/security-identity`);
+see `security/THREAT_MODEL.md` §4 for the per-threat evidence this table
+summarizes.
+
+| Purpose | Primitive | Implementation rule | Status |
+|---|---|---|---|
+| Media encryption | DTLS-SRTP | WebRTC platform stack only; never re-implemented | Blocked, dated 2026-07-15 (native `flutter_webrtc` build needs full Xcode) |
+| Endpoint manifest signatures | Ed25519 | Audited library (`package:cryptography`) via `Ed25519Verifier` adapter; keys pinned in the app build | Verification logic implemented and tested against fakes (`manifest_verifier_test.dart`). Real-crypto adapter `CryptographyEd25519Verifier` exists but 2 of 8 tests in `crypto_ed25519_verifier_test.dart` fail as of this review — do not treat as production-ready until green. Build-pinned keys: not yet built (no shipped app build exists). |
+| Device identity / envelope auth | Ed25519 | Audited library (`package:cryptography`) via `IdentityKeyEngine` / `EnvelopeSigner` adapters; private keys in platform secure storage, hardware-backed where available | Identity engine (`CryptographyIdentityKeyEngine`) implemented and tested (`crypto_identity_engine_test.dart`, `identity_store_e2e_test.dart`, all passing). Envelope crypto adapter (`CryptoEnvelopeSigner`/`Verifier` in `device_link`) implemented, exported, and tested with real keys (15 tests, 100% coverage). Private-key storage: dev-only stores only (`InMemoryKeyStore`, `DevFileKeyStore`); platform Keystore/Keychain blocked, dated 2026-07-15 (needs the Flutter app shell). |
+| Fingerprints / safety numbers | SHA-256 | Audited library via adapter | Sign/verify + fingerprint computation implemented and tested (`identity_store_e2e_test.dart`). User-facing comparison UI not yet built (no call UI exists). |
+| TURN credential issuance | HMAC-SHA1 (coturn `use-auth-secret` interop requirement, scoped to this one wire format) | Audited library (`package:crypto`); short-lived, expiring credentials | Implemented (`TurnCredentialsIssuer`), no test file yet. Not wired to a live server that hands credentials to clients per call. |
+| Key agreement (future E2E signaling payloads) | X25519 | Audited library only | Not yet built — planned for a future signaling-payload confidentiality layer; today signaling confidentiality is transport-level only (WSS), see `docs/DATA_FLOW.md` T18 in the threat model. |
 
 Standing rules:
 
@@ -37,13 +42,26 @@ Standing rules:
 
 ## Server-side data handling
 
-- Signaling service: stores routing state only; message bodies are opaque;
-  logs pass through redaction equivalent to `LogRedactor`; retention for
-  operational logs is 30 days maximum.
-- Config service: serves signed manifests; signing keys live offline/HSM
-  and are used in an air-gapped signing step.
-- TURN: short-lived credentials; no media content is ever stored (TURN
-  relays encrypted SRTP).
+- Signaling service (`server/signaling_server`, implemented): stores
+  routing state only; message bodies are opaque; retention for
+  operational logs is 30 days maximum as a policy target — the redaction
+  guarantee itself is proven at the client library layer
+  (`packages/security/lib/src/log_redactor.dart`, tested); the signaling
+  server's own log output has not been independently audited against
+  this table yet.
+- Config service (**not yet built** — no `server/config_service` exists
+  in this repo): the design is that it would serve signed manifests
+  produced by an offline/HSM signing step. Today, manifest signing exists
+  only as an offline CLI (`packages/signed_config/bin/sign_manifest.dart`,
+  `manifest_keygen.dart`) and manifest *verification* exists client-side
+  (`ManifestVerifier`, tested against fakes); there is no live serving
+  host to hold this policy accountable to yet.
+- TURN: `infra/turn/turnserver.conf` provides the coturn config; short-
+  lived credential *issuance logic* exists
+  (`packages/security/lib/src/turn_credentials.dart`, tested — known vector + expiry; not yet
+  wired to a live issuing service). No media content is ever stored
+  (TURN relays encrypted SRTP) — this part follows from the standard
+  TURN protocol itself, not from code in this repo.
 
 ## Dependency and release policy
 

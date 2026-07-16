@@ -116,6 +116,7 @@ Each row: the phase's disjoint targets (→ parallel surgeon+tester pairs) and t
 ### Phase 4 — Security + identity base
 - Pairs: verifier · signer · identity key engine · manifest verification · anti-replay (nonce+window) · anti-rollback (one pair each). Keys in Keystore/Keychain.
 - Gate: 100% tampered manifests rejected · 100% replays rejected · no secret in storage/log · threat-model + data-flow diagram complete.
+- **STATUS 2026-07-15 — pure-Dart scope CLOSED (419 tests green):** real Ed25519 everywhere (identity engine, manifest verifier + signer/keygen CLIs, envelope/mesh-frame auth), TURN short-lived credentials (known-vector pinned), threat model T1-T19 + DATA_FLOW.md complete. All tamper/replay tests reject 100%. **1 dated blocker:** OS Keystore/Keychain adapter needs the Flutter app shell → same Xcode blocker as Phase 3; scheduled for the Xcode slot. Dev key stores (`InMemoryKeyStore`/`DevFileKeyStore`) are loudly dev-only.
 
 ### Phase 5 — Media quality + stability
 - Pairs: audio policy (Opus/DTX/FEC/PLC, audio-first degrade) · video policy (bitrate→fps→resolution→audio-only) · JitterBuffer/FEC scoping.

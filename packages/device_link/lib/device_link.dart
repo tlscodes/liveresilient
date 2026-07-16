@@ -3,5 +3,7 @@
 library;
 
 export 'src/authenticated_envelope.dart';
+export 'src/crypto_envelope_auth.dart';
+export 'src/crypto_media_frame_auth.dart';
 export 'src/device_link_adapter.dart';
 export 'src/media_frame.dart';
