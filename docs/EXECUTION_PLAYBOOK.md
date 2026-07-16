@@ -129,6 +129,7 @@ Each row: the phase's disjoint targets (→ parallel surgeon+tester pairs) and t
 ### Phase 7 — Signed endpoint discovery
 - Pairs: ≥2 HTTPS origins (Host/SNI match) · signed manifest (version/iat/exp/keyID/regions/endpoints/min-version/flags) · last-known-good + grace window · key rotation. No runtime code download.
 - Gate: origin-1 failure covered by origin-2 · offline last-known-good works in window · older/tampered manifest rejected · rotation without outage.
+- **STATUS 2026-07-16 — CLOSED (95 tests green in signed_config):** manifest schema v2 (relayRegions, bounded featureFlags, multi-origin `configServiceUris` — all canonical-signed); real `IoManifestFetcher` (strict TLS, no badCertificateCallback, size cap, https-only redirects); multi-origin failover with per-origin isolation proven over two real `HttpServer.bindSecure` origins (origin-1 down AND origin-1 tampered → origin-2 serves; both down → last-known-good in grace; past grace → unavailable); zero-outage key rotation proven with real Ed25519 (revocation beats freshness and rollback); threat model extended T20-T24. All gate items pass.
 
 ### Phase 8 — Restore the old-version values (plainly named)
 - Pairs: `PushWakeup` (FCM/APNs wake only, opaque call-id) · `NearbyTransport` (BLE discovery + Wi-Fi Direct/local) · `LocalDissemination` (signed+encrypted store-and-forward, TTL/quota/consent) · `NetworkQualityPolicy` (healthy/constrained/degraded/locallyConnected).
