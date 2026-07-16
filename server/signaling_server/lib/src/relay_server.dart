@@ -328,3 +328,14 @@ class SignalingRelayServer {
     await _httpServer.close(force: true);
   }
 }
+
+/// Test/fuzz-only exposure of the relay's internal envelope decoder.
+///
+/// The relay deliberately never parses or trusts frame contents at
+/// runtime beyond this one step (extracting `callId` for room routing);
+/// everything else is relayed as opaque bytes. This top-level function
+/// exists solely so out-of-process fuzz and regression suites can drive
+/// [SignalingRelayServer._decodeEnvelope] directly, without standing up a
+/// live socket. Not part of the relay's operational surface.
+Map<String, Object?>? decodeSignalingEnvelopeForFuzzing(List<int> bytes) =>
+    SignalingRelayServer._decodeEnvelope(bytes);

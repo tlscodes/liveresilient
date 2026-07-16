@@ -201,7 +201,19 @@ class MeshMessageProcessor {
       return false;
     }
 
-    if (envelope.createdAtMs > nowMs + 60 * 1000) {
+    // Two-sided sanity bound on createdAtMs relative to nowMs, checked
+    // before any arithmetic touches it: a crafted extreme value (e.g.
+    // 64-bit int min) must never reach the lifetime subtraction below,
+    // where `expiresAtMs - createdAtMs` can silently wrap around 64-bit
+    // signed overflow and evade the maximumLifetimeMs check entirely
+    // (found by fuzzing — see
+    // packages/device_link/test/parser_robustness_test.dart, target
+    // `mesh_frame`). Any legitimate frame already satisfies this: a
+    // non-expired frame has expiresAtMs > nowMs and expiresAtMs <=
+    // createdAtMs + maximumLifetimeMs, so createdAtMs > nowMs -
+    // maximumLifetimeMs follows from the (overflow-safe) checks below.
+    if (envelope.createdAtMs > nowMs + 60 * 1000 ||
+        envelope.createdAtMs < nowMs - maximumLifetimeMs - 60 * 1000) {
       return false;
     }
 

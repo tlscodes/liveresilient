@@ -1,0 +1,21 @@
+name: fuzz_tool
+description: >-
+  Structured-mutation fuzz CLI for the workspace's untrusted-input parsers
+  (device_link, signed_config, signaling_server). Dev-only tooling — no
+  shipping package depends on this one, which is what keeps it free to
+  depend on all three targets without a workspace dependency cycle.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  device_link:
+    path: ../../packages/device_link
+  signed_config:
+    path: ../../packages/signed_config
+  signaling_server:
+    path: ../../server/signaling_server
