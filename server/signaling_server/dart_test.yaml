@@ -1,0 +1,6 @@
+# Test tags for the signaling server package.
+tags:
+  # Long-running load/soak tiers (G8). Skipped by default; run manually:
+  #   dart test test/load_soak_test.dart -t soak --run-skipped
+  soak:
+    timeout: 10m
