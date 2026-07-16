@@ -89,7 +89,8 @@ class ManifestCache {
     required ManifestFetcher fetcher,
 
     /// HTTPS URI baked into the app build for the first fetch; later
-    /// refreshes prefer the manifest's own `configServiceUri`.
+    /// refreshes prefer the first entry of the manifest's own
+    /// `configServiceUris` (multi-origin failover lands in a later wave).
     required Uri bootstrapUri,
     this.config = const ManifestCacheConfig(),
     DateTime Function()? clock,
@@ -198,7 +199,9 @@ class ManifestCache {
   Future<void> _doRefresh(DateTime now) async {
     _lastRefreshAttempt = now;
 
-    final uri = _current?.configServiceUri ?? _bootstrapUri;
+    // Wave 1 uses only the primary origin; Wave 2 adds failover across
+    // the full configServiceUris list.
+    final uri = _current?.configServiceUris.first ?? _bootstrapUri;
     final bytes = await _fetch(uri);
     final document = SignedManifestDocument.fromBytes(bytes);
     final accepted = await _storage.readAcceptedRevision();

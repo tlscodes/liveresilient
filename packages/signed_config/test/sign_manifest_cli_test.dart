@@ -69,7 +69,12 @@ void main() {
           'expiresAt': '2026-07-17T00:00:00Z',
           'signalingEndpoints': ['wss://signal.example.com/v1'],
           'iceServers': <Object?>[],
-          'configServiceUri': 'https://config.example.com/manifest',
+          'configServiceUris': [
+            'https://config.example.com/manifest',
+            'https://config-alt.example.net/manifest',
+          ],
+          'relayRegions': ['eu-central', 'us-east'],
+          'featureFlags': {'relay_failover': true, 'ipv6_candidates': false},
         }),
       );
 
@@ -111,7 +116,17 @@ void main() {
       final result = await verifier.verify(document, lastAcceptedRevision: 0);
 
       expect(result, isA<ManifestAccepted>());
-      expect((result as ManifestAccepted).manifest.revision, 1);
+      final manifest = (result as ManifestAccepted).manifest;
+      expect(manifest.revision, 1);
+      expect(manifest.configServiceUris.map((u) => u.toString()).toList(), [
+        'https://config.example.com/manifest',
+        'https://config-alt.example.net/manifest',
+      ]);
+      expect(manifest.relayRegions, ['eu-central', 'us-east']);
+      expect(manifest.featureFlags, {
+        'relay_failover': true,
+        'ipv6_candidates': false,
+      });
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
@@ -129,7 +144,7 @@ void main() {
       ]);
       expect(keygenResult.exitCode, 0);
 
-      // Missing signalingEndpoints/configServiceUri.
+      // Missing signalingEndpoints/configServiceUris.
       File(manifestPath).writeAsStringSync(jsonEncode({'revision': 1}));
 
       final signResult = await _run([

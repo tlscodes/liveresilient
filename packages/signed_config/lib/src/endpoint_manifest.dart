@@ -14,7 +14,13 @@ library;
 
 import 'dart:convert';
 
-const int manifestSchemaVersion = 1;
+/// Schema v2 (Phase 7 "Signed Endpoint Discovery"): multi-origin
+/// `configServiceUris`, `relayRegions`, and limited `featureFlags`.
+/// There are no deployed v1 manifests, so v2 is the only accepted version.
+const int manifestSchemaVersion = 2;
+
+/// Upper bound on `featureFlags` entries ("limited" per the v2 blueprint).
+const int maxFeatureFlags = 32;
 
 /// A standard STUN/TURN server entry, mirroring the W3C `RTCIceServer`
 /// dictionary so it maps 1:1 onto WebRTC configuration.
@@ -106,12 +112,26 @@ class EndpointManifest {
   /// Standard STUN/TURN servers.
   final List<IceServerEntry> iceServers;
 
-  /// HTTPS base URI of the configuration service for the next refresh.
-  final Uri configServiceUri;
+  /// HTTPS base URIs of the configuration service, in priority order, for
+  /// the next refresh. The model requires >= 1; Phase 7 production policy
+  /// requires >= 2 independent origins (enforced at deployment, not here,
+  /// so tests and dev setups can run single-origin).
+  final List<Uri> configServiceUris;
+
+  /// Relay regions this manifest advertises (lowercase kebab/ASCII, e.g.
+  /// `eu-central`). May be empty.
+  final List<String> relayRegions;
+
+  /// Limited feature toggles: at most [maxFeatureFlags] entries, keys are
+  /// `snake_case` ASCII, values strictly boolean.
+  final Map<String, bool> featureFlags;
 
   /// Minimum app version allowed to use these endpoints (semver string,
   /// enforced by the app shell; empty means no restriction).
   final String minimumAppVersion;
+
+  static final _relayRegionPattern = RegExp(r'^[a-z0-9-]{1,32}$');
+  static final _featureFlagKeyPattern = RegExp(r'^[a-z0-9_]{1,64}$');
 
   EndpointManifest({
     this.schemaVersion = manifestSchemaVersion,
@@ -121,10 +141,15 @@ class EndpointManifest {
     required this.expiresAt,
     required List<Uri> signalingEndpoints,
     required List<IceServerEntry> iceServers,
-    required this.configServiceUri,
+    required List<Uri> configServiceUris,
+    List<String> relayRegions = const [],
+    Map<String, bool> featureFlags = const {},
     this.minimumAppVersion = '',
   }) : signalingEndpoints = List.unmodifiable(signalingEndpoints),
-       iceServers = List.unmodifiable(iceServers) {
+       iceServers = List.unmodifiable(iceServers),
+       configServiceUris = List.unmodifiable(configServiceUris),
+       relayRegions = List.unmodifiable(relayRegions),
+       featureFlags = Map.unmodifiable(featureFlags) {
     if (schemaVersion != manifestSchemaVersion) {
       throw FormatException('Unsupported manifest schema: $schemaVersion');
     }
@@ -149,10 +174,45 @@ class EndpointManifest {
         );
       }
     }
-    if (configServiceUri.scheme != 'https' || configServiceUri.host.isEmpty) {
-      throw FormatException(
-        'Config service URI must be https://, got: $configServiceUri',
+    if (configServiceUris.isEmpty) {
+      throw const FormatException(
+        'Manifest must list at least one config service URI.',
       );
+    }
+    final seenConfigUris = <String>{};
+    for (final uri in configServiceUris) {
+      if (uri.scheme != 'https' || uri.host.isEmpty) {
+        throw FormatException(
+          'Config service URIs must be https://, got: $uri',
+        );
+      }
+      if (!seenConfigUris.add(uri.toString())) {
+        throw FormatException('Duplicate config service URI: $uri');
+      }
+    }
+    final seenRegions = <String>{};
+    for (final region in relayRegions) {
+      if (!_relayRegionPattern.hasMatch(region)) {
+        throw FormatException(
+          'Relay regions must match ^[a-z0-9-]{1,32}\$, got: "$region"',
+        );
+      }
+      if (!seenRegions.add(region)) {
+        throw FormatException('Duplicate relay region: $region');
+      }
+    }
+    if (featureFlags.length > maxFeatureFlags) {
+      throw FormatException(
+        'featureFlags is limited to $maxFeatureFlags entries, '
+        'got ${featureFlags.length}.',
+      );
+    }
+    for (final key in featureFlags.keys) {
+      if (!_featureFlagKeyPattern.hasMatch(key)) {
+        throw FormatException(
+          'Feature flag keys must match ^[a-z0-9_]{1,64}\$, got: "$key"',
+        );
+      }
     }
   }
 
@@ -166,7 +226,9 @@ class EndpointManifest {
     final expiresAt = json['expiresAt'];
     final signaling = json['signalingEndpoints'];
     final ice = json['iceServers'];
-    final configService = json['configServiceUri'];
+    final configServices = json['configServiceUris'];
+    final regions = json['relayRegions'];
+    final flags = json['featureFlags'];
     final minAppVersion = json['minimumAppVersion'];
 
     if (schemaVersion is! int ||
@@ -176,8 +238,30 @@ class EndpointManifest {
         expiresAt is! String ||
         signaling is! List ||
         ice is! List ||
-        configService is! String) {
+        configServices is! List) {
       throw const FormatException('Manifest has missing or mistyped fields.');
+    }
+    // Reject unsupported schemas here as well as in the constructor, so the
+    // error names the version even when other fields are also off.
+    if (schemaVersion != manifestSchemaVersion) {
+      throw FormatException('Unsupported manifest schema: $schemaVersion');
+    }
+    if (regions is! List?) {
+      throw const FormatException('relayRegions must be a list of strings.');
+    }
+    if (flags is! Map<String, Object?>?) {
+      throw const FormatException(
+        'featureFlags must be an object of boolean values.',
+      );
+    }
+    final featureFlags = <String, bool>{};
+    for (final MapEntry(:key, :value) in (flags ?? const {}).entries) {
+      if (value is! bool) {
+        throw FormatException(
+          'Feature flag "$key" must be a boolean, got: $value',
+        );
+      }
+      featureFlags[key] = value;
     }
 
     return EndpointManifest(
@@ -204,7 +288,21 @@ class EndpointManifest {
               'ICE server entry must be a JSON object.',
             ),
       ],
-      configServiceUri: Uri.parse(configService),
+      configServiceUris: [
+        for (final raw in configServices)
+          if (raw is String)
+            Uri.parse(raw)
+          else
+            throw const FormatException('Config service URI must be a string.'),
+      ],
+      relayRegions: [
+        for (final raw in regions ?? const [])
+          if (raw is String)
+            raw
+          else
+            throw const FormatException('Relay region must be a string.'),
+      ],
+      featureFlags: featureFlags,
       minimumAppVersion: minAppVersion is String ? minAppVersion : '',
     );
   }
@@ -217,7 +315,11 @@ class EndpointManifest {
     'expiresAt': expiresAt.toUtc().toIso8601String(),
     'signalingEndpoints': signalingEndpoints.map((u) => u.toString()).toList(),
     'iceServers': iceServers.map((s) => s.toJson()).toList(),
-    'configServiceUri': configServiceUri.toString(),
+    'configServiceUris': configServiceUris.map((u) => u.toString()).toList(),
+    // Always emitted (even when empty) so the canonical signed bytes never
+    // depend on presence-vs-absence of these fields.
+    'relayRegions': relayRegions,
+    'featureFlags': Map<String, Object?>.of(featureFlags),
     if (minimumAppVersion.isNotEmpty) 'minimumAppVersion': minimumAppVersion,
   };
 
