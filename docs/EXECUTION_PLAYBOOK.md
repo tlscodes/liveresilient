@@ -150,6 +150,7 @@ Each row: the phase's disjoint targets (→ parallel surgeon+tester pairs) and t
 ### Phase 11 — Chaos / scale / audit / rollout
 - Pairs: load 100→1k→10k · chaos (node/region kill, DNS fail, cert rotate, clock skew, reorder, burst loss, DB restart, process kill, net transition, suspend, manifest corruption) · security (dep audit, SBOM, fuzz parsers/signaling, replay+downgrade, independent threat-model review, pen test) · gradual rollout (dogfood→1%→5%→25%→50%→100% with auto-rollback).
 - Gate: SLOs met under load + chaos · independent audit done and critical findings closed · rollback tested.
+- **STATUS 2026-07-16 — G8 local slice ONLY (16 tests green in signaling_server):** reusable load/soak harness landed (`bin/load_soak.dart` + `soak`-tagged tests): 100 rooms in-suite (2,000/2,000 frames, 0 errors, RTT P95 87 ms, rooms drain to 0) and 1k rooms manual run (10,000/10,000 frames, 0 errors, 31.7 s) — both explicitly client-bound single-process measurements, NOT SLO claims. 10k tier, chaos matrix, security audit, and rollout remain fully open — they need real infra/audit; scheduled with the deploy slot. Phase 11 is OPEN.
 
 ---
 
