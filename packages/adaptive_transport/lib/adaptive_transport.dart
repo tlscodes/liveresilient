@@ -2,6 +2,7 @@
 /// circuit breaker, endpoint authority parsing.
 library;
 
+export 'src/network_quality_policy.dart';
 export 'src/path_selector.dart';
 export 'src/circuit_breaker.dart';
 export 'src/host_port.dart';
