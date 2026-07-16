@@ -23,3 +23,4 @@ workspace:
   - packages/signed_config
   - server/signaling_server
   - integration_test
+  - tool/fuzz

@@ -1,0 +1,408 @@
+/// Real [PeerConnectionPort] over the `flutter_webrtc` plugin.
+///
+/// This is the thin platform adapter the pure-Dart `media_webrtc` package
+/// was designed around: it maps each port call 1:1 onto the plugin API and
+/// carries ZERO policy logic (adaptation, sampling cadence, negotiation
+/// serialization all live in `media_webrtc` / `call_core`).
+///
+/// Port-method -> flutter_webrtc mapping:
+///
+/// | PeerConnectionPort              | flutter_webrtc                        |
+/// |---------------------------------|---------------------------------------|
+/// | connectionStatus                | RTCPeerConnection.onConnectionState   |
+/// | localCandidates                 | RTCPeerConnection.onIceCandidate      |
+/// | createOffer(iceRestart)         | pc.createOffer (mandatory IceRestart) |
+/// | createAnswer()                  | pc.createAnswer()                     |
+/// | setLocalDescription             | pc.setLocalDescription               |
+/// | setRemoteDescription            | pc.setRemoteDescription              |
+/// | addRemoteCandidate              | pc.addCandidate                       |
+/// | setVideoSenderParameters        | video RTCRtpSender.setParameters +    |
+/// |                                 | MediaStreamTrack.enabled              |
+/// | setAudioMaxBitrate              | audio RTCRtpSender.setParameters      |
+/// | readStatsCounters               | pc.getStats() (standard stats)        |
+/// | close                           | pc.close + pc.dispose + track stop    |
+///
+/// Stats-counter mapping (standard W3C stats passed through unmodified by
+/// the darwin plugin's stats bridge; units verified against the
+/// webrtc-stats spec, which `flutter_webrtc` does not rescale):
+///
+/// | RawRtcCounters field            | stats report source        | unit    |
+/// |---------------------------------|----------------------------|---------|
+/// | packetsReceived                 | sum inbound-rtp            | packets |
+/// | packetsLost                     | sum inbound-rtp            | packets |
+/// | packetsSent                     | sum outbound-rtp           | packets |
+/// | bytesReceived                   | sum inbound-rtp            | bytes   |
+/// | bytesSent                       | sum outbound-rtp           | bytes   |
+/// | jitterSeconds                   | inbound-rtp `jitter`       | seconds |
+/// |                                 | (audio preferred)          |         |
+/// | currentRoundTripTimeSeconds     | selected candidate-pair    | seconds |
+/// |                                 | `currentRoundTripTime`     |         |
+/// | availableOutgoingBitrateBps     | selected candidate-pair    | bit/s   |
+/// |                                 | `availableOutgoingBitrate` |         |
+///
+/// The selected candidate pair is resolved via the `transport` report's
+/// `selectedCandidatePairId` when present, falling back to the
+/// `candidate-pair` report flagged `selected`/`nominated`+`succeeded`.
+library;
+
+import 'dart:async';
+
+import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
+import 'package:media_webrtc/media_webrtc.dart';
+
+class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
+  FlutterWebRtcPeerConnectionPort._(this._pc, this._localStream) {
+    _pc.onConnectionState = (rtc.RTCPeerConnectionState state) {
+      final mapped = mapConnectionState(state);
+      if (mapped != null && !_statusController.isClosed) {
+        _statusController.add(mapped);
+      }
+    };
+    _pc.onIceCandidate = (rtc.RTCIceCandidate candidate) {
+      final line = candidate.candidate;
+      // A null/empty candidate line is the end-of-gathering marker; the
+      // pure-Dart IceCandidate type requires a real candidate line.
+      if (line == null || line.isEmpty) return;
+      if (_candidatesController.isClosed) return;
+      _candidatesController.add(
+        IceCandidate(
+          candidate: line,
+          sdpMid: candidate.sdpMid,
+          sdpMLineIndex: candidate.sdpMLineIndex,
+        ),
+      );
+    };
+  }
+
+  /// Creates the underlying [rtc.RTCPeerConnection], captures local media
+  /// via `getUserMedia`, and adds the tracks as senders.
+  ///
+  /// The reference app is audio-first ([video] defaults to false); when no
+  /// video sender exists, [setVideoSenderParameters] degrades to a no-op.
+  static Future<FlutterWebRtcPeerConnectionPort> create({
+    List<Map<String, Object>> iceServers = const [],
+    bool audio = true,
+    bool video = false,
+  }) async {
+    final pc = await rtc.createPeerConnection(<String, dynamic>{
+      'iceServers': iceServers,
+      'sdpSemantics': 'unified-plan',
+    });
+    rtc.MediaStream? stream;
+    if (audio || video) {
+      try {
+        stream = await rtc.navigator.mediaDevices.getUserMedia(
+          <String, dynamic>{'audio': audio, 'video': video},
+        );
+        for (final track in stream.getTracks()) {
+          await pc.addTrack(track, stream);
+        }
+      } catch (_) {
+        await pc.close();
+        await pc.dispose();
+        rethrow;
+      }
+    }
+    return FlutterWebRtcPeerConnectionPort._(pc, stream);
+  }
+
+  final rtc.RTCPeerConnection _pc;
+  final rtc.MediaStream? _localStream;
+
+  final _statusController = StreamController<PeerConnectionStatus>.broadcast();
+  final _candidatesController = StreamController<IceCandidate>.broadcast();
+  bool _closed = false;
+
+  @override
+  Stream<PeerConnectionStatus> get connectionStatus =>
+      _statusController.stream;
+
+  @override
+  Stream<IceCandidate> get localCandidates => _candidatesController.stream;
+
+  @override
+  Future<SdpDescription> createOffer({required bool iceRestart}) async {
+    _ensureOpen();
+    // Passing no constraints keeps the plugin's defaults
+    // (OfferToReceiveAudio/Video); an ICE restart adds the standard
+    // mandatory `IceRestart` constraint on top of them.
+    final description = iceRestart
+        ? await _pc.createOffer(<String, dynamic>{
+            'mandatory': <String, dynamic>{
+              'OfferToReceiveAudio': true,
+              'OfferToReceiveVideo': true,
+              'IceRestart': true,
+            },
+            'optional': <dynamic>[],
+          })
+        : await _pc.createOffer();
+    return _toSdpDescription(description, expectedType: 'offer');
+  }
+
+  @override
+  Future<SdpDescription> createAnswer() async {
+    _ensureOpen();
+    final description = await _pc.createAnswer();
+    return _toSdpDescription(description, expectedType: 'answer');
+  }
+
+  @override
+  Future<void> setLocalDescription(SdpDescription description) async {
+    _ensureOpen();
+    await _pc.setLocalDescription(
+      rtc.RTCSessionDescription(description.sdp, description.type),
+    );
+  }
+
+  @override
+  Future<void> setRemoteDescription(SdpDescription description) async {
+    _ensureOpen();
+    await _pc.setRemoteDescription(
+      rtc.RTCSessionDescription(description.sdp, description.type),
+    );
+  }
+
+  @override
+  Future<void> addRemoteCandidate(IceCandidate candidate) async {
+    _ensureOpen();
+    await _pc.addCandidate(
+      rtc.RTCIceCandidate(
+        candidate.candidate,
+        candidate.sdpMid,
+        candidate.sdpMLineIndex,
+      ),
+    );
+  }
+
+  /// Rolls the local description back to stable.
+  ///
+  /// NOT part of [PeerConnectionPort] — the pure contract's
+  /// `SdpDescription` only admits offer/answer, so rollback (needed by
+  /// `call_core`'s glare handling via `CallMediaSession.rollback`) is
+  /// exposed as an adapter-side extra instead of changing the pure-Dart
+  /// contract. The darwin plugin maps the `rollback` type string through
+  /// `[RTCSessionDescription typeForString:]` to `RTCSdpTypeRollback`.
+  Future<void> rollbackLocalDescription() async {
+    _ensureOpen();
+    await _pc.setLocalDescription(rtc.RTCSessionDescription('', 'rollback'));
+  }
+
+  @override
+  Future<void> setVideoSenderParameters(
+    VideoSenderParameters parameters,
+  ) async {
+    _ensureOpen();
+    final sender = await _senderByKind('video');
+    // Audio-only session: nothing to apply (documented no-op).
+    if (sender == null) return;
+
+    sender.track?.enabled = parameters.enabled;
+
+    final rtpParameters = sender.parameters;
+    final encodings = rtpParameters.encodings;
+    if (encodings == null || encodings.isEmpty) {
+      // Adding encodings that the platform did not report can fail native
+      // setParameters (encoding-count changes are rejected); the track
+      // enable/disable above still applies. Conservative no-op here.
+      return;
+    }
+    for (final encoding in encodings) {
+      encoding.active = parameters.enabled;
+      encoding.maxBitrate = parameters.maxBitrateBps;
+      encoding.maxFramerate = parameters.maxFramerate;
+      encoding.scaleResolutionDownBy = parameters.scaleResolutionDownBy;
+    }
+    await sender.setParameters(rtpParameters);
+  }
+
+  @override
+  Future<void> setAudioMaxBitrate(int bitrateBps) async {
+    _ensureOpen();
+    final sender = await _senderByKind('audio');
+    if (sender == null) return;
+
+    final rtpParameters = sender.parameters;
+    final encodings = rtpParameters.encodings;
+    if (encodings == null || encodings.isEmpty) return;
+    for (final encoding in encodings) {
+      encoding.maxBitrate = bitrateBps;
+    }
+    await sender.setParameters(rtpParameters);
+  }
+
+  @override
+  Future<RawRtcCounters?> readStatsCounters() async {
+    _ensureOpen();
+    final reports = await _pc.getStats();
+    return countersFromStats(reports);
+  }
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    _pc.onConnectionState = null;
+    _pc.onIceCandidate = null;
+    final stream = _localStream;
+    if (stream != null) {
+      for (final track in stream.getTracks()) {
+        await track.stop();
+      }
+      await stream.dispose();
+    }
+    await _pc.close();
+    await _pc.dispose();
+    await _statusController.close();
+    await _candidatesController.close();
+  }
+
+  // -----------------------------------------------------------------------
+  // Mapping helpers (static + visible for unit tests)
+  // -----------------------------------------------------------------------
+
+  /// Maps the plugin connection state onto the port's five-state enum.
+  /// `RTCPeerConnectionStateNew` has no port equivalent (the engine only
+  /// reacts to the five states) and maps to null (not emitted).
+  static PeerConnectionStatus? mapConnectionState(
+    rtc.RTCPeerConnectionState state,
+  ) {
+    switch (state) {
+      case rtc.RTCPeerConnectionState.RTCPeerConnectionStateNew:
+        return null;
+      case rtc.RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
+        return PeerConnectionStatus.connecting;
+      case rtc.RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+        return PeerConnectionStatus.connected;
+      case rtc.RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+        return PeerConnectionStatus.disconnected;
+      case rtc.RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+        return PeerConnectionStatus.failed;
+      case rtc.RTCPeerConnectionState.RTCPeerConnectionStateClosed:
+        return PeerConnectionStatus.closed;
+    }
+  }
+
+  /// Aggregates a standard stats report list into [RawRtcCounters].
+  ///
+  /// Returns null when the report contains no inbound-rtp and no
+  /// outbound-rtp entries (peer connection not producing media stats yet),
+  /// matching the [PeerConnectionPort.readStatsCounters] contract.
+  static RawRtcCounters? countersFromStats(List<rtc.StatsReport> reports) {
+    var packetsReceived = 0;
+    var packetsLost = 0;
+    var packetsSent = 0;
+    var bytesReceived = 0;
+    var bytesSent = 0;
+    double? audioJitter;
+    double? anyJitter;
+    var sawInbound = false;
+    var sawOutbound = false;
+
+    String? selectedPairId;
+    final candidatePairs = <String, Map<dynamic, dynamic>>{};
+    Map<dynamic, dynamic>? flaggedSelectedPair;
+
+    for (final report in reports) {
+      final values = report.values;
+      switch (report.type) {
+        case 'inbound-rtp':
+          sawInbound = true;
+          packetsReceived += _asInt(values['packetsReceived']);
+          packetsLost += _asInt(values['packetsLost']);
+          bytesReceived += _asInt(values['bytesReceived']);
+          final jitter = _asDoubleOrNull(values['jitter']);
+          if (jitter != null) {
+            anyJitter = jitter;
+            final kind = values['kind'] ?? values['mediaType'];
+            if (kind == 'audio') audioJitter = jitter;
+          }
+        case 'outbound-rtp':
+          sawOutbound = true;
+          packetsSent += _asInt(values['packetsSent']);
+          bytesSent += _asInt(values['bytesSent']);
+        case 'transport':
+          final id = values['selectedCandidatePairId'];
+          if (id is String && id.isNotEmpty) selectedPairId = id;
+        case 'candidate-pair':
+          candidatePairs[report.id] = values;
+          final selected = values['selected'];
+          final nominated = values['nominated'];
+          final state = values['state'];
+          if (selected == true ||
+              (nominated == true && state == 'succeeded')) {
+            flaggedSelectedPair ??= values;
+          }
+      }
+    }
+
+    if (!sawInbound && !sawOutbound) return null;
+
+    final selectedPair = (selectedPairId != null
+            ? candidatePairs[selectedPairId]
+            : null) ??
+        flaggedSelectedPair;
+
+    return RawRtcCounters(
+      packetsReceived: packetsReceived,
+      packetsLost: packetsLost,
+      packetsSent: packetsSent,
+      bytesReceived: bytesReceived,
+      bytesSent: bytesSent,
+      // Prefer the audio stream's jitter (a voice kit adapts on voice
+      // quality first); fall back to any inbound jitter, then 0.
+      jitterSeconds: audioJitter ?? anyJitter ?? 0.0,
+      currentRoundTripTimeSeconds: selectedPair == null
+          ? null
+          : _asDoubleOrNull(selectedPair['currentRoundTripTime']),
+      availableOutgoingBitrateBps: selectedPair == null
+          ? null
+          : _asDoubleOrNull(selectedPair['availableOutgoingBitrate']),
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Internals
+  // -----------------------------------------------------------------------
+
+  Future<rtc.RTCRtpSender?> _senderByKind(String kind) async {
+    final senders = await _pc.getSenders();
+    for (final sender in senders) {
+      if (sender.track?.kind == kind) return sender;
+    }
+    return null;
+  }
+
+  SdpDescription _toSdpDescription(
+    rtc.RTCSessionDescription description, {
+    required String expectedType,
+  }) {
+    final sdp = description.sdp;
+    final type = description.type ?? expectedType;
+    if (sdp == null || sdp.isEmpty) {
+      throw StateError('Platform returned an empty $expectedType SDP.');
+    }
+    return SdpDescription(type: type, sdp: sdp);
+  }
+
+  void _ensureOpen() {
+    if (_closed) {
+      throw StateError('FlutterWebRtcPeerConnectionPort has been closed.');
+    }
+  }
+
+  /// Stats values cross a platform channel and may arrive as int, double,
+  /// or (on some platforms) String — parse defensively.
+  static int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  static double? _asDoubleOrNull(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+}
