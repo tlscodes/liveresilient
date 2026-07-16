@@ -13,6 +13,7 @@ resolution: workspace
 
 dependencies:
   clock: ^1.1.1
+  cryptography: ^2.7.0
 
 dev_dependencies:
   test: ^1.25.0
