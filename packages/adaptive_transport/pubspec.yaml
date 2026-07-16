@@ -12,6 +12,10 @@ resolution: workspace
 
 dependencies:
   clock: ^1.1.1
+  security:
+    path: ../security
+  signed_config:
+    path: ../signed_config
 
 dev_dependencies:
   test: ^1.25.0
