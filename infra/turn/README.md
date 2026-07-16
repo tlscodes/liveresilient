@@ -81,6 +81,34 @@ blueprint's TURN cost pre-gate (line 817) is a Phase-6 concern that applies
 once coturn is deployed to a real cloud region with real relayed media
 traffic; it does not apply to this local container.
 
+## Production credentials (`use-auth-secret`)
+
+The static `user=dev:devpass` line above is dev-only (see "Production
+differences"). The production `turnserver.conf` replaces `lt-cred-mech` /
+`user=` with:
+
+```
+use-auth-secret
+static-auth-secret=<shared secret, 32+ random bytes, ops-managed>
+realm=<production realm>
+```
+
+With this config, coturn no longer checks a fixed username/password pair.
+Instead it recomputes the credential itself from the *username the client
+presents* plus the same `static-auth-secret`, and accepts the allocation
+only if they match and the encoded expiry hasn't passed. That recompute
+step must exactly match what mints the credential on the signaling
+server, which is what `packages/security/lib/src/turn_credentials.dart`
+(`TurnCredentialsIssuer`) implements:
+
+- `username` = `"<unix-expiry-seconds>:<userId>"`
+- `credential` = `base64(HMAC-SHA1(static-auth-secret, username))`
+
+So `TurnCredentialsIssuer(sharedSecret: ...)` must be constructed with the
+exact same value as this file's `static-auth-secret`, and only the
+signaling server (never a client build) should hold that value — see the
+"server-side secret" note in `turn_credentials.dart`'s doc comment.
+
 ## Docker daemon status at time of writing
 
 `docker compose config` was validated (exits 0) without the daemon running.
