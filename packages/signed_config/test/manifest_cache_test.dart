@@ -102,7 +102,10 @@ void main() {
         reason: 'expired-but-authentic manifest must still be adopted',
       );
 
-      // Network is unreachable; get() must still serve last-known-good.
+      // Network is unreachable on every origin; get() must still serve
+      // last-known-good. (The manifest lists two configServiceUris and the
+      // refresh now fails over across all of them.)
+      fetcher.enqueueFailure(Exception('network down'));
       fetcher.enqueueFailure(Exception('network down'));
       final result = await cache.get();
       expect(result.freshness, ManifestFreshness.lastKnownGood);
@@ -178,14 +181,19 @@ void main() {
         expect(first.freshness, ManifestFreshness.fresh);
 
         // Move past expiry (but inside grace) and past the refresh cooldown,
-        // then make the network fail.
+        // then make the network fail on both manifest-listed origins.
         clock.set(DateTime.utc(2026, 1, 1, 2, 0));
+        fetcher.enqueueFailure(Exception('network down'));
         fetcher.enqueueFailure(Exception('network down'));
 
         final second = await cache.get();
         expect(second.freshness, ManifestFreshness.lastKnownGood);
         expect(second.manifest.revision, 1);
-        expect(fetcher.calls, 2);
+        expect(
+          fetcher.calls,
+          3,
+          reason: 'seed + one failover attempt per manifest origin',
+        );
       },
     );
 
@@ -248,14 +256,16 @@ void main() {
         expect(seeded.manifest.revision, 5);
         expect(storage.acceptedRevision, 5);
 
-        // An attacker (or a misbehaving mirror) serves an older, validly
-        // signed manifest on the next refresh.
+        // An attacker (or misbehaving mirrors) serve an older, validly
+        // signed manifest from BOTH origins on the next refresh.
         final stale = buildManifest(
           revision: 2,
           issuedAt: DateTime.utc(2026, 1, 1),
           expiresAt: DateTime.utc(2026, 1, 1, 6),
         );
-        fetcher.enqueueSuccess(encodeSignedDocument(signManifest(stale, key1)));
+        final staleBytes = encodeSignedDocument(signManifest(stale, key1));
+        fetcher.enqueueSuccess(staleBytes);
+        fetcher.enqueueSuccess(staleBytes);
         clock.advance(const Duration(minutes: 6)); // past cooldown, still fresh
 
         final result = await cache.get(forceRefresh: true);

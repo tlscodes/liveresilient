@@ -79,6 +79,12 @@ EndpointManifest buildManifest({
   DateTime? issuedAt,
   DateTime? expiresAt,
   int schemaVersion = manifestSchemaVersion,
+  List<Uri>? configServiceUris,
+  List<String> relayRegions = const ['eu-central', 'us-east'],
+  Map<String, bool> featureFlags = const {
+    'relay_failover': true,
+    'ipv6_candidates': false,
+  },
 }) {
   final issued = issuedAt ?? DateTime.utc(2026, 1, 1);
   final expires = expiresAt ?? issued.add(const Duration(hours: 1));
@@ -90,7 +96,14 @@ EndpointManifest buildManifest({
     expiresAt: expires,
     signalingEndpoints: [Uri.parse('wss://signal.example.com/v1')],
     iceServers: const [],
-    configServiceUri: Uri.parse('https://config.example.com/manifest'),
+    configServiceUris:
+        configServiceUris ??
+        [
+          Uri.parse('https://config.example.com/manifest'),
+          Uri.parse('https://config-alt.example.net/manifest'),
+        ],
+    relayRegions: relayRegions,
+    featureFlags: featureFlags,
   );
 }
 

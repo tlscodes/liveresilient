@@ -17,6 +17,7 @@ import 'dart:async';
 
 import 'endpoint_manifest.dart';
 import 'manifest_verifier.dart';
+import 'multi_origin_refresh.dart';
 
 /// Durable storage for the last accepted manifest document and revision.
 abstract interface class ManifestStorage {
@@ -75,7 +76,7 @@ class ManifestCache {
   final ManifestVerifier _verifier;
   final ManifestStorage _storage;
   final ManifestFetcher _fetch;
-  final Uri _bootstrapUri;
+  final List<Uri> _bootstrapUris;
   final ManifestCacheConfig config;
   final DateTime Function() _clock;
 
@@ -88,22 +89,44 @@ class ManifestCache {
     required ManifestStorage storage,
     required ManifestFetcher fetcher,
 
-    /// HTTPS URI baked into the app build for the first fetch; later
-    /// refreshes prefer the manifest's own `configServiceUri`.
-    required Uri bootstrapUri,
+    /// Single-origin convenience: equivalent to `bootstrapUris: [uri]`.
+    /// Exactly one of [bootstrapUri] / [bootstrapUris] must be provided.
+    Uri? bootstrapUri,
+
+    /// HTTPS URIs baked into the app build for the first fetch, tried in
+    /// order. Later refreshes prefer the manifest's own `configServiceUris`
+    /// (all of them, in order — per-origin failover).
+    List<Uri>? bootstrapUris,
     this.config = const ManifestCacheConfig(),
     DateTime Function()? clock,
   }) : _verifier = verifier,
        _storage = storage,
        _fetch = fetcher,
-       _bootstrapUri = bootstrapUri,
+       _bootstrapUris = List.unmodifiable([
+         if (bootstrapUri != null) bootstrapUri,
+         ...?bootstrapUris,
+       ]),
        _clock = clock ?? DateTime.now {
-    if (bootstrapUri.scheme != 'https') {
-      throw ArgumentError.value(
-        bootstrapUri,
-        'bootstrapUri',
-        'Manifest bootstrap URI must be https.',
+    if ((bootstrapUri == null) == (bootstrapUris == null)) {
+      throw ArgumentError(
+        'Provide exactly one of bootstrapUri / bootstrapUris.',
       );
+    }
+    if (_bootstrapUris.isEmpty) {
+      throw ArgumentError.value(
+        bootstrapUris,
+        'bootstrapUris',
+        'At least one bootstrap URI is required.',
+      );
+    }
+    for (final uri in _bootstrapUris) {
+      if (uri.scheme != 'https') {
+        throw ArgumentError.value(
+          uri,
+          'bootstrapUri',
+          'Manifest bootstrap URIs must be https.',
+        );
+      }
     }
   }
 
@@ -198,28 +221,30 @@ class ManifestCache {
   Future<void> _doRefresh(DateTime now) async {
     _lastRefreshAttempt = now;
 
-    final uri = _current?.configServiceUri ?? _bootstrapUri;
-    final bytes = await _fetch(uri);
-    final document = SignedManifestDocument.fromBytes(bytes);
+    // Candidate origins: the current manifest's own configServiceUris (all,
+    // in order) when a manifest exists, else the baked-in bootstrap list.
+    // Origins are tried sequentially with per-origin failure isolation —
+    // a tampering/unreachable origin never blocks a healthy later one.
+    final origins = _current?.configServiceUris ?? _bootstrapUris;
     final accepted = await _storage.readAcceptedRevision();
 
-    final result = await _verifier.verify(
-      document,
-      lastAcceptedRevision: accepted,
-      now: now,
-    );
+    final MultiOriginRefreshResult result;
+    try {
+      result = await fetchVerifiedManifest(
+        origins: origins,
+        fetch: _fetch,
+        verifier: _verifier,
+        lastAcceptedRevision: accepted,
+        now: now,
+      );
+    } on MultiOriginRefreshException catch (error) {
+      throw ManifestUnavailable(error.toString());
+    }
 
-    switch (result) {
-      case ManifestAccepted(:final manifest):
-        _current = manifest;
-        await _storage.writeDocument(bytes);
-        if (manifest.revision > accepted) {
-          await _storage.writeAcceptedRevision(manifest.revision);
-        }
-      case ManifestRejected(:final reason, :final detail):
-        throw ManifestUnavailable(
-          'Fetched manifest rejected (${reason.name}): $detail',
-        );
+    _current = result.manifest;
+    await _storage.writeDocument(result.documentBytes);
+    if (result.manifest.revision > accepted) {
+      await _storage.writeAcceptedRevision(result.manifest.revision);
     }
   }
 }
