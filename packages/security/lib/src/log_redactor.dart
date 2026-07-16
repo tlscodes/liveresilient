@@ -33,10 +33,27 @@ class LogRedactor {
     ),
     _RedactionRule(RegExp(r'\?[^\s"]+'), (_) => '?[redacted-query]'),
 
-    // Bearer / token-style credentials.
+    // "Bearer <value>" as one unit, BEFORE the generic keyword rule: in
+    // 'Authorization: Bearer eyJ..' the keyword rule would consume only
+    // the word 'Bearer' as the value and leave the actual token standing.
+    _RedactionRule(
+      RegExp(r'\bbearer\s+\S+', caseSensitive: false),
+      (_) => '[redacted-bearer]',
+    ),
+
+    // JWT-shaped values (three dot-separated base64url segments) anywhere
+    // in a line — the generic blob rule below misses JWTs whose individual
+    // segments are shorter than 32 chars.
+    _RedactionRule(
+      RegExp(r'\bey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*'),
+      (_) => '[jwt]',
+    ),
+
+    // Bearer / token-style credentials. 'username' is included because
+    // TURN usernames ('<expiry>:<userId>') identify the user.
     _RedactionRule(
       RegExp(
-        r'\b(bearer|token|authorization|password|secret|credential)\b'
+        r'\b(bearer|token|authorization|password|secret|credential|username)\b'
         r'([=:\s]+)\S+',
         caseSensitive: false,
       ),
@@ -72,10 +89,18 @@ class LogRedactor {
     _RedactionRule(RegExp(r'\b[A-Za-z0-9+/_-]{32,}={0,2}\b'), (_) => '[blob]'),
   ];
 
+  /// Test-only switch: when true, [redact] throws internally so tests can
+  /// prove the fail-closed contract (any internal error drops the whole
+  /// line instead of passing it through). Never set in production code.
+  static bool debugSimulateInternalError = false;
+
   /// Returns a redacted copy of [line]. Never throws: on any internal
   /// error the whole line is replaced, because failing open would leak.
   static String redact(String line) {
     try {
+      if (debugSimulateInternalError) {
+        throw StateError('simulated internal redaction error');
+      }
       var result = line;
       for (final rule in _rules) {
         result = result.replaceAllMapped(rule.pattern, rule.replace);

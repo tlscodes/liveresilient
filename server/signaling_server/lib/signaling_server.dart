@@ -2,5 +2,6 @@
 /// opaque frames between them without parsing or trusting their contents.
 library;
 
+export 'src/abuse_controls.dart';
 export 'src/dev_certificate.dart';
 export 'src/relay_server.dart';
