@@ -5,4 +5,5 @@ library;
 export 'src/path_selector.dart';
 export 'src/circuit_breaker.dart';
 export 'src/host_port.dart';
+export 'src/relay_pool.dart';
 export 'src/transport_channel.dart';
