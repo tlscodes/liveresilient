@@ -12,6 +12,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'abuse_controls.dart';
+
 /// Upper bound for a single relayed frame, matching
 /// `signal_envelope.maxEnvelopeBytes` in package:signaling. Kept as a literal
 /// here (not a dependency) so this server stays a standalone, dependency-free
@@ -39,9 +41,13 @@ void _noopLogSink(String event, {String? callId, Object? error}) {}
 
 /// A two-party relay room keyed by `callId`.
 class _Room {
-  _Room(this.callId);
+  _Room(this.callId, this.lastActivity);
 
   final String callId;
+
+  /// Last time a frame was relayed/buffered or a peer joined; drives the
+  /// idle-room TTL sweep.
+  DateTime lastActivity;
   final List<WebSocket> sockets = <WebSocket>[];
   final List<Object> _pending = <Object>[];
 
@@ -84,32 +90,56 @@ class _Room {
 /// frame goes. Two sockets sharing a `callId` are paired into a room and
 /// every frame either one sends is forwarded verbatim to the other.
 class SignalingRelayServer {
-  SignalingRelayServer._(this._httpServer, this._logSink) {
+  SignalingRelayServer._(
+    this._httpServer,
+    this._logSink,
+    this._guard,
+    this._now,
+  ) {
     _subscription = _httpServer.listen(
       _handleRequest,
       onError: (Object error) => _logSink('http_server_error', error: error),
+    );
+    _sweepTimer = Timer.periodic(
+      _guard.config.sweepInterval,
+      (_) => _sweepIdleRooms(),
     );
   }
 
   final HttpServer _httpServer;
   final SignalingLogSink _logSink;
+  final AbuseGuard _guard;
+  final Clock _now;
   late final StreamSubscription<HttpRequest> _subscription;
+  late final Timer _sweepTimer;
   final Map<String, _Room> _rooms = <String, _Room>{};
 
   /// Binds a TLS WebSocket server on [address]:[port] (ephemeral if `0`)
   /// using [security] for the TLS handshake.
+  ///
+  /// [abuseControls] tunes the application-level rate/session/room limits
+  /// (validated defaults when omitted); [clock] injects a deterministic time
+  /// source for the limiters and the idle-room sweep.
   static Future<SignalingRelayServer> bind({
     required SecurityContext security,
     InternetAddress? address,
     int port = 0,
     SignalingLogSink logSink = _noopLogSink,
+    AbuseControlConfig? abuseControls,
+    Clock? clock,
   }) async {
     final httpServer = await HttpServer.bindSecure(
       address ?? InternetAddress.loopbackIPv4,
       port,
       security,
     );
-    return SignalingRelayServer._(httpServer, logSink);
+    final now = clock ?? DateTime.now;
+    return SignalingRelayServer._(
+      httpServer,
+      logSink,
+      AbuseGuard(config: abuseControls, clock: now),
+      now,
+    );
   }
 
   /// The bound TCP port (useful when constructed with `port: 0`).
@@ -118,12 +148,19 @@ class SignalingRelayServer {
   /// Number of rooms currently tracked (0, 1, or 2 sockets joined).
   int get activeRooms => _rooms.length;
 
+  /// Aggregate, identity-free abuse counters (see [AbuseCounters]).
+  AbuseCounters get counters => _guard.counters;
+
   Future<void> _handleRequest(HttpRequest request) async {
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
       request.response.statusCode = HttpStatus.upgradeRequired;
       await request.response.close();
       return;
     }
+    // Transient source key for in-memory limiting only — never stored in
+    // counters, never logged.
+    final sourceKey =
+        request.connectionInfo?.remoteAddress.address ?? 'unknown';
     late final WebSocket socket;
     try {
       socket = await WebSocketTransformer.upgrade(request);
@@ -131,15 +168,25 @@ class SignalingRelayServer {
       _logSink('upgrade_failed', error: error);
       return;
     }
-    unawaited(_handleSocket(socket));
+    unawaited(_handleSocket(socket, sourceKey));
   }
 
-  Future<void> _handleSocket(WebSocket socket) async {
+  Future<void> _handleSocket(WebSocket socket, String sourceKey) async {
+    _guard.counters.connectionsTotal++;
+    final bucket = _guard.newConnectionBucket();
     _Room? room;
     try {
       await for (final Object raw in socket) {
+        if (!bucket.tryConsume()) {
+          _guard.counters.rateLimitDisconnects++;
+          _logSink('rate_limit_close', callId: room?.callId);
+          await _safeClose(socket, rateLimitCloseCode, 'message rate limit');
+          return;
+        }
+
         final bytes = _frameBytes(raw);
-        if (bytes == null || bytes.length > maxRelayFrameBytes) {
+        if (bytes == null || bytes.length > _guard.config.maxFrameBytes) {
+          _guard.counters.oversizedFramesDropped++;
           _logSink('frame_dropped_oversized', callId: room?.callId);
           continue;
         }
@@ -158,20 +205,52 @@ class SignalingRelayServer {
           continue;
         }
 
-        room ??= _joinRoom(callIdField, socket);
         if (room == null) {
-          _logSink('room_rejected_full', callId: callIdField);
-          await _safeClose(socket, roomFullCloseCode, 'room full');
-          return;
+          final admission = _guard.admitRoomJoin(
+            sourceKey: sourceKey,
+            callId: callIdField,
+            roomExists: _rooms.containsKey(callIdField),
+            activeRooms: _rooms.length,
+          );
+          if (!admission.allowed) {
+            _logSink('room_rejected_limited', callId: callIdField);
+            await _safeClose(socket, admission.closeCode, admission.reason);
+            return;
+          }
+          room = _joinRoom(callIdField, socket);
+          if (room == null) {
+            _guard.leaveRoom(sourceKey, callIdField);
+            _logSink('room_rejected_full', callId: callIdField);
+            await _safeClose(socket, roomFullCloseCode, 'room full');
+            return;
+          }
         }
 
         room.relayOrBuffer(socket, raw);
+        room.lastActivity = _now();
       }
     } catch (error) {
       _logSink('socket_stream_error', callId: room?.callId, error: error);
     } finally {
       if (room != null) {
+        _guard.leaveRoom(sourceKey, room.callId);
         _closeRoom(room, socket);
+      }
+    }
+  }
+
+  /// Reaps rooms with no traffic for [AbuseControlConfig.idleRoomTtl] and
+  /// prunes the guard's transient session-tracking maps (bounded memory).
+  void _sweepIdleRooms() {
+    _guard.prune();
+    final cutoff = _now().subtract(_guard.config.idleRoomTtl);
+    for (final room in _rooms.values.toList()) {
+      if (room.lastActivity.isAfter(cutoff)) continue;
+      _rooms.remove(room.callId);
+      _guard.counters.idleRoomsReaped++;
+      _logSink('idle_room_reaped', callId: room.callId);
+      for (final socket in room.sockets) {
+        unawaited(_safeClose(socket, idleTimeoutCloseCode, 'idle timeout'));
       }
     }
   }
@@ -180,7 +259,7 @@ class SignalingRelayServer {
   /// needed. Returns `null` if the room already has two other sockets
   /// (caller must reject the connection).
   _Room? _joinRoom(String callId, WebSocket socket) {
-    final room = _rooms.putIfAbsent(callId, () => _Room(callId));
+    final room = _rooms.putIfAbsent(callId, () => _Room(callId, _now()));
     if (room.sockets.any((s) => identical(s, socket))) {
       return room;
     }
@@ -188,6 +267,7 @@ class SignalingRelayServer {
       return null;
     }
     room.sockets.add(socket);
+    room.lastActivity = _now();
     if (room.sockets.length == 2) {
       room.flushPendingTo(socket);
     }
@@ -237,6 +317,7 @@ class SignalingRelayServer {
   /// Stops accepting new connections and closes every tracked room's
   /// sockets, then shuts down the underlying HTTP server.
   Future<void> close() async {
+    _sweepTimer.cancel();
     await _subscription.cancel();
     for (final room in _rooms.values.toList()) {
       for (final socket in room.sockets.toList()) {
