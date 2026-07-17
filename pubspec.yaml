@@ -1,9 +1,9 @@
-name: voice_call_kit_v2_workspace
+name: voice_call_kit_v3_workspace
 description: >-
-  Melos-style Dart/Flutter monorepo for VoiceCallKit v2 — a
+  Native pub-workspace Dart/Flutter monorepo for VoiceCallKit v3 — a
   standards-based resilient calling stack. This root package only anchors
   the workspace; all code lives in packages/ and apps/.
-version: 2.0.0
+version: 3.0.0-dev.1
 publish_to: none
 
 environment:
