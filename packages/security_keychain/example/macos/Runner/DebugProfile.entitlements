@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- NOTE: no keychain-access-groups here. It is a RESTRICTED entitlement:
+	     with the ad-hoc "Sign to Run Locally" identity this debug host uses,
+	     taskgated SIGKILLs the app at launch (verified 2026-07-17, crash
+	     report "Taskgated Invalid Signature"). A sandboxed app still gets
+	     its own implicit keychain access group, which is all these
+	     integration tests need. Shipping apps signed with a real identity
+	     SHOULD add Keychain Sharing per the flutter_secure_storage docs. -->
+</dict>
+</plist>

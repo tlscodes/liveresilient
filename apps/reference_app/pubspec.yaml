@@ -52,6 +52,18 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # Direct dev-dep (same constraint as media_webrtc_flutter): the E2E
+  # support code probes `getUserMedia` directly to report the media mode.
+  flutter_webrtc: ^1.5.2
+
+  # In-process TLS signaling relay for the on-device loopback E2E suite
+  # (integration_test/): the tests bind the real relay inside the app
+  # process so the full stack runs over a real wss:// socket on one machine.
+  signaling_server:
+    path: ../../server/signaling_server
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

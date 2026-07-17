@@ -1,0 +1,61 @@
+/// TEST-ONLY self-signed TLS material for the in-process loopback relay.
+///
+/// The macOS app sandbox forbids spawning `openssl` from inside the app,
+/// so the E2E suite embeds a pre-generated self-signed certificate for
+/// `localhost`/`127.0.0.1` (10-year validity). The private key below is
+/// INTENTIONALLY public: it secures nothing — it only lets the loopback
+/// relay speak TLS to peers inside the same test process. Never reuse it.
+library;
+
+const String e2eDevCertificatePem = '''
+-----BEGIN CERTIFICATE-----
+MIIDJTCCAg2gAwIBAgIUd+I0T0qSQbefQ6P4qckw+DKFTqcwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDcxNjIzNTgzNloXDTM2MDcx
+MzIzNTgzNlowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAsRztcwBV2Oxeu8ZUHljNv+HeSNow+QVPN4HsoBsc8EuD
+E4AcKFAIWANm1fw7+ZolyVEY/R1QlZg+VxOvS2lmkNBp0TAzSGTQec7p/gBxiLdI
+0cHwawrsIRLS2VGSe+TSIrQPAWx+LykZlIv0RwJwJj8xqvcYRbODqufMWMpimM3j
+LL43N6OVl4tkRtBhGl1MWR5wRyF4qykhZ/PBsA+vqnuuDWsP2LfOAjXNz9PAB/oM
+BBwbrDGLeU+4lzCtl8LaVklFW81VeUR6pGSxnf86QlJKKvFo540SXbXv6mleQdSQ
+w5o1Aef83n6+8sGIPQOyjPeX/D/0E2B/5BozKx3uqwIDAQABo28wbTAdBgNVHQ4E
+FgQUZN5KrceuDHEkPq20/VmLh9g3uFAwHwYDVR0jBBgwFoAUZN5KrceuDHEkPq20
+/VmLh9g3uFAwDwYDVR0TAQH/BAUwAwEB/zAaBgNVHREEEzARgglsb2NhbGhvc3SH
+BH8AAAEwDQYJKoZIhvcNAQELBQADggEBAKNUUfYi0nfU51qdqgp1csAZJgnjmADH
+l6MI9HEFupWUCteC+8NTrmmFLMW/N3CNLAqEbqFE0/AqSjOGibDayvIp+OSmUBMh
+ajZgfaxv31Oytj4N/tG9dVodS5+u9eDh6kto7nwYqcBHYd+2rgHCQPXBAh2jlHzM
+GJu9TtCtCzeBYRBqxAgO+fObTOp0EhOvi9/cXCbB4+8xGGD1LDcLIhfDLQkqF6Cx
+4N+XxDV2a6yAb2WRcrwF5Q+MDw0VKAtBvDTl3o1wWk67iHwvZ/Y2pE5bxcIZggoX
+C1DUmnIq7JH9cW+dgcJG8LjYM/D1W1Thf2XBLP6uqUakJ3gyYse8mYQ=
+-----END CERTIFICATE-----
+''';
+
+const String e2eDevPrivateKeyPem = '''
+-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCxHO1zAFXY7F67
+xlQeWM2/4d5I2jD5BU83geygGxzwS4MTgBwoUAhYA2bV/Dv5miXJURj9HVCVmD5X
+E69LaWaQ0GnRMDNIZNB5zun+AHGIt0jRwfBrCuwhEtLZUZJ75NIitA8BbH4vKRmU
+i/RHAnAmPzGq9xhFs4Oq58xYymKYzeMsvjc3o5WXi2RG0GEaXUxZHnBHIXirKSFn
+88GwD6+qe64Naw/Yt84CNc3P08AH+gwEHBusMYt5T7iXMK2XwtpWSUVbzVV5RHqk
+ZLGd/zpCUkoq8WjnjRJdte/qaV5B1JDDmjUB5/zefr7ywYg9A7KM95f8P/QTYH/k
+GjMrHe6rAgMBAAECggEACWG2ZDqW0YxHwluRlh/vGiRtQV+pa29wEEkmDx8Qi9v8
+H/rPwwTmRD894cTgKmsTaFQO5k14uMvdNYCZ7v0wzSf1CvsqJEIO1vzyYR2F5g+L
+YG0M/qaP9nqIR7Gt+DkZNnRiPRmRn47mR3uYX3COH0CGsX8wPnTxWwq3RNbHnT9o
+HeWdVYKLnSswPciW2zjZSB5wmxH9+/yDgXb5Q4PS8UDphNReAmbnVu5cYufNLSWm
+ginXFRwn1Q+dSQRosu8HiECehEtdF+RhVlgeFk8BYf5IVm77SjRYlEakS7gbecNG
+xeEnIcDl9yHNN61KDH2kvPD/UVY4bw31EtFA1U0t+QKBgQDesrG34Ss8oaNWw5WF
+9QJ5MlVzof668tcww9YFqs7H4b/wKmeWmCLLk5rGDdydbpLR7JXJMu81B052G+dR
+655qN02/d6d5MVmA/WJMWaovLufD7b9sT4RH63ytVlfdmn/om1A3s8gkPTFCf650
+51yWQn8BTR4KFHMBLsGzRaxZyQKBgQDLmSbFFvxppcyEKu9LsTGjjXTURRPqJuX6
+93wJC9jbUNZhP0/PU+jDnWr2jktYESNokF1ED35ed6Z0w8x+o2x825tXg1TqwKyu
+mhuMD7WiB09cx4OkFpFhIbdt/JHgFku7NWJJfSuhBn7nv2X7t0/IEdsNwUVBB5BP
+kO3kemd+0wKBgDkarzGMfo7Ej+K+skewRNsZCgplnrEHdiCeBvJbEzzz6UjHRtq5
+1ipHhieFBG4mHWXQ+bOm6Om7HuZwT0eVWIC5/6i6IOqVufK2ho83aslAiNOX0j8O
+wMfEXasA+fTsGiJmORKfehG40znPDcgST46ELJcD1FEXX0oNWEQE+KXpAoGARK/w
+koGEuqfC7bwGa0TmeEUa6xo6874XzKl94RdsG+GT0c8oP8wRNR2Anpm29Ykipv49
+WN7ZRUmckLwV24uK6Dy2lbmrBl/mYil/rasHHhjVP3nYAZ3Tgi970NFq7WzYM9p4
+xE5ET9j/K3Q5FcjsU5Uij+tqT9wbZZyBhZl+HR0CgYEAlZnATE7Dh7sahRfe2IK5
+ZDJupuAsKiRxLuCQvnXsPRuWn9FtYYJOU/mfPES7FIxvcFXkaFHo02icL+szEgog
+ehgHpug9uiieTuV3nyD/Kr12Gln7umzEkhzsAtERy86ZJ1BekGQhOQ8qdxoJV5Uf
+WCCx2o6nURCdVyGKv0crb6g=
+-----END PRIVATE KEY-----
+''';
