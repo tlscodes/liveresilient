@@ -45,8 +45,8 @@ class ReliableMessenger {
     this.retryAfter = const Duration(seconds: 2),
     this.maxAttempts = 5,
     Clock? clock,
-  })  : _clock = clock ?? const Clock(),
-        assert(maxAttempts >= 1) {
+  }) : _clock = clock ?? const Clock(),
+       assert(maxAttempts >= 1) {
     _sub = _port.inbound.listen(_onFrame);
   }
 
