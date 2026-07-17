@@ -14,7 +14,7 @@ features. This closes the 7 Release Blockers that make the repo un-buildable.
 |---|----------------|---------------|
 | A | `call_core`: pick one canonical `CallState` + `ReconnectPolicy`; remove the duplicate defs from `call_controller.dart`; fix barrel exports | unit test: importing `package:call_core/call_core.dart` compiles; state-machine transitions |
 | B | Add real, pinned deps after license/security check (WebRTC adapter, WSS/HTTP client, crypto lib, secure storage, test+fake_clock+mocking) | `flutter pub get` resolves; no version conflicts |
-| C | `rtc_stats_sampler.dart` single-flight guard; `_negotiating` timeout + `try/finally`; circuit-breaker half-open probe | property tests: no concurrent `_tick`; negotiation always releases; open-state success does not bypass cooldown |
+| C | `rtc_stats_sampler.dart` single-flight guard; `_negotiating` timeout + `try/finally`; circuit-breaker half-open probe | property tests: no concurrent `_tick`; negotiation always releases; open-state success does not skip the cooldown |
 | D | `architecture_guard.dart`: resolve workspace root independent of CWD; fix redaction regex order (IPv4 before phone) | test: guard finds root from any CWD; redactor labels IPv4 vs phone correctly |
 
 ## Hidden contradictions to catch (the part a cheap model misses)

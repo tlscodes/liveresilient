@@ -40,7 +40,7 @@ void main() {
       expect(breaker.allowsRequest(), isFalse);
     });
 
-    test('recordSuccess while open does not bypass the cooldown', () {
+    test('recordSuccess while open does not skip the cooldown', () {
       trip();
       expect(breaker.state, CircuitState.open);
 

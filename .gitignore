@@ -22,3 +22,7 @@ pubspec.lock
 
 # Generated dev TLS certs (signaling_server)
 .dev-certs/
+
+# conversation transcripts / logs — never in the technical repo
+chats.md
+*.log

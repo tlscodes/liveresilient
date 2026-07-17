@@ -30,7 +30,7 @@ import 'support/fakes.dart';
 /// `openssl` binary (dev_certificate.dart recipe, extended to a mini
 /// CA-signs-leaf chain).
 ///
-/// Unlike the wss tests — which bypass verification with
+/// Unlike the wss tests — which skip verification with
 /// `badCertificateCallback` — this suite installs a real TRUST ANCHOR via
 /// `setTrustedCertificates`, and the Dart/BoringSSL verifier refuses a
 /// self-signed LEAF as an anchor (probed empirically: CERTIFICATE_VERIFY_

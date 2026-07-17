@@ -42,7 +42,7 @@ Future<void> pumpEventQueue([int times = 20]) async {
 /// future itself was created while the fake zone was already active --
 /// otherwise the very first `_enqueue`d task (i.e. `start()`) never
 /// resolves via `flushMicrotasks()`/`elapse()` at all. (Same family of
-/// zone-bypass quirk as the `StreamSubscription.cancel()` issue [run]'s
+/// zone-skip quirk as the `StreamSubscription.cancel()` issue [run]'s
 /// caller has to work around with [pumpEventQueue] -- both are
 /// already-completed/no-op futures whose continuation dispatch doesn't
 /// follow the normal "zone active at `.then()` call time" rule under
