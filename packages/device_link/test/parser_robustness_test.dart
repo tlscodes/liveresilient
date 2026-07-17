@@ -227,7 +227,7 @@ class _MeshFrameFuzzTarget extends FuzzTarget {
       throw StateError(
         'Frame passed bounds validation with lifetime $lifetime ms '
         '(createdAtMs=${frame.createdAtMs}, '
-        'expiresAtMs=${frame.expiresAtMs}) — 64-bit overflow bypass.',
+        'expiresAtMs=${frame.expiresAtMs}) — 64-bit overflow slip-through.',
       );
     }
     return FuzzOutcome.accept;

@@ -151,7 +151,7 @@ class CircuitBreaker {
       case CircuitState.open:
         // A success while open comes from a request that started BEFORE the
         // trip; it says nothing about the path after its rest period. It
-        // must not bypass the cool-down — recovery is proven only by
+        // must not skip the cool-down — recovery is proven only by
         // half-open probes admitted through allowsRequest().
         break;
     }

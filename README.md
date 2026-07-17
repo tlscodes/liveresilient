@@ -88,8 +88,6 @@ melos run guard      # architecture guard (also a required CI check)
 - `docs/ARCHITECTURE.md` — layering, package responsibilities, call flow.
 - `docs/PRIVACY.md` — what each component can and cannot see.
 - `docs/ACCESSIBILITY.md` — WCAG 2.2 AA requirements for the app.
-- `docs/HUMAN_RIGHTS_DESIGN.md` — UDHR Article 19-informed design values
-  and claims discipline (no affiliation claims).
 - `security/` — threat model, security policy, incident-response runbook.
 - `docs/DATA_FLOW.md` — data-flow diagram, trust boundaries, key-material
   locations (companion to `security/THREAT_MODEL.md`).
