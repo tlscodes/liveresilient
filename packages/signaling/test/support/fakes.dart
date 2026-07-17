@@ -155,7 +155,7 @@ class InMemoryOutboxStore implements OutboxStore {
   @override
   Future<List<SignalEnvelope>> loadAll() async => _entries.values.toList();
 
-  /// Seeds the store as if a previous process had persisted it, bypassing
+  /// Seeds the store as if a previous process had persisted it, skipping
   /// [save] so `restore()` sees only this pre-existing data.
   void seed(SignalEnvelope envelope) {
     _entries[envelope.messageId] = envelope;

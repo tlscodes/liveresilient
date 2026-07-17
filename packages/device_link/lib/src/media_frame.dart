@@ -205,7 +205,7 @@ class MeshMessageProcessor {
     // before any arithmetic touches it: a crafted extreme value (e.g.
     // 64-bit int min) must never reach the lifetime subtraction below,
     // where `expiresAtMs - createdAtMs` can silently wrap around 64-bit
-    // signed overflow and evade the maximumLifetimeMs check entirely
+    // signed overflow and skip the maximumLifetimeMs check entirely
     // (found by fuzzing — see
     // packages/device_link/test/parser_robustness_test.dart, target
     // `mesh_frame`). Any legitimate frame already satisfies this: a

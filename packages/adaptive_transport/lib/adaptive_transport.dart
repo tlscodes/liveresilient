@@ -1,4 +1,4 @@
-/// Multi-path resilient transport: channel abstraction, adaptive router,
+/// Multi-path adaptive transport: channel abstraction, adaptive router,
 /// circuit breaker, endpoint authority parsing.
 library;
 
