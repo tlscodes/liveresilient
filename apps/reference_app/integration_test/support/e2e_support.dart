@@ -47,13 +47,13 @@ const e2eSignalingConfig = SignalingClientConfig(
 /// intentionally creates ~100 rooms fast, which the production defaults
 /// (30 msg/s, 20 new callIds/min, 16 rooms/source) would correctly reject.
 AbuseControlConfig e2eAbuseControls() => AbuseControlConfig(
-      messagesPerSecond: 1000000,
-      messageBurst: 1 << 20,
-      maxNewCallIdsPerWindow: 1024,
-      maxConcurrentRoomsGlobal: 1024,
-      maxConcurrentRoomsPerSource: 1024,
-      idleRoomTtl: const Duration(minutes: 30),
-    );
+  messagesPerSecond: 1000000,
+  messageBurst: 1 << 20,
+  maxNewCallIdsPerWindow: 1024,
+  maxConcurrentRoomsGlobal: 1024,
+  maxConcurrentRoomsPerSource: 1024,
+  idleRoomTtl: const Duration(minutes: 30),
+);
 
 /// The in-process relay over the embedded TEST-ONLY localhost certificate
 /// (`e2e_dev_tls.dart` — the sandboxed app cannot spawn `openssl`).
@@ -106,7 +106,8 @@ Future<MediaMode> resolveMediaMode({
   if (resolved != null) return resolved;
   try {
     final stream = await rtc.navigator.mediaDevices
-        .getUserMedia(<String, dynamic>{'audio': true}).timeout(probeTimeout);
+        .getUserMedia(<String, dynamic>{'audio': true})
+        .timeout(probeTimeout);
     for (final track in stream.getTracks()) {
       await track.stop();
     }
@@ -254,8 +255,7 @@ Future<void> waitForActiveRooms(
   Duration timeout = const Duration(seconds: 3),
 }) async {
   final deadline = DateTime.now().add(timeout);
-  while (
-      server.activeRooms != expected && DateTime.now().isBefore(deadline)) {
+  while (server.activeRooms != expected && DateTime.now().isBefore(deadline)) {
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
 }
@@ -275,9 +275,9 @@ Future<List<int>> samplePacketsReceivedStrictlyIncreasing(
   final accepted = <int>[];
   final rawReadings = <int>[];
   while (DateTime.now().isBefore(deadline)) {
-    final counters = await port
-        .readStatsCounters()
-        .timeout(const Duration(seconds: 5));
+    final counters = await port.readStatsCounters().timeout(
+      const Duration(seconds: 5),
+    );
     final received = counters?.packetsReceived;
     if (received != null) {
       rawReadings.add(received);

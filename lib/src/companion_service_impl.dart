@@ -24,12 +24,12 @@ class CompanionServiceImpl implements CompanionService {
     required String host,
     required int port,
     required Map<String, dynamic> config,
-  })  : _storage = storage,
-        _runner = runner,
-        _verifier = verifier,
-        _host = host,
-        _port = port,
-        _config = config;
+  }) : _storage = storage,
+       _runner = runner,
+       _verifier = verifier,
+       _host = host,
+       _port = port,
+       _config = config;
 
   /// Returns the current lifecycle status of this service.
   ServiceStatus get status => _status;
@@ -58,7 +58,7 @@ class CompanionServiceImpl implements CompanionService {
 
     try {
       await _runner.start();
-      
+
       if (!_runner.isActive) {
         _status = ServiceStatus.stopped;
         return false;

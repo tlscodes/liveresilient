@@ -61,6 +61,11 @@ class SignalingClientConfig {
   /// Inbound envelopes older than this are dropped as stale.
   final Duration maxEnvelopeAge;
 
+  /// Bound on a single socket dial: a connector that hangs past this is
+  /// treated as a failed attempt and schedules a reconnect, so the client
+  /// never sits in `connecting` indefinitely.
+  final Duration connectTimeout;
+
   const SignalingClientConfig({
     this.heartbeatInterval = const Duration(seconds: 15),
     this.livenessTimeout = const Duration(seconds: 45),
@@ -68,6 +73,7 @@ class SignalingClientConfig {
     this.maxReconnectDelay = const Duration(seconds: 30),
     this.maxReconnectAttempts = 10,
     this.maxEnvelopeAge = const Duration(minutes: 5),
+    this.connectTimeout = const Duration(seconds: 10),
   });
 }
 
@@ -94,6 +100,7 @@ class SignalingClient {
   int _reconnectAttempts = 0;
   int _outgoingSequence = 0;
   bool _disposed = false;
+  bool _connectInFlight = false;
   final math.Random _random = math.Random.secure();
 
   SignalingClient({
@@ -158,13 +165,29 @@ class SignalingClient {
   // ---------------------------------------------------------------------
 
   Future<void> _openSocket() async {
+    // Single-flight: connect() during a reconnect back-off (or two racing
+    // connect() calls) must never dial twice — the pending back-off timer
+    // is absorbed here and the in-flight flag blocks a second dial that
+    // would leak the first socket.
+    if (_disposed || _connectInFlight || _socket != null) {
+      return;
+    }
+    _connectInFlight = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _setState(
       _reconnectAttempts == 0
           ? SignalingConnectionState.connecting
           : SignalingConnectionState.reconnecting,
     );
     try {
-      final socket = await _connector(endpoint);
+      final socket = await _connector(endpoint).timeout(config.connectTimeout);
+      if (_disposed) {
+        // dispose() ran while the dial was in flight: the late socket must
+        // not outlive the client.
+        unawaited(socket.close().catchError((Object _) {}));
+        return;
+      }
       _socket = socket;
       _frameSubscription = socket.frames.listen(
         _onFrame,
@@ -178,7 +201,11 @@ class SignalingClient {
       _armLivenessTimer();
       _outbox.flush();
     } catch (_) {
-      _scheduleReconnect();
+      if (!_disposed) {
+        _scheduleReconnect();
+      }
+    } finally {
+      _connectInFlight = false;
     }
   }
 

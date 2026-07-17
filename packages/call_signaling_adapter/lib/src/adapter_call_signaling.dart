@@ -54,11 +54,17 @@ class AdapterCallSignaling implements CallSignaling {
       throw StateError('AdapterCallSignaling.send() called before start().');
     }
     final (type, payload) = encodeCommand(command);
-    final outcome = await _gateway.send(
-      callId: callId,
-      type: type,
-      payload: payload,
-    );
+    var pending = _gateway.send(callId: callId, type: type, payload: payload);
+    if (command is SendHangupCommand) {
+      // Hangup must never block teardown: if the gateway does not settle
+      // within 300ms, treat the send as acknowledged so the caller can
+      // terminate call state immediately.
+      pending = pending.timeout(
+        const Duration(milliseconds: 300),
+        onTimeout: () => OutboxOutcome.acknowledged,
+      );
+    }
+    final outcome = await pending;
     switch (outcome) {
       case OutboxOutcome.acknowledged:
         return;
@@ -75,5 +81,14 @@ class AdapterCallSignaling implements CallSignaling {
   Future<void> stop() async {
     await _inboundSubscription?.cancel();
     _inboundSubscription = null;
+  }
+
+  /// Releases this instance's listener and closes [events]. Unlike [stop]
+  /// (which keeps the instance restartable via [start]), a disposed
+  /// adapter is terminal. The gateway itself is caller-owned and stays
+  /// untouched.
+  Future<void> dispose() async {
+    await stop();
+    await _eventsController.close();
   }
 }

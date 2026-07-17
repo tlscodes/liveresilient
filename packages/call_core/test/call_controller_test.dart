@@ -1424,4 +1424,211 @@ void main() {
       expect(h.controller.state.phase, CallPhase.idle);
     });
   });
+
+  group('Coverage: remaining reachable event/transition branches', () {
+    test('SignalingFailureEvent from the signaling stream triggers '
+        'recovery', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 50)),
+        ]);
+        final h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+
+        h.signaling.emit(
+          SignalingFailureEvent(StateError('auth token expired')),
+        );
+        async.flushMicrotasks();
+
+        expect(h.states.last.phase, CallPhase.reconnecting);
+      });
+    });
+
+    test('TransportStatus.closed triggers recovery (distinct from '
+        'disconnected)', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 50)),
+        ]);
+        final h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+
+        h.transport.emit(const TransportEvent(TransportStatus.closed));
+        async.flushMicrotasks();
+
+        expect(h.states.last.phase, CallPhase.reconnecting);
+      });
+    });
+
+    test('a generic exception while applying a remote ICE candidate routes '
+        'to recovery (not protocol failure)', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 50)),
+        ]);
+        final h = Harness(reconnectPolicy: policy);
+        h.media.addRemoteIceCandidateImpl = (_) async {
+          throw StateError('ICE agent rejected the candidate');
+        };
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+
+        h.signaling.emit(
+          RemoteIceCandidateEvent(
+            IceCandidate(
+              candidate: 'candidate:1 1 udp 1 10.0.0.1 1 typ host',
+              sdpMid: '0',
+            ),
+          ),
+        );
+        async.flushMicrotasks();
+
+        expect(h.states.last.phase, CallPhase.reconnecting);
+      });
+    });
+
+    test('newConnection / connecting media states are ignored (no state '
+        'change, no recovery)', () {
+      fakeAsync((async) {
+        final h = Harness();
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        final before = h.states.length;
+
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connecting),
+        );
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.newConnection),
+        );
+        async.flushMicrotasks();
+
+        expect(
+          h.states.length,
+          before,
+          reason:
+              'duplicate/benign '
+              'connection-progress events must not emit new states',
+        );
+        expect(h.states.last.phase, CallPhase.connected);
+      });
+    });
+
+    test('recovery attempt ending with media already connected emits '
+        'connected immediately (no connection-timeout wait)', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 50)),
+        ]);
+        final h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+
+        h.media.connectionState = MediaConnectionState.connected;
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.disconnected),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.reconnecting);
+
+        async.elapse(const Duration(milliseconds: 50));
+        async.flushMicrotasks();
+
+        expect(h.states.last.phase, CallPhase.connected);
+        expectNoPendingTimers(async);
+      });
+    });
+
+    test('hangUp during reconnecting transitions '
+        'reconnecting -> ending -> ended', () async {
+      late Harness h;
+      late Outcome<void> hangup;
+      late FakeAsync fa;
+      fakeAsync((async) {
+        fa = async;
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(seconds: 5)),
+        ]);
+        h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.failed),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.reconnecting);
+
+        hangup = Outcome<void>()..attach(h.run(async, h.controller.hangUp));
+        async.flushMicrotasks();
+      });
+      await pumpEventQueue();
+      fa.flushMicrotasks();
+
+      expect(hangup.completed, isTrue);
+      expect(hangup.error, isNull);
+      expect(
+        h.states.map((s) => s.phase).toList().sublist(h.states.length - 2),
+        [CallPhase.ending, CallPhase.ended],
+      );
+      expect(h.states.last.endReason, CallEndReason.localHangup);
+    });
+
+    test('RemoteHangupEvent during reconnecting transitions '
+        'reconnecting -> ended(remoteHangup)', () async {
+      late Harness h;
+      late FakeAsync fa;
+      fakeAsync((async) {
+        fa = async;
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(seconds: 5)),
+        ]);
+        h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.failed),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.reconnecting);
+
+        h.signaling.emit(RemoteHangupEvent('peer left'));
+        async.flushMicrotasks();
+      });
+      await pumpEventQueue();
+      fa.flushMicrotasks();
+
+      expect(h.states.last.phase, CallPhase.ended);
+      expect(h.states.last.endReason, CallEndReason.remoteHangup);
+    });
+  });
 }

@@ -57,12 +57,10 @@ void main() {
         // Both peers start concurrently: the initiator's offer is only
         // deliverable once the receiver has joined the relay room.
         final connected = await Future.wait([
-          initiator.controller
-              .start()
-              .then((_) => initiator.waitForConnected()),
-          receiver.controller
-              .start()
-              .then((_) => receiver.waitForConnected()),
+          initiator.controller.start().then(
+            (_) => initiator.waitForConnected(),
+          ),
+          receiver.controller.start().then((_) => receiver.waitForConnected()),
         ]).timeout(const Duration(seconds: 30));
 
         expect(connected[0].phase, CallPhase.connected);
@@ -86,13 +84,17 @@ void main() {
               label: 'receiver (pre-restart)',
             ),
           ]);
-          print('e2e evidence pre-restart: '
-              'initiator packetsReceived samples=${samples[0]} '
-              'receiver packetsReceived samples=${samples[1]}');
+          print(
+            'e2e evidence pre-restart: '
+            'initiator packetsReceived samples=${samples[0]} '
+            'receiver packetsReceived samples=${samples[1]}',
+          );
         } else {
-          print('e2e DEFERRED: packet-flow criteria skipped — '
-              'no local audio source ($mediaModeReason); '
-              'proved: ICE/DTLS connected over real signaling only.');
+          print(
+            'e2e DEFERRED: packet-flow criteria skipped — '
+            'no local audio source ($mediaModeReason); '
+            'proved: ICE/DTLS connected over real signaling only.',
+          );
         }
 
         // ------------------------------------------------------------------
@@ -103,18 +105,19 @@ void main() {
         // initiator's port (gathering had already completed).
         // ------------------------------------------------------------------
         final restartCandidates = <mw.IceCandidate>[];
-        final candidateSub =
-            initiatorPort.localCandidates.listen(restartCandidates.add);
+        final candidateSub = initiatorPort.localCandidates.listen(
+          restartCandidates.add,
+        );
         final statusLog = <String>[];
-        final statusSub = initiatorPort.connectionStatus
-            .listen((status) => statusLog.add(status.name));
+        final statusSub = initiatorPort.connectionStatus.listen(
+          (status) => statusLog.add(status.name),
+        );
 
         await receiver.signalingAdapter
             .send(const SendRestartRequestCommand())
             .timeout(const Duration(seconds: 10));
 
-        final restartDeadline =
-            DateTime.now().add(const Duration(seconds: 15));
+        final restartDeadline = DateTime.now().add(const Duration(seconds: 15));
         while (restartCandidates.isEmpty &&
             DateTime.now().isBefore(restartDeadline)) {
           await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -122,7 +125,8 @@ void main() {
         expect(
           restartCandidates,
           isNotEmpty,
-          reason: 'ICE restart produced no new local candidates '
+          reason:
+              'ICE restart produced no new local candidates '
               '(no new ICE generation observed)',
         );
 
@@ -132,18 +136,30 @@ void main() {
             DateTime.now().isBefore(restartDeadline)) {
           await Future<void>.delayed(const Duration(milliseconds: 50));
         }
-        expect(initiator.media.signalingState, MediaSignalingState.stable,
-            reason: 'ICE restart negotiation did not settle');
+        expect(
+          initiator.media.signalingState,
+          MediaSignalingState.stable,
+          reason: 'ICE restart negotiation did not settle',
+        );
 
-        expect(initiator.controller.state.phase, CallPhase.connected,
-            reason: 'initiator left connected after ICE restart; '
-                'status transitions: $statusLog');
-        expect(receiver.controller.state.phase, CallPhase.connected,
-            reason: 'receiver left connected after ICE restart');
-        print('e2e evidence restart: newLocalCandidates='
-            '${restartCandidates.length} '
-            'initiatorStatusTransitions=$statusLog '
-            'bothPhases=connected');
+        expect(
+          initiator.controller.state.phase,
+          CallPhase.connected,
+          reason:
+              'initiator left connected after ICE restart; '
+              'status transitions: $statusLog',
+        );
+        expect(
+          receiver.controller.state.phase,
+          CallPhase.connected,
+          reason: 'receiver left connected after ICE restart',
+        );
+        print(
+          'e2e evidence restart: newLocalCandidates='
+          '${restartCandidates.length} '
+          'initiatorStatusTransitions=$statusLog '
+          'bothPhases=connected',
+        );
 
         if (mode == MediaMode.realAudio) {
           final postSamples = await Future.wait([
@@ -156,9 +172,11 @@ void main() {
               label: 'receiver (post-restart)',
             ),
           ]);
-          print('e2e evidence post-restart: '
-              'initiator packetsReceived samples=${postSamples[0]} '
-              'receiver packetsReceived samples=${postSamples[1]}');
+          print(
+            'e2e evidence post-restart: '
+            'initiator packetsReceived samples=${postSamples[0]} '
+            'receiver packetsReceived samples=${postSamples[1]}',
+          );
         }
 
         await candidateSub.cancel();
@@ -171,21 +189,25 @@ void main() {
         final initiatorDone = initiator.controller.done;
         final receiverDone = receiver.controller.done;
 
-        await initiator.controller
-            .hangUp()
-            .timeout(const Duration(seconds: 10));
+        await initiator.controller.hangUp().timeout(
+          const Duration(seconds: 10),
+        );
 
-        final initiatorEnd =
-            await initiatorDone.timeout(const Duration(seconds: 10));
-        final receiverEnd =
-            await receiverDone.timeout(const Duration(seconds: 10));
+        final initiatorEnd = await initiatorDone.timeout(
+          const Duration(seconds: 10),
+        );
+        final receiverEnd = await receiverDone.timeout(
+          const Duration(seconds: 10),
+        );
 
         expect(initiatorEnd.phase, CallPhase.ended);
         expect(initiatorEnd.endReason, CallEndReason.localHangup);
         expect(receiverEnd.phase, CallPhase.ended);
         expect(receiverEnd.endReason, CallEndReason.remoteHangup);
-        print('e2e: clean hangup — initiator=localHangup, '
-            'receiver=remoteHangup');
+        print(
+          'e2e: clean hangup — initiator=localHangup, '
+          'receiver=remoteHangup',
+        );
       } finally {
         await initiator.dispose();
         await receiver.dispose();

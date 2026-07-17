@@ -10,8 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:security_keychain/security_keychain.dart';
 
-const MethodChannel _channel =
-    MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+const MethodChannel _channel = MethodChannel(
+  'plugins.it_nomads.com/flutter_secure_storage',
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -27,22 +28,22 @@ void main() {
     calls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, (MethodCall call) async {
-      calls.add(call);
-      final args = (call.arguments as Map).cast<String, dynamic>();
-      final key = args['key'] as String?;
-      switch (call.method) {
-        case 'read':
-          return fakeKeychain[key];
-        case 'write':
-          fakeKeychain[key!] = args['value'] as String;
-          return null;
-        case 'delete':
-          fakeKeychain.remove(key);
-          return null;
-        default:
-          throw UnimplementedError(call.method);
-      }
-    });
+          calls.add(call);
+          final args = (call.arguments as Map).cast<String, dynamic>();
+          final key = args['key'] as String?;
+          switch (call.method) {
+            case 'read':
+              return fakeKeychain[key];
+            case 'write':
+              fakeKeychain[key!] = args['value'] as String;
+              return null;
+            case 'delete':
+              fakeKeychain.remove(key);
+              return null;
+            default:
+              throw UnimplementedError(call.method);
+          }
+        });
   });
 
   tearDown(() {
@@ -50,7 +51,9 @@ void main() {
         .setMockMethodCallHandler(_channel, null);
   });
 
-  final seed = Uint8List.fromList(List<int>.generate(32, (i) => (i * 7) & 0xff));
+  final seed = Uint8List.fromList(
+    List<int>.generate(32, (i) => (i * 7) & 0xff),
+  );
 
   test('write -> read round-trips seed bytes exactly', () async {
     final store = KeychainKeyMaterialStore();
@@ -123,9 +126,11 @@ void main() {
         : false,
   );
 
-  test('re-instantiation reads what a previous instance wrote (wiring)',
-      () async {
-    await KeychainKeyMaterialStore().write('persist', seed);
-    expect(await KeychainKeyMaterialStore().read('persist'), equals(seed));
-  });
+  test(
+    're-instantiation reads what a previous instance wrote (wiring)',
+    () async {
+      await KeychainKeyMaterialStore().write('persist', seed);
+      expect(await KeychainKeyMaterialStore().read('persist'), equals(seed));
+    },
+  );
 }

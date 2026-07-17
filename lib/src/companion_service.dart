@@ -1,10 +1,5 @@
 /// Lifecycle status of the local companion service.
-enum ServiceStatus {
-  idle,
-  preparing,
-  active,
-  stopped,
-}
+enum ServiceStatus { idle, preparing, active, stopped }
 
 /// Abstract contract for a local companion service.
 abstract class CompanionService {

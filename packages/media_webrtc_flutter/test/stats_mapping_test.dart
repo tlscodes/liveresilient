@@ -104,10 +104,7 @@ void main() {
   group('mapConnectionState', () {
     test('maps the five reactive states and drops "new"', () {
       const map = FlutterWebRtcPeerConnectionPort.mapConnectionState;
-      expect(
-        map(rtc.RTCPeerConnectionState.RTCPeerConnectionStateNew),
-        isNull,
-      );
+      expect(map(rtc.RTCPeerConnectionState.RTCPeerConnectionStateNew), isNull);
       expect(
         map(rtc.RTCPeerConnectionState.RTCPeerConnectionStateConnecting),
         PeerConnectionStatus.connecting,

@@ -28,6 +28,10 @@ class FakeSignalingGateway implements SignalingGateway {
   int connectCalls = 0;
   int disposeCalls = 0;
 
+  /// When set, every `send()` waits this long before resolving — simulates
+  /// a slow/stalled gateway for timeout tests.
+  Duration? sendDelay;
+
   @override
   Stream<SignalEnvelope> get inbound => _inboundController.stream;
 
@@ -47,6 +51,10 @@ class FakeSignalingGateway implements SignalingGateway {
     required Map<String, Object?> payload,
   }) async {
     sendCalls.add((callId: callId, type: type, payload: payload));
+    final delay = sendDelay;
+    if (delay != null) {
+      await Future<void>.delayed(delay);
+    }
     if (_queuedErrors.isNotEmpty) {
       throw _queuedErrors.removeAt(0);
     }
