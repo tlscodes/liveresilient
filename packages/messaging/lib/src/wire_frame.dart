@@ -22,17 +22,17 @@ class WireCodec {
   static const int version = 1;
 
   static List<int> encodeMessage(ChatMessage m) => utf8.encode(
-        jsonEncode({
-          'v': version,
-          'type': 'msg',
-          'id': m.id,
-          'sender': m.senderId,
-          'seq': m.seq,
-          'ts': m.sentAtMs,
-          'ct': m.contentType,
-          'body': m.text,
-        }),
-      );
+    jsonEncode({
+      'v': version,
+      'type': 'msg',
+      'id': m.id,
+      'sender': m.senderId,
+      'seq': m.seq,
+      'ts': m.sentAtMs,
+      'ct': m.contentType,
+      'body': m.text,
+    }),
+  );
 
   static List<int> encodeAck(String id) =>
       utf8.encode(jsonEncode({'v': version, 'type': 'ack', 'id': id}));

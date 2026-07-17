@@ -36,61 +36,66 @@ class MemPort implements DataChannelPort {
 }
 
 void main() {
-  test('round-trip: message delivered, receiver emits once, sender acked', () async {
-    final (a, b) = pair();
-    final alice = ReliableMessenger(a, peerId: 'alice');
-    final bob = ReliableMessenger(b, peerId: 'bob');
-    final received = <ChatMessage>[];
-    final delivered = <String>[];
-    bob.incoming.listen(received.add);
-    alice.deliveries.listen((e) {
-      if (e.$2 == DeliveryState.delivered) delivered.add(e.$1);
-    });
+  test(
+    'round-trip: message delivered, receiver emits once, sender acked',
+    () async {
+      final (a, b) = pair();
+      final alice = ReliableMessenger(a, peerId: 'alice');
+      final bob = ReliableMessenger(b, peerId: 'bob');
+      final received = <ChatMessage>[];
+      final delivered = <String>[];
+      bob.incoming.listen(received.add);
+      alice.deliveries.listen((e) {
+        if (e.$2 == DeliveryState.delivered) delivered.add(e.$1);
+      });
 
-    final sent = await alice.send('salaam');
-    await pumpEventQueue();
+      final sent = await alice.send('salaam');
+      await pumpEventQueue();
 
-    expect(received, hasLength(1));
-    expect(received.single.text, 'salaam');
-    expect(received.single.senderId, 'alice');
-    expect(alice.pendingCount, 0);
-    expect(delivered, [sent.id]);
+      expect(received, hasLength(1));
+      expect(received.single.text, 'salaam');
+      expect(received.single.senderId, 'alice');
+      expect(alice.pendingCount, 0);
+      expect(delivered, [sent.id]);
 
-    await alice.close();
-    await bob.close();
-  });
+      await alice.close();
+      await bob.close();
+    },
+  );
 
-  test('retransmission + de-dup: dropped acks cause resend, receiver still once',
-      () async {
-    var now = DateTime.utc(2026, 1, 1);
-    final (a, b) = pair();
-    final alice = ReliableMessenger(
-      a,
-      peerId: 'alice',
-      clock: Clock(() => now),
-      retryAfter: const Duration(seconds: 2),
-    );
-    final bob = ReliableMessenger(b, peerId: 'bob');
-    final received = <ChatMessage>[];
-    bob.incoming.listen(received.add);
+  test(
+    'retransmission + de-dup: dropped acks cause resend, receiver still once',
+    () async {
+      var now = DateTime.utc(2026, 1, 1);
+      final (a, b) = pair();
+      final alice = ReliableMessenger(
+        a,
+        peerId: 'alice',
+        clock: Clock(() => now),
+        retryAfter: const Duration(seconds: 2),
+      );
+      final bob = ReliableMessenger(b, peerId: 'bob');
+      final received = <ChatMessage>[];
+      bob.incoming.listen(received.add);
 
-    b.dropOutbound = true; // bob's acks never reach alice
-    await alice.send('hi');
-    await pumpEventQueue();
-    expect(received, hasLength(1));
-    expect(alice.pendingCount, 1); // no ack yet
+      b.dropOutbound = true; // bob's acks never reach alice
+      await alice.send('hi');
+      await pumpEventQueue();
+      expect(received, hasLength(1));
+      expect(alice.pendingCount, 1); // no ack yet
 
-    now = now.add(const Duration(seconds: 3));
-    await alice.tick(); // retransmit
-    await pumpEventQueue();
+      now = now.add(const Duration(seconds: 3));
+      await alice.tick(); // retransmit
+      await pumpEventQueue();
 
-    expect(a.sent.length, 2); // sent twice
-    expect(received, hasLength(1)); // but received/emitted once (de-duped)
-    expect(alice.pendingCount, 1); // still unacked
+      expect(a.sent.length, 2); // sent twice
+      expect(received, hasLength(1)); // but received/emitted once (de-duped)
+      expect(alice.pendingCount, 1); // still unacked
 
-    await alice.close();
-    await bob.close();
-  });
+      await alice.close();
+      await bob.close();
+    },
+  );
 
   test('gives up after maxAttempts with a failed delivery', () async {
     var now = DateTime.utc(2026, 1, 1);
