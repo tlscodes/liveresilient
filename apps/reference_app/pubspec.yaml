@@ -35,9 +35,35 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # VoiceCallKit v2 stack (standalone path deps; the app and the
+  # media_webrtc_flutter plugin package stay OUT of the root pure-Dart pub
+  # workspace so Flutter SDK constraints never fight the root resolution).
+  call_core:
+    path: ../../packages/call_core
+  call_signaling_adapter:
+    path: ../../packages/call_signaling_adapter
+  media_webrtc:
+    path: ../../packages/media_webrtc
+  media_webrtc_flutter:
+    path: ../../packages/media_webrtc_flutter
+  signaling:
+    path: ../../packages/signaling
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # Direct dev-dep (same constraint as media_webrtc_flutter): the E2E
+  # support code probes `getUserMedia` directly to report the media mode.
+  flutter_webrtc: ^1.5.2
+
+  # In-process TLS signaling relay for the on-device loopback E2E suite
+  # (integration_test/): the tests bind the real relay inside the app
+  # process so the full stack runs over a real wss:// socket on one machine.
+  signaling_server:
+    path: ../../server/signaling_server
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
