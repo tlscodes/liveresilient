@@ -1,0 +1,19 @@
+name: messaging
+description: >-
+  Reliable peer-to-peer text messaging over an abstract binary data channel
+  (e.g. a WebRTC DataChannel): at-least-once delivery with acknowledgements,
+  receiver-side de-duplication, and app-driven retry. Pure Dart — the native
+  channel binding is provided separately.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  clock: ^1.1.1
+
+dev_dependencies:
+  test: ^1.25.0

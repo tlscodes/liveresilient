@@ -1,0 +1,82 @@
+import 'dart:convert';
+
+import 'chat_message.dart';
+
+/// A decoded wire frame: either a message or an acknowledgement.
+sealed class WireFrame {}
+
+class MessageFrame extends WireFrame {
+  final ChatMessage message;
+  MessageFrame(this.message);
+}
+
+class AckFrame extends WireFrame {
+  final String id;
+  AckFrame(this.id);
+}
+
+/// JSON wire codec. Frame shapes (version-gated):
+///   message: {v, type:"msg", id, sender, seq, ts, ct, body}
+///   ack:     {v, type:"ack", id}
+class WireCodec {
+  static const int version = 1;
+
+  static List<int> encodeMessage(ChatMessage m) => utf8.encode(
+        jsonEncode({
+          'v': version,
+          'type': 'msg',
+          'id': m.id,
+          'sender': m.senderId,
+          'seq': m.seq,
+          'ts': m.sentAtMs,
+          'ct': m.contentType,
+          'body': m.text,
+        }),
+      );
+
+  static List<int> encodeAck(String id) =>
+      utf8.encode(jsonEncode({'v': version, 'type': 'ack', 'id': id}));
+
+  /// Decodes a frame, or returns null if the bytes are not a recognizable
+  /// frame of this version. NEVER throws on malformed/hostile peer input — a
+  /// garbled frame is simply ignored by the caller.
+  static WireFrame? tryDecode(List<int> bytes) {
+    try {
+      final obj = jsonDecode(utf8.decode(bytes));
+      if (obj is! Map || obj['v'] != version) return null;
+      switch (obj['type']) {
+        case 'ack':
+          final id = obj['id'];
+          return id is String ? AckFrame(id) : null;
+        case 'msg':
+          final id = obj['id'];
+          final sender = obj['sender'];
+          final seq = obj['seq'];
+          final ts = obj['ts'];
+          final body = obj['body'];
+          if (id is! String ||
+              sender is! String ||
+              seq is! int ||
+              ts is! int ||
+              body is! String) {
+            return null;
+          }
+          final ct = obj['ct'];
+          return MessageFrame(
+            ChatMessage(
+              id: id,
+              senderId: sender,
+              seq: seq,
+              sentAtMs: ts,
+              contentType: ct is String ? ct : 'text/plain',
+              text: body,
+            ),
+          );
+        default:
+          return null;
+      }
+    } catch (_) {
+      return null;
+    }
+  }
+}

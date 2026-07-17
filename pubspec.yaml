@@ -17,6 +17,7 @@ workspace:
   - packages/call_signaling_adapter
   - packages/device_link
   - packages/media_webrtc
+  - packages/messaging
   - packages/privacy_telemetry
   - packages/security
   - packages/signaling
