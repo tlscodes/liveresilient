@@ -45,6 +45,14 @@ class IoManifestFetcher {
 
   final SecurityContext? _securityContext;
 
+  /// Optional resolver for an on-device forward proxy. When provided, its
+  /// return value is used as the HttpClient `findProxy` policy (standard
+  /// `dart:io` proxy support, e.g. "PROXY 127.0.0.1:1080" or "DIRECT").
+  /// Null (default) means the fetcher connects directly. The core neither
+  /// knows nor cares what runs behind the proxy — that lives in an external,
+  /// independently audited plugin, wired in only through this neutral hook.
+  final String Function(Uri uri)? _proxyResolver;
+
   IoManifestFetcher({
     this.timeout = const Duration(seconds: 10),
     this.maxBodyBytes = 256 * 1024,
@@ -53,7 +61,11 @@ class IoManifestFetcher {
     /// Optional trust root override for tests (self-signed localhost dev
     /// certificate). Never disables hostname verification.
     SecurityContext? securityContext,
-  }) : _securityContext = securityContext {
+
+    /// Optional on-device forward-proxy policy (see [_proxyResolver]).
+    String Function(Uri uri)? proxyResolver,
+  })  : _securityContext = securityContext,
+        _proxyResolver = proxyResolver {
     if (timeout <= Duration.zero) {
       throw ArgumentError.value(timeout, 'timeout', 'Must be positive.');
     }
@@ -78,6 +90,9 @@ class IoManifestFetcher {
 
     final client = HttpClient(context: _securityContext)
       ..connectionTimeout = timeout;
+    if (_proxyResolver != null) {
+      client.findProxy = _proxyResolver;
+    }
     try {
       var target = uri;
       for (var hop = 0; ; hop++) {
