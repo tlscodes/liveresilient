@@ -17,5 +17,22 @@ void main() {
         );
       },
     );
+
+    test('rejects a non ws/wss endpoint', () {
+      expect(
+        connectWebSocketWithCustomRules(Uri.parse('https://x/y')),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects a non-positive timeout', () {
+      expect(
+        connectWebSocketWithCustomRules(
+          Uri.parse('wss://127.0.0.1:1/ws'),
+          timeout: Duration.zero,
+        ),
+        throwsArgumentError,
+      );
+    });
   });
 }

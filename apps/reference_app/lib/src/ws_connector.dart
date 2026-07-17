@@ -2,7 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 /// A robust WebSocket connection helper supporting standard host resolution,
-/// proxy configuration, and custom client rules.
+/// optional forward-proxy configuration, and custom client rules.
+///
+/// [endpoint] must be a `ws`/`wss` URI. All hooks are optional and default to
+/// standard direct behaviour. The internal [HttpClient] is force-closed if the
+/// upgrade fails, so a failed attempt never leaks a client; on success the
+/// returned [WebSocket] owns the detached socket.
 Future<WebSocket> connectWebSocketWithCustomRules(
   Uri endpoint, {
   String? Function(String host)? hostResolver,
@@ -11,6 +16,17 @@ Future<WebSocket> connectWebSocketWithCustomRules(
   Duration timeout = const Duration(seconds: 10),
   SecurityContext? securityContext,
 }) async {
+  if (endpoint.scheme != 'ws' && endpoint.scheme != 'wss') {
+    throw ArgumentError.value(
+      endpoint.toString(),
+      'endpoint',
+      'Must be a ws:// or wss:// URI.',
+    );
+  }
+  if (timeout <= Duration.zero) {
+    throw ArgumentError.value(timeout, 'timeout', 'Must be positive.');
+  }
+
   final client = HttpClient(context: securityContext)
     ..connectionTimeout = timeout;
 
@@ -57,8 +73,14 @@ Future<WebSocket> connectWebSocketWithCustomRules(
     };
   }
 
-  return await WebSocket.connect(
-    endpoint.toString(),
-    customClient: client, // اصلاح نام پارامتر به کلاینت اختصاصی وب‌ساکت
-  ).timeout(timeout);
+  try {
+    return await WebSocket.connect(
+      endpoint.toString(),
+      customClient: client,
+    ).timeout(timeout);
+  } catch (_) {
+    // Failed upgrade: release the client so a bad attempt never leaks it.
+    client.close(force: true);
+    rethrow;
+  }
 }
