@@ -113,7 +113,14 @@ void main() {
         crypto: CryptographyEd25519Verifier(),
       );
 
-      final result = await verifier.verify(document, lastAcceptedRevision: 0);
+      // Deterministic clock inside the manifest validity window
+      // (issuedAt 2026-07-16 .. expiresAt 2026-07-17) — otherwise this becomes a
+      // time-bomb that fails once the wall clock passes expiresAt.
+      final result = await verifier.verify(
+        document,
+        lastAcceptedRevision: 0,
+        now: DateTime.utc(2026, 7, 16, 12),
+      );
 
       expect(result, isA<ManifestAccepted>());
       final manifest = (result as ManifestAccepted).manifest;
