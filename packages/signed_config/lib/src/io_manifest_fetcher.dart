@@ -53,6 +53,23 @@ class IoManifestFetcher {
   /// independently audited plugin, wired in only through this neutral hook.
   final String Function(Uri uri)? _proxyResolver;
 
+  /// Optional per-fetch client configuration hook, invoked AFTER the proxy
+  /// policy ([_proxyResolver]) is applied and before any request is issued.
+  /// Lets the application perform client-level security setup that needs
+  /// the live [HttpClient] — e.g. registering proxy credentials via
+  /// `client.addProxyCredentials`. The callback must not keep a reference
+  /// to the client: each [fetch] creates and force-closes its own.
+  final void Function(HttpClient client)? _proxyConfigurator;
+
+  /// Optional hostname-to-address mapping hook. When provided, [fetch]
+  /// overrides the standard `HttpClient.connectionFactory`: the raw socket
+  /// is connected to the address this callback returns for the target host
+  /// (returning null falls back to system DNS on the original hostname),
+  /// and an https connection is then upgraded with `SecureSocket.secure`
+  /// against the ORIGINAL hostname — so SNI and TLS certificate hostname
+  /// verification behave exactly as a direct connection would.
+  final String? Function(String host)? _resolveAddress;
+
   IoManifestFetcher({
     this.timeout = const Duration(seconds: 10),
     this.maxBodyBytes = 256 * 1024,
@@ -64,8 +81,16 @@ class IoManifestFetcher {
 
     /// Optional on-device forward-proxy policy (see [_proxyResolver]).
     String Function(Uri uri)? proxyResolver,
-  })  : _securityContext = securityContext,
-        _proxyResolver = proxyResolver {
+
+    /// Optional hostname-to-address mapping (see [_resolveAddress]).
+    String? Function(String host)? resolveAddress,
+
+    /// Optional post-proxy client setup hook (see [_proxyConfigurator]).
+    void Function(HttpClient client)? proxyConfigurator,
+  }) : _securityContext = securityContext,
+       _proxyResolver = proxyResolver,
+       _resolveAddress = resolveAddress,
+       _proxyConfigurator = proxyConfigurator {
     if (timeout <= Duration.zero) {
       throw ArgumentError.value(timeout, 'timeout', 'Must be positive.');
     }
@@ -93,6 +118,10 @@ class IoManifestFetcher {
     if (_proxyResolver != null) {
       client.findProxy = _proxyResolver;
     }
+    if (_resolveAddress != null) {
+      client.connectionFactory = _connectViaResolvedAddress;
+    }
+    _proxyConfigurator?.call(client);
     try {
       var target = uri;
       for (var hop = 0; ; hop++) {
@@ -138,6 +167,48 @@ class IoManifestFetcher {
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// `HttpClient.connectionFactory` implementation backing [_resolveAddress].
+  ///
+  /// Connects the raw socket to the mapped address, then (for https)
+  /// upgrades with `SecureSocket.secure` using the ORIGINAL hostname so SNI
+  /// and certificate hostname verification stay fully standard. A configured
+  /// proxy owns destination name resolution, so when [proxyHost] is set the
+  /// socket connects to the proxy untouched and the mapping is not applied.
+  Future<ConnectionTask<Socket>> _connectViaResolvedAddress(
+    Uri url,
+    String? proxyHost,
+    int? proxyPort,
+  ) async {
+    if (proxyHost != null && proxyPort != null) {
+      return Socket.startConnect(proxyHost, proxyPort);
+    }
+    final connectHost = _resolveAddress!(url.host) ?? url.host;
+    var cancelled = false;
+    final socketFuture = () async {
+      final socket = await Socket.connect(
+        connectHost,
+        url.port,
+        timeout: timeout,
+      );
+      if (cancelled) {
+        socket.destroy();
+        throw const SocketException('Connection attempt cancelled.');
+      }
+      if (url.scheme != 'https') return socket;
+      try {
+        return await SecureSocket.secure(
+          socket,
+          host: url.host,
+          context: _securityContext,
+        );
+      } catch (_) {
+        socket.destroy();
+        rethrow;
+      }
+    }();
+    return ConnectionTask.fromSocket(socketFuture, () => cancelled = true);
   }
 
   Future<List<int>> _readCapped(Uri uri, HttpClientResponse response) async {

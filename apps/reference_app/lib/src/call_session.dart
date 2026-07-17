@@ -12,6 +12,7 @@ import 'package:call_core/call_core.dart';
 import 'package:call_signaling_adapter/call_signaling_adapter.dart';
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
 import 'package:signaling/signaling.dart';
+import 'ws_connector.dart';
 
 import 'webrtc_media_session.dart';
 
@@ -40,11 +41,24 @@ CallSessionHandle buildWebRtcCallSession({
   required Uri endpoint,
   required String callId,
   required CallRole role,
+  String? Function(String host)? resolveAddress,
+  String Function(Uri uri)? proxyResolver,
+  void Function(HttpClient client)? proxyConfigurator,
+  SecurityContext? securityContext,
 }) {
   final client = SignalingClient(
     endpoint: endpoint,
     localKeyId: '${role.name}-key',
-    connector: devLoopbackWsConnector(),
+    connector: (uri) async {
+      final socket = await connectWebSocketWithCustomRules(
+        uri,
+        hostResolver: resolveAddress,
+        proxyResolver: proxyResolver,
+        proxyConfigurator: proxyConfigurator,
+        securityContext: securityContext,
+      );
+      return _IoSignalingSocket(socket);
+    },
   );
   final gateway = SignalingClientGateway(client);
   final media = WebRtcCallMediaSession(
@@ -84,7 +98,10 @@ SignalingSocketConnector devLoopbackWsConnector() {
       ..badCertificateCallback = (X509Certificate cert, String host, int port) {
         return host == 'localhost' || host == '127.0.0.1' || host == '::1';
       };
-    final socket = await WebSocket.connect(uri.toString(), customClient: client);
+    final socket = await WebSocket.connect(
+      uri.toString(),
+      customClient: client,
+    );
     return _IoSignalingSocket(socket);
   };
 }

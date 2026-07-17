@@ -9,10 +9,7 @@ import 'dart:io';
 /// the process safely by sending the OS-standard termination signal
 /// (SIGTERM) and waiting for it to exit.
 class LocalServiceRunner {
-  LocalServiceRunner(
-    this.executablePath, {
-    this.arguments = const <String>[],
-  });
+  LocalServiceRunner(this.executablePath, {this.arguments = const <String>[]});
 
   /// Path of the executable to run.
   final String executablePath;
@@ -42,20 +39,22 @@ class LocalServiceRunner {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-      stdout.writeln('[LocalServiceRunner][out] $line');
-    });
+          stdout.writeln('[LocalServiceRunner][out] $line');
+        });
 
     _stderrSub = process.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-      stderr.writeln('[LocalServiceRunner][err] $line');
-    });
+          stderr.writeln('[LocalServiceRunner][err] $line');
+        });
 
     // Reflect spontaneous exits (crash or normal completion) in isActive.
-    unawaited(process.exitCode.then((_) {
-      _active = false;
-    }));
+    unawaited(
+      process.exitCode.then((_) {
+        _active = false;
+      }),
+    );
   }
 
   /// Stops the child process safely with the standard termination signal

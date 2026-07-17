@@ -85,16 +85,17 @@ class KeychainKeyMaterialStore implements KeyMaterialStore {
   KeychainKeyMaterialStore({
     FlutterSecureStorage? storage,
     bool macUseDataProtectionKeychain = true,
-  }) : _storage = storage ??
-            FlutterSecureStorage(
-              iOptions: const IOSOptions(
-                accessibility: keychainSeedAccessibility,
-              ),
-              mOptions: MacOsOptions(
-                accessibility: keychainSeedAccessibility,
-                useDataProtectionKeyChain: macUseDataProtectionKeychain,
-              ),
-            );
+  }) : _storage =
+           storage ??
+           FlutterSecureStorage(
+             iOptions: const IOSOptions(
+               accessibility: keychainSeedAccessibility,
+             ),
+             mOptions: MacOsOptions(
+               accessibility: keychainSeedAccessibility,
+               useDataProtectionKeyChain: macUseDataProtectionKeychain,
+             ),
+           );
 
   /// Maps an opaque handle to its namespaced Keychain account key.
   static String storageKeyFor(String keyHandle) =>

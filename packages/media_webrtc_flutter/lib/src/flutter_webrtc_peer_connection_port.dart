@@ -114,8 +114,7 @@ class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
   bool _closed = false;
 
   @override
-  Stream<PeerConnectionStatus> get connectionStatus =>
-      _statusController.stream;
+  Stream<PeerConnectionStatus> get connectionStatus => _statusController.stream;
 
   @override
   Stream<IceCandidate> get localCandidates => _candidatesController.stream;
@@ -328,8 +327,7 @@ class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
           final selected = values['selected'];
           final nominated = values['nominated'];
           final state = values['state'];
-          if (selected == true ||
-              (nominated == true && state == 'succeeded')) {
+          if (selected == true || (nominated == true && state == 'succeeded')) {
             flaggedSelectedPair ??= values;
           }
       }
@@ -337,9 +335,8 @@ class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
 
     if (!sawInbound && !sawOutbound) return null;
 
-    final selectedPair = (selectedPairId != null
-            ? candidatePairs[selectedPairId]
-            : null) ??
+    final selectedPair =
+        (selectedPairId != null ? candidatePairs[selectedPairId] : null) ??
         flaggedSelectedPair;
 
     return RawRtcCounters(

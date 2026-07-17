@@ -341,5 +341,109 @@ void main() {
         expect(error.toString(), contains('all 2 origin(s) failed'));
       }
     });
+
+    test('staggered racing: fastest healthy origin wins over a slow '
+        'origin 1 still in flight', () async {
+      final requested = <Uri>[];
+      Future<List<int>> fetch(Uri uri) async {
+        requested.add(uri);
+        if (uri == origin1) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          return signedBytes(buildManifest(revision: 2));
+        }
+        return signedBytes(buildManifest(revision: 3));
+      }
+
+      final result = await fetchVerifiedManifest(
+        origins: [origin1, origin2],
+        fetch: fetch,
+        verifier: verifier,
+        lastAcceptedRevision: 0,
+        now: clock(),
+        staggerDelay: const Duration(milliseconds: 50),
+      );
+
+      expect(result.manifest.revision, 3, reason: 'origin 2 finished first');
+      expect(requested, [
+        origin1,
+        origin2,
+      ], reason: 'both origins were racing in flight');
+    });
+
+    test('healthy origin 1 answers within the stagger window: '
+        'origin 2 is never fetched', () async {
+      final requested = <Uri>[];
+      Future<List<int>> fetch(Uri uri) async {
+        requested.add(uri);
+        return signedBytes(buildManifest(revision: 2));
+      }
+
+      final result = await fetchVerifiedManifest(
+        origins: [origin1, origin2],
+        fetch: fetch,
+        verifier: verifier,
+        lastAcceptedRevision: 0,
+        now: clock(),
+      );
+
+      expect(result.manifest.revision, 2);
+      expect(requested, [origin1]);
+    });
+
+    test('fast failure of origin 1 launches origin 2 immediately, '
+        'without waiting out the stagger', () async {
+      final requested = <Uri>[];
+      Future<List<int>> fetch(Uri uri) async {
+        requested.add(uri);
+        if (uri == origin1) throw Exception('down');
+        return signedBytes(buildManifest(revision: 2));
+      }
+
+      final stopwatch = Stopwatch()..start();
+      final result = await fetchVerifiedManifest(
+        origins: [origin1, origin2],
+        fetch: fetch,
+        verifier: verifier,
+        lastAcceptedRevision: 0,
+        now: clock(),
+        staggerDelay: const Duration(seconds: 2),
+      );
+      stopwatch.stop();
+
+      expect(result.manifest.revision, 2);
+      expect(requested, [origin1, origin2]);
+      expect(
+        stopwatch.elapsed,
+        lessThan(const Duration(seconds: 1)),
+        reason:
+            'early start: an all-started-failed state wakes the next '
+            'origin instead of sleeping the full stagger',
+      );
+    });
+
+    test('rejected slow origin 1 does not block a verified origin 2 winner '
+        'racing in parallel', () async {
+      final requested = <Uri>[];
+      Future<List<int>> fetch(Uri uri) async {
+        requested.add(uri);
+        if (uri == origin1) {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          return tamperedBytes(buildManifest(revision: 9));
+        }
+        return signedBytes(buildManifest(revision: 4));
+      }
+
+      final result = await fetchVerifiedManifest(
+        origins: [origin1, origin2],
+        fetch: fetch,
+        verifier: verifier,
+        lastAcceptedRevision: 0,
+        now: clock(),
+        staggerDelay: const Duration(milliseconds: 50),
+      );
+
+      expect(result.manifest.revision, 4);
+      expect(requested, [origin1, origin2]);
+    });
   });
 }

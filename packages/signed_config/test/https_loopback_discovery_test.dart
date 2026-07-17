@@ -213,6 +213,31 @@ void main() {
       expect(await fetcher.fetch(origin.manifestUri), [1, 2, 3, 4]);
     });
 
+    test('resolveAddress maps localhost to 127.0.0.1 while TLS verifies '
+        'the ORIGINAL hostname (SNI + certificate)', () async {
+      origin.body = [9, 8, 7];
+      final resolvedHosts = <String>[];
+      final mappedFetcher = IoManifestFetcher(
+        timeout: const Duration(seconds: 5),
+        securityContext: clientContext,
+        resolveAddress: (host) {
+          resolvedHosts.add(host);
+          return host == 'localhost' ? '127.0.0.1' : null;
+        },
+      );
+
+      // The server listens on 127.0.0.1 (IPv4 only); the URI names
+      // "localhost". The hook routes the socket to 127.0.0.1 and the TLS
+      // upgrade runs against "localhost", which the leaf SAN covers — so a
+      // successful fetch proves both the mapping and standard verification.
+      final bytes = await mappedFetcher.fetch(
+        Uri.parse('https://localhost:${origin.port}/manifest'),
+      );
+
+      expect(bytes, [9, 8, 7]);
+      expect(resolvedHosts, contains('localhost'));
+    });
+
     test('rejects a non-https URI before any I/O', () async {
       expect(
         () => fetcher.fetch(Uri.parse('http://127.0.0.1:${origin.port}/m')),

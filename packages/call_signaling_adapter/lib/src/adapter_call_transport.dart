@@ -21,30 +21,58 @@ import 'signaling_gateway.dart';
 /// - `disconnected` / `closed` -> [TransportStatus.disconnected] — both
 ///   mean the channel is not usable right now.
 ///
-/// [connect] simply calls through to the gateway. [disconnect] is a no-op
-/// with respect to the (shared, caller-owned) gateway — it only detaches
-/// this instance's listener.
+/// [connect] re-attaches this instance's state listener (dropped by a
+/// previous [disconnect]) and calls through to the gateway, so a recovery
+/// cycle (`disconnect()` then `connect()` on the same instance) keeps
+/// observing gateway state changes. [disconnect] is a no-op with respect
+/// to the (shared, caller-owned) gateway — it only detaches this
+/// instance's listener. [dispose] additionally closes [events].
 class AdapterCallTransport implements CallTransport {
   AdapterCallTransport(this._gateway) {
-    _stateSubscription = _gateway.connectionState.listen((state) {
-      if (_eventsController.isClosed) return;
-      _eventsController.add(TransportEvent(_mapStatus(state)));
-    });
+    _attach();
   }
 
   final SignalingGateway _gateway;
   final _eventsController = StreamController<TransportEvent>.broadcast();
-  late final StreamSubscription<SignalingConnectionState> _stateSubscription;
+  StreamSubscription<TransportStatus>? _stateSubscription;
 
   @override
   Stream<TransportEvent> get events => _eventsController.stream;
 
   @override
-  Future<void> connect() => _gateway.connect();
+  Future<void> connect() {
+    _attach();
+    return _gateway.connect();
+  }
 
   @override
   Future<void> disconnect() async {
-    await _stateSubscription.cancel();
+    final subscription = _stateSubscription;
+    _stateSubscription = null;
+    await subscription?.cancel();
+  }
+
+  /// Releases this instance's listener and closes [events]. The gateway
+  /// itself is caller-owned and stays untouched.
+  Future<void> dispose() async {
+    await disconnect();
+    await _eventsController.close();
+  }
+
+  void _attach() {
+    if (_stateSubscription != null || _eventsController.isClosed) {
+      return;
+    }
+    // distinct() after the mapping collapses rapid gateway flapping
+    // (ping-ponging through states that map to the same TransportStatus)
+    // so the core call state machine never sees redundant duplicates.
+    _stateSubscription = _gateway.connectionState
+        .map(_mapStatus)
+        .distinct()
+        .listen((status) {
+          if (_eventsController.isClosed) return;
+          _eventsController.add(TransportEvent(status));
+        });
   }
 
   static TransportStatus _mapStatus(SignalingConnectionState state) {

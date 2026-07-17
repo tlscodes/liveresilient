@@ -234,7 +234,10 @@ class WebRtcMediaEngine {
     );
     _remoteDescriptionSet = true;
     for (final candidate in _pendingRemoteCandidates) {
-      await _port.addRemoteCandidate(candidate);
+      await _bounded(
+        _port.addRemoteCandidate(candidate),
+        'apply buffered remote candidate',
+      );
     }
     _pendingRemoteCandidates.clear();
   }
@@ -247,7 +250,7 @@ class WebRtcMediaEngine {
       _pendingRemoteCandidates.add(candidate);
       return;
     }
-    await _port.addRemoteCandidate(candidate);
+    await _bounded(_port.addRemoteCandidate(candidate), 'add remote candidate');
   }
 
   /// Performs a standards-based ICE restart (invoked by the reconnect

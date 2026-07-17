@@ -64,23 +64,25 @@ void main() {
 
         try {
           final connected = await Future.wait([
-            initiator.controller
-                .start()
-                .then((_) => initiator.waitForConnected()),
-            receiver.controller
-                .start()
-                .then((_) => receiver.waitForConnected()),
+            initiator.controller.start().then(
+              (_) => initiator.waitForConnected(),
+            ),
+            receiver.controller.start().then(
+              (_) => receiver.waitForConnected(),
+            ),
           ]).timeout(const Duration(seconds: 30));
           if (connected[0].phase != CallPhase.connected ||
               connected[1].phase != CallPhase.connected) {
-            errors.add('cycle $i: did not connect '
-                '(${connected[0].phase.name}/${connected[1].phase.name})');
+            errors.add(
+              'cycle $i: did not connect '
+              '(${connected[0].phase.name}/${connected[1].phase.name})',
+            );
           }
 
           final receiverDone = receiver.controller.done;
-          await initiator.controller
-              .hangUp()
-              .timeout(const Duration(seconds: 10));
+          await initiator.controller.hangUp().timeout(
+            const Duration(seconds: 10),
+          );
           await receiverDone.timeout(const Duration(seconds: 10));
         } catch (error) {
           errors.add('cycle $i failed: $error');
@@ -91,12 +93,16 @@ void main() {
 
         // Object-level teardown evidence, every cycle.
         if (!initiator.controller.state.isTerminal) {
-          errors.add('cycle $i: initiator not terminal '
-              '(${initiator.controller.state.phase.name})');
+          errors.add(
+            'cycle $i: initiator not terminal '
+            '(${initiator.controller.state.phase.name})',
+          );
         }
         if (!receiver.controller.state.isTerminal) {
-          errors.add('cycle $i: receiver not terminal '
-              '(${receiver.controller.state.phase.name})');
+          errors.add(
+            'cycle $i: receiver not terminal '
+            '(${receiver.controller.state.phase.name})',
+          );
         }
         for (final (side, port) in [
           ('initiator', initiator.port),
@@ -108,8 +114,10 @@ void main() {
           }
           try {
             await port.readStatsCounters();
-            errors.add('cycle $i: $side port still usable after teardown '
-                '(not closed)');
+            errors.add(
+              'cycle $i: $side port still usable after teardown '
+              '(not closed)',
+            );
           } on StateError {
             // Expected: the port is closed.
           }
@@ -117,18 +125,22 @@ void main() {
 
         await waitForActiveRooms(relay.server, 0);
         if (relay.server.activeRooms != 0) {
-          errors.add('cycle $i: relay room leaked '
-              '(activeRooms=${relay.server.activeRooms})');
+          errors.add(
+            'cycle $i: relay room leaked '
+            '(activeRooms=${relay.server.activeRooms})',
+          );
         }
 
         if (i == (totalCycles ~/ 2) - 1) {
           rssMid = ProcessInfo.currentRss;
         }
         if ((i + 1) % 10 == 0) {
-          print('soak: ${i + 1}/$totalCycles cycles, '
-              'errors=${errors.length}, '
-              'rss=${ProcessInfo.currentRss} bytes, '
-              'elapsed=${DateTime.now().difference(started).inSeconds}s');
+          print(
+            'soak: ${i + 1}/$totalCycles cycles, '
+            'errors=${errors.length}, '
+            'rss=${ProcessInfo.currentRss} bytes, '
+            'elapsed=${DateTime.now().difference(started).inSeconds}s',
+          );
         }
       }
 
@@ -151,12 +163,12 @@ void main() {
       };
       print('SOAK_SUMMARY ${jsonEncode(summary)}');
 
-      expect(errors, isEmpty,
-          reason: 'soak cycles reported errors: $errors');
+      expect(errors, isEmpty, reason: 'soak cycles reported errors: $errors');
       expect(
         steadyStateGrowth,
         lessThan(maxSteadyStateRssGrowthBytes),
-        reason: 'steady-state RSS grew $steadyStateGrowth bytes between '
+        reason:
+            'steady-state RSS grew $steadyStateGrowth bytes between '
             'identical halves (bound $maxSteadyStateRssGrowthBytes)',
       );
     },

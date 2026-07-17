@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:clock/clock.dart';
@@ -574,6 +575,110 @@ void main() {
         expect(client.currentState, SignalingConnectionState.closed);
         expect(inboundDone, isTrue);
         expect(stateDone, isTrue);
+        expect(async.pendingTimers, isEmpty);
+      });
+    });
+  });
+
+  group('dial single-flight and bounded connect', () {
+    test('connect() during reconnect back-off dials once and absorbs the '
+        'pending retry timer', () {
+      runFake((async) {
+        final connector = CountingConnector()..queueFailure();
+        final client = _buildClient(connector: connector);
+
+        client.connect();
+        async.flushMicrotasks();
+        expect(connector.callCount, 1);
+        expect(client.currentState, SignalingConnectionState.reconnecting);
+
+        // Manual connect while the back-off timer is still pending.
+        client.connect();
+        async.flushMicrotasks();
+        expect(connector.callCount, 2);
+        expect(client.currentState, SignalingConnectionState.connected);
+
+        // The absorbed back-off timer (≤ 500ms) must not fire a third dial
+        // that would leak the live socket.
+        async.elapse(const Duration(seconds: 1));
+        expect(connector.callCount, 2);
+
+        client.dispose();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('two racing connect() calls dial exactly once', () {
+      runFake((async) {
+        final connector = CountingConnector()..queueSocket(FakeSocket());
+        final client = _buildClient(connector: connector);
+
+        client.connect();
+        client.connect();
+        async.flushMicrotasks();
+
+        expect(connector.callCount, 1);
+        expect(client.currentState, SignalingConnectionState.connected);
+
+        client.dispose();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a hung dial is bounded by connectTimeout and schedules a '
+        'reconnect', () {
+      runFake((async) {
+        final client = SignalingClient(
+          endpoint: Uri.parse('wss://signal.example.com/v2'),
+          localKeyId: 'k',
+          connector: (_) => Completer<SignalingSocket>().future,
+          config: const SignalingClientConfig(
+            connectTimeout: Duration(seconds: 5),
+          ),
+        );
+
+        client.connect();
+        async.flushMicrotasks();
+        expect(client.currentState, SignalingConnectionState.connecting);
+
+        async.elapse(const Duration(seconds: 5));
+        expect(
+          client.currentState,
+          SignalingConnectionState.reconnecting,
+          reason:
+              'a connector that never answers must not pin the client '
+              'in connecting forever',
+        );
+
+        client.dispose();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('dispose() during an in-flight dial closes the late socket', () {
+      runFake((async) {
+        final completer = Completer<SignalingSocket>();
+        final socket = FakeSocket();
+        final client = SignalingClient(
+          endpoint: Uri.parse('wss://signal.example.com/v2'),
+          localKeyId: 'k',
+          connector: (_) => completer.future,
+        );
+
+        client.connect();
+        async.flushMicrotasks();
+        client.dispose();
+        async.flushMicrotasks();
+
+        completer.complete(socket);
+        async.flushMicrotasks();
+
+        expect(
+          socket.closed,
+          isTrue,
+          reason: 'a socket handed over after dispose() must not leak',
+        );
+        expect(client.currentState, SignalingConnectionState.closed);
         expect(async.pendingTimers, isEmpty);
       });
     });

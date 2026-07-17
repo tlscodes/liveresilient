@@ -53,23 +53,27 @@ void main() {
     List<int>.generate(32, (i) => (i * 31 + 3) & 0xff),
   );
 
-  test('write -> read round-trips 32 seed bytes through the real Keychain',
-      () async {
-    final KeyMaterialStore store = _newStore();
-    await store.write('it.roundtrip', seed);
-    final back = await store.read('it.roundtrip');
-    expect(back, isNotNull);
-    expect(back, equals(seed));
-  });
+  test(
+    'write -> read round-trips 32 seed bytes through the real Keychain',
+    () async {
+      final KeyMaterialStore store = _newStore();
+      await store.write('it.roundtrip', seed);
+      final back = await store.read('it.roundtrip');
+      expect(back, isNotNull);
+      expect(back, equals(seed));
+    },
+  );
 
-  test('seed persists across store re-instantiation (Keychain, not memory)',
-      () async {
-    await _newStore().write('it.persist', seed);
-    // A brand-new adapter instance (and plugin client) must find the item —
-    // the bytes live in the OS Keychain, not in any Dart-side state.
-    final back = await _newStore().read('it.persist');
-    expect(back, equals(seed));
-  });
+  test(
+    'seed persists across store re-instantiation (Keychain, not memory)',
+    () async {
+      await _newStore().write('it.persist', seed);
+      // A brand-new adapter instance (and plugin client) must find the item —
+      // the bytes live in the OS Keychain, not in any Dart-side state.
+      final back = await _newStore().read('it.persist');
+      expect(back, equals(seed));
+    },
+  );
 
   test('delete removes the seed; second delete is a no-op', () async {
     final store = _newStore();
