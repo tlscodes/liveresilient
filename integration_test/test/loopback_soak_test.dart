@@ -17,6 +17,8 @@ void main() {
   test(
     '100 sequential setup/teardown cycles leave no leaked rooms or sockets',
     () async {
+      const cycles = 100;
+
       final certDir = await Directory.systemTemp.createTemp(
         'loopback_soak_test_certs_',
       );
@@ -26,9 +28,18 @@ void main() {
       final security = SecurityContext()
         ..useCertificateChain(certificate.certificatePath)
         ..usePrivateKey(certificate.privateKeyPath);
+      // The invite-spam guard is deliberately NOT bypassed for loopback: a
+      // source-address exemption in shipped server code would be a real
+      // weakness (anything the relay resolves to a local address would get
+      // unlimited session quota). Instead this soak — which legitimately
+      // creates 100 distinct callIds from ONE source in ~2 minutes, a rate no
+      // real client produces — injects a soak-appropriate quota through the
+      // config seam the server already exposes. Every other limit keeps its
+      // production default, so the guard's code path is still exercised.
       final server = await SignalingRelayServer.bind(
         security: security,
         port: 0,
+        abuseControls: AbuseControlConfig(maxNewCallIdsPerWindow: cycles + 10),
       );
 
       final unhandledErrors = <Object>[];
@@ -37,7 +48,6 @@ void main() {
         await certDir.delete(recursive: true);
       });
 
-      const cycles = 100;
       for (var i = 0; i < cycles; i++) {
         final callId = 'soak-call-$i';
         final initiator = CallStack.build(
