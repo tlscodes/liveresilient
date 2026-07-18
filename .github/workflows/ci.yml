@@ -53,19 +53,30 @@ jobs:
       - name: Static analysis (infos are fatal)
         run: dart analyze --fatal-infos --fatal-warnings
 
-      - name: Tests with coverage (per package that has a test/ dir)
+      - name: Tests with coverage (every package that has a test/ dir)
         run: |
           set -e
+          # The glob must cover EVERY testable directory, not just packages/
+          # and apps/. A suite outside this list is a suite the gate cannot
+          # fail on: the loopback soak in integration_test/ sat red while CI
+          # reported green, because the old glob never reached it.
           found=0
-          for d in packages/*/ apps/*/; do
-            if [ -d "${d}test" ]; then
-              echo "== testing ${d}"
+          for d in packages/*/ apps/*/ server/*/ integration_test/ tool/*/; do
+            [ -d "${d}test" ] || continue
+            # Flutter-SDK packages must use `flutter test`; `dart test` cannot
+            # resolve flutter_test and fails with "Could not find package test".
+            if grep -q 'sdk: flutter' "${d}pubspec.yaml" 2>/dev/null; then
+              echo "== testing ${d} (flutter)"
+              (cd "$d" && flutter test --coverage)
+            else
+              echo "== testing ${d} (dart)"
               (cd "$d" && dart test --coverage=coverage)
-              found=1
             fi
+            found=1
           done
           if [ "$found" = "0" ]; then
-            echo "No test/ directories yet — gate stays green; testers add teeth per phase."
+            echo "No test/ directories found — that is itself a gate failure."
+            exit 1
           fi
 
       - name: Upload coverage artifacts
@@ -73,7 +84,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: packages/*/coverage/
+          path: |
+            packages/*/coverage/
+            apps/*/coverage/
+            server/*/coverage/
           if-no-files-found: ignore
           retention-days: 14
 
