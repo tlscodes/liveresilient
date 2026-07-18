@@ -4,5 +4,6 @@ library;
 
 export 'src/adaptive_media_policy.dart';
 export 'src/media_adaptation.dart';
+export 'src/media_data_channel.dart';
 export 'src/rtc_stats_sampler.dart';
 export 'src/webrtc_media_engine.dart';

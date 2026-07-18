@@ -11,6 +11,11 @@ class FakePeerConnectionPort implements PeerConnectionPort {
   final _statusController = StreamController<PeerConnectionStatus>.broadcast();
   final _candidateController = StreamController<IceCandidate>.broadcast();
 
+  @override
+  Future<MediaDataChannel> createDataChannel(DataChannelConfig config) {
+    throw UnsupportedError('engine tests do not exercise the data channel');
+  }
+
   /// When set, `createOffer` awaits this completer instead of returning
   /// immediately (used to simulate a hung platform channel).
   Completer<SdpDescription>? hangOfferOn;
@@ -89,6 +94,11 @@ class FakePeerConnectionPort implements PeerConnectionPort {
 class _SerializingFakePort implements PeerConnectionPort {
   final List<RawRtcCounters> counterSequence;
   int _pollIndex = 0;
+
+  @override
+  Future<MediaDataChannel> createDataChannel(DataChannelConfig config) {
+    throw UnsupportedError('engine tests do not exercise the data channel');
+  }
 
   final _statusController = StreamController<PeerConnectionStatus>.broadcast();
   final _candidateController = StreamController<IceCandidate>.broadcast();

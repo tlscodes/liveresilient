@@ -108,6 +108,11 @@ class ImpairedNetworkSimulator {
 class SimulatedPeerConnectionPort implements PeerConnectionPort {
   final ImpairedNetworkSimulator simulator;
 
+  @override
+  Future<MediaDataChannel> createDataChannel(DataChannelConfig config) {
+    throw UnsupportedError('impaired-network simulation has no data channel');
+  }
+
   final _statusController = StreamController<PeerConnectionStatus>.broadcast();
   final _candidateController = StreamController<IceCandidate>.broadcast();
 

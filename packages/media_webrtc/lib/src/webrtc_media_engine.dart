@@ -20,6 +20,7 @@ library;
 import 'dart:async';
 
 import 'adaptive_media_policy.dart';
+import 'media_data_channel.dart';
 import 'rtc_stats_sampler.dart';
 
 /// Subset of `RTCPeerConnectionState` the engine reacts to.
@@ -87,6 +88,13 @@ abstract interface class PeerConnectionPort {
 
   Future<void> setVideoSenderParameters(VideoSenderParameters parameters);
   Future<void> setAudioMaxBitrate(int bitrateBps);
+
+  /// Creates a NEGOTIATED application data channel on this connection (see
+  /// media_data_channel.dart for the negotiated-mode contract). Both peers
+  /// call this with an identical [config]; frames ride the call's existing
+  /// DTLS transport. May be called before or after the SDP exchange — the
+  /// channel reports [MediaDataChannelState.open] once the transport is up.
+  Future<MediaDataChannel> createDataChannel(DataChannelConfig config);
 
   /// Reads cumulative counters from the platform stats report.
   Future<RawRtcCounters?> readStatsCounters();
