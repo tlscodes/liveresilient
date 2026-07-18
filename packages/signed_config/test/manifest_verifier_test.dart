@@ -138,30 +138,29 @@ void main() {
       expect(crypto.callCount, 0);
     });
 
-    test(
-      'rejects a signature of the wrong length without calling crypto',
-      () async {
-        final manifest = buildManifest(signingKeyId: 'key-1');
-        final document = signManifest(
-          manifest,
-          key1,
-          signatureOverride: List.filled(10, 1),
-        );
+    test('rejects a signature of the wrong length without calling crypto, as '
+        'malformedSignature (structural defect, distinct from a correctly '
+        'shaped signature that fails crypto verification)', () async {
+      final manifest = buildManifest(signingKeyId: 'key-1');
+      final document = signManifest(
+        manifest,
+        key1,
+        signatureOverride: List.filled(10, 1),
+      );
 
-        final result = await verifier.verify(
-          document,
-          lastAcceptedRevision: 0,
-          now: DateTime.utc(2026, 1, 1, 0, 30),
-        );
+      final result = await verifier.verify(
+        document,
+        lastAcceptedRevision: 0,
+        now: DateTime.utc(2026, 1, 1, 0, 30),
+      );
 
-        expect(result, isA<ManifestRejected>());
-        expect(
-          (result as ManifestRejected).reason,
-          ManifestRejection.badSignature,
-        );
-        expect(crypto.callCount, 0);
-      },
-    );
+      expect(result, isA<ManifestRejected>());
+      expect(
+        (result as ManifestRejected).reason,
+        ManifestRejection.malformedSignature,
+      );
+      expect(crypto.callCount, 0);
+    });
 
     test(
       'rejects a tampered signature (correct length, wrong bytes)',
@@ -269,6 +268,56 @@ void main() {
         (result as ManifestRejected).reason,
         ManifestRejection.badSignature,
         reason: 'signature must be checked before the time window',
+      );
+    });
+
+    test('signature-before-time order: a tampered AND not-yet-valid manifest '
+        'reports badSignature, never notYetValid', () async {
+      final manifest = buildManifest(
+        signingKeyId: 'key-1',
+        issuedAt: DateTime.utc(2026, 6, 1),
+        expiresAt: DateTime.utc(2026, 6, 1, 1),
+      );
+      final document = signManifest(
+        manifest,
+        key1,
+        signatureOverride: List.filled(64, 7), // tampered
+      );
+
+      final result = await verifier.verify(
+        document,
+        lastAcceptedRevision: 0,
+        now: DateTime.utc(2026, 1, 1), // also before issuedAt
+      );
+
+      expect(result, isA<ManifestRejected>());
+      expect(
+        (result as ManifestRejected).reason,
+        ManifestRejection.badSignature,
+        reason: 'signature must be checked before the time window',
+      );
+    });
+
+    test('signature-before-time order: a tampered AND rollback manifest '
+        'reports badSignature, never rollback', () async {
+      final manifest = buildManifest(revision: 3, signingKeyId: 'key-1');
+      final document = signManifest(
+        manifest,
+        key1,
+        signatureOverride: List.filled(64, 7), // tampered
+      );
+
+      final result = await verifier.verify(
+        document,
+        lastAcceptedRevision: 5, // also a rollback vs. last accepted
+        now: DateTime.utc(2026, 1, 1, 0, 30),
+      );
+
+      expect(result, isA<ManifestRejected>());
+      expect(
+        (result as ManifestRejected).reason,
+        ManifestRejection.badSignature,
+        reason: 'signature must be checked before rollback protection',
       );
     });
 

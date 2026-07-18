@@ -314,6 +314,31 @@ void main() {
 
       expect(await fetcher.fetch(origin.manifestUri), [9, 9, 9]);
     });
+
+    test('maxRedirects: 0 rejects on the very first redirect, never reaching '
+        'the target', () async {
+      final target = await TestOrigin.start(serverContext);
+      addTearDown(target.stop);
+      target.body = [9, 9, 9];
+      origin.redirectTo = target.manifestUri.toString();
+      final noRedirects = IoManifestFetcher(
+        timeout: const Duration(seconds: 5),
+        securityContext: clientContext,
+        maxRedirects: 0,
+      );
+
+      await expectLater(
+        noRedirects.fetch(origin.manifestUri),
+        throwsA(isA<ManifestFetchException>()),
+      );
+      expect(
+        target.requestCount,
+        0,
+        reason:
+            'maxRedirects: 0 must fail on hop 0, before any request '
+            'reaches the redirect target',
+      );
+    });
   });
 
   group('multi-origin discovery over real TLS', () {

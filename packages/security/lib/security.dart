@@ -1,4 +1,5 @@
-/// Device identity management and log redaction.
+/// Device identity management, TURN credential issuance, and log
+/// redaction.
 library;
 
 export 'src/crypto_identity_engine.dart';

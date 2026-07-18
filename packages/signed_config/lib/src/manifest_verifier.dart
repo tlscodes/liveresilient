@@ -38,7 +38,7 @@ abstract interface class Ed25519Verifier {
 }
 
 /// A public key pinned into the app build.
-class PinnedManifestKey {
+final class PinnedManifestKey {
   final String keyId;
   final Uint8List publicKey;
 
@@ -66,6 +66,11 @@ enum ManifestRejection {
   malformed,
   unknownSigningKey,
   revokedSigningKey,
+
+  /// The signature bytes are not even the right length for Ed25519 (64
+  /// bytes) — a structural defect, distinct from [badSignature] which means
+  /// a correctly-shaped signature that failed cryptographic verification.
+  malformedSignature,
   badSignature,
   expired,
   notYetValid,
@@ -76,12 +81,12 @@ sealed class ManifestVerification {
   const ManifestVerification();
 }
 
-class ManifestAccepted extends ManifestVerification {
+final class ManifestAccepted extends ManifestVerification {
   final EndpointManifest manifest;
   const ManifestAccepted(this.manifest);
 }
 
-class ManifestRejected extends ManifestVerification {
+final class ManifestRejected extends ManifestVerification {
   final ManifestRejection reason;
 
   /// Diagnostic message safe for logs (never includes key material).
@@ -183,7 +188,7 @@ class ManifestVerifier {
 
     if (document.signature.length != 64) {
       return const ManifestRejected(
-        ManifestRejection.badSignature,
+        ManifestRejection.malformedSignature,
         'Ed25519 signatures are 64 bytes.',
       );
     }

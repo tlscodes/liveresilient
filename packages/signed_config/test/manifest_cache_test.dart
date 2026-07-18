@@ -299,6 +299,48 @@ void main() {
 
       expect(cache.currentRevision, isNull);
     });
+
+    test(
+      'exact last-known-good grace boundary: one microsecond before '
+      'expiresAt+grace still serves lastKnownGood; AT expiresAt+grace it is '
+      'already ManifestUnavailable (get() compares with strict isBefore, '
+      'so the grace window is half-open: [expiresAt, expiresAt+grace) )',
+      () async {
+        final expiresAt = DateTime.utc(2026, 1, 1, 1);
+        const grace = Duration(days: 1);
+        final graceEnd = expiresAt.add(grace);
+        final manifest = buildManifest(
+          revision: 1,
+          issuedAt: DateTime.utc(2026, 1, 1),
+          expiresAt: expiresAt,
+        );
+        fetcher.enqueueSuccess(
+          encodeSignedDocument(signManifest(manifest, key1)),
+        );
+
+        final cache = newCache(
+          config: const ManifestCacheConfig(lastKnownGoodGrace: grace),
+        );
+        final seeded = await cache.get();
+        expect(seeded.freshness, ManifestFreshness.fresh);
+
+        // One microsecond before the grace end: still last-known-good.
+        // (Each attempt fails over across both of buildManifest()'s
+        // configServiceUris, so two failures are queued per get() call.)
+        clock.set(graceEnd.subtract(const Duration(microseconds: 1)));
+        fetcher.enqueueFailure(Exception('network down'));
+        fetcher.enqueueFailure(Exception('network down'));
+        final justInsideGrace = await cache.get();
+        expect(justInsideGrace.freshness, ManifestFreshness.lastKnownGood);
+        expect(justInsideGrace.manifest.revision, 1);
+
+        // Exactly at the grace end: unavailable.
+        clock.set(graceEnd);
+        fetcher.enqueueFailure(Exception('network down'));
+        fetcher.enqueueFailure(Exception('network down'));
+        await expectLater(cache.get(), throwsA(isA<ManifestUnavailable>()));
+      },
+    );
   });
 
   test('ManifestUnavailable.toString() carries the message', () {

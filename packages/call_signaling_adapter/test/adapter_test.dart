@@ -141,6 +141,20 @@ void main() {
         await sub.cancel();
       },
     );
+
+    test('dispose() is idempotent — a second call is a safe no-op', () async {
+      await signaling.start(callId: 'call-1', role: CallRole.initiator);
+      await signaling.dispose();
+      await expectLater(signaling.dispose(), completes);
+    });
+
+    test('start() after dispose() throws StateError', () async {
+      await signaling.dispose();
+      await expectLater(
+        signaling.start(callId: 'call-1', role: CallRole.initiator),
+        throwsA(isA<StateError>()),
+      );
+    });
   });
 
   group('AdapterCallTransport', () {
@@ -283,6 +297,16 @@ void main() {
 
       expect(done, isTrue);
       expect(events, isEmpty);
+    });
+
+    test('dispose() is idempotent — a second call is a safe no-op', () async {
+      await transport.dispose();
+      await expectLater(transport.dispose(), completes);
+    });
+
+    test('connect() after dispose() throws StateError', () async {
+      await transport.dispose();
+      expect(() => transport.connect(), throwsA(isA<StateError>()));
     });
   });
 

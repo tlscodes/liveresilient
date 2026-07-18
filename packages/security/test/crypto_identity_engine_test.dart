@@ -108,6 +108,36 @@ void main() {
       },
     );
 
+    test(
+      'verify fails cleanly (no throw) on an empty publicKey and signature',
+      () async {
+        final message = _msg('anything');
+        final ok = await engine.verify(
+          publicKey: Uint8List(0),
+          message: message,
+          signature: Uint8List(0),
+        );
+        expect(ok, isFalse);
+      },
+    );
+
+    test('forget() + re-generate produces a different keypair on the same '
+        'engine instance', () async {
+      final keyStore = InMemoryKeyStore();
+      final rotatingEngine = CryptographyIdentityKeyEngine(keyStore: keyStore);
+
+      final firstPublicKey = await rotatingEngine.generateKeyPair(
+        keyHandle: 'rotating',
+      );
+      await keyStore.delete('rotating');
+      rotatingEngine.forget('rotating');
+      final secondPublicKey = await rotatingEngine.generateKeyPair(
+        keyHandle: 'rotating',
+      );
+
+      expect(secondPublicKey, isNot(equals(firstPublicKey)));
+    });
+
     test('sha256 is deterministic and 32 bytes', () async {
       final input = _msg('fingerprint me');
       final a = await engine.sha256(input);

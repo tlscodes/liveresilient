@@ -159,6 +159,18 @@ void main() {
       expect(result.status, SendStatus.transient);
     });
 
+    test('send lets a programming Error from the link propagate instead of '
+        'masquerading as SendStatus.transient', () async {
+      consent.granted = true;
+      adapter.degradedModeActive = true;
+      link.throwErrorOnSend = true;
+
+      expect(
+        () => adapter.send(utf8.encode('payload')),
+        throwsA(isA<StateError>()),
+      );
+    });
+
     test('name identifies this as the local-peer path', () {
       expect(adapter.name, 'local-peer');
     });

@@ -70,20 +70,16 @@ class CryptoMediaFrameAuthenticator implements MediaFrameAuthenticator {
     );
   }
 
-  @override
-  Future<MediaFrame> createForwardedEnvelope(MediaFrame envelope) async {
-    final unsigned = MediaFrame(
-      version: envelope.version,
-      messageId: envelope.messageId,
-      originKeyId: envelope.originKeyId,
-      currentRelayKeyId: signer.keyId,
-      createdAtMs: envelope.createdAtMs,
-      expiresAtMs: envelope.expiresAtMs,
-      maxHops: envelope.maxHops,
-      hopCount: envelope.hopCount + 1,
-      ciphertext: envelope.ciphertext,
-      signature: const [],
-    );
+  /// Signs [unsigned] (whose `signature` field is ignored/expected empty)
+  /// with [signer] and returns a new [MediaFrame] carrying the resulting
+  /// signature, all other fields unchanged. The single place both
+  /// [createForwardedEnvelope] and [createOriginFrame] route through, so the
+  /// "build unsigned frame, sign it, rebuild with the signature" plumbing
+  /// is not duplicated per call site.
+  static Future<MediaFrame> _withSignature(
+    MediaFrame unsigned,
+    EnvelopeSigner signer,
+  ) async {
     final signature = await signer.sign(mediaFrameSignedBytes(unsigned));
     return MediaFrame(
       version: unsigned.version,
@@ -99,6 +95,23 @@ class CryptoMediaFrameAuthenticator implements MediaFrameAuthenticator {
     );
   }
 
+  @override
+  Future<MediaFrame> createForwardedEnvelope(MediaFrame envelope) {
+    final unsigned = MediaFrame(
+      version: envelope.version,
+      messageId: envelope.messageId,
+      originKeyId: envelope.originKeyId,
+      currentRelayKeyId: signer.keyId,
+      createdAtMs: envelope.createdAtMs,
+      expiresAtMs: envelope.expiresAtMs,
+      maxHops: envelope.maxHops,
+      hopCount: envelope.hopCount + 1,
+      ciphertext: envelope.ciphertext,
+      signature: const [],
+    );
+    return _withSignature(unsigned, signer);
+  }
+
   /// Creates and signs the initial (hop 0) frame from the origin device,
   /// where `originKeyId == currentRelayKeyId == signer.keyId`.
   static Future<MediaFrame> createOriginFrame({
@@ -109,7 +122,7 @@ class CryptoMediaFrameAuthenticator implements MediaFrameAuthenticator {
     required int expiresAtMs,
     required int maxHops,
     int version = 1,
-  }) async {
+  }) {
     final unsigned = MediaFrame(
       version: version,
       messageId: messageId,
@@ -122,18 +135,6 @@ class CryptoMediaFrameAuthenticator implements MediaFrameAuthenticator {
       ciphertext: ciphertext,
       signature: const [],
     );
-    final signature = await signer.sign(mediaFrameSignedBytes(unsigned));
-    return MediaFrame(
-      version: unsigned.version,
-      messageId: unsigned.messageId,
-      originKeyId: unsigned.originKeyId,
-      currentRelayKeyId: unsigned.currentRelayKeyId,
-      createdAtMs: unsigned.createdAtMs,
-      expiresAtMs: unsigned.expiresAtMs,
-      maxHops: unsigned.maxHops,
-      hopCount: unsigned.hopCount,
-      ciphertext: unsigned.ciphertext,
-      signature: signature,
-    );
+    return _withSignature(unsigned, signer);
   }
 }

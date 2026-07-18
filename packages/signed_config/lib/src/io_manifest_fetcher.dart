@@ -22,7 +22,7 @@ import 'manifest_cache.dart' show ManifestFetcher;
 
 /// Network-level manifest fetch failure (HTTP status, size cap, redirect
 /// policy, timeout). TLS/socket errors surface as their own exceptions.
-class ManifestFetchException implements Exception {
+final class ManifestFetchException implements Exception {
   final Uri uri;
   final String message;
 

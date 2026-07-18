@@ -32,7 +32,7 @@ abstract interface class SignalingGateway {
 }
 
 /// Default [SignalingGateway] wrapping a real [SignalingClient].
-class SignalingClientGateway implements SignalingGateway {
+final class SignalingClientGateway implements SignalingGateway {
   SignalingClientGateway(this._client);
 
   final SignalingClient _client;

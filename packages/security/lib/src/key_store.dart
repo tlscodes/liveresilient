@@ -17,6 +17,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'hex_codec.dart';
+
 /// Persists raw private-key seed bytes by opaque handle.
 ///
 /// Implementations MUST treat the bytes as secret: no logging, no
@@ -71,6 +73,24 @@ class DevFileKeyStore implements KeyMaterialStore {
 
   DevFileKeyStore(String path) : _file = File(path);
 
+  /// Tail of the mutation queue: every `write`/`delete` chains onto this so
+  /// its own read-modify-write cycle only starts once the previous one has
+  /// fully finished (read old contents → mutate in memory → write back).
+  /// Without this, two concurrent `write()` calls can both read the same
+  /// starting contents, mutate independently, and the second write's
+  /// `_writeAll` clobbers the first's change (lost update). `read()` is
+  /// not queued — it doesn't mutate the file.
+  Future<void> _serial = Future<void>.value();
+
+  /// Runs [action] after every previously-enqueued mutation has settled
+  /// (succeeded or failed), and advances the queue tail the same way so a
+  /// failing mutation never wedges the ones queued after it.
+  Future<T> _enqueue<T>(Future<T> Function() action) {
+    final result = _serial.then((_) => action());
+    _serial = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
   Future<Map<String, dynamic>> _readAll() async {
     if (!await _file.exists()) return <String, dynamic>{};
     final contents = await _file.readAsString();
@@ -93,36 +113,28 @@ class DevFileKeyStore implements KeyMaterialStore {
   Future<Uint8List?> read(String keyHandle) async {
     final data = await _readAll();
     final hex = data[keyHandle];
+    // A handle whose value isn't a hex string (e.g. corrupted to a JSON
+    // number/object) is reported as "missing" rather than thrown from
+    // here — [read]'s contract is "seed or null", so corruption at this
+    // specific spot is masked as absence. (Other corruption shapes, like
+    // odd-length hex or a non-object file, still surface via
+    // [FormatException] from `_readAll`/`hexDecode`.)
     if (hex is! String) return null;
-    return _hexDecode(hex);
+    return hexDecode(hex);
   }
 
   @override
-  Future<void> write(String keyHandle, Uint8List seed) async {
+  Future<void> write(String keyHandle, Uint8List seed) => _enqueue(() async {
     final data = await _readAll();
-    data[keyHandle] = _hexEncode(seed);
+    data[keyHandle] = hexEncode(seed);
     await _writeAll(data);
-  }
+  });
 
   @override
-  Future<void> delete(String keyHandle) async {
+  Future<void> delete(String keyHandle) => _enqueue(() async {
     final data = await _readAll();
     if (data.remove(keyHandle) != null) {
       await _writeAll(data);
     }
-  }
-
-  static String _hexEncode(Uint8List bytes) =>
-      bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-
-  static Uint8List _hexDecode(String hex) {
-    if (hex.length.isOdd) {
-      throw FormatException('Hex string has odd length: ${hex.length}');
-    }
-    final out = Uint8List(hex.length ~/ 2);
-    for (var i = 0; i < out.length; i++) {
-      out[i] = int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16);
-    }
-    return out;
-  }
+  });
 }

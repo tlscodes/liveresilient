@@ -21,20 +21,28 @@ import 'signaling_gateway.dart';
 ///   trigger.
 /// - [stop] only detaches this instance's listeners — the gateway's own
 ///   lifecycle (connect/dispose) is owned by the caller, not by this class.
-class AdapterCallSignaling implements CallSignaling {
+final class AdapterCallSignaling implements CallSignaling {
   AdapterCallSignaling(this._gateway);
+
+  /// How long [send] waits for the gateway to settle a hangup before
+  /// treating it as acknowledged. Hangup must never block teardown.
+  static const Duration hangupSendTimeout = Duration(milliseconds: 300);
 
   final SignalingGateway _gateway;
 
   final _eventsController = StreamController<SignalingEvent>.broadcast();
   StreamSubscription<SignalEnvelope>? _inboundSubscription;
   String? _callId;
+  bool _disposed = false;
 
   @override
   Stream<SignalingEvent> get events => _eventsController.stream;
 
   @override
   Future<void> start({required String callId, required CallRole role}) async {
+    if (_disposed) {
+      throw StateError('AdapterCallSignaling.start() called after dispose().');
+    }
     _callId = callId;
     await _inboundSubscription?.cancel();
     _inboundSubscription = _gateway.inbound.listen((envelope) {
@@ -56,11 +64,8 @@ class AdapterCallSignaling implements CallSignaling {
     final (type, payload) = encodeCommand(command);
     var pending = _gateway.send(callId: callId, type: type, payload: payload);
     if (command is SendHangupCommand) {
-      // Hangup must never block teardown: if the gateway does not settle
-      // within 300ms, treat the send as acknowledged so the caller can
-      // terminate call state immediately.
       pending = pending.timeout(
-        const Duration(milliseconds: 300),
+        hangupSendTimeout,
         onTimeout: () => OutboxOutcome.acknowledged,
       );
     }
@@ -85,9 +90,12 @@ class AdapterCallSignaling implements CallSignaling {
 
   /// Releases this instance's listener and closes [events]. Unlike [stop]
   /// (which keeps the instance restartable via [start]), a disposed
-  /// adapter is terminal. The gateway itself is caller-owned and stays
-  /// untouched.
+  /// adapter is terminal: a later [start] throws [StateError]. Idempotent —
+  /// calling [dispose] more than once is safe. The gateway itself is
+  /// caller-owned and stays untouched.
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     await stop();
     await _eventsController.close();
   }

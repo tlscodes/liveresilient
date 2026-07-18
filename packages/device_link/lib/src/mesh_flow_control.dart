@@ -111,20 +111,51 @@ enum MeshFlowRejection { peerQuotaExceeded, rateLimited }
 
 /// Outcome of a guarded process call: either the inner processor's
 /// disposition (admitted) or a flow-control rejection (shed).
-class GuardedMeshOutcome {
+///
+/// A true `sealed class` with exactly two variants ([AdmittedMeshOutcome],
+/// [ShedMeshOutcome]) so callers can exhaustively `switch` on the outcome.
+/// The pre-existing public surface — `admitted`/`disposition`/`rejection`
+/// getters and the `.admitted(...)`/`.shed(...)` factory constructors — is
+/// preserved unchanged on the base type so every existing call site
+/// compiles as-is; the factories now return the concrete subtype.
+sealed class GuardedMeshOutcome {
   /// Set when the message was admitted to the inner processor.
-  final MeshDisposition? disposition;
+  MeshDisposition? get disposition;
 
   /// Set when flow control shed the message before processing.
-  final MeshFlowRejection? rejection;
+  MeshFlowRejection? get rejection;
 
-  const GuardedMeshOutcome.admitted(MeshDisposition this.disposition)
-    : rejection = null;
+  const GuardedMeshOutcome();
 
-  const GuardedMeshOutcome.shed(MeshFlowRejection this.rejection)
-    : disposition = null;
+  const factory GuardedMeshOutcome.admitted(MeshDisposition disposition) =
+      AdmittedMeshOutcome;
+
+  const factory GuardedMeshOutcome.shed(MeshFlowRejection rejection) =
+      ShedMeshOutcome;
 
   bool get admitted => rejection == null;
+}
+
+/// The message was admitted to the inner processor.
+final class AdmittedMeshOutcome extends GuardedMeshOutcome {
+  @override
+  final MeshDisposition disposition;
+
+  @override
+  MeshFlowRejection? get rejection => null;
+
+  const AdmittedMeshOutcome(this.disposition);
+}
+
+/// Flow control shed the message before it reached the inner processor.
+final class ShedMeshOutcome extends GuardedMeshOutcome {
+  @override
+  final MeshFlowRejection rejection;
+
+  @override
+  MeshDisposition? get disposition => null;
+
+  const ShedMeshOutcome(this.rejection);
 }
 
 /// Wraps a [MeshMessageProcessor] with per-peer quotas, a global

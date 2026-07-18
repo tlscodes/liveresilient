@@ -27,7 +27,7 @@ import 'signaling_gateway.dart';
 /// observing gateway state changes. [disconnect] is a no-op with respect
 /// to the (shared, caller-owned) gateway — it only detaches this
 /// instance's listener. [dispose] additionally closes [events].
-class AdapterCallTransport implements CallTransport {
+final class AdapterCallTransport implements CallTransport {
   AdapterCallTransport(this._gateway) {
     _attach();
   }
@@ -35,12 +35,18 @@ class AdapterCallTransport implements CallTransport {
   final SignalingGateway _gateway;
   final _eventsController = StreamController<TransportEvent>.broadcast();
   StreamSubscription<TransportStatus>? _stateSubscription;
+  bool _disposed = false;
 
   @override
   Stream<TransportEvent> get events => _eventsController.stream;
 
   @override
   Future<void> connect() {
+    if (_disposed) {
+      throw StateError(
+        'AdapterCallTransport.connect() called after dispose().',
+      );
+    }
     _attach();
     return _gateway.connect();
   }
@@ -52,9 +58,12 @@ class AdapterCallTransport implements CallTransport {
     await subscription?.cancel();
   }
 
-  /// Releases this instance's listener and closes [events]. The gateway
-  /// itself is caller-owned and stays untouched.
+  /// Releases this instance's listener and closes [events]. Idempotent —
+  /// calling [dispose] more than once is safe. A later [connect] throws
+  /// [StateError]. The gateway itself is caller-owned and stays untouched.
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     await disconnect();
     await _eventsController.close();
   }

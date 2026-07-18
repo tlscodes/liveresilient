@@ -140,4 +140,143 @@ void main() {
       });
     }
   });
+
+  group('CallState value semantics', () {
+    test(
+      'two snapshots with equal field values are ==, with equal hashCode',
+      () {
+        final a = CallState(
+          phase: CallPhase.connecting,
+          sequence: 3,
+          changedAt: now,
+        );
+        final b = CallState(
+          phase: CallPhase.connecting,
+          sequence: 3,
+          changedAt: now,
+        );
+        expect(a, equals(b));
+        expect(a.hashCode, equals(b.hashCode));
+      },
+    );
+
+    test('a state equals itself', () {
+      final a = CallState(
+        phase: CallPhase.connected,
+        sequence: 1,
+        changedAt: now,
+      );
+      expect(a, equals(a));
+    });
+
+    test('differing phase makes two otherwise-identical states unequal', () {
+      final a = CallState(
+        phase: CallPhase.connecting,
+        sequence: 1,
+        changedAt: now,
+      );
+      final b = CallState(
+        phase: CallPhase.negotiating,
+        sequence: 1,
+        changedAt: now,
+      );
+      expect(a, isNot(equals(b)));
+    });
+
+    test('differing reconnectAttempt makes two otherwise-identical states '
+        'unequal', () {
+      final a = CallState(
+        phase: CallPhase.reconnecting,
+        sequence: 1,
+        changedAt: now,
+        reconnectAttempt: 1,
+      );
+      final b = CallState(
+        phase: CallPhase.reconnecting,
+        sequence: 1,
+        changedAt: now,
+        reconnectAttempt: 2,
+      );
+      expect(a, isNot(equals(b)));
+    });
+
+    test('error is compared by identity, not value', () {
+      final sharedError = StateError('boom');
+      final a = CallState(
+        phase: CallPhase.failed,
+        sequence: 1,
+        changedAt: now,
+        endReason: CallEndReason.protocolError,
+        error: sharedError,
+      );
+      final bSameInstance = CallState(
+        phase: CallPhase.failed,
+        sequence: 1,
+        changedAt: now,
+        endReason: CallEndReason.protocolError,
+        error: sharedError,
+      );
+      final cDistinctInstance = CallState(
+        phase: CallPhase.failed,
+        sequence: 1,
+        changedAt: now,
+        endReason: CallEndReason.protocolError,
+        error: StateError('boom'), // same message, different object
+      );
+
+      expect(a, equals(bSameInstance), reason: 'same error instance -> ==');
+      expect(
+        a,
+        isNot(equals(cDistinctInstance)),
+        reason:
+            'equal-looking but distinct error objects must NOT compare '
+            'equal -- Object has no deep-equality contract',
+      );
+    });
+
+    test('equal states behave correctly as Set members', () {
+      final a = CallState(
+        phase: CallPhase.connecting,
+        sequence: 1,
+        changedAt: now,
+      );
+      final duplicateOfA = CallState(
+        phase: CallPhase.connecting,
+        sequence: 1,
+        changedAt: now,
+      );
+      final different = CallState(
+        phase: CallPhase.negotiating,
+        sequence: 1,
+        changedAt: now,
+      );
+
+      final set = <CallState>{a, duplicateOfA, different};
+      expect(set, hasLength(2));
+      expect(set, contains(a));
+      expect(set, contains(different));
+    });
+
+    test('toString mentions the phase', () {
+      final state = CallState(
+        phase: CallPhase.reconnecting,
+        sequence: 4,
+        changedAt: now,
+        reconnectAttempt: 2,
+      );
+      expect(state.toString(), contains('reconnecting'));
+    });
+
+    test('toString mentions sequence and reconnectAttempt', () {
+      final state = CallState(
+        phase: CallPhase.reconnecting,
+        sequence: 4,
+        changedAt: now,
+        reconnectAttempt: 2,
+      );
+      final text = state.toString();
+      expect(text, contains('4'));
+      expect(text, contains('2'));
+    });
+  });
 }

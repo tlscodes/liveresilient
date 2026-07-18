@@ -197,6 +197,28 @@ void main() {
       );
     });
 
+    test('acceptChangedIdentity + checkRemoteIdentity round-trips to a '
+        'match for the newly-pinned key', () async {
+      final identityStore = _newStore();
+      final firstIdentity = await _newStore().localIdentity();
+      final secondIdentity = await _newStore().localIdentity();
+
+      await identityStore.checkRemoteIdentity(
+        peerId: 'peer-5',
+        presentedPublicKey: firstIdentity.publicKey,
+      );
+      await identityStore.acceptChangedIdentity(
+        peerId: 'peer-5',
+        newPublicKey: secondIdentity.publicKey,
+      );
+
+      final result = await identityStore.checkRemoteIdentity(
+        peerId: 'peer-5',
+        presentedPublicKey: secondIdentity.publicKey,
+      );
+      expect(result, RemoteIdentityCheck.match);
+    });
+
     group('safetyNumber symmetry with real keys', () {
       test('is identical regardless of which side computes it', () async {
         final aliceStore = _newStore();
@@ -232,6 +254,23 @@ void main() {
         );
 
         expect(withBob, isNot(equals(withCarol)));
+      });
+
+      test('self-pairing (local == remote) is stable across repeated '
+          'calls', () async {
+        final store = _newStore();
+        final identity = await store.localIdentity();
+
+        final first = await store.safetyNumber(
+          localPublicKey: identity.publicKey,
+          remotePublicKey: identity.publicKey,
+        );
+        final second = await store.safetyNumber(
+          localPublicKey: identity.publicKey,
+          remotePublicKey: identity.publicKey,
+        );
+
+        expect(first, equals(second));
       });
     });
   });

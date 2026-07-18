@@ -136,4 +136,42 @@ void main() {
       expect(credsA.credential, isNot(credsB.credential));
     });
   });
+
+  group('TurnCredentialsIssuer.issue input validation', () {
+    test('userId containing a colon throws ArgumentError', () {
+      final issuer = TurnCredentialsIssuer(sharedSecret: 's3cret');
+      expect(() => issuer.issue('ali:ce'), throwsArgumentError);
+    });
+
+    test('empty userId throws ArgumentError', () {
+      final issuer = TurnCredentialsIssuer(sharedSecret: 's3cret');
+      expect(() => issuer.issue(''), throwsArgumentError);
+    });
+  });
+
+  group('TurnCredentialsIssuer construction validation', () {
+    test('Duration.zero ttl throws ArgumentError at construction', () {
+      expect(
+        () => TurnCredentialsIssuer(sharedSecret: 's3cret', ttl: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('negative ttl throws ArgumentError at construction', () {
+      expect(
+        () => TurnCredentialsIssuer(
+          sharedSecret: 's3cret',
+          ttl: const Duration(seconds: -1),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('empty sharedSecret throws ArgumentError at construction', () {
+      expect(
+        () => TurnCredentialsIssuer(sharedSecret: ''),
+        throwsArgumentError,
+      );
+    });
+  });
 }

@@ -15,6 +15,7 @@
 /// frames were unauthenticated).
 library;
 
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -51,7 +52,7 @@ abstract interface class EnvelopeVerifier {
   });
 }
 
-class AuthenticatedEnvelope {
+final class AuthenticatedEnvelope {
   final int version;
 
   /// Random unique id for replay rejection.
@@ -207,7 +208,12 @@ class EnvelopeValidator {
   final Duration freshnessWindow;
   final int maxTrackedNonces;
 
-  final Map<String, int> _seenNonceExpiry = {};
+  // Explicit LinkedHashMap (not the default `{}`, which happens to also be
+  // insertion-ordered) so the `.keys.first` eviction below relies on a
+  // documented, guaranteed insertion order rather than an implementation
+  // detail of the map literal.
+  final LinkedHashMap<String, int> _seenNonceExpiry =
+      LinkedHashMap<String, int>();
 
   EnvelopeValidator({
     required EnvelopeVerifier verifier,

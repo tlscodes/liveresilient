@@ -22,9 +22,24 @@ const int manifestSchemaVersion = 2;
 /// Upper bound on `featureFlags` entries ("limited" per the v2 blueprint).
 const int maxFeatureFlags = 32;
 
+/// Upper bound on `signalingEndpoints` entries. A manifest lists priority-
+/// ordered candidates, not an unbounded directory; this caps parser/memory
+/// cost on untrusted input while staying far above any realistic deployment.
+const int maxSignalingEndpoints = 16;
+
+/// Upper bound on `configServiceUris` entries (same rationale as
+/// [maxSignalingEndpoints]).
+const int maxConfigServiceUris = 16;
+
+/// Upper bound on `iceServers` entries.
+const int maxIceServers = 32;
+
+/// Upper bound on `relayRegions` entries.
+const int maxRelayRegions = 32;
+
 /// A standard STUN/TURN server entry, mirroring the W3C `RTCIceServer`
 /// dictionary so it maps 1:1 onto WebRTC configuration.
-class IceServerEntry {
+final class IceServerEntry {
   /// `stun:`, `stuns:`, `turn:`, or `turns:` URIs.
   final List<Uri> urls;
 
@@ -36,6 +51,15 @@ class IceServerEntry {
   final String credential;
 
   static const _allowedSchemes = {'stun', 'stuns', 'turn', 'turns'};
+
+  /// STUN/TURN URIs are opaque per RFC 7064/7065 (`stun:host:port`, no
+  /// `//`), so `dart:core`'s [Uri.host] is empty even for valid entries —
+  /// it only populates from an authority (`//host:port`) component. Try
+  /// the authority form first (some callers do write `stun://host:port`),
+  /// then fall back to reparsing the opaque scheme-specific part as an
+  /// authority to recover the real host.
+  static String _hostOf(Uri uri) =>
+      uri.host.isNotEmpty ? uri.host : Uri.parse('//${uri.path}').host;
 
   IceServerEntry({
     required List<Uri> urls,
@@ -51,6 +75,9 @@ class IceServerEntry {
           'ICE server URI must use stun/stuns/turn/turns, got: '
           '${uri.scheme}',
         );
+      }
+      if (_hostOf(uri).isEmpty) {
+        throw FormatException('ICE server URI is missing a host: $uri');
       }
     }
     final needsCredentials = urls.any(
@@ -92,7 +119,7 @@ class IceServerEntry {
 }
 
 /// The verified configuration consumed by the rest of the app.
-class EndpointManifest {
+final class EndpointManifest {
   final int schemaVersion;
 
   /// Strictly increasing revision; the cache rejects anything lower than
@@ -174,6 +201,22 @@ class EndpointManifest {
         );
       }
     }
+    // Count caps run AFTER the per-item format/type checks above, so an
+    // oversized list that also contains a malformed entry keeps throwing
+    // the existing, more specific FormatException rather than a generic
+    // "too many" one.
+    if (signalingEndpoints.length > maxSignalingEndpoints) {
+      throw FormatException(
+        'signalingEndpoints is limited to $maxSignalingEndpoints entries, '
+        'got ${signalingEndpoints.length}.',
+      );
+    }
+    if (iceServers.length > maxIceServers) {
+      throw FormatException(
+        'iceServers is limited to $maxIceServers entries, '
+        'got ${iceServers.length}.',
+      );
+    }
     if (configServiceUris.isEmpty) {
       throw const FormatException(
         'Manifest must list at least one config service URI.',
@@ -190,6 +233,12 @@ class EndpointManifest {
         throw FormatException('Duplicate config service URI: $uri');
       }
     }
+    if (configServiceUris.length > maxConfigServiceUris) {
+      throw FormatException(
+        'configServiceUris is limited to $maxConfigServiceUris entries, '
+        'got ${configServiceUris.length}.',
+      );
+    }
     final seenRegions = <String>{};
     for (final region in relayRegions) {
       if (!_relayRegionPattern.hasMatch(region)) {
@@ -200,6 +249,12 @@ class EndpointManifest {
       if (!seenRegions.add(region)) {
         throw FormatException('Duplicate relay region: $region');
       }
+    }
+    if (relayRegions.length > maxRelayRegions) {
+      throw FormatException(
+        'relayRegions is limited to $maxRelayRegions entries, '
+        'got ${relayRegions.length}.',
+      );
     }
     if (featureFlags.length > maxFeatureFlags) {
       throw FormatException(

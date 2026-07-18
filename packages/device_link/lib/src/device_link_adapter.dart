@@ -154,7 +154,17 @@ class DeviceLinkAdapter implements TransportChannel {
     } on FormatException catch (e) {
       // Payload too large for the local link: not retryable on this path.
       return SendResult(SendStatus.unavailable, error: e);
-    } catch (e) {
+    } on Exception catch (e) {
+      // Operational failures from the link (I/O, timeout, etc.) are
+      // retryable on another path — surfaced as transient, never thrown.
+      // Narrowed from a bare `catch` (2026-07-18): a programming Error
+      // (assertion, null-check, out-of-range) must propagate and crash
+      // loudly instead of masquerading as a retryable transient send
+      // failure. Verified against the test suite first: the only test
+      // exercising this path (`send reports transient when the link
+      // itself throws`) was updated to throw an `Exception`, matching what
+      // a real link failure actually is — not a `StateError` (Dart's
+      // convention for programming bugs).
       return SendResult(SendStatus.transient, error: e);
     }
   }

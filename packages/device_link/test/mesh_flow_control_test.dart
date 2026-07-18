@@ -598,6 +598,33 @@ void main() {
       expect(duplicateProbe.disposition, MeshDisposition.duplicate);
     });
   });
+
+  group('GuardedMeshOutcome sealed hierarchy', () {
+    test('an exhaustive switch (no default) matches both variants', () {
+      String describe(GuardedMeshOutcome outcome) {
+        return switch (outcome) {
+          AdmittedMeshOutcome(disposition: final d) => 'admitted:$d',
+          ShedMeshOutcome(rejection: final r) => 'shed:$r',
+        };
+      }
+
+      final admitted = GuardedMeshOutcome.admitted(MeshDisposition.delivered);
+      final shed = GuardedMeshOutcome.shed(MeshFlowRejection.rateLimited);
+
+      expect(admitted, isA<AdmittedMeshOutcome>());
+      expect(shed, isA<ShedMeshOutcome>());
+      expect(describe(admitted), 'admitted:MeshDisposition.delivered');
+      expect(describe(shed), 'shed:MeshFlowRejection.rateLimited');
+
+      // The pre-existing getter surface survives on the base type.
+      expect(admitted.admitted, isTrue);
+      expect(admitted.disposition, MeshDisposition.delivered);
+      expect(admitted.rejection, isNull);
+      expect(shed.admitted, isFalse);
+      expect(shed.disposition, isNull);
+      expect(shed.rejection, MeshFlowRejection.rateLimited);
+    });
+  });
 }
 
 class _SimulationTally {
