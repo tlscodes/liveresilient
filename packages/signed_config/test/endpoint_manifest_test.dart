@@ -210,4 +210,149 @@ void main() {
       expect(manifest.featureFlags, isEmpty);
     });
   });
+
+  group('count caps', () {
+    test('rejects more than $maxSignalingEndpoints signalingEndpoints', () {
+      expect(
+        () => EndpointManifest(
+          revision: 1,
+          signingKeyId: 'key-1',
+          issuedAt: DateTime.utc(2026, 1, 1),
+          expiresAt: DateTime.utc(2026, 1, 2),
+          signalingEndpoints: [
+            for (var i = 0; i <= maxSignalingEndpoints; i++)
+              Uri.parse('wss://signal-$i.example.com/v1'),
+          ],
+          iceServers: const [],
+          configServiceUris: [Uri.parse('https://config.example.com')],
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('accepts exactly $maxSignalingEndpoints signalingEndpoints', () {
+      final manifest = EndpointManifest(
+        revision: 1,
+        signingKeyId: 'key-1',
+        issuedAt: DateTime.utc(2026, 1, 1),
+        expiresAt: DateTime.utc(2026, 1, 2),
+        signalingEndpoints: [
+          for (var i = 0; i < maxSignalingEndpoints; i++)
+            Uri.parse('wss://signal-$i.example.com/v1'),
+        ],
+        iceServers: const [],
+        configServiceUris: [Uri.parse('https://config.example.com')],
+      );
+      expect(manifest.signalingEndpoints.length, maxSignalingEndpoints);
+    });
+
+    test('rejects more than $maxConfigServiceUris configServiceUris', () {
+      expect(
+        () => EndpointManifest(
+          revision: 1,
+          signingKeyId: 'key-1',
+          issuedAt: DateTime.utc(2026, 1, 1),
+          expiresAt: DateTime.utc(2026, 1, 2),
+          signalingEndpoints: [Uri.parse('wss://signal.example.com/v1')],
+          iceServers: const [],
+          configServiceUris: [
+            for (var i = 0; i <= maxConfigServiceUris; i++)
+              Uri.parse('https://config-$i.example.com'),
+          ],
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects more than $maxIceServers iceServers', () {
+      expect(
+        () => EndpointManifest(
+          revision: 1,
+          signingKeyId: 'key-1',
+          issuedAt: DateTime.utc(2026, 1, 1),
+          expiresAt: DateTime.utc(2026, 1, 2),
+          signalingEndpoints: [Uri.parse('wss://signal.example.com/v1')],
+          iceServers: [
+            for (var i = 0; i <= maxIceServers; i++)
+              IceServerEntry(
+                urls: [Uri.parse('stun:stun-$i.example.com:3478')],
+              ),
+          ],
+          configServiceUris: [Uri.parse('https://config.example.com')],
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects more than $maxRelayRegions relayRegions', () {
+      expect(
+        () => buildManifest(
+          relayRegions: [
+            for (var i = 0; i <= maxRelayRegions; i++) 'region-$i',
+          ],
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('accepts exactly $maxRelayRegions relayRegions', () {
+      final manifest = buildManifest(
+        relayRegions: [for (var i = 0; i < maxRelayRegions; i++) 'region-$i'],
+      );
+      expect(manifest.relayRegions.length, maxRelayRegions);
+    });
+  });
+
+  group('IceServerEntry validation', () {
+    // STUN/TURN URIs are opaque per RFC 7064/7065 (`stun:host:port`, no
+    // `//`), which is the form every fixture/fuzz-corpus entry in this repo
+    // uses — dart:core's Uri.host is empty for THOSE even when valid, so
+    // the missing-host check must not key off Uri.host directly.
+    test('rejects an authority-form stun URI with an empty host', () {
+      expect(
+        () => IceServerEntry(urls: [Uri.parse('stun://')]),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects an authority-form turn URI with an empty host', () {
+      expect(
+        () => IceServerEntry(
+          urls: [Uri.parse('turn://')],
+          username: 'u',
+          credential: 'c',
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects an opaque-form stun URI with an empty host', () {
+      expect(
+        () => IceServerEntry(urls: [Uri.parse('stun::3478')]),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects a bare "stun:" URI with no host at all', () {
+      expect(
+        () => IceServerEntry(urls: [Uri.parse('stun:')]),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('accepts the standard opaque-form stun URI (RFC 7064, no host on '
+        'Uri.host but a valid one in the opaque part)', () {
+      final entry = IceServerEntry(
+        urls: [Uri.parse('stun:stun.example.com:3478')],
+      );
+      expect(entry.urls.single.toString(), 'stun:stun.example.com:3478');
+    });
+
+    test('accepts an authority-form stun URI with a valid host', () {
+      final entry = IceServerEntry(
+        urls: [Uri.parse('stun://stun.example.com:3478')],
+      );
+      expect(entry.urls.single.host, 'stun.example.com');
+    });
+  });
 }

@@ -71,20 +71,54 @@ final class TurnCredentialsIssuer {
   TurnCredentialsIssuer({
     required String sharedSecret,
     this.ttl = const Duration(hours: 1),
-  }) : _secretBytes = utf8.encode(sharedSecret);
+  }) : _secretBytes = utf8.encode(sharedSecret) {
+    if (sharedSecret.isEmpty) {
+      throw ArgumentError.value(
+        sharedSecret,
+        'sharedSecret',
+        'must not be empty',
+      );
+    }
+    if (ttl <= Duration.zero) {
+      throw ArgumentError.value(ttl, 'ttl', 'must be strictly positive');
+    }
+  }
 
   /// How long a minted credential remains valid. Keep this comfortably
   /// above expected call setup + duration; coturn rejects any TURN
   /// allocation attempt once the encoded expiry has passed.
   final Duration ttl;
 
+  /// Caller-supplied secret material, UTF-8 encoded so the HMAC can be
+  /// computed. Dart's [String] and [List] types have no zeroize/wipe
+  /// primitive — the bytes stay resident (and, for `String`, may have been
+  /// copied by the runtime/GC) for as long as this issuer and its inputs
+  /// are reachable. Callers should not retain [sharedSecret] longer than
+  /// needed to construct this issuer.
   final List<int> _secretBytes;
 
   /// Issues a fresh credential for [userId], expiring [ttl] from now.
   ///
   /// [uris] is passed through onto the returned [TurnCredentials]
   /// unchanged; it plays no part in the HMAC computation.
+  ///
+  /// Throws [ArgumentError] if [userId] is empty or contains a colon
+  /// (`:`) — the coturn wire format joins `"<expiry>:<userId>"` with a
+  /// colon, so a colon inside `userId` would make the encoded username
+  /// structurally ambiguous (the server cannot tell where the expiry
+  /// field ends).
   TurnCredentials issue(String userId, {List<String>? uris}) {
+    if (userId.isEmpty) {
+      throw ArgumentError.value(userId, 'userId', 'must not be empty');
+    }
+    if (userId.contains(':')) {
+      throw ArgumentError.value(
+        userId,
+        'userId',
+        'must not contain ":" (would collide with the '
+            '"<expiry>:<userId>" wire format separator)',
+      );
+    }
     final expiresAt = clock.now().toUtc().add(ttl);
     final expirySeconds = expiresAt.millisecondsSinceEpoch ~/ 1000;
     final username = '$expirySeconds:$userId';

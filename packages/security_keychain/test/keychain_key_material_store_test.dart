@@ -133,4 +133,37 @@ void main() {
       expect(await KeychainKeyMaterialStore().read('persist'), equals(seed));
     },
   );
+
+  test('corrupt (non-base64) stored value throws FormatException without '
+      'echoing the payload', () async {
+    const corrupt = 'not-valid-base64-!!!___@@@';
+    fakeKeychain['vck.identity.corrupt'] = corrupt;
+    final store = KeychainKeyMaterialStore();
+    Object? caught;
+    try {
+      await store.read('corrupt');
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught, isA<FormatException>());
+    expect(caught.toString(), isNot(contains(corrupt)));
+  });
+
+  test('different keyHandles map to different storageKeyFor results', () {
+    expect(
+      KeychainKeyMaterialStore.storageKeyFor('device-a'),
+      isNot(equals(KeychainKeyMaterialStore.storageKeyFor('device-b'))),
+    );
+  });
+
+  test('zero-byte seed round-trips (format-agnostic contract)', () async {
+    // The store makes no claim about non-zero length; an empty seed must
+    // still round-trip exactly, pinning the encoding as length-agnostic.
+    final store = KeychainKeyMaterialStore();
+    final empty = Uint8List(0);
+    await store.write('empty', empty);
+    final back = await store.read('empty');
+    expect(back, isNotNull);
+    expect(back, isEmpty);
+  });
 }

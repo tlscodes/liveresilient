@@ -19,6 +19,8 @@ library;
 
 import 'dart:typed_data';
 
+import 'hex_codec.dart';
+
 /// Handle-based signer over an audited Ed25519 implementation. The engine
 /// owns private key material (ideally hardware-backed) and exposes only
 /// operations.
@@ -137,10 +139,13 @@ class IdentityStore {
     required Uint8List sessionDigest,
     required Uint8List signature,
   }) async {
+    if (peerId.isEmpty) {
+      throw ArgumentError.value(peerId, 'peerId', 'must not be empty');
+    }
     final pinnedHex = await _store.read('$_remoteKeyPrefix$peerId');
     if (pinnedHex == null) return false;
     return _engine.verify(
-      publicKey: _hexDecode(pinnedHex),
+      publicKey: hexDecode(pinnedHex),
       message: sessionDigest,
       signature: signature,
     );
@@ -164,12 +169,16 @@ class IdentityStore {
 
     final storageKey = '$_remoteKeyPrefix$peerId';
     final pinnedHex = await _store.read(storageKey);
-    final presentedHex = _hexEncode(presentedPublicKey);
+    final presentedHex = hexEncode(presentedPublicKey);
 
     if (pinnedHex == null) {
       await _store.write(storageKey, presentedHex);
       return RemoteIdentityCheck.pinnedFirstUse;
     }
+    // Both values are public key material (not secrets), so a non
+    // constant-time string compare here leaks nothing an attacker doesn't
+    // already have; constant-time comparison is reserved for secret-vs-
+    // secret checks elsewhere (e.g. MAC verification).
     return pinnedHex == presentedHex
         ? RemoteIdentityCheck.match
         : RemoteIdentityCheck.changed;
@@ -181,7 +190,7 @@ class IdentityStore {
     required String peerId,
     required Uint8List newPublicKey,
   }) async {
-    await _store.write('$_remoteKeyPrefix$peerId', _hexEncode(newPublicKey));
+    await _store.write('$_remoteKeyPrefix$peerId', hexEncode(newPublicKey));
   }
 
   /// Safety number for out-of-band comparison: a stable digest over both
@@ -190,8 +199,8 @@ class IdentityStore {
     required Uint8List localPublicKey,
     required Uint8List remotePublicKey,
   }) async {
-    final a = _hexEncode(localPublicKey);
-    final b = _hexEncode(remotePublicKey);
+    final a = hexEncode(localPublicKey);
+    final b = hexEncode(remotePublicKey);
     // Order-independent: sort so both sides derive the same number.
     final combined = a.compareTo(b) <= 0 ? '$a$b' : '$b$a';
     final digest = await _engine.sha256(Uint8List.fromList(combined.codeUnits));
@@ -210,24 +219,10 @@ class IdentityStore {
 
   Future<String> _fingerprint(Uint8List publicKey) async {
     final digest = await _engine.sha256(publicKey);
-    final hex = _hexEncode(digest).toUpperCase();
+    final hex = hexEncode(digest).toUpperCase();
     final groups = <String>[
       for (var i = 0; i < hex.length; i += 4) hex.substring(i, i + 4),
     ];
     return groups.join(' ');
-  }
-
-  static String _hexEncode(Uint8List bytes) =>
-      bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-
-  static Uint8List _hexDecode(String hex) {
-    if (hex.length.isOdd) {
-      throw FormatException('Hex string has odd length: ${hex.length}');
-    }
-    final out = Uint8List(hex.length ~/ 2);
-    for (var i = 0; i < out.length; i++) {
-      out[i] = int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16);
-    }
-    return out;
   }
 }

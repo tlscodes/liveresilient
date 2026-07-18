@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:privacy_telemetry/privacy_telemetry.dart';
 import 'package:test/test.dart';
 
@@ -19,6 +21,34 @@ class FakeExporter implements TelemetryExporter {
     }
     exported.add(snapshot);
   }
+}
+
+/// Exporter with an artificial delay, for pinning overlapping-exportNow()
+/// behavior.
+class _SlowFakeExporter implements TelemetryExporter {
+  final List<TelemetrySnapshot> exported = [];
+
+  @override
+  Future<void> exportAggregates(TelemetrySnapshot snapshot) async {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    exported.add(snapshot);
+  }
+}
+
+/// Minimal fake [Timer]: tracks whether [cancel] was called, does nothing
+/// else. Used with [PrivacyTelemetry]'s `timerFactory` override so the
+/// periodic auto-export path can be driven deterministically in tests.
+class _FakeTimer implements Timer {
+  bool cancelled = false;
+
+  @override
+  void cancel() => cancelled = true;
+
+  @override
+  bool get isActive => !cancelled;
+
+  @override
+  int get tick => 0;
 }
 
 void main() {
@@ -142,6 +172,91 @@ void main() {
       telemetry.purgeLocalData();
 
       expect(telemetry.snapshot().isEmpty, isTrue);
+    });
+  });
+
+  group('PrivacyTelemetry auto-export timer', () {
+    test('a fake timerFactory captures the callback; firing it triggers an '
+        'export via the fake exporter, and firing after dispose() does '
+        'nothing', () async {
+      void Function()? capturedCallback;
+      var factoryCalls = 0;
+      final fakeTimer = _FakeTimer();
+
+      final consent = FakeConsent(granted: true);
+      final exporter = FakeExporter();
+      final telemetry = PrivacyTelemetry(
+        consent: consent,
+        exporter: exporter,
+        appVersion: '2.0.0-test',
+        exportInterval: const Duration(minutes: 1),
+        timerFactory: (duration, callback) {
+          factoryCalls++;
+          expect(duration, const Duration(minutes: 1));
+          capturedCallback = callback;
+          return fakeTimer;
+        },
+      );
+
+      expect(
+        factoryCalls,
+        1,
+        reason: 'the factory must be used instead of a real Timer.periodic',
+      );
+      expect(capturedCallback, isNotNull);
+
+      telemetry.recordEvent(TelemetryEvent.callAttempted);
+      capturedCallback!();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(exporter.exported, hasLength(1));
+      expect(exporter.exported.single.counters['callAttempted'], 1);
+
+      // A second event, left unexported, pending across dispose().
+      telemetry.recordEvent(TelemetryEvent.callConnected);
+      await telemetry.dispose();
+
+      expect(fakeTimer.cancelled, isTrue);
+
+      // Firing the (still-held) callback after dispose must not export:
+      // exportNow() is a no-op once _disposed is set.
+      capturedCallback!();
+      await Future<void>.delayed(Duration.zero);
+      expect(exporter.exported, hasLength(1));
+    });
+  });
+
+  group('PrivacyTelemetry.exportNow re-entrancy', () {
+    test('overlapping exportNow() calls with a slow exporter both succeed '
+        '(pins current behavior: no re-entrancy guard, so an event recorded '
+        'while the first export is in flight can be captured and sent by '
+        'both calls)', () async {
+      final consent = FakeConsent(granted: true);
+      final exporter = _SlowFakeExporter();
+      final telemetry = PrivacyTelemetry(
+        consent: consent,
+        exporter: exporter,
+        appVersion: '2.0.0-test',
+        exportInterval: const Duration(days: 365),
+      );
+
+      telemetry.recordEvent(TelemetryEvent.callAttempted);
+      final first = telemetry.exportNow();
+
+      // Recorded before the first export's snapshot has been cleared —
+      // both calls' snapshot() reads see it.
+      telemetry.recordEvent(TelemetryEvent.callConnected);
+      final second = telemetry.exportNow();
+
+      await Future.wait([first, second]);
+
+      expect(exporter.exported, hasLength(2));
+      expect(exporter.exported[0].counters['callAttempted'], 1);
+      expect(exporter.exported[0].counters['callConnected'], isNull);
+      expect(exporter.exported[1].counters['callAttempted'], 1);
+      expect(exporter.exported[1].counters['callConnected'], 1);
+
+      await telemetry.dispose();
     });
   });
 

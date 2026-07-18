@@ -77,6 +77,7 @@ class FakeLocalLinkPort implements LocalLinkPort {
   bool reachable = true;
   bool throwOnReachable = false;
   bool throwOnSend = false;
+  bool throwErrorOnSend = false;
   int rttMs = 25;
   bool closed = false;
 
@@ -91,7 +92,14 @@ class FakeLocalLinkPort implements LocalLinkPort {
   @override
   Future<int> sendBytes(List<int> bytes) async {
     if (throwOnSend) {
-      throw StateError('link send failed');
+      // An operational link failure is an Exception, not a StateError:
+      // device_link_adapter.dart narrows its catch to `on Exception` so a
+      // real programming Error still propagates. StateError is reserved
+      // for [throwErrorOnSend] below, which pins that propagation.
+      throw Exception('link send failed');
+    }
+    if (throwErrorOnSend) {
+      throw StateError('link send failed with a programming error');
     }
     sentBytes.add(bytes);
     return rttMs;

@@ -45,7 +45,7 @@ enum ManifestFreshness {
   lastKnownGood,
 }
 
-class CachedManifest {
+final class CachedManifest {
   final EndpointManifest manifest;
   final ManifestFreshness freshness;
   const CachedManifest(this.manifest, this.freshness);
@@ -64,7 +64,7 @@ class ManifestCacheConfig {
   });
 }
 
-class ManifestUnavailable implements Exception {
+final class ManifestUnavailable implements Exception {
   final String message;
   const ManifestUnavailable(this.message);
 

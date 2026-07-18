@@ -65,7 +65,7 @@ const KeychainAccessibility keychainSeedAccessibility =
 /// `vck.identity.h` with the seed bytes base64-encoded (the plugin's value
 /// type is `String`). Unknown handles read back as `null`, writes overwrite,
 /// deletes are idempotent — exactly the [KeyMaterialStore] contract.
-class KeychainKeyMaterialStore implements KeyMaterialStore {
+final class KeychainKeyMaterialStore implements KeyMaterialStore {
   /// Namespace prefix so VoiceCallKit identity seeds can never collide with
   /// other Keychain entries the host app (or other plugins) may create.
   static const String storageKeyPrefix = 'vck.identity.';
@@ -105,7 +105,17 @@ class KeychainKeyMaterialStore implements KeyMaterialStore {
   Future<Uint8List?> read(String keyHandle) async {
     final encoded = await _storage.read(key: storageKeyFor(keyHandle));
     if (encoded == null) return null;
-    return base64Decode(encoded);
+    try {
+      return base64Decode(encoded);
+    } catch (_) {
+      // base64Decode's own FormatException interpolates the offending
+      // string; rethrow a fixed message so the stored payload is never
+      // echoed, per this class's secrecy-discipline doc promise.
+      throw const FormatException(
+        'security_keychain: stored value for key handle is not valid '
+        'base64 (payload not echoed)',
+      );
+    }
   }
 
   @override

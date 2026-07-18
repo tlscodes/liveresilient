@@ -387,6 +387,135 @@ void main() {
         ]);
       });
     });
+
+    // Pins the controller's actual (surprising, but correct) behavior when
+    // `signaling.send` fails partway through flushing buffered candidates:
+    // `_flushLocalCandidates` only removes a candidate from the pending
+    // list AFTER its `send` succeeds, so a mid-flush failure leaves that
+    // candidate (and everything after it) still pending -- nothing is
+    // lost, but the failed `send` call itself already happened, so a
+    // retry-visible signaling layer sees that candidate sent twice (once
+    // failed, once succeeded). The exception propagates out of
+    // `_connectChannels`, which -- because this happens inside
+    // `_performRecoveryAttempt` -- is caught there and folded into the
+    // normal recovery loop (another scheduled retry), not surfaced to any
+    // caller.
+    test('signaling.send failing on the 2nd of 3 buffered candidates during '
+        'a flush retries that candidate from scratch on the next attempt, '
+        'dropping none and never skipping ahead', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 100)),
+          ReconnectDecision.retry(const Duration(milliseconds: 100)),
+        ]);
+        final h = Harness(maxBufferedIceCandidates: 3, reconnectPolicy: policy);
+
+        // Signaling itself only fails to *start* on the very first
+        // attempt, so the initial connect fails and buffering begins.
+        var signalingStartAttempts = 0;
+        h.signaling.startImpl = ({required callId, required role}) async {
+          signalingStartAttempts++;
+          if (signalingStartAttempts == 1) {
+            throw StateError('signaling unavailable');
+          }
+        };
+
+        // Independently, the 2nd ICE-candidate send ever attempted
+        // (i.e. candidate 2's first attempt, during the first flush)
+        // fails; every other ICE send -- including candidate 2's retry
+        // -- succeeds.
+        var iceSendAttempts = 0;
+        h.signaling.sendImpl = (command) async {
+          if (command is SendIceCandidateCommand) {
+            iceSendAttempts++;
+            if (iceSendAttempts == 2) {
+              throw StateError('signaling send failed for candidate 2');
+            }
+          }
+        };
+
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.reconnecting);
+
+        h.media.emit(LocalIceCandidateEvent(fakeCandidate(1)));
+        h.media.emit(LocalIceCandidateEvent(fakeCandidate(2)));
+        h.media.emit(LocalIceCandidateEvent(fakeCandidate(3)));
+        async.flushMicrotasks();
+        expect(h.signaling.sent, isEmpty);
+
+        // First retry: signaling.start succeeds, candidate 1 flushes
+        // fine, candidate 2's send throws -- which aborts the flush
+        // loop and folds back into another scheduled recovery attempt.
+        async.elapse(const Duration(milliseconds: 100));
+        expect(h.states.last.phase, CallPhase.reconnecting);
+
+        // Second retry: signaling.start succeeds again, and the flush
+        // resumes from candidate 2 (still first in the pending list),
+        // this time succeeding, followed by candidate 3.
+        async.elapse(const Duration(milliseconds: 100));
+
+        final iceSent = h.signaling.sent
+            .whereType<SendIceCandidateCommand>()
+            .map((c) => c.candidate.candidate)
+            .toList();
+        expect(iceSent, [
+          'candidate:1 1 UDP 2122260223 10.0.0.1 51 typ host',
+          'candidate:2 1 UDP 2122260223 10.0.0.2 52 typ host', // failed
+          'candidate:2 1 UDP 2122260223 10.0.0.2 52 typ host', // retried
+          'candidate:3 1 UDP 2122260223 10.0.0.3 53 typ host',
+        ]);
+      });
+    });
+
+    test('dispose() while candidates are buffered discards them -- they are '
+        'never flushed after teardown', () async {
+      late final Harness h;
+
+      late FakeAsync fa;
+      fakeAsync((async) {
+        fa = async;
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 100)),
+        ]);
+        h = Harness(maxBufferedIceCandidates: 3, reconnectPolicy: policy);
+        var signalingStartAttempts = 0;
+        h.signaling.startImpl = ({required callId, required role}) async {
+          signalingStartAttempts++;
+          if (signalingStartAttempts == 1) {
+            throw StateError('signaling unavailable');
+          }
+        };
+
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.reconnecting);
+
+        h.media.emit(LocalIceCandidateEvent(fakeCandidate(1)));
+        h.media.emit(LocalIceCandidateEvent(fakeCandidate(2)));
+        h.media.emit(LocalIceCandidateEvent(fakeCandidate(3)));
+        async.flushMicrotasks();
+        expect(h.signaling.sent, isEmpty);
+
+        // dispose() instead of letting the retry timer fire: teardown
+        // clears `_pendingLocalCandidates` directly, so the retry timer
+        // (canceled as part of `_completeRecovery`) never gets a chance
+        // to flush them, and nothing sends them afterward either.
+        h.run(async, h.controller.dispose);
+        async.flushMicrotasks();
+      });
+      await pumpEventQueue();
+      fa.flushMicrotasks();
+
+      expect(h.states.last.phase, CallPhase.ended);
+      expect(h.states.last.endReason, CallEndReason.disposed);
+      expect(
+        h.signaling.sent.whereType<SendIceCandidateCommand>(),
+        isEmpty,
+        reason: 'buffered candidates must never be flushed post-teardown',
+      );
+      expectNoPendingTimers(fa);
+    });
   });
 
   group('4. Recovery happy path', () {

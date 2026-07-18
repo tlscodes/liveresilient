@@ -23,7 +23,7 @@ import 'dart:convert';
 import 'media_frame.dart' show MeshSeenCache;
 
 /// Fixed-schema wakeup payload: an opaque call ID plus its validity window.
-class PushWakeupPayload {
+final class PushWakeupPayload {
   /// The only schema this module reads or writes.
   static const int currentSchemaVersion = 1;
 

@@ -100,7 +100,7 @@ final RegExp _coarseVersionFormat = RegExp(
 final RegExp _regionIdFormat = RegExp(r'^[a-z0-9-]{1,32}$');
 
 /// Immutable aggregate snapshot handed to the exporter.
-class TelemetrySnapshot {
+final class TelemetrySnapshot {
   /// Schema version of this snapshot format.
   final int schemaVersion;
 
@@ -142,7 +142,7 @@ class TelemetrySnapshot {
   bool get isEmpty => counters.isEmpty && histograms.isEmpty;
 }
 
-class PrivacyTelemetry {
+final class PrivacyTelemetry {
   final TelemetryConsent _consent;
   final TelemetryExporter _exporter;
   final String appVersion;
@@ -167,6 +167,9 @@ class PrivacyTelemetry {
   Timer? _exportTimer;
   bool _disposed = false;
 
+  /// Constructs the periodic auto-export timer. Defaults to the real
+  /// [Timer.periodic]; tests inject a fake to drive the auto-export path
+  /// deterministically without waiting on [exportInterval] in real time.
   PrivacyTelemetry({
     required TelemetryConsent consent,
     required TelemetryExporter exporter,
@@ -174,6 +177,7 @@ class PrivacyTelemetry {
     this.osVersion = '',
     Set<String> allowedRegions = const {},
     this.exportInterval = const Duration(hours: 6),
+    Timer Function(Duration, void Function())? timerFactory,
   }) : _consent = consent,
        _exporter = exporter,
        _allowedRegions = Set.unmodifiable(allowedRegions) {
@@ -200,7 +204,9 @@ class PrivacyTelemetry {
         );
       }
     }
-    _exportTimer = Timer.periodic(exportInterval, (_) => exportNow());
+    final factory =
+        timerFactory ?? (duration, cb) => Timer.periodic(duration, (_) => cb());
+    _exportTimer = factory(exportInterval, () => exportNow());
   }
 
   /// Records one occurrence of an allowlisted event. Silently a no-op

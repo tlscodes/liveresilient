@@ -14,7 +14,7 @@ String generateMeshMessageId() {
   return base64Url.encode(bytes).replaceAll('=', '');
 }
 
-class MediaFrame {
+final class MediaFrame {
   final int version;
   final String messageId;
   final String originKeyId;

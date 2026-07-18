@@ -83,6 +83,18 @@ void main() {
       );
     });
 
+    test('verifySessionFingerprint rejects an empty peerId', () async {
+      final store = realStore();
+      await expectLater(
+        store.verifySessionFingerprint(
+          peerId: '',
+          sessionDigest: Uint8List(32),
+          signature: Uint8List(64),
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('a corrupted (odd-length hex) pinned key fails loudly when used '
         'for verification', () async {
       final kv = InMemorySecureKeyValueStore();
@@ -117,6 +129,36 @@ void main() {
         DevFileKeyStore(path).read('handle-1'),
         throwsFormatException,
       );
+    });
+
+    test(
+      'DevFileKeyStore treats a handle whose value is a non-string JSON '
+      '(e.g. an integer) as missing rather than throwing — corruption at '
+      'this specific spot is masked as absence, current pinned behavior',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('security_test_');
+        addTearDown(() => dir.delete(recursive: true));
+        final path = '${dir.path}/keys.json';
+        File(path).writeAsStringSync('{"handle-1": 42}');
+
+        expect(await DevFileKeyStore(path).read('handle-1'), isNull);
+      },
+    );
+
+    test('DevFileKeyStore serializes concurrent writes so neither is lost '
+        '(no read-modify-write race)', () async {
+      final dir = await Directory.systemTemp.createTemp('security_test_');
+      addTearDown(() => dir.delete(recursive: true));
+      final path = '${dir.path}/keys.json';
+      final store = DevFileKeyStore(path);
+
+      await Future.wait([
+        store.write('h1', Uint8List.fromList([1, 2, 3])),
+        store.write('h2', Uint8List.fromList([4, 5, 6])),
+      ]);
+
+      expect(await store.read('h1'), equals(Uint8List.fromList([1, 2, 3])));
+      expect(await store.read('h2'), equals(Uint8List.fromList([4, 5, 6])));
     });
   });
 

@@ -77,9 +77,19 @@ class CryptographyIdentityKeyEngine implements IdentityKeyEngine {
     );
     try {
       return await _algorithm.verify(message, signature: candidate);
-    } on Object {
-      // Malformed signature/public-key material (e.g. wrong length after
-      // tampering) is a verification failure, not a caller error.
+    } on ArgumentError {
+      // `package:cryptography` validates key/signature byte lengths with
+      // its own `ArgumentError` (e.g. `DartEd25519.verify` rejects a
+      // public key that isn't 32 bytes) *before* it gets to do any actual
+      // verification — that is malformed input material (possibly from
+      // tampering), not a caller bug in this class, so it is treated as
+      // "verification failed" like any other bad signature.
+      return false;
+    } on Exception {
+      // Any other malformed-input exception the crypto library may throw
+      // for the same reason. A real Error (assertion/type/out-of-memory)
+      // is a bug and must propagate rather than be swallowed as
+      // "verification failed".
       return false;
     }
   }
@@ -88,6 +98,15 @@ class CryptographyIdentityKeyEngine implements IdentityKeyEngine {
   Future<Uint8List> sha256(Uint8List input) async {
     final hash = await _hashAlgorithm.hash(input);
     return Uint8List.fromList(hash.bytes);
+  }
+
+  /// Drops any cached key pair for [keyHandle] so the next operation on
+  /// that handle re-derives it from [KeyMaterialStore] (or finds nothing,
+  /// if the caller also deleted the underlying seed). Call this after
+  /// deleting a handle's seed from the key store — otherwise this engine
+  /// instance keeps serving the stale in-memory key pair indefinitely.
+  void forget(String keyHandle) {
+    _cache.remove(keyHandle);
   }
 
   Future<SimpleKeyPair?> _loadKeyPair(String keyHandle) async {
