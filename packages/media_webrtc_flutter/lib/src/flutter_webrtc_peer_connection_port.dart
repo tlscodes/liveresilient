@@ -20,6 +20,8 @@
 /// |                                 | MediaStreamTrack.enabled              |
 /// | setAudioMaxBitrate              | audio RTCRtpSender.setParameters      |
 /// | readStatsCounters               | pc.getStats() (standard stats)        |
+/// | createDataChannel               | pc.createDataChannel (negotiated,     |
+/// |                                 | binary) -> FlutterWebRtcDataChannel   |
 /// | close                           | pc.close + pc.dispose + track stop    |
 ///
 /// Stats-counter mapping (standard W3C stats passed through unmodified by
@@ -49,6 +51,8 @@ import 'dart:async';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:media_webrtc/media_webrtc.dart';
+
+import 'flutter_webrtc_data_channel.dart';
 
 final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
   FlutterWebRtcPeerConnectionPort._(this._pc, this._localStream) {
@@ -250,6 +254,21 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
     _ensureOpen();
     final reports = await _pc.getStats();
     return countersFromStats(reports);
+  }
+
+  @override
+  Future<MediaDataChannel> createDataChannel(DataChannelConfig config) async {
+    _ensureOpen();
+    config.validate();
+    final channel = await _pc.createDataChannel(
+      config.label,
+      rtc.RTCDataChannelInit()
+        ..negotiated = true
+        ..id = config.negotiatedId
+        ..ordered = config.ordered
+        ..binaryType = 'binary',
+    );
+    return FlutterWebRtcDataChannel(channel, config.label);
   }
 
   @override
