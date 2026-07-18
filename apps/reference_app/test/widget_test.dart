@@ -1,9 +1,6 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// App-level smoke test: the home screen launches on the Call tab and
+// switches to Chat via the NavigationBar, with no server/network/device
+// required — every state is driven by the in-app demo controllers.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,20 +8,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  testWidgets('launches on the Call tab, idle, ready to call', (tester) async {
     await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Idle'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Call'), findsOneWidget);
+  });
+
+  testWidgets('NavigationBar switches to the Chat tab', (tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.bySemanticsLabel('Send message'), findsOneWidget);
+  });
+
+  testWidgets('tapping Call moves the phase to Connecting', (tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Call'));
+    await tester.pump();
+
+    expect(find.text('Connecting…'), findsOneWidget);
+
+    // Let the simulated connect/negotiate timers finish so no pending timer
+    // outlives the test.
+    await tester.pump(const Duration(seconds: 1));
   });
 }

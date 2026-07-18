@@ -48,6 +48,8 @@ dependencies:
     path: ../../packages/media_webrtc_flutter
   signaling:
     path: ../../packages/signaling
+  messaging:
+    path: ../../packages/messaging
 
 dev_dependencies:
   flutter_test:
