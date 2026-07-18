@@ -2,4 +2,5 @@
 /// implemented over the `flutter_webrtc` plugin.
 library;
 
+export 'src/flutter_webrtc_data_channel.dart';
 export 'src/flutter_webrtc_peer_connection_port.dart';
