@@ -1,5 +1,5 @@
 /// Reliable text messaging over an abstract binary data channel.
-library messaging;
+library;
 
 export 'src/attachment.dart';
 export 'src/attachment_transfer.dart';

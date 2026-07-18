@@ -106,6 +106,40 @@ void main() {
       expect(() => hp.toUri(''), throwsArgumentError);
     });
 
+    test('toUri builds a correctly-bracketed IPv6 URI', () {
+      final hp = HostPort.parseAuthority('[2001:db8::10]:443');
+      final uri = hp.toUri('wss');
+      expect(uri.host, '2001:db8::10');
+      expect(uri.port, 443);
+      expect(uri.toString(), 'wss://[2001:db8::10]:443');
+    });
+
+    test('operator== / hashCode are structural on host+port', () {
+      final a = HostPort(host: 'example.org', port: 443);
+      final b = HostPort(host: 'example.org', port: 443);
+      final differentPort = HostPort(host: 'example.org', port: 8443);
+      final differentHost = HostPort(host: 'other.org', port: 443);
+
+      expect(a, equals(b));
+      expect(a.hashCode, b.hashCode);
+      expect(a, isNot(equals(differentPort)));
+      expect(a, isNot(equals(differentHost)));
+      // ignore: unrelated_type_equality_checks
+      expect(a == 'not a HostPort', isFalse);
+    });
+
+    test('set membership follows structural equality, not identity', () {
+      final a = HostPort(host: 'example.org', port: 443);
+      final b = HostPort(host: 'example.org', port: 443);
+      final other = HostPort(host: 'example.org', port: 8443);
+
+      final set = {a, b, other};
+
+      expect(set, hasLength(2), reason: 'a and b are structurally equal');
+      expect(set.contains(HostPort(host: 'example.org', port: 443)), isTrue);
+      expect(set.contains(HostPort(host: 'other.org', port: 443)), isFalse);
+    });
+
     test('toJson round-trips through fromJson', () {
       final hp = HostPort.parseAuthority('example.org:443');
       expect(HostPort.fromJson(hp.toJson()).authority, hp.authority);

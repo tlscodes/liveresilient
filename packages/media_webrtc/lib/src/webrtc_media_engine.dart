@@ -132,6 +132,14 @@ class WebRtcMediaEngine {
   bool _negotiating = false;
   bool _disposed = false;
 
+  /// Guards the sender-parameter application pipeline: while a decision's
+  /// port calls are in flight, a newly-arrived sample is stashed here
+  /// (overwriting any previous one) instead of starting a second, possibly
+  /// interleaved, set of port calls. Only the latest queued sample is ever
+  /// applied once the in-flight one finishes.
+  bool _applyingSample = false;
+  RtcStatsSample? _queuedSample;
+
   /// Upper bound for every negotiation-related port call. A hung platform
   /// channel must fail the operation (and release the negotiation guard via
   /// try/finally), never freeze the engine for the life of the call.
@@ -285,26 +293,61 @@ class WebRtcMediaEngine {
     if (_eventsController.isClosed) return;
     _eventsController.add(MediaStatsUpdated(sample));
 
+    if (_applyingSample) {
+      // A previous sample's port calls are still in flight: coalesce to the
+      // latest sample rather than let this call's port calls interleave
+      // with the in-flight one's.
+      _queuedSample = sample;
+      return;
+    }
+
+    _applyingSample = true;
+    try {
+      await _applyPolicyDecisionFor(sample);
+      // Drain whatever arrived (and was coalesced) while the call above was
+      // in flight; a sample that lands during this drain is itself
+      // coalesced by the guard above, so this always converges.
+      while (true) {
+        final queued = _queuedSample;
+        if (queued == null) break;
+        _queuedSample = null;
+        await _applyPolicyDecisionFor(queued);
+      }
+    } finally {
+      _applyingSample = false;
+    }
+  }
+
+  /// Feeds [sample] to the policy and, if it recommends a profile change,
+  /// applies the new sender parameters through the (timeout-bounded) port.
+  Future<void> _applyPolicyDecisionFor(RtcStatsSample sample) async {
     final decision = _policy.onSample(sample);
     if (decision == null) return;
 
     final p = decision.parameters;
     try {
-      await _port.setVideoSenderParameters(
-        VideoSenderParameters(
-          enabled: p.videoEnabled,
-          maxBitrateBps: p.videoMaxBitrateBps,
-          maxFramerate: p.videoMaxFramerate,
-          scaleResolutionDownBy: p.videoScaleResolutionDownBy,
+      await _bounded(
+        _port.setVideoSenderParameters(
+          VideoSenderParameters(
+            enabled: p.videoEnabled,
+            maxBitrateBps: p.videoMaxBitrateBps,
+            maxFramerate: p.videoMaxFramerate,
+            scaleResolutionDownBy: p.videoScaleResolutionDownBy,
+          ),
         ),
+        'set video sender parameters',
       );
-      await _port.setAudioMaxBitrate(p.audioMaxBitrateBps);
+      await _bounded(
+        _port.setAudioMaxBitrate(p.audioMaxBitrateBps),
+        'set audio max bitrate',
+      );
       if (!_eventsController.isClosed) {
         _eventsController.add(MediaProfileChanged(decision));
       }
     } catch (_) {
-      // Parameter application can fail transiently mid-renegotiation; the
-      // next decision will retry. Never let it kill the sample loop.
+      // Parameter application can fail transiently mid-renegotiation, or
+      // time out per operationTimeout; the next decision will retry. Never
+      // let it kill the sample loop.
     }
   }
 

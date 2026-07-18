@@ -40,6 +40,12 @@ class _QueuedPacket {
 /// Adaptive inter-arrival jitter buffer for non-WebRTC datagrams.
 ///
 /// For live WebRTC audio/video, use WebRTC's native jitter buffer instead.
+///
+/// A sender-timestamp discontinuity (renegotiation, sender restart, or any
+/// event that resets [MediaPacket.senderTimestampMs] to a new base) is not
+/// detected automatically: the caller must call [clear] when it knows such
+/// a discontinuity occurred, otherwise `targetDelayMs`/`takeNext` scheduling
+/// will be computed against a stale `_firstSenderTimestampMs` baseline.
 class AdaptiveJitterBuffer {
   final int minimumDelayMs;
   final int maximumDelayMs;
@@ -259,7 +265,9 @@ class RecoveredFecShard {
 ///
 /// This class provides loss recovery, not authenticity. Shards must still be
 /// covered by authenticated encryption or a verified MAC.
-class XorFec {
+///
+/// Static-members-only utility: never instantiated.
+abstract final class XorFec {
   static XorFecBlock encode({
     required int blockId,
     required List<List<int>> packets,

@@ -43,9 +43,14 @@ enum SignalType {
   heartbeat,
 }
 
+/// Shared CSPRNG for message id generation. `Random.secure()` pulls from the
+/// platform's secure entropy source on construction, which is unnecessary
+/// overhead to repeat on every call; one lazily-initialized instance is
+/// reused for the lifetime of the process.
+final Random _secureRandom = Random.secure();
+
 String generateSignalMessageId() {
-  final random = Random.secure();
-  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  final bytes = List<int>.generate(16, (_) => _secureRandom.nextInt(256));
   return base64Url.encode(bytes).replaceAll('=', '');
 }
 
@@ -171,10 +176,7 @@ class SignalEnvelope {
       throw const FormatException('Envelope has missing or mistyped fields.');
     }
 
-    final type = SignalType.values.cast<SignalType?>().firstWhere(
-      (t) => t!.name == typeName,
-      orElse: () => null,
-    );
+    final type = SignalType.values.asNameMap()[typeName];
     if (type == null) {
       throw FormatException('Unknown signal type: $typeName');
     }

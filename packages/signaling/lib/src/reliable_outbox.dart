@@ -50,13 +50,58 @@ class OutboxConfig {
   /// [StateError] so callers surface overload instead of buffering silently.
   final int maxPending;
 
-  const OutboxConfig({
+  // Not a `const` constructor: validation below must run eagerly and
+  // unconditionally (an `assert` in a const-constructor initializer list
+  // must be a compile-time-constant expression, and `Duration` getters/
+  // operators are not const-evaluable — confirmed by `dart analyze`), so
+  // this throws a real `ArgumentError` on every code path, debug or
+  // release.
+  OutboxConfig({
     this.initialRetryDelay = const Duration(seconds: 1),
     this.maxRetryDelay = const Duration(seconds: 30),
     this.backoffMultiplier = 2.0,
     this.messageLifetime = const Duration(minutes: 2),
     this.maxPending = 256,
-  });
+  }) {
+    if (initialRetryDelay <= Duration.zero) {
+      throw ArgumentError.value(
+        initialRetryDelay,
+        'initialRetryDelay',
+        'Must be positive.',
+      );
+    }
+    if (maxRetryDelay <= Duration.zero) {
+      throw ArgumentError.value(
+        maxRetryDelay,
+        'maxRetryDelay',
+        'Must be positive.',
+      );
+    }
+    if (messageLifetime <= Duration.zero) {
+      throw ArgumentError.value(
+        messageLifetime,
+        'messageLifetime',
+        'Must be positive.',
+      );
+    }
+    if (maxRetryDelay < initialRetryDelay) {
+      throw ArgumentError.value(
+        maxRetryDelay,
+        'maxRetryDelay',
+        'Must be >= initialRetryDelay ($initialRetryDelay).',
+      );
+    }
+    if (backoffMultiplier < 1) {
+      throw ArgumentError.value(
+        backoffMultiplier,
+        'backoffMultiplier',
+        'Must be >= 1.',
+      );
+    }
+    if (maxPending < 1) {
+      throw ArgumentError.value(maxPending, 'maxPending', 'Must be >= 1.');
+    }
+  }
 }
 
 /// Terminal outcome for an envelope handed to the outbox.
@@ -85,9 +130,14 @@ class ReliableOutbox {
   ReliableOutbox({
     required OutboxTransmit transmit,
     OutboxStore? store,
-    this.config = const OutboxConfig(),
+    OutboxConfig? config,
   }) : _transmit = transmit,
-       _store = store;
+       _store = store,
+       // `OutboxConfig` validates eagerly and so is no longer
+       // `const`-constructible; a compile-time-constant default value is
+       // therefore not possible here, hence the nullable parameter with
+       // this runtime fallback (same effective default as before).
+       config = config ?? OutboxConfig();
 
   int get pendingCount => _pending.length;
 

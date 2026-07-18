@@ -99,6 +99,69 @@ void main() {
       expect(counters.availableOutgoingBitrateBps, isNull);
       expect(counters.jitterSeconds, 0.0);
     });
+
+    test("falls back to 'mediaType' when 'kind' is absent, identically to "
+        "an equivalent report keyed by 'kind'", () {
+      final byMediaType = FlutterWebRtcPeerConnectionPort.countersFromStats([
+        _report('in1', 'inbound-rtp', {
+          'mediaType': 'audio',
+          'packetsReceived': 20,
+          'packetsLost': 0,
+          'bytesReceived': 1600,
+          'jitter': 0.02,
+        }),
+      ])!;
+      final byKind = FlutterWebRtcPeerConnectionPort.countersFromStats([
+        _report('in1', 'inbound-rtp', {
+          'kind': 'audio',
+          'packetsReceived': 20,
+          'packetsLost': 0,
+          'bytesReceived': 1600,
+          'jitter': 0.02,
+        }),
+      ])!;
+
+      // The audio jitter branch is only taken when the media-type key
+      // (whichever of the two is present) resolves to 'audio'.
+      expect(byMediaType.jitterSeconds, 0.02);
+      expect(byMediaType.jitterSeconds, byKind.jitterSeconds);
+      expect(byMediaType.packetsReceived, byKind.packetsReceived);
+      expect(byMediaType.bytesReceived, byKind.bytesReceived);
+    });
+
+    test('parses String-typed platform-channel numeric values for both '
+        '_asInt and _asDoubleOrNull call sites', () {
+      final counters = FlutterWebRtcPeerConnectionPort.countersFromStats([
+        _report('in1', 'inbound-rtp', {
+          'kind': 'audio',
+          // String ints exercise _asInt's String branch.
+          'packetsReceived': '1500',
+          'packetsLost': '12',
+          'bytesReceived': '900000',
+          // String double exercises _asDoubleOrNull's String branch.
+          'jitter': '0.021',
+        }),
+        _report('out1', 'outbound-rtp', {
+          'packetsSent': '1400',
+          'bytesSent': '850000',
+        }),
+        _report('cp1', 'candidate-pair', {
+          'selected': true,
+          // Strings again, on the candidate-pair side.
+          'currentRoundTripTime': '0.045',
+          'availableOutgoingBitrate': '500000',
+        }),
+      ])!;
+
+      expect(counters.packetsReceived, 1500);
+      expect(counters.packetsLost, 12);
+      expect(counters.bytesReceived, 900000);
+      expect(counters.packetsSent, 1400);
+      expect(counters.bytesSent, 850000);
+      expect(counters.jitterSeconds, 0.021);
+      expect(counters.currentRoundTripTimeSeconds, 0.045);
+      expect(counters.availableOutgoingBitrateBps, 500000.0);
+    });
   });
 
   group('mapConnectionState', () {

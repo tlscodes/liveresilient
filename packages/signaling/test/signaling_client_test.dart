@@ -22,7 +22,7 @@ void runFake(void Function(FakeAsync async) body) {
 SignalingClient _buildClient({
   required CountingConnector connector,
   OutboxStore? outboxStore,
-  SignalingClientConfig config = const SignalingClientConfig(),
+  SignalingClientConfig? config,
   String localKeyId = 'local-key',
   Uri? endpoint,
 }) {
@@ -54,6 +54,108 @@ void main() {
           endpoint: Uri.parse('wss://signal.example.com'),
           localKeyId: 'k',
           connector: CountingConnector().call,
+        ),
+        returnsNormally,
+      );
+    });
+  });
+
+  group('SignalingClientConfig validation', () {
+    test('the defaults are accepted', () {
+      expect(() => SignalingClientConfig(), returnsNormally);
+    });
+
+    test('non-positive heartbeatInterval throws ArgumentError', () {
+      expect(
+        () => SignalingClientConfig(heartbeatInterval: Duration.zero),
+        throwsArgumentError,
+      );
+      expect(
+        () => SignalingClientConfig(
+          heartbeatInterval: const Duration(seconds: -1),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('non-positive livenessTimeout throws ArgumentError', () {
+      expect(
+        () => SignalingClientConfig(livenessTimeout: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('non-positive initialReconnectDelay throws ArgumentError', () {
+      expect(
+        () => SignalingClientConfig(initialReconnectDelay: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('non-positive maxReconnectDelay throws ArgumentError', () {
+      expect(
+        () => SignalingClientConfig(maxReconnectDelay: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('maxReconnectAttempts < 1 throws ArgumentError', () {
+      expect(
+        () => SignalingClientConfig(maxReconnectAttempts: 0),
+        throwsArgumentError,
+      );
+      expect(
+        () => SignalingClientConfig(maxReconnectAttempts: -1),
+        throwsArgumentError,
+      );
+    });
+
+    test('maxReconnectAttempts == 1 is accepted', () {
+      expect(
+        () => SignalingClientConfig(maxReconnectAttempts: 1),
+        returnsNormally,
+      );
+    });
+
+    test('non-positive maxEnvelopeAge throws ArgumentError', () {
+      expect(
+        () => SignalingClientConfig(maxEnvelopeAge: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('non-positive connectTimeout throws ArgumentError', () {
+      expect(
+        () => SignalingClientConfig(connectTimeout: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('livenessTimeout <= heartbeatInterval throws ArgumentError, since a '
+        'liveness timeout that short tears the socket down before the next '
+        'heartbeat is even due', () {
+      expect(
+        () => SignalingClientConfig(
+          heartbeatInterval: const Duration(seconds: 15),
+          livenessTimeout: const Duration(seconds: 15),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => SignalingClientConfig(
+          heartbeatInterval: const Duration(seconds: 15),
+          livenessTimeout: const Duration(seconds: 10),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('livenessTimeout strictly greater than heartbeatInterval is '
+        'accepted', () {
+      expect(
+        () => SignalingClientConfig(
+          heartbeatInterval: const Duration(seconds: 15),
+          livenessTimeout: const Duration(seconds: 16),
         ),
         returnsNormally,
       );
@@ -446,7 +548,7 @@ void main() {
         connector.defaultFactory = () => throw StateError('offline');
         final client = _buildClient(
           connector: connector,
-          config: const SignalingClientConfig(maxReconnectAttempts: 10),
+          config: SignalingClientConfig(maxReconnectAttempts: 10),
         );
 
         client.connect();
@@ -470,6 +572,96 @@ void main() {
         final callsAfterGivingUp = connector.callCount;
         async.elapse(const Duration(minutes: 10));
         expect(connector.callCount, callsAfterGivingUp);
+
+        client.dispose();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a manual connect() after reconnect exhaustion reports connecting, '
+        'not a stale reconnecting', () {
+      runFake((async) {
+        final connector = CountingConnector();
+        connector.defaultFactory = () => throw StateError('offline');
+        final client = _buildClient(
+          connector: connector,
+          config: SignalingClientConfig(maxReconnectAttempts: 3),
+        );
+
+        client.connect();
+        async.flushMicrotasks();
+        for (var i = 0; i < 3; i++) {
+          async.elapse(
+            client.config.maxReconnectDelay + const Duration(milliseconds: 1),
+          );
+          async.flushMicrotasks();
+        }
+        expect(client.currentState, SignalingConnectionState.disconnected);
+        expect(connector.callCount, 4); // 1 initial + 3 reconnect attempts
+
+        // The next dial succeeds cleanly, so the only question is which
+        // state(s) this manual connect() reports on the way there.
+        connector.queueSocket();
+        final states = <SignalingConnectionState>[];
+        client.connectionState.listen(states.add);
+        client.connect();
+        async.flushMicrotasks();
+
+        // Bug fix under test: _reconnectAttempts must be reset before this
+        // dial, so `_openSocket` reports `connecting` (a fresh attempt),
+        // never `reconnecting` (a stale continuation of the exhausted
+        // budget) — even though nothing has actually failed yet this time.
+        expect(states, [
+          SignalingConnectionState.connecting,
+          SignalingConnectionState.connected,
+        ]);
+
+        client.dispose();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a manual connect() after reconnect exhaustion, on renewed failure, '
+        'gets a full fresh retry budget instead of re-hitting the saturated '
+        'cap', () {
+      runFake((async) {
+        final connector = CountingConnector();
+        connector.defaultFactory = () => throw StateError('offline');
+        final client = _buildClient(
+          connector: connector,
+          config: SignalingClientConfig(maxReconnectAttempts: 3),
+        );
+
+        client.connect();
+        async.flushMicrotasks();
+        for (var i = 0; i < 3; i++) {
+          async.elapse(
+            client.config.maxReconnectDelay + const Duration(milliseconds: 1),
+          );
+          async.flushMicrotasks();
+        }
+        expect(client.currentState, SignalingConnectionState.disconnected);
+        final callsAfterExhaustion = connector.callCount;
+
+        // Still offline: the manual retry's own dial fails too.
+        client.connect();
+        async.flushMicrotasks();
+        expect(connector.callCount, callsAfterExhaustion + 1);
+        // Bug fix under test: this single failure must schedule a genuine
+        // reconnect (a fresh budget), never immediately re-settle into
+        // disconnected as if the old, saturated cap still applied.
+        expect(client.currentState, SignalingConnectionState.reconnecting);
+
+        // The fresh budget (3 more attempts) is fully honored before
+        // giving up again.
+        for (var i = 0; i < 3; i++) {
+          async.elapse(
+            client.config.maxReconnectDelay + const Duration(milliseconds: 1),
+          );
+          async.flushMicrotasks();
+        }
+        expect(client.currentState, SignalingConnectionState.disconnected);
+        expect(connector.callCount, callsAfterExhaustion + 4);
 
         client.dispose();
         async.flushMicrotasks();
@@ -632,8 +824,8 @@ void main() {
           endpoint: Uri.parse('wss://signal.example.com/v2'),
           localKeyId: 'k',
           connector: (_) => Completer<SignalingSocket>().future,
-          config: const SignalingClientConfig(
-            connectTimeout: Duration(seconds: 5),
+          config: SignalingClientConfig(
+            connectTimeout: const Duration(seconds: 5),
           ),
         );
 

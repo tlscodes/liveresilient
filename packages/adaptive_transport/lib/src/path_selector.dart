@@ -77,6 +77,15 @@ class RouterConfig {
   final int fanout;
 
   const RouterConfig({this.maxFailover = 4, this.fanout = 1});
+
+  void _validate() {
+    if (maxFailover < 1) {
+      throw RangeError.range(maxFailover, 1, null, 'maxFailover');
+    }
+    if (fanout < 1) {
+      throw RangeError.range(fanout, 1, null, 'fanout');
+    }
+  }
 }
 
 /// A single telemetry event emitted by the router.
@@ -107,12 +116,16 @@ class PathSelector {
   }) : _channels = List.unmodifiable(channels),
        _breakers = {
          for (final c in channels) c: CircuitBreaker(config: breakerConfig),
-       };
+       } {
+    config._validate();
+  }
 
   /// Applies a redundancy recommendation, e.g. when the app detects that
   /// conditions moved from `stable` to `degraded`.
   void applyPolicy(NetworkConditionPolicy policy) {
-    config = policy.toRouterConfig();
+    final next = policy.toRouterConfig();
+    next._validate();
+    config = next;
   }
 
   List<TransportChannel> _ranked() {
@@ -222,11 +235,26 @@ class PathSelector {
   }
 
   /// Whether at least one path is currently usable.
+  ///
+  /// Side-effect free: reads each breaker's [CircuitBreaker.state] (a pure
+  /// view) instead of [CircuitBreaker.allowsRequest], which consumes a
+  /// half-open probe slot. A channel counts as available when its breaker
+  /// is closed or half-open (not [CircuitState.open]) and its health score
+  /// is positive. This can be polled arbitrarily often (e.g. from a UI
+  /// health widget) without exhausting `halfOpenMaxProbes` and stranding a
+  /// recovering path that real traffic would otherwise be able to probe
+  /// back to closed.
   bool get online => _channels.any(
-    (c) => _breakers[c]!.allowsRequest() && c.health.score() > 0,
+    (c) => _breakers[c]!.state != CircuitState.open && c.health.score() > 0,
   );
 
+  bool _disposed = false;
+
+  /// Idempotent: a second call returns immediately without re-invoking each
+  /// channel's [TransportChannel.dispose].
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     await _telemetryController.close();
     for (final c in _channels) {
       await c.dispose();

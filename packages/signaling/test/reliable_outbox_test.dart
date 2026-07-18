@@ -59,7 +59,7 @@ void main() {
         // (expiry has its own dedicated test below).
         final outbox = ReliableOutbox(
           transmit: transmitter.call,
-          config: const OutboxConfig(messageLifetime: Duration(hours: 1)),
+          config: OutboxConfig(messageLifetime: const Duration(hours: 1)),
         );
         outbox.enqueue(testEnvelope(messageId: 'm1'));
 
@@ -121,7 +121,7 @@ void main() {
         final outbox = ReliableOutbox(
           transmit: transmitter.call,
           store: store,
-          config: const OutboxConfig(messageLifetime: Duration(seconds: 10)),
+          config: OutboxConfig(messageLifetime: const Duration(seconds: 10)),
         );
         final envelope = testEnvelope(messageId: 'm1');
 
@@ -177,7 +177,7 @@ void main() {
           final transmitter = RecordingTransmitter();
           final outbox = ReliableOutbox(
             transmit: transmitter.call,
-            config: const OutboxConfig(maxPending: 2),
+            config: OutboxConfig(maxPending: 2),
           );
 
           outbox.enqueue(testEnvelope(messageId: 'a'));
@@ -218,6 +218,33 @@ void main() {
 
         async.elapse(Duration.zero);
         expect(transmitter.ids, contains('persisted-1'));
+
+        outbox.dispose();
+      });
+    });
+
+    test('calling restore() a second time does not duplicate the already '
+        'loaded entries (the containsKey guard)', () {
+      runFake((async) {
+        final transmitter = RecordingTransmitter();
+        final store = InMemoryOutboxStore();
+        store.seed(testEnvelope(messageId: 'persisted-1'));
+
+        final outbox = ReliableOutbox(transmit: transmitter.call, store: store);
+
+        outbox.restore();
+        async.flushMicrotasks();
+        expect(outbox.pendingCount, 1);
+
+        outbox.restore();
+        async.flushMicrotasks();
+        expect(outbox.pendingCount, 1);
+
+        async.elapse(Duration.zero);
+        // Exactly one live retry timer per entry: a duplicated entry
+        // would have scheduled a second concurrent retry chain and so
+        // transmitted twice for the same id at t=0.
+        expect(transmitter.ids.where((id) => id == 'persisted-1').length, 1);
 
         outbox.dispose();
       });
@@ -286,6 +313,149 @@ void main() {
         async.elapse(const Duration(minutes: 5));
         expect(transmitter.log.length, 2); // only the initial a/b attempts
       });
+    });
+  });
+
+  group('OutboxConfig validation', () {
+    test('the defaults are accepted', () {
+      expect(() => OutboxConfig(), returnsNormally);
+    });
+
+    test('non-positive initialRetryDelay throws ArgumentError', () {
+      expect(
+        () => OutboxConfig(initialRetryDelay: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('non-positive maxRetryDelay throws ArgumentError', () {
+      expect(
+        () => OutboxConfig(maxRetryDelay: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('non-positive messageLifetime throws ArgumentError', () {
+      expect(
+        () => OutboxConfig(messageLifetime: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test('maxRetryDelay < initialRetryDelay throws ArgumentError', () {
+      expect(
+        () => OutboxConfig(
+          initialRetryDelay: const Duration(seconds: 5),
+          maxRetryDelay: const Duration(seconds: 1),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('maxRetryDelay == initialRetryDelay is accepted', () {
+      expect(
+        () => OutboxConfig(
+          initialRetryDelay: const Duration(seconds: 5),
+          maxRetryDelay: const Duration(seconds: 5),
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('backoffMultiplier < 1 throws ArgumentError', () {
+      expect(() => OutboxConfig(backoffMultiplier: 0.5), throwsArgumentError);
+    });
+
+    test('backoffMultiplier == 1 is accepted', () {
+      expect(() => OutboxConfig(backoffMultiplier: 1), returnsNormally);
+    });
+
+    test('maxPending < 1 throws ArgumentError', () {
+      expect(() => OutboxConfig(maxPending: 0), throwsArgumentError);
+      expect(() => OutboxConfig(maxPending: -1), throwsArgumentError);
+    });
+
+    test('maxPending == 1 is accepted', () {
+      expect(() => OutboxConfig(maxPending: 1), returnsNormally);
+    });
+  });
+
+  group('InboxDeduplicator', () {
+    test('constructor rejects maximumEntries < 1', () {
+      expect(() => InboxDeduplicator(maximumEntries: 0), throwsRangeError);
+      expect(() => InboxDeduplicator(maximumEntries: -1), throwsRangeError);
+    });
+
+    test('maximumEntries == 1 is accepted', () {
+      expect(() => InboxDeduplicator(maximumEntries: 1), returnsNormally);
+    });
+
+    test('markIfNew reports true once, then false for the same id', () {
+      final dedup = InboxDeduplicator();
+      expect(dedup.markIfNew('m1'), isTrue);
+      expect(dedup.markIfNew('m1'), isFalse);
+      expect(dedup.markIfNew('m1'), isFalse);
+    });
+
+    test('eviction at exact boundary: filling to maximumEntries then adding '
+        'one more evicts the OLDEST id, which then reports as new again', () {
+      final dedup = InboxDeduplicator(maximumEntries: 3);
+
+      expect(dedup.markIfNew('a'), isTrue);
+      expect(dedup.markIfNew('b'), isTrue);
+      expect(dedup.markIfNew('c'), isTrue);
+
+      // At capacity: every one of a/b/c is still a known duplicate.
+      expect(dedup.markIfNew('a'), isFalse);
+      expect(dedup.markIfNew('b'), isFalse);
+      expect(dedup.markIfNew('c'), isFalse);
+
+      // A 4th distinct id evicts the oldest ('a').
+      expect(dedup.markIfNew('d'), isTrue);
+
+      // b, c, d survived the eviction. Checked BEFORE probing 'a' below,
+      // since markIfNew('a') is itself an insertion that would trigger a
+      // second eviction (at this 3-entry capacity) and invalidate these.
+      expect(dedup.markIfNew('b'), isFalse);
+      expect(dedup.markIfNew('c'), isFalse);
+      expect(dedup.markIfNew('d'), isFalse);
+
+      expect(
+        dedup.markIfNew('a'),
+        isTrue,
+        reason: 'the evicted oldest id must report as new again',
+      );
+    });
+
+    test('re-seeing an id does not refresh its eviction position (pinned '
+        'LinkedHashSet insertion-order semantics)', () {
+      final dedup = InboxDeduplicator(maximumEntries: 3);
+
+      expect(dedup.markIfNew('a'), isTrue);
+      expect(dedup.markIfNew('b'), isTrue);
+      expect(dedup.markIfNew('c'), isTrue);
+
+      // Re-seeing 'a' (already the oldest) is a no-op on ordering: it
+      // must NOT move 'a' to the back of the eviction queue.
+      expect(dedup.markIfNew('a'), isFalse);
+
+      // A 4th distinct id must still evict 'a' (the original oldest),
+      // not 'b' — proving re-seeing did not refresh its position.
+      expect(dedup.markIfNew('d'), isTrue);
+
+      // Checked BEFORE probing 'a' below, since markIfNew('a') is itself an
+      // insertion that would trigger a second eviction (at this 3-entry
+      // capacity) and invalidate this assertion.
+      expect(
+        dedup.markIfNew('b'),
+        isFalse,
+        reason: '"b" must still be known — it was never evicted',
+      );
+      expect(
+        dedup.markIfNew('a'),
+        isTrue,
+        reason: '"a" must have been evicted despite being re-seen',
+      );
     });
   });
 }

@@ -1,4 +1,4 @@
-class HostPort {
+final class HostPort {
   final String host;
   final int port;
 
@@ -87,4 +87,14 @@ class HostPort {
 
   @override
   String toString() => authority;
+
+  /// Structural equality on [host] + [port] (case-sensitive on [host]; no
+  /// hostname normalization — callers that need case-insensitive comparison
+  /// must lower-case before constructing).
+  @override
+  bool operator ==(Object other) =>
+      other is HostPort && other.host == host && other.port == port;
+
+  @override
+  int get hashCode => Object.hash(host, port);
 }

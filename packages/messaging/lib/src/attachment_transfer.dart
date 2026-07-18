@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'attachment.dart';
 import 'reliable_messenger.dart';
@@ -24,6 +25,11 @@ class AttachmentChunk {
     required List<int> data,
   }) : data = List.unmodifiable(data);
 
+  /// Hard ceiling on a chunk's declared piece count, checked before any
+  /// per-index bookkeeping — a hostile peer cannot force an unbounded
+  /// `_Partial` allocation via an absurd `total`.
+  static const int maxChunks = 4096;
+
   /// Encodes to a self-describing text frame carried by [ReliableMessenger].
   String encode() => jsonEncode({
     't': 'attach',
@@ -45,19 +51,22 @@ class AttachmentChunk {
       final n = obj['n'];
       final d = obj['d'];
       if (aid is! String || i is! int || n is! int || d is! String) return null;
-      if (i < 0 || n <= 0 || i >= n) return null;
+      if (n <= 0 || n > maxChunks) return null;
+      if (i < 0 || i >= n) return null;
       final kind = MediaKind.values.firstWhere(
         (k) => k.name == obj['kind'],
         orElse: () => MediaKind.file,
       );
       final ct = obj['ct'];
+      final data = base64Decode(d);
+      if (data.length > AttachmentChunker.maxAllowedChunkBytes) return null;
       return AttachmentChunk(
         attachmentId: aid,
         kind: kind,
         contentType: ct is String ? ct : 'application/octet-stream',
         index: i,
         total: n,
-        data: base64Decode(d),
+        data: data,
       );
     } catch (_) {
       return null;
@@ -68,12 +77,22 @@ class AttachmentChunk {
 /// Splits attachments into ordered chunks. An empty attachment yields a single
 /// empty chunk so the receiver always completes.
 class AttachmentChunker {
+  /// Upper bound on a single chunk's payload size, checked both here
+  /// (against [split]'s `maxChunkBytes`) and on the receiving side in
+  /// [AttachmentChunk.tryDecode] — a hostile peer cannot claim a chunk larger
+  /// than any legitimate sender could ever produce.
+  static const int maxAllowedChunkBytes = 256 * 1024;
+
   static List<AttachmentChunk> split(
     Attachment a, {
     int maxChunkBytes = 12 * 1024,
   }) {
-    if (maxChunkBytes <= 0) {
-      throw ArgumentError.value(maxChunkBytes, 'maxChunkBytes', 'Must be > 0');
+    if (maxChunkBytes <= 0 || maxChunkBytes > maxAllowedChunkBytes) {
+      throw ArgumentError.value(
+        maxChunkBytes,
+        'maxChunkBytes',
+        'Must be > 0 and <= $maxAllowedChunkBytes',
+      );
     }
     final total = a.bytes.isEmpty ? 1 : (a.bytes.length / maxChunkBytes).ceil();
     return [
@@ -104,31 +123,54 @@ class _Partial {
 /// Reassembles chunks into complete [Attachment]s. Tolerates out-of-order and
 /// duplicate chunks (duplicates by index are idempotent).
 class AttachmentReassembler {
+  /// Maximum number of attachments with an incomplete partial in flight at
+  /// once. Insertion-ordered `_partials` map, so once at cap the OLDEST
+  /// incomplete partial is evicted to admit a new attachmentId — a hostile
+  /// peer opening unbounded distinct attachmentIds cannot grow memory
+  /// unboundedly.
+  final int maxPendingAttachments;
+
+  AttachmentReassembler({this.maxPendingAttachments = 16})
+    : assert(maxPendingAttachments >= 1);
+
   final _partials = <String, _Partial>{};
 
   int get pendingCount => _partials.length;
 
   /// Feeds one chunk; returns the finished [Attachment] on the last piece, else
-  /// null.
+  /// null. A chunk whose total/kind/contentType conflicts with the partial
+  /// already recorded for its attachmentId is dropped — the original partial
+  /// is kept untouched.
   Attachment? accept(AttachmentChunk c) {
-    final p = _partials.putIfAbsent(
-      c.attachmentId,
-      () => _Partial(c.total, c.kind, c.contentType),
-    );
+    final existing = _partials[c.attachmentId];
+    if (existing != null) {
+      if (existing.total != c.total ||
+          existing.kind != c.kind ||
+          existing.contentType != c.contentType) {
+        return null; // conflicting chunk for a known id: drop it
+      }
+    } else {
+      if (_partials.length >= maxPendingAttachments) {
+        _partials.remove(_partials.keys.first); // evict oldest incomplete
+      }
+      _partials[c.attachmentId] = _Partial(c.total, c.kind, c.contentType);
+    }
+
+    final p = _partials[c.attachmentId]!;
     if (c.index < 0 || c.index >= p.total) return null;
     p.parts[c.index] = c.data;
     if (p.parts.length < p.total) return null;
 
-    final bytes = <int>[];
+    final builder = BytesBuilder(copy: false);
     for (var i = 0; i < p.total; i++) {
-      bytes.addAll(p.parts[i]!);
+      builder.add(p.parts[i]!);
     }
     _partials.remove(c.attachmentId);
     return Attachment(
       id: c.attachmentId,
       kind: p.kind,
       contentType: p.contentType,
-      bytes: bytes,
+      bytes: builder.toBytes(),
     );
   }
 }

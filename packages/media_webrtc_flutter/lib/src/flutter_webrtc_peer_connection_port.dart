@@ -50,7 +50,7 @@ import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:media_webrtc/media_webrtc.dart';
 
-class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
+final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
   FlutterWebRtcPeerConnectionPort._(this._pc, this._localStream) {
     _pc.onConnectionState = (rtc.RTCPeerConnectionState state) {
       final mapped = mapConnectionState(state);
@@ -98,6 +98,22 @@ class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
           await pc.addTrack(track, stream);
         }
       } catch (_) {
+        // getUserMedia succeeded but a later step (addTrack) failed: the
+        // captured stream is a live camera/microphone handle and must be
+        // released, not just the peer connection. Guarded in its own
+        // try/catch so a failing stream cleanup cannot mask the original
+        // error via rethrow below.
+        try {
+          final capturedStream = stream;
+          if (capturedStream != null) {
+            for (final track in capturedStream.getTracks()) {
+              await track.stop();
+            }
+            await capturedStream.dispose();
+          }
+        } catch (_) {
+          // Best-effort cleanup; the original failure is what gets rethrown.
+        }
         await pc.close();
         await pc.dispose();
         rethrow;

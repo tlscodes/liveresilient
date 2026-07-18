@@ -72,6 +72,12 @@ class CircuitBreakerConfig {
 }
 
 /// Injectable clock for deterministic tests.
+///
+/// Note the name collision with `package:clock`'s `Clock` class (used
+/// elsewhere in this package, e.g. `relay_pool.dart` imports it as
+/// `import 'package:clock/clock.dart' hide Clock;`). Importers that need
+/// both this typedef and `package:clock`'s `Clock` in the same file must
+/// `hide` one of them on import.
 typedef Clock = DateTime Function();
 
 class CircuitBreaker {

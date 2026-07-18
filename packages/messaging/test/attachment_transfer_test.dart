@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:messaging/messaging.dart';
 import 'package:test/test.dart';
@@ -78,6 +79,106 @@ void main() {
         expect(AttachmentChunk.tryDecode('hello there'), isNull);
       },
     );
+
+    test('a chunk declaring an oversized total is rejected', () {
+      final huge = jsonEncode({
+        't': 'attach',
+        'aid': 'a5',
+        'kind': 'file',
+        'ct': 'application/octet-stream',
+        'i': 0,
+        'n': AttachmentChunk.maxChunks + 1,
+        'd': base64Encode([1, 2, 3]),
+      });
+      expect(AttachmentChunk.tryDecode(huge), isNull);
+    });
+
+    test('a chunk whose decoded data exceeds the byte cap is rejected', () {
+      final oversizedData = List<int>.filled(
+        AttachmentChunker.maxAllowedChunkBytes + 1,
+        7,
+      );
+      final frame = jsonEncode({
+        't': 'attach',
+        'aid': 'a6',
+        'kind': 'file',
+        'ct': 'application/octet-stream',
+        'i': 0,
+        'n': 1,
+        'd': base64Encode(oversizedData),
+      });
+      expect(AttachmentChunk.tryDecode(frame), isNull);
+    });
+
+    test('AttachmentChunker.split rejects maxChunkBytes above the cap', () {
+      expect(
+        () => AttachmentChunker.split(
+          att('a7', 10),
+          maxChunkBytes: AttachmentChunker.maxAllowedChunkBytes + 1,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('a chunk with a conflicting total for a known id is dropped; the '
+        'original partial still completes correctly', () {
+      final a = att('a8', 20000);
+      final chunks = AttachmentChunker.split(a, maxChunkBytes: 10000);
+      expect(chunks.length, 2);
+      final asm = AttachmentReassembler();
+
+      // Feed the first legitimate chunk.
+      expect(asm.accept(chunks[0]), isNull);
+
+      // A conflicting chunk (same id, different total) must be dropped,
+      // not corrupt the in-flight partial.
+      final conflicting = AttachmentChunk(
+        attachmentId: 'a8',
+        kind: MediaKind.image,
+        contentType: 'image/jpeg',
+        index: 0,
+        total: 99,
+        data: [1, 2, 3],
+      );
+      expect(asm.accept(conflicting), isNull);
+      expect(asm.pendingCount, 1);
+
+      // The original partial still completes correctly.
+      final done = asm.accept(chunks[1]);
+      expect(done, isNotNull);
+      expect(done!.bytes, a.bytes);
+    });
+
+    test('pending-attachment cap: the 17th distinct incomplete id evicts the '
+        'oldest', () {
+      final asm = AttachmentReassembler(); // default cap 16
+      // Open 16 distinct incomplete attachments (send only the first of 2
+      // chunks for each, so none complete).
+      for (var i = 0; i < 16; i++) {
+        final chunks = AttachmentChunker.split(
+          att('id$i', 20000),
+          maxChunkBytes: 10000,
+        );
+        asm.accept(chunks[0]);
+      }
+      expect(asm.pendingCount, 16);
+
+      // The 17th distinct id evicts the oldest (id0).
+      final chunks17 = AttachmentChunker.split(
+        att('id16', 20000),
+        maxChunkBytes: 10000,
+      );
+      asm.accept(chunks17[0]);
+      expect(asm.pendingCount, 16);
+
+      // id0's partial was evicted: finishing it now starts a fresh
+      // partial rather than completing the original one.
+      final id0Chunks = AttachmentChunker.split(
+        att('id0', 20000),
+        maxChunkBytes: 10000,
+      );
+      expect(asm.accept(id0Chunks[1]), isNull); // second half alone: no-op
+    });
   });
 
   test(

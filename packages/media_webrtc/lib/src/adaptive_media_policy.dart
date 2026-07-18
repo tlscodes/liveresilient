@@ -303,7 +303,9 @@ class AdaptiveMediaPolicy {
     if (_profile == MediaProfile.high) return false;
     final target = MediaProfile.values[_profile.index - 1]; // One step better.
     final estimate = sample.availableOutgoingBitrateBps;
-    if (estimate <= 0) return true; // No estimate: rely on hysteresis alone.
+    if (estimate == null) return true; // No estimate: rely on hysteresis alone.
+    // A measured value -- including a measured 0 -- is a real gate: zero
+    // headroom must block the upgrade, not be treated as "no estimate".
     final required =
         MediaProfileParameters.of(target).videoMaxBitrateBps *
         config.upgradeBandwidthHeadroom;

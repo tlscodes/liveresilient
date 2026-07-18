@@ -7,7 +7,10 @@ RtcStatsSample _sample({
   int jitterMs = 0,
   int incomingBitrateBps = 0,
   int outgoingBitrateBps = 0,
-  int availableOutgoingBitrateBps = 0,
+  // Defaults to null ("no estimate reported"), not 0: 0 is now a distinct,
+  // real measurement that gates the upgrade (see the null-vs-zero group
+  // below). Tests that don't care about bandwidth simply omit this.
+  int? availableOutgoingBitrateBps,
   int timestampMs = 0,
 }) => RtcStatsSample(
   packetLossFraction: packetLossFraction,
@@ -175,8 +178,25 @@ void main() {
       },
     );
 
-    test('no bandwidth estimate reported (0) relies on hysteresis alone and '
-        'still upgrades', () {
+    test('a MEASURED zero bandwidth estimate blocks the upgrade even after '
+        'enough clean samples (0 is a real gate, not "no estimate")', () {
+      final policy = AdaptiveMediaPolicy(initialProfile: MediaProfile.low);
+
+      for (var i = 0; i < config.cleanSamplesToUpgrade * 3; i++) {
+        final decision = policy.onSample(
+          _sample(
+            packetLossFraction: 0.0,
+            rttMs: 30,
+            availableOutgoingBitrateBps: 0,
+          ),
+        );
+        expect(decision, isNull, reason: 'sample $i must not upgrade');
+      }
+      expect(policy.profile, MediaProfile.low);
+    });
+
+    test('no bandwidth estimate reported (null) relies on hysteresis alone '
+        'and still upgrades', () {
       final policy = AdaptiveMediaPolicy(initialProfile: MediaProfile.low);
 
       MediaPolicyDecision? last;
@@ -185,7 +205,7 @@ void main() {
           _sample(
             packetLossFraction: 0.0,
             rttMs: 30,
-            availableOutgoingBitrateBps: 0,
+            availableOutgoingBitrateBps: null,
           ),
         );
       }
@@ -366,6 +386,36 @@ void main() {
         expect(policy.profile, MediaProfile.low);
       },
     );
+  });
+
+  group('MediaProfileParameters.table completeness', () {
+    test('has exactly one entry for every MediaProfile.values entry', () {
+      expect(
+        MediaProfileParameters.table.keys.toSet(),
+        MediaProfile.values.toSet(),
+        reason: 'table must cover every profile, no more and no fewer',
+      );
+      expect(MediaProfileParameters.table.length, MediaProfile.values.length);
+      for (final profile in MediaProfile.values) {
+        expect(
+          MediaProfileParameters.table[profile]!.profile,
+          profile,
+          reason: 'entry for $profile must be keyed consistently',
+        );
+      }
+    });
+
+    test('MediaProfile.values declaration order is pinned: the ladder math in '
+        '_shift()/_canUpgrade() relies on .index, so reordering the enum '
+        'silently breaks the up/down direction', () {
+      expect(MediaProfile.values, [
+        MediaProfile.high,
+        MediaProfile.medium,
+        MediaProfile.low,
+        MediaProfile.minimal,
+        MediaProfile.audioOnly,
+      ]);
+    });
   });
 
   group('MediaPolicyDecision', () {

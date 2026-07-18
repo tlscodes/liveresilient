@@ -128,6 +128,20 @@ void main() {
       expect(k.batteryBudgetHint, 0.2);
     });
 
+    test(
+      'NetworkQualityProfile.values exact declaration order is pinned — '
+      'the hysteresis escalate/recover decision in observe() relies on '
+      '.index severity ordering, so an accidental reorder must fail loudly',
+      () {
+        expect(NetworkQualityProfile.values, [
+          NetworkQualityProfile.healthy,
+          NetworkQualityProfile.constrained,
+          NetworkQualityProfile.degraded,
+          NetworkQualityProfile.locallyConnected,
+        ]);
+      },
+    );
+
     test('telemetry sampling spans the blueprint 1.0 → 0.1 range and '
         'every knob degrades monotonically with severity', () {
       final rows = [

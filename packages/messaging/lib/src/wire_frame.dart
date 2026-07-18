@@ -3,16 +3,18 @@ import 'dart:convert';
 import 'chat_message.dart';
 
 /// A decoded wire frame: either a message or an acknowledgement.
-sealed class WireFrame {}
-
-class MessageFrame extends WireFrame {
-  final ChatMessage message;
-  MessageFrame(this.message);
+sealed class WireFrame {
+  const WireFrame();
 }
 
-class AckFrame extends WireFrame {
+final class MessageFrame extends WireFrame {
+  final ChatMessage message;
+  const MessageFrame(this.message);
+}
+
+final class AckFrame extends WireFrame {
   final String id;
-  AckFrame(this.id);
+  const AckFrame(this.id);
 }
 
 /// JSON wire codec. Frame shapes (version-gated):
@@ -20,6 +22,12 @@ class AckFrame extends WireFrame {
 ///   ack:     {v, type:"ack", id}
 class WireCodec {
   static const int version = 1;
+
+  /// Hard ceiling on an inbound frame's byte length, checked before any
+  /// parsing touches the bytes — matches signed_config's fetch-cap
+  /// convention (256 KiB) so a hostile/oversized peer frame is rejected for
+  /// the cost of a length check, never a full JSON parse.
+  static const int maxFrameBytes = 262144;
 
   static List<int> encodeMessage(ChatMessage m) => utf8.encode(
     jsonEncode({
@@ -41,9 +49,12 @@ class WireCodec {
   /// frame of this version. NEVER throws on malformed/hostile peer input — a
   /// garbled frame is simply ignored by the caller.
   static WireFrame? tryDecode(List<int> bytes) {
+    if (bytes.length > maxFrameBytes) return null;
     try {
       final obj = jsonDecode(utf8.decode(bytes));
       if (obj is! Map || obj['v'] != version) return null;
+      final ct = obj['ct'];
+      if (ct != null && (ct is! String || ct.length > 255)) return null;
       switch (obj['type']) {
         case 'ack':
           final id = obj['id'];
@@ -61,7 +72,6 @@ class WireCodec {
               body is! String) {
             return null;
           }
-          final ct = obj['ct'];
           return MessageFrame(
             ChatMessage(
               id: id,
