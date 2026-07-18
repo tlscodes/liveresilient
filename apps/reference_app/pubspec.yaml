@@ -50,6 +50,8 @@ dependencies:
     path: ../../packages/signaling
   messaging:
     path: ../../packages/messaging
+  messaging_webrtc_adapter:
+    path: ../../packages/messaging_webrtc_adapter
 
 dev_dependencies:
   flutter_test:

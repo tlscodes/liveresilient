@@ -158,40 +158,75 @@ class CallDemoController extends ChangeNotifier {
   }
 }
 
-/// Drives [ChatScreen] over a real [ReliableMessenger] pair connected by an
-/// in-process [LoopbackPort] — genuine reliable delivery/ack/de-dup, zero
-/// network. The peer side auto-replies so the loopback demonstrates real
-/// two-way delivery, not just a local echo of the typed text.
+/// Drives [ChatScreen] over a real [ReliableMessenger].
+///
+/// Two transports, same messaging stack either way:
+/// - Default (no [callChannelPort]): an in-process [LoopbackPort] pair with
+///   an auto-replying peer — genuine reliable delivery/ack/de-dup, zero
+///   network, so the demo works standalone.
+/// - Call mode ([callChannelPort] from [CallSessionHandle.openChatPort]):
+///   the messenger rides the live call's own data channel; the remote human
+///   is the peer, so there is no local echo side and incoming attachments
+///   are reassembled off the wire.
 class ChatDemoController extends ChangeNotifier {
-  ChatDemoController() {
-    final (localPort, peerPort) = pairLoopbackPorts();
+  ChatDemoController({DataChannelPort? callChannelPort}) {
+    final DataChannelPort localPort;
+    if (callChannelPort != null) {
+      localPort = callChannelPort;
+    } else {
+      final (loopLocal, loopPeer) = pairLoopbackPorts();
+      localPort = loopLocal;
+      final peer = _peer = ReliableMessenger(loopPeer, peerId: 'peer');
+      _peerSub = peer.incoming.listen((message) {
+        if (_peerAttachments.offer(message.text)) {
+          return; // an attachment chunk, not chat text — already consumed
+        }
+        unawaited(peer.send('echo: ${message.text}'));
+      });
+    }
     _local = ReliableMessenger(localPort, peerId: localSenderId);
-    _peer = ReliableMessenger(peerPort, peerId: 'peer');
 
     _localSub = _local.incoming.listen((message) {
+      if (_localAttachments.offer(message.text)) {
+        return; // reassembling; the completed stream emits the bubble
+      }
       entries.add(ChatEntry(message: message));
       notifyListeners();
     });
-
-    _peerSub = _peer.incoming.listen((message) {
-      if (_peerAttachments.offer(message.text)) {
-        return; // an attachment chunk, not chat text — already consumed
-      }
-      unawaited(_peer.send('echo: ${message.text}'));
+    _localAttachmentsSub = _localAttachments.completed.listen((attachment) {
+      entries.add(
+        ChatEntry(
+          message: _peerPlaceholder('[${attachment.kind.name}]'),
+          attachment: attachment,
+        ),
+      );
+      notifyListeners();
     });
 
-    unawaited(_seedDemoAttachments());
+    if (callChannelPort == null) {
+      unawaited(_seedDemoAttachments());
+    }
   }
 
   final String localSenderId = 'me';
   final List<ChatEntry> entries = [];
 
   late final ReliableMessenger _local;
-  late final ReliableMessenger _peer;
+  ReliableMessenger? _peer;
   late final StreamSubscription<ChatMessage> _localSub;
-  late final StreamSubscription<ChatMessage> _peerSub;
+  StreamSubscription<ChatMessage>? _peerSub;
+  late final StreamSubscription<Attachment> _localAttachmentsSub;
   final AttachmentReceiver _peerAttachments = AttachmentReceiver();
+  final AttachmentReceiver _localAttachments = AttachmentReceiver();
   int _localSeq = 0;
+
+  ChatMessage _peerPlaceholder(String text) => ChatMessage(
+    id: 'peer-recv-${_localSeq++}',
+    senderId: 'peer',
+    seq: _localSeq,
+    sentAtMs: DateTime.now().millisecondsSinceEpoch,
+    text: text,
+  );
 
   Future<void> sendText(String text) async {
     await _local.send(text);
@@ -242,9 +277,10 @@ class ChatDemoController extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_localSub.cancel());
-    unawaited(_peerSub.cancel());
+    unawaited(_peerSub?.cancel());
+    unawaited(_localAttachmentsSub.cancel());
     unawaited(_local.close());
-    unawaited(_peer.close());
+    unawaited(_peer?.close());
     super.dispose();
   }
 }

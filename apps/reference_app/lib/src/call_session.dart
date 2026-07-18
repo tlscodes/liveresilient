@@ -11,6 +11,8 @@ import 'dart:io';
 import 'package:call_core/call_core.dart';
 import 'package:call_signaling_adapter/call_signaling_adapter.dart';
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
+import 'package:messaging/messaging.dart';
+import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
 import 'ws_connector.dart';
 
@@ -18,9 +20,19 @@ import 'webrtc_media_session.dart';
 
 /// One live call session plus the teardown of everything it owns.
 class CallSessionHandle {
-  CallSessionHandle({required this.controller, required this.dispose});
+  CallSessionHandle({
+    required this.controller,
+    required this.dispose,
+    this.openChatPort,
+  });
 
   final CallController controller;
+
+  /// Opens the messaging layer's transport over THIS call's negotiated data
+  /// channel (frames ride the call's existing DTLS transport). Both peers
+  /// open it with the same default config; null on session builds that have
+  /// no media data channel (e.g. pure test fakes).
+  final Future<DataChannelPort> Function()? openChatPort;
 
   /// Tears down the controller and everything the session owns (e.g. the
   /// real signaling client's socket).
@@ -79,6 +91,8 @@ CallSessionHandle buildWebRtcCallSession({
   );
   return CallSessionHandle(
     controller: controller,
+    openChatPort: () async =>
+        MediaChannelDataPort(await media.openDataChannel()),
     dispose: () async {
       await controller.dispose();
       await client.dispose();

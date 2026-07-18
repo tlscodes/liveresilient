@@ -128,6 +128,16 @@ class WebRtcCallMediaSession implements CallMediaSession {
     );
   }
 
+  /// Opens the call's NEGOTIATED application data channel (chat/attachments
+  /// ride the call's own DTLS transport). Both peers must call this with an
+  /// identical [config] — that is the negotiated-mode contract. Requires
+  /// [start]; the returned channel reports open once the transport is up.
+  Future<mw.MediaDataChannel> openDataChannel([
+    mw.DataChannelConfig config = const mw.DataChannelConfig(),
+  ]) {
+    return _requirePort().createDataChannel(config);
+  }
+
   @override
   Future<void> rollback() async {
     final port = _requirePort();

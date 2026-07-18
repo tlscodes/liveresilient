@@ -9,6 +9,25 @@ import 'package:reference_app/src/webrtc_media_session.dart';
 /// implement `FlutterWebRtcPeerConnectionPort`, so it exercises the
 /// documented fallback branch of `WebRtcCallMediaSession.rollback()` (the
 /// port-contract gap workaround for fakes / non-Flutter adapters).
+class _FakeMediaDataChannel implements mw.MediaDataChannel {
+  _FakeMediaDataChannel(this.label);
+
+  @override
+  final String label;
+
+  @override
+  Stream<List<int>> get inbound => const Stream.empty();
+
+  @override
+  Stream<mw.MediaDataChannelState> get state => const Stream.empty();
+
+  @override
+  Future<void> send(List<int> frame) async {}
+
+  @override
+  Future<void> close() async {}
+}
+
 class FakePeerConnectionPort implements mw.PeerConnectionPort {
   final _statusController =
       StreamController<mw.PeerConnectionStatus>.broadcast();
@@ -20,6 +39,15 @@ class FakePeerConnectionPort implements mw.PeerConnectionPort {
   int setRemoteDescriptionCalls = 0;
   int addRemoteCandidateCalls = 0;
   int closeCalls = 0;
+  mw.DataChannelConfig? lastDataChannelConfig;
+
+  @override
+  Future<mw.MediaDataChannel> createDataChannel(
+    mw.DataChannelConfig config,
+  ) async {
+    lastDataChannelConfig = config;
+    return _FakeMediaDataChannel(config.label);
+  }
 
   void pushStatus(mw.PeerConnectionStatus status) =>
       _statusController.add(status);
@@ -216,6 +244,22 @@ void main() {
       await session.rollback();
 
       expect(session.signalingState, MediaSignalingState.stable);
+    });
+
+    test('openDataChannel delegates to the port with the negotiated default '
+        'config (id 0, ordered, vck-messaging)', () async {
+      await session.start();
+      final channel = await session.openDataChannel();
+
+      expect(channel.label, 'vck-messaging');
+      final config = port.lastDataChannelConfig;
+      expect(config, isNotNull);
+      expect(config!.negotiatedId, 0);
+      expect(config.ordered, isTrue);
+    });
+
+    test('openDataChannel before start() throws StateError', () async {
+      expect(() => session.openDataChannel(), throwsStateError);
     });
   });
 }
