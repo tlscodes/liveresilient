@@ -1,0 +1,23 @@
+name: messaging_webrtc_adapter
+description: >-
+  Bridges the messaging package's abstract DataChannelPort onto
+  media_webrtc's MediaDataChannel, so reliable text and chunked attachments
+  ride the call's own WebRTC data channel (SCTP over the existing DTLS
+  transport) — keeping messaging and media_webrtc free of any dependency on
+  each other, mirroring call_signaling_adapter on the signaling side.
+version: 2.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  media_webrtc:
+    path: ../media_webrtc
+  messaging:
+    path: ../messaging
+
+dev_dependencies:
+  test: ^1.25.0
