@@ -145,4 +145,100 @@ void main() {
       expect(sample.timestampMs, 2000);
     });
   });
+
+  group('RtcStatsSampler stop()/start() race', () {
+    test(
+      'a read that resolves after stop() must not resurrect stale state, '
+      'and the next start() treats its first poll as a fresh baseline',
+      () async {
+        var callCount = 0;
+        Completer<RawRtcCounters?>? pending;
+
+        Future<RawRtcCounters?> reader() {
+          callCount++;
+          pending = Completer<RawRtcCounters?>();
+          return pending!.future;
+        }
+
+        final sampler = RtcStatsSampler(
+          reader: reader,
+          interval: const Duration(milliseconds: 10),
+        );
+        addTearDown(sampler.dispose);
+
+        final emitted = <RtcStatsSample>[];
+        sampler.samples.listen(emitted.add);
+
+        sampler.start();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(callCount, 1, reason: 'the first tick must have begun a read');
+        final staleRead = pending!;
+
+        // stop() while that read is still unresolved.
+        sampler.stop();
+
+        // Resolve the STALE read only after stop(): the epoch guard must
+        // silently drop it -- no state mutation, no emission -- even though
+        // it carries large cumulative counters that would otherwise become
+        // a bogus "_previous" baseline.
+        staleRead.complete(
+          _counters(
+            packetsReceived: 100000,
+            packetsLost: 0,
+            packetsSent: 100000,
+            bytesReceived: 100000000,
+            bytesSent: 100000000,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          emitted,
+          isEmpty,
+          reason: 'a read resolving after stop() must never emit a sample',
+        );
+
+        // start() again: its first poll only seeds a fresh baseline, so it
+        // must not emit either -- proving the stale pre-stop counters were
+        // discarded rather than reused as "_previous".
+        sampler.start();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(callCount, 2, reason: 'restart must poll again');
+        pending!.complete(
+          _counters(
+            packetsReceived: 5,
+            packetsLost: 0,
+            packetsSent: 5,
+            bytesReceived: 500,
+            bytesSent: 500,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          emitted,
+          isEmpty,
+          reason: 'the first poll after restart only seeds the new baseline',
+        );
+
+        // A second poll after restart computes a delta against the FRESH
+        // baseline (5 packets / 500 bytes). If the stale pre-stop counters
+        // (100000 packets / 1e8 bytes) had leaked through, this delta would
+        // go negative and the sample would be silently skipped instead of
+        // emitted with the small, correct delta asserted below.
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(callCount, 3);
+        pending!.complete(
+          _counters(
+            packetsReceived: 10,
+            packetsLost: 0,
+            packetsSent: 10,
+            bytesReceived: 1000,
+            bytesSent: 1000,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(emitted, hasLength(1));
+        expect(emitted.single.packetLossFraction, 0.0);
+      },
+    );
+  });
 }

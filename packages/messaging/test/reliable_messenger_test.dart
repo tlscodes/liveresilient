@@ -140,4 +140,94 @@ void main() {
     expect(received, isEmpty);
     await bob.close();
   });
+
+  test('capped de-dup: oldest seen id evicted, newest retained, re-sent oldest '
+      'id accepted again', () async {
+    final (a, b) = pair();
+    final bob = ReliableMessenger(b, peerId: 'bob', maxSeenEntries: 4);
+    final received = <String>[];
+    bob.incoming.listen((m) => received.add(m.id));
+
+    // Send 5 distinct raw message frames directly (bypassing alice's
+    // instance so ids are simple and ordering is explicit).
+    for (var i = 0; i < 5; i++) {
+      final frame = WireCodec.encodeMessage(
+        ChatMessage(
+          id: 'm$i',
+          senderId: 'alice',
+          seq: i,
+          sentAtMs: i,
+          text: 'msg$i',
+        ),
+      );
+      await a.send(frame);
+    }
+    await pumpEventQueue();
+
+    expect(received, ['m0', 'm1', 'm2', 'm3', 'm4']);
+
+    // m0 was evicted (cap 4, 5 inserted) so re-sending it is accepted
+    // again as new; m4 (newest) is retained and must NOT be re-emitted.
+    final resendM0 = WireCodec.encodeMessage(
+      ChatMessage(id: 'm0', senderId: 'alice', seq: 0, sentAtMs: 0, text: 'x'),
+    );
+    final resendM4 = WireCodec.encodeMessage(
+      ChatMessage(id: 'm4', senderId: 'alice', seq: 4, sentAtMs: 4, text: 'x'),
+    );
+    await a.send(resendM0);
+    await a.send(resendM4);
+    await pumpEventQueue();
+
+    expect(received, ['m0', 'm1', 'm2', 'm3', 'm4', 'm0']);
+
+    await bob.close();
+  });
+
+  test('close() emits failed for every still-pending message', () async {
+    final (a, b) = pair();
+    b.dropOutbound = true; // acks never arrive
+    final alice = ReliableMessenger(a, peerId: 'alice');
+    final failed = <String>[];
+    alice.deliveries.listen((e) {
+      if (e.$2 == DeliveryState.failed) failed.add(e.$1);
+    });
+
+    final m1 = await alice.send('one');
+    final m2 = await alice.send('two');
+    await pumpEventQueue();
+    expect(alice.pendingCount, 2);
+
+    await alice.close();
+
+    expect(failed, containsAll([m1.id, m2.id]));
+    expect(failed, hasLength(2));
+  });
+
+  test('send()/tick() after close() throw StateError', () async {
+    final a = MemPort();
+    final alice = ReliableMessenger(a, peerId: 'alice');
+    await alice.close();
+
+    // send()/tick() are `async`, so the StateError surfaces as a rejected
+    // Future, not a synchronous throw — pass the Future itself.
+    await expectLater(alice.send('late'), throwsStateError);
+    await expectLater(alice.tick(), throwsStateError);
+  });
+
+  test(
+    'two messengers with the same peerId produce non-colliding ids',
+    () async {
+      final (a, b) = pair();
+      final alice1 = ReliableMessenger(a, peerId: 'alice');
+      final alice2 = ReliableMessenger(b, peerId: 'alice');
+
+      final m1 = await alice1.send('hi');
+      final m2 = await alice2.send('hi');
+
+      expect(m1.id, isNot(equals(m2.id)));
+
+      await alice1.close();
+      await alice2.close();
+    },
+  );
 }

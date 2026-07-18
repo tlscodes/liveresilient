@@ -83,8 +83,11 @@ class RtcStatsSample {
   final int outgoingBitrateBps;
 
   /// Congestion-controller estimate of available send bandwidth, bits per
-  /// second (0 when the platform did not report one).
-  final int availableOutgoingBitrateBps;
+  /// second; null when the platform did not report one. A measured `0` is a
+  /// real (if rare) zero-headroom estimate and is NOT the same as "no
+  /// estimate" — [AdaptiveMediaPolicy] relies on this distinction to decide
+  /// whether an upgrade gate applies at all.
+  final int? availableOutgoingBitrateBps;
 
   /// Monotonic timestamp of the sample in milliseconds.
   final int timestampMs;
@@ -128,6 +131,15 @@ class RtcStatsSampler {
   double _jitterMsEwma = 0;
   bool _hasEwma = false;
 
+  /// Bumped on every [start] and [stop] transition. A [_tickInner] in
+  /// flight across a [stop]/[start] pair captures its epoch up front and
+  /// re-checks it after the only await point (the stats read); a mismatch
+  /// means the sampler was stopped (and possibly restarted) while the read
+  /// was pending, so the stale result must never mutate state or emit —
+  /// otherwise it would resurrect the pre-stop baseline and corrupt the
+  /// first delta computed after the restart.
+  int _epoch = 0;
+
   RtcStatsSampler({
     required RtcCountersReader reader,
     this.interval = const Duration(seconds: 2),
@@ -147,10 +159,12 @@ class RtcStatsSampler {
 
   void start() {
     if (_timer != null) return;
+    _epoch++;
     _timer = Timer.periodic(interval, (_) => _tick());
   }
 
   void stop() {
+    _epoch++;
     _timer?.cancel();
     _timer = null;
     _previous = null;
@@ -171,12 +185,16 @@ class RtcStatsSampler {
   }
 
   Future<void> _tickInner() async {
+    final epoch = _epoch;
     final RawRtcCounters? current;
     try {
       current = await _read();
     } catch (_) {
       return; // A failed poll never breaks the sampling loop.
     }
+    // stop() (or a stop()+start() restart) happened while this read was in
+    // flight: drop the stale result before it can mutate state or emit.
+    if (epoch != _epoch) return;
     if (current == null) return;
 
     final nowMs = _nowMs();
@@ -225,8 +243,9 @@ class RtcStatsSampler {
         current.bytesReceived - previous.bytesReceived,
       ),
       outgoingBitrateBps: bitrate(current.bytesSent - previous.bytesSent),
-      availableOutgoingBitrateBps: (current.availableOutgoingBitrateBps ?? 0)
-          .round(),
+      // Preserve null ("no estimate") rather than coercing it to 0 (a real,
+      // distinct measurement of zero headroom).
+      availableOutgoingBitrateBps: current.availableOutgoingBitrateBps?.round(),
       timestampMs: nowMs,
     );
 

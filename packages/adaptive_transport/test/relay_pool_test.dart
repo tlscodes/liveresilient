@@ -161,6 +161,34 @@ void main() {
       );
       expect(pool.selectRegion().id, 'eu-central');
     });
+
+    test('3-way exact-score tie: the highest-priority region wins '
+        'regardless of iteration order (fresh pool, no observations)', () {
+      final regionSetA = [
+        _region('low', priority: 1),
+        _region('winner', priority: 9),
+        _region('mid', priority: 4),
+      ];
+      final regionSetB = [
+        _region('winner', priority: 9),
+        _region('mid', priority: 4),
+        _region('low', priority: 1),
+      ];
+      final regionSetC = [
+        _region('mid', priority: 4),
+        _region('low', priority: 1),
+        _region('winner', priority: 9),
+      ];
+
+      for (final regions in [regionSetA, regionSetB, regionSetC]) {
+        final pool = RelayPool(regions: regions, clock: FakeTime().call);
+        expect(
+          pool.selectRegion().id,
+          'winner',
+          reason: 'iteration order: ${regions.map((r) => r.id).toList()}',
+        );
+      }
+    });
   });
 
   group('hysteresis (anti-flapping)', () {
@@ -354,6 +382,55 @@ void main() {
       time.advance(const Duration(seconds: 9));
       expect(pool.breakerStateOf('eu-central'), CircuitState.halfOpen);
       expect(pool.regionsDueForProbe().map((r) => r.id), ['eu-central']);
+    });
+
+    test('documented current behavior: polling regionsDueForProbe() '
+        'repeatedly WITHOUT reporting outcomes exhausts the half-open probe '
+        'budget and then starves the region — regionsDueForProbe() consumes '
+        'a probe slot per listed region the same way allowsRequest() does, '
+        'so every region it returns MUST be fed back through '
+        'reportSuccess/reportFailure (per the method doc); this test pins '
+        'that contract rather than changing selection logic', () {
+      final time = FakeTime();
+      final pool = RelayPool(
+        regions: [_region('eu-central')],
+        clock: time.call,
+        config: const RelayPoolConfig(
+          probeInterval: Duration(seconds: 1),
+          breaker: CircuitBreakerConfig(
+            failureThreshold: 3,
+            openDuration: Duration(seconds: 10),
+            halfOpenMaxProbes: 2,
+          ),
+        ),
+      );
+      for (var i = 0; i < 3; i++) {
+        pool.reportFailure('eu-central');
+      }
+      time.advance(const Duration(seconds: 11)); // cooldown + stale
+      expect(pool.breakerStateOf('eu-central'), CircuitState.halfOpen);
+
+      // The first two polls consume the two half-open probe slots.
+      expect(pool.regionsDueForProbe().map((r) => r.id), ['eu-central']);
+      expect(pool.regionsDueForProbe().map((r) => r.id), ['eu-central']);
+
+      // Probe budget now exhausted with no outcome ever reported: the
+      // region is starved out of the list even though it is still
+      // stale, and stays starved no matter how much more time passes.
+      expect(pool.regionsDueForProbe(), isEmpty);
+      time.advance(const Duration(seconds: 5));
+      expect(
+        pool.regionsDueForProbe(),
+        isEmpty,
+        reason:
+            'more elapsed time alone does not refill the probe '
+            'budget; only a reported outcome does',
+      );
+
+      // Reporting an outcome is what unsticks it: a failure re-trips
+      // with a fresh cool-down and probe budget.
+      pool.reportFailure('eu-central');
+      expect(pool.breakerStateOf('eu-central'), CircuitState.open);
     });
   });
 

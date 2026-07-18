@@ -20,7 +20,7 @@ class ChatMessage {
   final String contentType;
   final String text;
 
-  const ChatMessage({
+  ChatMessage({
     required this.id,
     required this.senderId,
     required this.seq,
@@ -28,7 +28,12 @@ class ChatMessage {
     this.kind = MessageKind.text,
     this.contentType = 'text/plain',
     required this.text,
-  });
+  }) {
+    if (seq < 0) throw ArgumentError.value(seq, 'seq', 'Must not be negative');
+    if (sentAtMs < 0) {
+      throw ArgumentError.value(sentAtMs, 'sentAtMs', 'Must not be negative');
+    }
+  }
 
   @override
   String toString() => 'ChatMessage($id, from $senderId, "$text")';

@@ -20,7 +20,7 @@ import 'ws_connector.dart';
 const testOperationTimeout = Duration(seconds: 6);
 const testConnectionTimeout = Duration(seconds: 6);
 
-const testSignalingConfig = SignalingClientConfig(
+final testSignalingConfig = SignalingClientConfig(
   heartbeatInterval: Duration(seconds: 2),
   livenessTimeout: Duration(seconds: 5),
   initialReconnectDelay: Duration(milliseconds: 100),

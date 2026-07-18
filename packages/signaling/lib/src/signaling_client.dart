@@ -66,7 +66,13 @@ class SignalingClientConfig {
   /// never sits in `connecting` indefinitely.
   final Duration connectTimeout;
 
-  const SignalingClientConfig({
+  // Not a `const` constructor: validation below must run eagerly and
+  // unconditionally (an `assert` in a const-constructor initializer list
+  // must be a compile-time-constant expression, and `Duration` getters/
+  // operators are not const-evaluable — confirmed by `dart analyze`), so
+  // this throws a real `ArgumentError` on every code path, debug or
+  // release.
+  SignalingClientConfig({
     this.heartbeatInterval = const Duration(seconds: 15),
     this.livenessTimeout = const Duration(seconds: 45),
     this.initialReconnectDelay = const Duration(milliseconds: 500),
@@ -74,7 +80,67 @@ class SignalingClientConfig {
     this.maxReconnectAttempts = 10,
     this.maxEnvelopeAge = const Duration(minutes: 5),
     this.connectTimeout = const Duration(seconds: 10),
-  });
+  }) {
+    if (heartbeatInterval <= Duration.zero) {
+      throw ArgumentError.value(
+        heartbeatInterval,
+        'heartbeatInterval',
+        'Must be positive.',
+      );
+    }
+    if (livenessTimeout <= Duration.zero) {
+      throw ArgumentError.value(
+        livenessTimeout,
+        'livenessTimeout',
+        'Must be positive.',
+      );
+    }
+    if (initialReconnectDelay <= Duration.zero) {
+      throw ArgumentError.value(
+        initialReconnectDelay,
+        'initialReconnectDelay',
+        'Must be positive.',
+      );
+    }
+    if (maxReconnectDelay <= Duration.zero) {
+      throw ArgumentError.value(
+        maxReconnectDelay,
+        'maxReconnectDelay',
+        'Must be positive.',
+      );
+    }
+    if (maxReconnectAttempts < 1) {
+      throw ArgumentError.value(
+        maxReconnectAttempts,
+        'maxReconnectAttempts',
+        'Must be >= 1.',
+      );
+    }
+    if (maxEnvelopeAge <= Duration.zero) {
+      throw ArgumentError.value(
+        maxEnvelopeAge,
+        'maxEnvelopeAge',
+        'Must be positive.',
+      );
+    }
+    if (connectTimeout <= Duration.zero) {
+      throw ArgumentError.value(
+        connectTimeout,
+        'connectTimeout',
+        'Must be positive.',
+      );
+    }
+    if (livenessTimeout <= heartbeatInterval) {
+      throw ArgumentError.value(
+        livenessTimeout,
+        'livenessTimeout',
+        'Must be greater than heartbeatInterval ($heartbeatInterval): a '
+            'liveness timeout shorter than (or equal to) the heartbeat '
+            'interval tears the socket down before the next heartbeat is '
+            'even due.',
+      );
+    }
+  }
 }
 
 class SignalingClient {
@@ -108,8 +174,13 @@ class SignalingClient {
     required this.localKeyId,
     required SignalingSocketConnector connector,
     OutboxStore? outboxStore,
-    this.config = const SignalingClientConfig(),
-  }) : _connector = connector {
+    SignalingClientConfig? config,
+  }) : _connector = connector,
+       // `SignalingClientConfig` validates eagerly and so is no longer
+       // `const`-constructible; a compile-time-constant default value is
+       // therefore not possible here, hence the nullable parameter with
+       // this runtime fallback (same effective default as before).
+       config = config ?? SignalingClientConfig() {
     if (endpoint.scheme != 'wss') {
       throw ArgumentError.value(
         endpoint,
@@ -135,6 +206,11 @@ class SignalingClient {
         _state == SignalingConnectionState.connecting) {
       return;
     }
+    // A manual connect() is a fresh attempt, not a continuation of whatever
+    // reconnect back-off happened before: reset the budget so it reports
+    // `connecting` (not a stale `reconnecting`) and gets a full, un-exhausted
+    // retry allowance on any subsequent failure.
+    _reconnectAttempts = 0;
     await _outbox.restore();
     await _openSocket();
   }

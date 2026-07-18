@@ -193,6 +193,11 @@ class NetworkQualityPolicyConfig {
 /// `nowMs`; read the hysteresis-stable [profile] and its [knobs]; bridge
 /// to the routing layer with [toConditionPolicy].
 class NetworkQualityPolicy {
+  /// Sentinel "no observation yet" value for [_lastNowMs]: far enough in the
+  /// past that the very first real [observe] call (any non-negative `nowMs`)
+  /// always satisfies the monotonic check, without a nullable-int branch.
+  static const int _neverObservedMs = -1 << 62;
+
   final NetworkQualityPolicyConfig config;
 
   NetworkQualityProfile _current;
@@ -204,7 +209,7 @@ class NetworkQualityPolicy {
     this.config = const NetworkQualityPolicyConfig(),
     NetworkQualityProfile initialProfile = NetworkQualityProfile.healthy,
   }) : _current = initialProfile,
-       _lastNowMs = -1 << 62 {
+       _lastNowMs = _neverObservedMs {
     config._validate();
   }
 

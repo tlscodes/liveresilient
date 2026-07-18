@@ -124,5 +124,61 @@ void main() {
         expect(breaker.state, CircuitState.halfOpen);
       },
     );
+
+    test('currentOpenDuration grows then caps at maxOpenDuration across >10 '
+        'open→halfOpen→re-trip cycles, and never regresses', () {
+      const longRunConfig = CircuitBreakerConfig(
+        failureThreshold: 1,
+        openDuration: Duration(seconds: 1),
+        maxOpenDuration: Duration(seconds: 30),
+        halfOpenMaxProbes: 1,
+      );
+      final longRunClock = FakeClock(DateTime(2026, 1, 1));
+      final longRunBreaker = CircuitBreaker(
+        config: longRunConfig,
+        clock: longRunClock.call,
+      );
+
+      longRunBreaker.recordFailure(); // cycle 1: trips open.
+      var previous = longRunBreaker.currentOpenDuration;
+      expect(previous, longRunConfig.openDuration);
+
+      for (var cycle = 0; cycle < 15; cycle++) {
+        longRunClock.advance(previous);
+        expect(
+          longRunBreaker.state,
+          CircuitState.halfOpen,
+          reason: 'cycle $cycle: cooldown elapsed',
+        );
+        expect(
+          longRunBreaker.allowsRequest(),
+          isTrue,
+          reason: 'cycle $cycle: consume the single half-open probe',
+        );
+        longRunBreaker.recordFailure(); // probe fails: re-trip.
+        expect(longRunBreaker.state, CircuitState.open);
+
+        final current = longRunBreaker.currentOpenDuration;
+        expect(
+          current,
+          greaterThanOrEqualTo(previous),
+          reason: 'cycle $cycle: back-off must never regress',
+        );
+        expect(
+          current,
+          lessThanOrEqualTo(longRunConfig.maxOpenDuration),
+          reason: 'cycle $cycle: back-off must stay capped',
+        );
+        previous = current;
+      }
+
+      expect(
+        previous,
+        longRunConfig.maxOpenDuration,
+        reason:
+            'after >10 cycles doubling from 1s, the back-off must have '
+            'saturated at the 30s cap',
+      );
+    });
   });
 }

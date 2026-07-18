@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:collection';
+import 'dart:math';
 
 import 'package:clock/clock.dart';
 
@@ -31,23 +33,52 @@ class ReliableMessenger {
   final int maxAttempts;
   final Clock _clock;
 
+  /// Maximum number of received-message ids retained for de-duplication.
+  final int maxSeenEntries;
+
   int _seq = 0;
   final _pending = <String, _Pending>{};
-  final _seen = <String>{};
+
+  /// Insertion-ordered, capped de-dup set: oldest id is evicted once
+  /// [maxSeenEntries] is exceeded, so a long-lived peer connection cannot
+  /// grow this unboundedly (mirrors `MeshSeenCache` in device_link).
+  final _seen = LinkedHashSet<String>();
   final _incoming = StreamController<ChatMessage>.broadcast();
   final _deliveries = StreamController<(String, DeliveryState)>.broadcast();
   late final StreamSubscription<List<int>> _sub;
   bool _closed = false;
+
+  /// Short per-instance random component mixed into generated message ids so
+  /// a rebuilt messenger (whose [_seq] restarts at 0) never reuses an id the
+  /// peer's de-dup set already saw. Six hex chars, derived once at
+  /// construction from [random] (or a secure default).
+  final String _instanceTag;
 
   ReliableMessenger(
     this._port, {
     required this.peerId,
     this.retryAfter = const Duration(seconds: 2),
     this.maxAttempts = 5,
+    this.maxSeenEntries = 4096,
     Clock? clock,
+    Random? random,
   }) : _clock = clock ?? const Clock(),
-       assert(maxAttempts >= 1) {
-    _sub = _port.inbound.listen(_onFrame);
+       _instanceTag = _makeInstanceTag(random ?? Random.secure()),
+       assert(maxAttempts >= 1),
+       assert(maxSeenEntries >= 1) {
+    _sub = _port.inbound.listen(
+      _onFrame,
+      // A broken/hostile port must not become an unhandled zone error: the
+      // simplest safe behavior is to drop the errored event and keep the
+      // messenger running (the app layer observes failures via `deliveries`
+      // and `tick()`, not via the port's error channel).
+      onError: (_, __) {},
+    );
+  }
+
+  static String _makeInstanceTag(Random random) {
+    const chars = '0123456789abcdef';
+    return List.generate(6, (_) => chars[random.nextInt(16)]).join();
   }
 
   /// Messages received from the peer, de-duplicated (each id emitted once).
@@ -62,10 +93,11 @@ class ReliableMessenger {
   /// Sends [text]; returns the created [ChatMessage]. Retransmits happen on
   /// [tick] until an ack arrives or [maxAttempts] transmissions are exhausted.
   Future<ChatMessage> send(String text) async {
+    if (_closed) throw StateError('ReliableMessenger is closed');
     final nowMs = _clock.now().millisecondsSinceEpoch;
     final seq = _seq++;
     final msg = ChatMessage(
-      id: '$peerId-$seq',
+      id: '$peerId-$_instanceTag-$seq',
       senderId: peerId,
       seq: seq,
       sentAtMs: nowMs,
@@ -80,6 +112,7 @@ class ReliableMessenger {
   /// Retransmits pending messages whose [retryAfter] window elapsed, and fails
   /// those that reach [maxAttempts]. Call periodically from the app layer.
   Future<void> tick() async {
+    if (_closed) throw StateError('ReliableMessenger is closed');
     final nowMs = _clock.now().millisecondsSinceEpoch;
     for (final p in _pending.values.toList()) {
       if (nowMs - p.lastSentMs < retryAfter.inMilliseconds) continue;
@@ -108,15 +141,24 @@ class ReliableMessenger {
         // message to the app only once.
         await _port.send(WireCodec.encodeAck(message.id));
         if (_seen.add(message.id)) {
+          while (_seen.length > maxSeenEntries) {
+            _seen.remove(_seen.first);
+          }
           _incoming.add(message);
         }
     }
   }
 
-  /// Closes the messenger and the underlying port.
+  /// Closes the messenger and the underlying port. Any message still
+  /// awaiting acknowledgement is reported as [DeliveryState.failed] first, so
+  /// callers never see it silently vanish.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    for (final p in _pending.values.toList()) {
+      _deliveries.add((p.message.id, DeliveryState.failed));
+    }
+    _pending.clear();
     await _sub.cancel();
     await _incoming.close();
     await _deliveries.close();

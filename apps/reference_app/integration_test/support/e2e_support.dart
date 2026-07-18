@@ -34,7 +34,7 @@ import 'e2e_dev_tls.dart';
 const e2eOperationTimeout = Duration(seconds: 15);
 const e2eConnectionTimeout = Duration(seconds: 20);
 
-const e2eSignalingConfig = SignalingClientConfig(
+final e2eSignalingConfig = SignalingClientConfig(
   heartbeatInterval: Duration(seconds: 2),
   livenessTimeout: Duration(seconds: 8),
   initialReconnectDelay: Duration(milliseconds: 100),

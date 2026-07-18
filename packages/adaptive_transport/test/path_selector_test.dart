@@ -19,6 +19,7 @@ class FakeChannel implements TransportChannel {
 
   int sendCalls = 0;
   int probeCalls = 0;
+  int disposeCalls = 0;
   bool disposed = false;
 
   FakeChannel(
@@ -44,6 +45,7 @@ class FakeChannel implements TransportChannel {
 
   @override
   Future<void> dispose() async {
+    disposeCalls++;
     disposed = true;
   }
 }
@@ -292,6 +294,50 @@ void main() {
     );
   });
 
+  group('RouterConfig validation', () {
+    test('PathSelector construction rejects maxFailover < 1', () {
+      final ch = FakeChannel(
+        'a',
+        _health(reliabilityPrior: 0.8, bandwidth: 0.8),
+      );
+      expect(
+        () => PathSelector([ch], config: const RouterConfig(maxFailover: 0)),
+        throwsRangeError,
+      );
+    });
+
+    test('PathSelector construction rejects fanout < 1', () {
+      final ch = FakeChannel(
+        'a',
+        _health(reliabilityPrior: 0.8, bandwidth: 0.8),
+      );
+      expect(
+        () => PathSelector([ch], config: const RouterConfig(fanout: 0)),
+        throwsRangeError,
+      );
+    });
+  });
+
+  group('PathSelector.dispose()', () {
+    test('second call is idempotent: channels are not re-disposed', () async {
+      final ch = FakeChannel(
+        'a',
+        _health(reliabilityPrior: 0.8, bandwidth: 0.8),
+      );
+      final selector = PathSelector([ch]);
+
+      await selector.dispose();
+      expect(ch.disposeCalls, 1);
+
+      await selector.dispose();
+      expect(
+        ch.disposeCalls,
+        1,
+        reason: 'a second dispose() must not re-invoke channel.dispose()',
+      );
+    });
+  });
+
   group('NetworkConditionPolicy.redundancy()', () {
     test('stable recommends maxFailover=2, fanout=1', () {
       const r = NetworkConditionPolicy(NetworkConditionProfile.stable);
@@ -380,6 +426,65 @@ void main() {
       expect(selector.online, isTrue);
       await selector.sendChunk([1]); // one failure trips the breaker
       expect(selector.online, isFalse);
+    });
+
+    test('regression: polling .online past halfOpenMaxProbes does not consume '
+        'probe slots — real traffic can still recover the path', () async {
+      final ch = FakeChannel(
+        'a',
+        _health(reliabilityPrior: 0.8, bandwidth: 0.8),
+        // First call (the trip) fails; every later call succeeds.
+        send: (callIndex) => callIndex == 0
+            ? const SendResult(SendStatus.transient)
+            : const SendResult(SendStatus.ok, rttMs: 10),
+      );
+      final selector = PathSelector(
+        [ch],
+        config: const RouterConfig(maxFailover: 1, fanout: 1),
+        breakerConfig: const CircuitBreakerConfig(
+          failureThreshold: 1,
+          openDuration: Duration(milliseconds: 20),
+          halfOpenMaxProbes: 2,
+          halfOpenSuccessesToClose: 2,
+        ),
+      );
+      addTearDown(selector.dispose);
+
+      final trip = await selector.sendChunk([1]);
+      expect(trip, isFalse, reason: 'first send trips the breaker open');
+      expect(selector.online, isFalse, reason: 'freshly open, no cooldown yet');
+
+      // Real wall-clock wait past openDuration: the breaker now reads
+      // half-open (PathSelector's internal breaker has no clock-injection
+      // hook, so this test uses a short real duration rather than a fake
+      // clock).
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      // Poll .online far more times than halfOpenMaxProbes (2). If
+      // `online` still called the mutating `allowsRequest()`, this alone
+      // would exhaust the probe budget and permanently strand the path.
+      for (var i = 0; i < 10; i++) {
+        expect(
+          selector.online,
+          isTrue,
+          reason: 'poll $i: half-open with positive score counts as online',
+        );
+      }
+
+      // Real traffic must still be able to use both half-open probe
+      // slots: two attempts, both reaching the channel and succeeding,
+      // the second one closing the breaker.
+      final probe1 = await selector.sendChunk([1]);
+      final probe2 = await selector.sendChunk([1]);
+      expect(probe1, isTrue, reason: 'first half-open probe must be admitted');
+      expect(probe2, isTrue, reason: 'second half-open probe must be admitted');
+      expect(
+        ch.sendCalls,
+        3,
+        reason:
+            '1 failed trip + 2 successful probes; none swallowed by '
+            'the earlier .online polling',
+      );
     });
   });
 
