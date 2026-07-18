@@ -1,4 +1,21 @@
+/// Reference app: a two-tab demo (Call / Chat) that runs standalone, with
+/// no server, camera, or network required — every screen is driven by
+/// plain state this file owns. Real device/network wiring
+/// (`buildWebRtcCallSession`) is kept available but only from the
+/// clearly-marked dev entry point at the bottom of this file.
+library;
+
+import 'dart:async';
+
+import 'package:call_core/call_core.dart';
 import 'package:flutter/material.dart';
+import 'package:messaging/messaging.dart';
+
+import 'src/call_screen.dart';
+import 'src/call_session.dart';
+import 'src/chat_screen.dart';
+import 'src/loopback_port.dart';
+import 'src/theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -7,116 +24,244 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'VoiceCallKit Reference',
+      theme: buildAppTheme(Brightness.light),
+      darkTheme: buildAppTheme(Brightness.dark),
+      home: const HomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+/// Root scaffold: a [NavigationBar] switching between the Call and Chat
+/// tabs. Owns both tabs' state so the screens themselves stay pure-data.
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _HomePageState extends State<HomePage> {
+  int _index = 0;
+  final CallDemoController _call = CallDemoController();
+  final ChatDemoController _chat = ChatDemoController();
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  @override
+  void initState() {
+    super.initState();
+    _call.addListener(_onChanged);
+    _chat.addListener(_onChanged);
+  }
+
+  void _onChanged() => setState(() {});
+
+  @override
+  void dispose() {
+    _call.removeListener(_onChanged);
+    _chat.removeListener(_onChanged);
+    _call.dispose();
+    _chat.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = <Widget>[
+      CallScreen(
+        phase: _call.phase,
+        reconnectAttempt: _call.reconnectAttempt,
+        endReason: _call.endReason,
+        audioOnly: _call.audioOnly,
+        onCall: _call.canCall ? _call.placeCall : null,
+        onHangUp: _call.canHangUp ? _call.hangUp : null,
+      ),
+      ChatScreen(
+        entries: _chat.entries,
+        localSenderId: _chat.localSenderId,
+        onSend: _chat.sendText,
+      ),
+    ];
+    return Scaffold(
+      appBar: AppBar(title: Text(_index == 0 ? 'Call' : 'Chat')),
+      body: pages[_index],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (value) => setState(() => _index = value),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.call), label: 'Call'),
+          NavigationDestination(icon: Icon(Icons.chat_bubble), label: 'Chat'),
+        ],
+      ),
+    );
+  }
+}
+
+/// Drives [CallScreen] with a simulated call lifecycle — no signaling, no
+/// media session, no network. Real calls go through [devConnectToLocalRelay]
+/// instead; this controller only produces the plain [CallPhase] data the
+/// screen renders.
+class CallDemoController extends ChangeNotifier {
+  CallPhase phase = CallPhase.idle;
+  int reconnectAttempt = 0;
+  CallEndReason? endReason;
+  bool audioOnly = false;
+
+  Timer? _timer;
+
+  bool get canCall =>
+      phase == CallPhase.idle ||
+      phase == CallPhase.ended ||
+      phase == CallPhase.failed;
+
+  bool get canHangUp =>
+      phase == CallPhase.connecting ||
+      phase == CallPhase.negotiating ||
+      phase == CallPhase.connected ||
+      phase == CallPhase.reconnecting;
+
+  /// Simulates placing a call: connecting -> negotiating -> connected.
+  void placeCall() {
+    _timer?.cancel();
+    endReason = null;
+    audioOnly = false;
+    phase = CallPhase.connecting;
+    notifyListeners();
+    _timer = Timer(const Duration(milliseconds: 250), () {
+      phase = CallPhase.negotiating;
+      notifyListeners();
+      _timer = Timer(const Duration(milliseconds: 250), () {
+        phase = CallPhase.connected;
+        notifyListeners();
+      });
+    });
+  }
+
+  /// Simulates a graceful local hang-up: ending -> ended.
+  void hangUp() {
+    _timer?.cancel();
+    phase = CallPhase.ending;
+    notifyListeners();
+    _timer = Timer(const Duration(milliseconds: 200), () {
+      phase = CallPhase.ended;
+      endReason = CallEndReason.localHangup;
+      notifyListeners();
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+}
+
+/// Drives [ChatScreen] over a real [ReliableMessenger] pair connected by an
+/// in-process [LoopbackPort] — genuine reliable delivery/ack/de-dup, zero
+/// network. The peer side auto-replies so the loopback demonstrates real
+/// two-way delivery, not just a local echo of the typed text.
+class ChatDemoController extends ChangeNotifier {
+  ChatDemoController() {
+    final (localPort, peerPort) = pairLoopbackPorts();
+    _local = ReliableMessenger(localPort, peerId: localSenderId);
+    _peer = ReliableMessenger(peerPort, peerId: 'peer');
+
+    _localSub = _local.incoming.listen((message) {
+      entries.add(ChatEntry(message: message));
+      notifyListeners();
+    });
+
+    _peerSub = _peer.incoming.listen((message) {
+      if (_peerAttachments.offer(message.text)) {
+        return; // an attachment chunk, not chat text — already consumed
+      }
+      unawaited(_peer.send('echo: ${message.text}'));
+    });
+
+    unawaited(_seedDemoAttachments());
+  }
+
+  final String localSenderId = 'me';
+  final List<ChatEntry> entries = [];
+
+  late final ReliableMessenger _local;
+  late final ReliableMessenger _peer;
+  late final StreamSubscription<ChatMessage> _localSub;
+  late final StreamSubscription<ChatMessage> _peerSub;
+  final AttachmentReceiver _peerAttachments = AttachmentReceiver();
+  int _localSeq = 0;
+
+  Future<void> sendText(String text) async {
+    await _local.send(text);
+  }
+
+  /// Seeds one image + one file attachment through the real chunker/
+  /// reassembler path, so the running app shows both bubble kinds without
+  /// requiring a UI attach button. Errors are swallowed — this is
+  /// demo-only seeding, never allowed to crash the app.
+  Future<void> _seedDemoAttachments() async {
+    try {
+      final photo = Attachment(
+        id: 'demo-photo',
+        kind: MediaKind.image,
+        contentType: 'image/png',
+        bytes: demoTinyPngBytes,
+      );
+      entries.add(
+        ChatEntry(message: _localPlaceholder('[photo]'), attachment: photo),
+      );
+      notifyListeners();
+      await sendAttachment(_local, photo);
+
+      final file = Attachment(
+        id: 'demo-file',
+        kind: MediaKind.file,
+        contentType: 'application/pdf',
+        bytes: List<int>.filled(2048, 0),
+      );
+      entries.add(
+        ChatEntry(message: _localPlaceholder('[file]'), attachment: file),
+      );
+      notifyListeners();
+      await sendAttachment(_local, file);
+    } catch (_) {
+      // Demo seeding is best-effort only.
+    }
+  }
+
+  ChatMessage _localPlaceholder(String text) => ChatMessage(
+    id: '$localSenderId-demo-${_localSeq++}',
+    senderId: localSenderId,
+    seq: _localSeq,
+    sentAtMs: DateTime.now().millisecondsSinceEpoch,
+    text: text,
+  );
+
+  @override
+  void dispose() {
+    unawaited(_localSub.cancel());
+    unawaited(_peerSub.cancel());
+    unawaited(_local.close());
+    unawaited(_peer.close());
+    super.dispose();
+  }
+}
+
+/// DEV-ONLY: connects to a local dev signaling relay
+/// (`server/signaling_server`) for manual real-device testing. Not part of
+/// the default demo flow, not called from anywhere in this file's widget
+/// tree, and safe to call even with no relay running — failures are caught
+/// and returned as `null` instead of throwing.
+CallSessionHandle? devConnectToLocalRelay({required String callId}) {
+  try {
+    return buildWebRtcCallSession(
+      endpoint: Uri.parse('wss://localhost:4443'),
+      callId: callId,
+      role: CallRole.initiator,
     );
+  } catch (_) {
+    return null;
   }
 }
