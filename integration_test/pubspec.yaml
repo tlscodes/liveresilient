@@ -24,3 +24,9 @@ dev_dependencies:
     path: ../server/signaling_server
   security:
     path: ../packages/security
+  media_webrtc:
+    path: ../packages/media_webrtc
+  messaging:
+    path: ../packages/messaging
+  messaging_webrtc_adapter:
+    path: ../packages/messaging_webrtc_adapter
