@@ -141,6 +141,9 @@ Future<void> main(List<String> args) async {
 
   final signedDocument = <String, Object?>{
     'manifest': manifest.toJson(),
+    // Explicit algorithm name so the format can ever carry another one;
+    // verifiers treat an absent "alg" as ed25519 for older documents.
+    'alg': ManifestSignatureAlgorithm.ed25519.wireName,
     'signature': base64Encode(signature.bytes),
   };
   final output =
