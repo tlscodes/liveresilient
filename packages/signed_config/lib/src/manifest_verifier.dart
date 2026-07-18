@@ -26,6 +26,47 @@ import 'package:clock/clock.dart';
 
 import 'endpoint_manifest.dart';
 
+/// Signature algorithms the manifest envelope can name.
+///
+/// The wire field is `"alg"` in the signed document; a document without the
+/// field means [ed25519] (the format's original and only algorithm), so every
+/// previously signed document stays valid. The point of carrying the name
+/// explicitly is migration: the manifest is the bootstrap artifact — a client
+/// that cannot verify it cannot reach anything, including an update channel —
+/// so any future algorithm change must be expressible in the format *before*
+/// it is needed, and an unknown algorithm must be distinguishable from a
+/// corrupt document (they call for opposite recoveries: "update the app"
+/// vs "distrust the origin").
+enum ManifestSignatureAlgorithm {
+  /// Ed25519 (64-byte signatures, 32-byte public keys).
+  ed25519('ed25519', signatureLength: 64, publicKeyLength: 32);
+
+  const ManifestSignatureAlgorithm(
+    this.wireName, {
+    required this.signatureLength,
+    required this.publicKeyLength,
+  });
+
+  /// The exact string carried in the document's `"alg"` field.
+  final String wireName;
+
+  /// Structural length of a well-formed signature, in bytes.
+  final int signatureLength;
+
+  /// Structural length of a well-formed public key, in bytes.
+  final int publicKeyLength;
+
+  /// Maps a wire name to an algorithm, or null when this build does not
+  /// support it (which the verifier reports as
+  /// [ManifestRejection.unsupportedAlgorithm], never as corruption).
+  static ManifestSignatureAlgorithm? tryParse(String wireName) {
+    for (final algorithm in values) {
+      if (algorithm.wireName == wireName) return algorithm;
+    }
+    return null;
+  }
+}
+
 /// Adapter over an audited Ed25519 implementation.
 abstract interface class Ed25519Verifier {
   /// Returns true when [signature] is a valid Ed25519 signature by
@@ -42,6 +83,11 @@ final class PinnedManifestKey {
   final String keyId;
   final Uint8List publicKey;
 
+  /// The algorithm this key verifies. Carried per key so a build can pin
+  /// keys of mixed algorithms during a future transition; a document is
+  /// only verified by a key whose algorithm matches its own.
+  final ManifestSignatureAlgorithm algorithm;
+
   /// Revoked keys stay in the list (so `keyId` lookups stay unambiguous)
   /// but never verify.
   final bool revoked;
@@ -49,14 +95,16 @@ final class PinnedManifestKey {
   PinnedManifestKey({
     required this.keyId,
     required List<int> publicKey,
+    this.algorithm = ManifestSignatureAlgorithm.ed25519,
     this.revoked = false,
   }) : publicKey = Uint8List.fromList(publicKey) {
     if (keyId.isEmpty) {
       throw const FormatException('Pinned key requires a keyId.');
     }
-    if (this.publicKey.length != 32) {
+    if (this.publicKey.length != algorithm.publicKeyLength) {
       throw FormatException(
-        'Ed25519 public keys are 32 bytes, got ${this.publicKey.length}.',
+        '${algorithm.wireName} public keys are '
+        '${algorithm.publicKeyLength} bytes, got ${this.publicKey.length}.',
       );
     }
   }
@@ -67,9 +115,17 @@ enum ManifestRejection {
   unknownSigningKey,
   revokedSigningKey,
 
-  /// The signature bytes are not even the right length for Ed25519 (64
-  /// bytes) — a structural defect, distinct from [badSignature] which means
-  /// a correctly-shaped signature that failed cryptographic verification.
+  /// The document names a signature algorithm this build cannot verify, or
+  /// names one that does not match the pinned key's algorithm. Deliberately
+  /// distinct from [malformed]: an unsupported algorithm usually means "this
+  /// client is too old", which calls for an update prompt — not for treating
+  /// the origin as corrupt or hostile.
+  unsupportedAlgorithm,
+
+  /// The signature bytes are not even the right length for the document's
+  /// algorithm — a structural defect, distinct from [badSignature] which
+  /// means a correctly-shaped signature that failed cryptographic
+  /// verification.
   malformedSignature,
   badSignature,
   expired,
@@ -97,16 +153,37 @@ final class ManifestRejected extends ManifestVerification {
 
 /// The signed document as fetched: manifest JSON plus detached signature.
 class SignedManifestDocument {
+  /// Longest `"alg"` value accepted structurally. Real algorithm names are
+  /// short; anything past this is malformed input, not a future algorithm.
+  static const int maxAlgorithmLabelLength = 64;
+
   final Map<String, Object?> manifestJson;
   final Uint8List signature;
+
+  /// The document's `"alg"` value, verbatim. Absent on the wire means
+  /// `'ed25519'` (the format's original algorithm), so pre-existing signed
+  /// documents parse identically. Kept as the raw string — not eagerly
+  /// resolved to [ManifestSignatureAlgorithm] — because an algorithm this build
+  /// does not know is a *verification* outcome
+  /// ([ManifestRejection.unsupportedAlgorithm]), not a parse failure.
+  final String algorithmLabel;
 
   SignedManifestDocument({
     required this.manifestJson,
     required List<int> signature,
-  }) : signature = Uint8List.fromList(signature);
+    this.algorithmLabel = 'ed25519',
+  }) : signature = Uint8List.fromList(signature) {
+    if (algorithmLabel.isEmpty ||
+        algorithmLabel.length > maxAlgorithmLabelLength) {
+      throw FormatException(
+        'Algorithm label must be 1-$maxAlgorithmLabelLength characters.',
+      );
+    }
+  }
 
   /// Parses the transport format:
-  /// `{"manifest": {...}, "signature": "<base64>"}`.
+  /// `{"manifest": {...}, "alg": "<name>", "signature": "<base64>"}`
+  /// where `"alg"` is optional and defaults to `"ed25519"`.
   factory SignedManifestDocument.fromBytes(List<int> bytes) {
     final Object? decoded;
     try {
@@ -124,6 +201,12 @@ class SignedManifestDocument {
         'Signed manifest requires "manifest" object and "signature" string.',
       );
     }
+    final alg = decoded['alg'];
+    if (alg is! String?) {
+      throw const FormatException(
+        'Signed manifest "alg", when present, must be a string.',
+      );
+    }
     final List<int> signatureBytes;
     try {
       signatureBytes = base64Decode(signature);
@@ -133,6 +216,7 @@ class SignedManifestDocument {
     return SignedManifestDocument(
       manifestJson: manifest,
       signature: signatureBytes,
+      algorithmLabel: alg ?? 'ed25519',
     );
   }
 }
@@ -172,6 +256,17 @@ class ManifestVerifier {
       return ManifestRejected(ManifestRejection.malformed, e.message);
     }
 
+    final algorithm = ManifestSignatureAlgorithm.tryParse(
+      document.algorithmLabel,
+    );
+    if (algorithm == null) {
+      return ManifestRejected(
+        ManifestRejection.unsupportedAlgorithm,
+        'This build cannot verify "${document.algorithmLabel}" signatures; '
+        'an update may be required.',
+      );
+    }
+
     final key = _keysById[manifest.signingKeyId];
     if (key == null) {
       return ManifestRejected(
@@ -185,11 +280,20 @@ class ManifestVerifier {
         'Key ${manifest.signingKeyId} has been revoked.',
       );
     }
+    if (key.algorithm != algorithm) {
+      return ManifestRejected(
+        ManifestRejection.unsupportedAlgorithm,
+        'Key ${manifest.signingKeyId} is pinned for '
+        '${key.algorithm.wireName}, but the document is signed with '
+        '${algorithm.wireName}.',
+      );
+    }
 
-    if (document.signature.length != 64) {
-      return const ManifestRejected(
+    if (document.signature.length != algorithm.signatureLength) {
+      return ManifestRejected(
         ManifestRejection.malformedSignature,
-        'Ed25519 signatures are 64 bytes.',
+        '${algorithm.wireName} signatures are '
+        '${algorithm.signatureLength} bytes.',
       );
     }
 
