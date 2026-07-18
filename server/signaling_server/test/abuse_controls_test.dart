@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:signaling_server/signaling_server.dart';
 import 'package:test/test.dart';
 
-const _settleDelay = Duration(milliseconds: 100);
+import 'support/frame_collector.dart';
 
 Future<void> main() async {
   late Directory certDir;
@@ -35,26 +35,27 @@ Future<void> main() async {
 
   /// Attaches a collector to [socket]; the returned future completes with
   /// the close code once the socket is closed by the server.
-  ({List<String> messages, Future<int?> closeCode}) observe(WebSocket socket) {
-    final messages = <String>[];
+  ({FrameCollector frames, Future<int?> closeCode}) observe(WebSocket socket) {
+    final frames = FrameCollector();
     final closed = Completer<int?>();
     socket.listen(
-      (event) => messages.add(event as String),
+      (event) => frames.add(event as String),
       onDone: () => closed.complete(socket.closeCode),
     );
-    return (
-      messages: messages,
-      closeCode: closed.future.timeout(const Duration(seconds: 5)),
-    );
+    return (frames: frames, closeCode: closed.future.timeout(frameWaitTimeout));
   }
 
-  /// Connects two peers into [callId]'s room and drains the seed exchange.
+  /// Connects two peers into [callId]'s room and awaits the seed exchange
+  /// (a's buffered seed flushes to b on join; b's seed relays live to a)
+  /// before draining both collectors. Event-driven: the old fixed settle
+  /// sleep here is what once let a `__seed__` frame leak into a later
+  /// assertion under heavy parallel load.
   Future<
     ({
       WebSocket a,
       WebSocket b,
-      List<String> aMessages,
-      List<String> bMessages,
+      FrameCollector aFrames,
+      FrameCollector bFrames,
       Future<int?> aClose,
       Future<int?> bClose,
     })
@@ -67,16 +68,17 @@ Future<void> main() async {
 
     a.add(envelope(callId, body: '__seed__'));
     b.add(envelope(callId, body: '__seed__'));
-    await Future<void>.delayed(_settleDelay);
+    await aObs.frames.waitForCount(1, '$callId: seed from b relayed to a');
+    await bObs.frames.waitForCount(1, '$callId: seed from a flushed to b');
 
-    aObs.messages.clear();
-    bObs.messages.clear();
+    aObs.frames.frames.clear();
+    bObs.frames.frames.clear();
 
     return (
       a: a,
       b: b,
-      aMessages: aObs.messages,
-      bMessages: bObs.messages,
+      aFrames: aObs.frames,
+      bFrames: bObs.frames,
       aClose: aObs.closeCode,
       bClose: bObs.closeCode,
     );
@@ -143,8 +145,8 @@ Future<void> main() async {
 
     // The legit pair (its own buckets) is unaffected.
     pair.a.add(envelope('legit-call', body: 'still-works'));
-    await Future<void>.delayed(_settleDelay);
-    expect(pair.bMessages, [envelope('legit-call', body: 'still-works')]);
+    await pair.bFrames.waitForCount(1, 'legit frame after flooder closed');
+    expect(pair.bFrames.frames, [envelope('legit-call', body: 'still-works')]);
     expect(server.counters.connectionsTotal, 3);
 
     await pair.a.close();
@@ -164,8 +166,7 @@ Future<void> main() async {
       within.add(socket);
       socket.add(envelope('spam-$i'));
     }
-    await Future<void>.delayed(_settleDelay);
-    expect(server.activeRooms, 3);
+    await waitForActiveRooms(server, 3);
 
     final fourth = await connectClient(server.port);
     final fourthObs = observe(fourth);
@@ -201,19 +202,21 @@ Future<void> main() async {
       // Caller drops; the relay tears the room down and closes the peer.
       await first.a.close();
       expect(await first.bClose, peerDisconnectedCloseCode);
-      await Future<void>.delayed(_settleDelay);
-      expect(server.activeRooms, 0);
+      await waitForActiveRooms(server, 0);
 
       // Reconnect to the SAME callId: must be admitted (rejoin is free) and
       // the rebuilt pair must relay both directions.
       final second = await connectAndPair(server.port, 'call-reconnect');
       second.a.add(envelope('call-reconnect', body: 'after-reconnect'));
       second.b.add(envelope('call-reconnect', body: 'reply'));
-      await Future<void>.delayed(_settleDelay);
-      expect(second.bMessages, [
+      await second.bFrames.waitForCount(1, 'relay a->b after reconnect');
+      await second.aFrames.waitForCount(1, 'relay b->a after reconnect');
+      expect(second.bFrames.frames, [
         envelope('call-reconnect', body: 'after-reconnect'),
       ]);
-      expect(second.aMessages, [envelope('call-reconnect', body: 'reply')]);
+      expect(second.aFrames.frames, [
+        envelope('call-reconnect', body: 'reply'),
+      ]);
       expect(server.counters.sessionLimitRejections, 0);
 
       // A genuinely NEW callId from the same source is still limited,
@@ -240,15 +243,14 @@ Future<void> main() async {
 
       final pair = await connectAndPair(server.port, 'call-size');
 
+      // Barrier pattern: the relay processes a's frames in order, so when
+      // the small frame arrives alone the oversized one is proven dropped
+      // (drop-not-close semantics keep the connection alive).
       pair.a.add(envelope('call-size', body: 'x' * 2048));
-      await Future<void>.delayed(_settleDelay);
-      expect(pair.bMessages, isEmpty);
-      expect(server.counters.oversizedFramesDropped, 1);
-
-      // Connection stays alive per the relay's drop-not-close frame semantics.
       pair.a.add(envelope('call-size', body: 'small'));
-      await Future<void>.delayed(_settleDelay);
-      expect(pair.bMessages, [envelope('call-size', body: 'small')]);
+      await pair.bFrames.waitForCount(1, 'barrier after oversized frame');
+      expect(pair.bFrames.frames, [envelope('call-size', body: 'small')]);
+      expect(server.counters.oversizedFramesDropped, 1);
 
       await pair.a.close();
       await pair.b.close();
@@ -293,8 +295,8 @@ Future<void> main() async {
 
     // The capped-out attempt did not disturb the existing room.
     pair.a.add(envelope('call-cap', body: 'unaffected'));
-    await Future<void>.delayed(_settleDelay);
-    expect(pair.bMessages, [envelope('call-cap', body: 'unaffected')]);
+    await pair.bFrames.waitForCount(1, 'relay after capped-out attempt');
+    expect(pair.bFrames.frames, [envelope('call-cap', body: 'unaffected')]);
 
     await pair.a.close();
     await pair.b.close();

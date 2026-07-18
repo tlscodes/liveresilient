@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:signaling_server/signaling_server.dart';
 import 'package:test/test.dart';
 
-const _settleDelay = Duration(milliseconds: 100);
+import 'support/frame_collector.dart';
 
 Future<void> main() async {
   late Directory certDir;
@@ -35,13 +35,16 @@ Future<void> main() async {
 
   /// Connects two peers, attaches collectors on both BEFORE any traffic (so
   /// the room-join buffer flush is captured deterministically), then joins
-  /// both peers into [callId]'s room and drains the flush.
+  /// both peers into [callId]'s room and awaits the seed exchange: `a`'s
+  /// buffered seed flushes to `b` on join, and `b`'s seed relays live to
+  /// `a`. Both collectors are drained before returning, so tests start from
+  /// a proven-joined, empty state without any settle sleep.
   Future<
     ({
       WebSocket a,
       WebSocket b,
-      List<String> aMessages,
-      List<String> bMessages,
+      FrameCollector aFrames,
+      FrameCollector bFrames,
       StreamSubscription<dynamic> aSub,
       StreamSubscription<dynamic> bSub,
     })
@@ -49,25 +52,24 @@ Future<void> main() async {
   connectAndPair(int port, String callId) async {
     final a = await connectClient(port);
     final b = await connectClient(port);
-    final aMessages = <String>[];
-    final bMessages = <String>[];
-    final aSub = a.listen((event) => aMessages.add(event as String));
-    final bSub = b.listen((event) => bMessages.add(event as String));
+    final aFrames = FrameCollector();
+    final bFrames = FrameCollector();
+    final aSub = a.listen((event) => aFrames.add(event as String));
+    final bSub = b.listen((event) => bFrames.add(event as String));
 
     a.add(envelope(callId, body: '__seed__'));
     b.add(envelope(callId, body: '__seed__'));
-    await Future<void>.delayed(_settleDelay);
+    await aFrames.waitForCount(1, '$callId: seed from b relayed to a');
+    await bFrames.waitForCount(1, '$callId: seed from a flushed to b');
 
-    // The buffered seed frame from `a` flushes to `b` on join; b's own seed
-    // frame then relays live to `a`. Drain both before real assertions.
-    aMessages.clear();
-    bMessages.clear();
+    aFrames.frames.clear();
+    bFrames.frames.clear();
 
     return (
       a: a,
       b: b,
-      aMessages: aMessages,
-      bMessages: bMessages,
+      aFrames: aFrames,
+      bFrames: bFrames,
       aSub: aSub,
       bSub: bSub,
     );
@@ -85,10 +87,11 @@ Future<void> main() async {
 
       pair.a.add(envelope('call-1', body: 'from-a-1'));
       pair.b.add(envelope('call-1', body: 'from-b-1'));
-      await Future<void>.delayed(_settleDelay);
+      await pair.bFrames.waitForCount(1, 'frame from a');
+      await pair.aFrames.waitForCount(1, 'frame from b');
 
-      expect(pair.bMessages, [envelope('call-1', body: 'from-a-1')]);
-      expect(pair.aMessages, [envelope('call-1', body: 'from-b-1')]);
+      expect(pair.bFrames.frames, [envelope('call-1', body: 'from-a-1')]);
+      expect(pair.aFrames.frames, [envelope('call-1', body: 'from-b-1')]);
 
       await pair.a.close();
       await pair.b.close();
@@ -104,15 +107,17 @@ Future<void> main() async {
     final a = await connectClient(server.port);
     a.add(envelope('call-buffer', body: 'queued-1'));
     a.add(envelope('call-buffer', body: 'queued-2'));
-    await Future<void>.delayed(_settleDelay);
 
     final b = await connectClient(server.port);
-    final received = <String>[];
+    final received = FrameCollector();
     b.listen((event) => received.add(event as String));
     b.add(envelope('call-buffer', body: 'joins'));
 
-    await Future<void>.delayed(_settleDelay);
-    expect(received, [
+    // The flush is triggered by b's join frame; ordering within the room is
+    // FIFO, so awaiting the count IS awaiting the flush — no sleep needed
+    // even though a's frames were still in flight when b connected.
+    await received.waitForCount(2, 'buffered frames flushed on join');
+    expect(received.frames, [
       envelope('call-buffer', body: 'queued-1'),
       envelope('call-buffer', body: 'queued-2'),
     ]);
@@ -134,7 +139,7 @@ Future<void> main() async {
     c.listen((_) {}, onDone: () => closeCode.complete(c.closeCode));
     c.add(envelope('call-full', body: 'reject-me'));
 
-    final code = await closeCode.future.timeout(const Duration(seconds: 5));
+    final code = await closeCode.future.timeout(frameWaitTimeout);
     expect(code, 4409);
     expect(server.activeRooms, 1);
 
@@ -152,15 +157,18 @@ Future<void> main() async {
 
       final pair = await connectAndPair(server.port, 'call-oversize');
 
+      // "Peer receives nothing" cannot be awaited directly; instead ride the
+      // relay's per-connection FIFO: the server fully processes (drops) the
+      // oversized frame before it relays the barrier sent right behind it on
+      // the same socket. When the barrier arrives alone, the drop is proven.
       final hugeBody = 'x' * (maxRelayFrameBytes + 1024);
       pair.a.add(envelope('call-oversize', body: hugeBody));
-      await Future<void>.delayed(_settleDelay);
-      expect(pair.bMessages, isEmpty);
-
-      // Connection stays alive: a normal frame right after still relays.
       pair.a.add(envelope('call-oversize', body: 'still-alive'));
-      await Future<void>.delayed(_settleDelay);
-      expect(pair.bMessages, [envelope('call-oversize', body: 'still-alive')]);
+
+      await pair.bFrames.waitForCount(1, 'barrier after oversized frame');
+      expect(pair.bFrames.frames, [
+        envelope('call-oversize', body: 'still-alive'),
+      ]);
 
       expect(pair.a.readyState, WebSocket.open);
 
@@ -177,13 +185,15 @@ Future<void> main() async {
 
     final pair = await connectAndPair(server.port, 'call-malformed');
 
+    // Same barrier pattern as the oversized-frame test: FIFO on a's
+    // connection proves the malformed frame was dropped, not delayed.
     pair.a.add('{not valid json');
-    await Future<void>.delayed(_settleDelay);
-    expect(pair.bMessages, isEmpty);
-
     pair.a.add(envelope('call-malformed', body: 'after-bad'));
-    await Future<void>.delayed(_settleDelay);
-    expect(pair.bMessages, [envelope('call-malformed', body: 'after-bad')]);
+
+    await pair.bFrames.waitForCount(1, 'barrier after malformed frame');
+    expect(pair.bFrames.frames, [
+      envelope('call-malformed', body: 'after-bad'),
+    ]);
 
     await pair.a.close();
     await pair.b.close();
@@ -202,7 +212,7 @@ Future<void> main() async {
 
     await pair.a.close();
 
-    final code = await closeCode.future.timeout(const Duration(seconds: 5));
+    final code = await closeCode.future.timeout(frameWaitTimeout);
     expect(code, 1000);
   });
 
@@ -216,10 +226,16 @@ Future<void> main() async {
     final pairY = await connectAndPair(server.port, 'call-y');
 
     pairX.a.add(envelope('call-x', body: 'only-for-x'));
-    await Future<void>.delayed(_settleDelay);
+    await pairX.bFrames.waitForCount(1, 'frame within room x');
 
-    expect(pairX.bMessages, [envelope('call-x', body: 'only-for-x')]);
-    expect(pairY.bMessages, isEmpty);
+    // Prove y saw nothing by round-tripping a barrier through room y AFTER
+    // x's frame was fully relayed; if the relay had leaked x's frame into
+    // room y it would sit in y's collector ahead of (or beside) the barrier.
+    pairY.a.add(envelope('call-y', body: 'y-barrier'));
+    await pairY.bFrames.waitForCount(1, 'barrier within room y');
+
+    expect(pairX.bFrames.frames, [envelope('call-x', body: 'only-for-x')]);
+    expect(pairY.bFrames.frames, [envelope('call-y', body: 'y-barrier')]);
     expect(server.activeRooms, 2);
 
     await pairX.a.close();
