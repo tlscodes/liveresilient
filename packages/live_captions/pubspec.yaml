@@ -1,0 +1,21 @@
+name: live_captions
+description: >-
+  Live transcription + translation captions for calls and streamed events
+  (conference talks, live broadcasts): engine-agnostic speech-to-text and
+  translator seams, an ordered translation pipeline, a bounded caption log
+  for UI rendering, and a JSON wire format so captions ride the same
+  reliable data channel as chat. Pure Dart — real STT/MT engines are
+  injected by the host app.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  messaging: ^0.1.0
+
+dev_dependencies:
+  test: ^1.25.0
