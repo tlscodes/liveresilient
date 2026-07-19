@@ -5,10 +5,38 @@
 /// reassembled off the wire into chat entries.
 library;
 
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:messaging/messaging.dart';
 import 'package:reference_app/main.dart';
 import 'package:reference_app/src/loopback_port.dart';
+
+/// Drops the first [_toDrop] outbound frames, then forwards normally —
+/// simulates a transiently dead channel so a send stays pending until the
+/// app's periodic retry driver retransmits it.
+class _DroppingPort implements DataChannelPort {
+  _DroppingPort(this._inner, {required int drop}) : _toDrop = drop;
+
+  final DataChannelPort _inner;
+  int _toDrop;
+
+  @override
+  Stream<List<int>> get inbound => _inner.inbound;
+
+  @override
+  Future<void> send(List<int> frame) async {
+    if (_toDrop > 0) {
+      _toDrop--;
+      return;
+    }
+    await _inner.send(frame);
+  }
+
+  @override
+  Future<void> close() => _inner.close();
+}
 
 void main() {
   test('typed text reaches the remote peer over the injected call port, '
@@ -79,6 +107,40 @@ void main() {
 
     await remoteHuman.close();
     controller.dispose();
+  });
+
+  test('the periodic retry driver retransmits a pending message after the '
+      'retry window elapses', () {
+    fakeAsync((async) {
+      final (callPort, remotePort) = pairLoopbackPorts();
+      // The first transmission vanishes into a dead channel; retransmits
+      // (driven by the controller's 500ms ticker) go through.
+      final controller = ChatDemoController(
+        callChannelPort: _DroppingPort(callPort, drop: 1),
+      );
+      final remoteHuman = ReliableMessenger(remotePort, peerId: 'remote');
+      final remoteGot = <ChatMessage>[];
+      remoteHuman.incoming.listen(remoteGot.add);
+
+      unawaited(controller.sendText('retry me'));
+      async.flushMicrotasks();
+      expect(remoteGot, isEmpty); // first copy dropped, message pending
+
+      // Ticker has fired (500/1000/1500ms) but the 2s retryAfter window has
+      // not elapsed — nothing may be retransmitted yet.
+      async.elapse(const Duration(milliseconds: 1500));
+      expect(remoteGot, isEmpty);
+
+      // Past the retry window the next tick retransmits, and the ack drains
+      // the outbox.
+      async.elapse(const Duration(seconds: 1));
+      expect(remoteGot, hasLength(1));
+      expect(remoteGot.single.text, 'retry me');
+
+      controller.dispose();
+      unawaited(remoteHuman.close());
+      async.flushMicrotasks();
+    });
   });
 
   test('default (no injected port) keeps the standalone loopback demo: '

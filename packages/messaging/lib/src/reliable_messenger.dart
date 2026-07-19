@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:math';
 
 import 'package:clock/clock.dart';
+import 'package:clock/clock.dart' as clock_pkg;
 
 import 'chat_message.dart';
 import 'data_channel_port.dart';
@@ -62,7 +63,11 @@ class ReliableMessenger {
     this.maxSeenEntries = 4096,
     Clock? clock,
     Random? random,
-  }) : _clock = clock ?? const Clock(),
+    // Default to the zone-scoped clock (package:clock's top-level `clock`)
+    // instead of the raw system clock, so `fakeAsync`/`withClock` tests can
+    // drive retry windows deterministically. Outside such zones this IS the
+    // system clock — production behavior is unchanged.
+  }) : _clock = clock ?? clock_pkg.clock,
        _instanceTag = _makeInstanceTag(random ?? Random.secure()),
        assert(maxAttempts >= 1),
        assert(maxSeenEntries >= 1) {
