@@ -82,6 +82,7 @@ class _HomePageState extends State<HomePage> {
         entries: _chat.entries,
         localSenderId: _chat.localSenderId,
         onSend: _chat.sendText,
+        deliveryStates: _chat.deliveryStates,
       ),
     ];
     return Scaffold(
@@ -186,6 +187,12 @@ class ChatDemoController extends ChangeNotifier {
     }
     _local = ReliableMessenger(localPort, peerId: localSenderId);
 
+    _deliverySub = _local.deliveries.listen((event) {
+      final (id, state) = event;
+      deliveryStates[id] = state;
+      notifyListeners();
+    });
+
     _localSub = _local.incoming.listen((message) {
       if (_localAttachments.offer(message.text)) {
         return; // reassembling; the completed stream emits the bubble
@@ -222,9 +229,14 @@ class ChatDemoController extends ChangeNotifier {
   final String localSenderId = 'me';
   final List<ChatEntry> entries = [];
 
+  /// Ack outcome per outbound message id ([ChatScreen] reads this to draw
+  /// the per-bubble marker); an outbound id absent here is still pending.
+  final Map<String, DeliveryState> deliveryStates = {};
+
   late final ReliableMessenger _local;
   ReliableMessenger? _peer;
   late final StreamSubscription<ChatMessage> _localSub;
+  late final StreamSubscription<(String, DeliveryState)> _deliverySub;
   StreamSubscription<ChatMessage>? _peerSub;
   late final StreamSubscription<Attachment> _localAttachmentsSub;
   final AttachmentReceiver _peerAttachments = AttachmentReceiver();
@@ -240,7 +252,9 @@ class ChatDemoController extends ChangeNotifier {
   );
 
   Future<void> sendText(String text) async {
-    await _local.send(text);
+    final message = await _local.send(text);
+    entries.add(ChatEntry(message: message));
+    notifyListeners();
   }
 
   /// Seeds one image + one file attachment through the real chunker/
@@ -288,6 +302,7 @@ class ChatDemoController extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    unawaited(_deliverySub.cancel());
     unawaited(_localSub.cancel());
     unawaited(_peerSub?.cancel());
     unawaited(_localAttachmentsSub.cancel());
