@@ -175,19 +175,85 @@ class AttachmentReassembler {
   }
 }
 
+/// A point-in-time snapshot of an outbound attachment transfer.
+class AttachmentSendProgress {
+  final int bytesSent;
+  final int totalBytes;
+
+  const AttachmentSendProgress(this.bytesSent, this.totalBytes);
+
+  /// 0.0 → 1.0; an empty attachment is complete by definition.
+  double get fraction => totalBytes == 0 ? 1.0 : bytesSent / totalBytes;
+}
+
+/// Live view of one outbound attachment transfer started by
+/// [startAttachmentSend]: a [progress] stream plus current-state getters
+/// ([bytesSent]/[totalBytes]) so late subscribers can still render.
+class AttachmentSendHandle {
+  AttachmentSendHandle._(this.totalBytes);
+
+  final int totalBytes;
+  int _bytesSent = 0;
+  int get bytesSent => _bytesSent;
+
+  final _progress = StreamController<AttachmentSendProgress>.broadcast();
+
+  /// Emits after each chunk is handed to the messenger, starting with a
+  /// `(0, totalBytes)` snapshot and ending at `bytesSent == totalBytes`;
+  /// closes when the transfer finishes (also on error, after [done] errors).
+  Stream<AttachmentSendProgress> get progress => _progress.stream;
+
+  /// Completes when every chunk has been handed to the messenger (delivery
+  /// itself is confirmed by the ack layer, as for chat text).
+  late final Future<void> done;
+}
+
+/// Starts sending [attachment] over [messenger] and returns a handle whose
+/// [AttachmentSendHandle.progress] reports bytesSent/totalBytes per chunk.
+AttachmentSendHandle startAttachmentSend(
+  ReliableMessenger messenger,
+  Attachment attachment, {
+  int maxChunkBytes = 12 * 1024,
+}) {
+  final chunks = AttachmentChunker.split(
+    attachment,
+    maxChunkBytes: maxChunkBytes,
+  );
+  final handle = AttachmentSendHandle._(attachment.sizeBytes);
+  handle.done = () async {
+    // Yield one microtask so a caller subscribing synchronously after this
+    // returns still sees the initial (0, totalBytes) snapshot.
+    await null;
+    try {
+      handle._progress.add(AttachmentSendProgress(0, handle.totalBytes));
+      for (final chunk in chunks) {
+        await messenger.send(chunk.encode());
+        handle._bytesSent += chunk.data.length;
+        handle._progress.add(
+          AttachmentSendProgress(handle._bytesSent, handle.totalBytes),
+        );
+      }
+    } finally {
+      await handle._progress.close();
+    }
+  }();
+  return handle;
+}
+
 /// Sends [attachment] over an existing [ReliableMessenger] by chunking it into
 /// reliable text frames — reusing the exact delivery path the chat text uses.
+/// (Kept as the simple await-to-completion form; [startAttachmentSend] is the
+/// same transfer with a progress handle.)
 Future<void> sendAttachment(
   ReliableMessenger messenger,
   Attachment attachment, {
   int maxChunkBytes = 12 * 1024,
 }) async {
-  for (final chunk in AttachmentChunker.split(
+  await startAttachmentSend(
+    messenger,
     attachment,
     maxChunkBytes: maxChunkBytes,
-  )) {
-    await messenger.send(chunk.encode());
-  }
+  ).done;
 }
 
 /// Consumes incoming chat text: routes attachment chunks to the reassembler and

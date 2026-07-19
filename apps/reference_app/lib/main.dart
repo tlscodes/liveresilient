@@ -83,6 +83,7 @@ class _HomePageState extends State<HomePage> {
         localSenderId: _chat.localSenderId,
         onSend: _chat.sendText,
         deliveryStates: _chat.deliveryStates,
+        attachmentProgress: _chat.attachmentProgress,
       ),
     ];
     return Scaffold(
@@ -233,6 +234,10 @@ class ChatDemoController extends ChangeNotifier {
   /// the per-bubble marker); an outbound id absent here is still pending.
   final Map<String, DeliveryState> deliveryStates = {};
 
+  /// Outbound transfer progress per attachment id, 0.0 → 1.0 ([ChatScreen]
+  /// draws the bubble's progress bar while < 1.0).
+  final Map<String, double> attachmentProgress = {};
+
   late final ReliableMessenger _local;
   ReliableMessenger? _peer;
   late final StreamSubscription<ChatMessage> _localSub;
@@ -257,6 +262,21 @@ class ChatDemoController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sends [attachment] over the live messenger, mirroring per-chunk
+  /// progress into [attachmentProgress] for the bubble's progress bar.
+  Future<void> sendAttachmentWithProgress(Attachment attachment) async {
+    final handle = startAttachmentSend(_local, attachment);
+    final sub = handle.progress.listen((p) {
+      attachmentProgress[attachment.id] = p.fraction;
+      notifyListeners();
+    });
+    try {
+      await handle.done;
+    } finally {
+      await sub.cancel();
+    }
+  }
+
   /// Seeds one image + one file attachment through the real chunker/
   /// reassembler path, so the running app shows both bubble kinds without
   /// requiring a UI attach button. Errors are swallowed — this is
@@ -273,7 +293,7 @@ class ChatDemoController extends ChangeNotifier {
         ChatEntry(message: _localPlaceholder('[photo]'), attachment: photo),
       );
       notifyListeners();
-      await sendAttachment(_local, photo);
+      await sendAttachmentWithProgress(photo);
 
       final file = Attachment(
         id: 'demo-file',
@@ -285,7 +305,7 @@ class ChatDemoController extends ChangeNotifier {
         ChatEntry(message: _localPlaceholder('[file]'), attachment: file),
       );
       notifyListeners();
-      await sendAttachment(_local, file);
+      await sendAttachmentWithProgress(file);
     } catch (_) {
       // Demo seeding is best-effort only.
     }

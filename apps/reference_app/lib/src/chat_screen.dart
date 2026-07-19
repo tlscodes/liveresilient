@@ -45,6 +45,7 @@ class ChatScreen extends StatefulWidget {
     required this.localSenderId,
     required this.onSend,
     this.deliveryStates = const {},
+    this.attachmentProgress = const {},
   });
 
   /// The full transcript, oldest first.
@@ -54,6 +55,11 @@ class ChatScreen extends StatefulWidget {
   /// `deliveries` stream. An outbound text bubble whose id is absent here is
   /// still pending (sent, not yet acknowledged).
   final Map<String, DeliveryState> deliveryStates;
+
+  /// Outbound transfer progress per attachment id, 0.0 → 1.0. While an
+  /// attachment's fraction is present and < 1.0 its bubble shows a
+  /// determinate progress bar.
+  final Map<String, double> attachmentProgress;
 
   /// Sender id treated as "me" — determines bubble alignment.
   final String localSenderId;
@@ -110,6 +116,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           entry: entry,
                           isMe: isMe,
                           delivery: widget.deliveryStates[entry.message.id],
+                          transferProgress: entry.attachment == null
+                              ? null
+                              : widget.attachmentProgress[entry.attachment!.id],
                         ),
                       );
                     },
@@ -152,13 +161,22 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.entry, required this.isMe, this.delivery});
+  const _Bubble({
+    required this.entry,
+    required this.isMe,
+    this.delivery,
+    this.transferProgress,
+  });
 
   final ChatEntry entry;
   final bool isMe;
 
   /// Ack outcome for this outbound message; null = still pending.
   final DeliveryState? delivery;
+
+  /// Outbound attachment transfer fraction (0.0 → 1.0); a value < 1.0 shows
+  /// a progress bar under the attachment content. Null = not tracked.
+  final double? transferProgress;
 
   /// Marker shown only on my own text bubbles — those are exactly the
   /// entries created by sendText, whose ids the delivery stream reports on.
@@ -238,9 +256,10 @@ class _Bubble extends StatelessWidget {
         ],
       );
     }
+    final Widget content;
     switch (attachment.kind) {
       case MediaKind.image:
-        return ClipRRect(
+        content = ClipRRect(
           borderRadius: BorderRadius.circular(Spacing.s8),
           child: Image.memory(
             Uint8List.fromList(attachment.bytes),
@@ -251,7 +270,7 @@ class _Bubble extends StatelessWidget {
         );
       case MediaKind.video:
       case MediaKind.file:
-        return Row(
+        content = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
@@ -270,5 +289,16 @@ class _Bubble extends StatelessWidget {
           ],
         );
     }
+    final progress = transferProgress;
+    if (progress == null || progress >= 1.0) return content;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        content,
+        const SizedBox(height: Spacing.s8),
+        LinearProgressIndicator(value: progress),
+      ],
+    );
   }
 }

@@ -213,4 +213,70 @@ void main() {
       await bob.close();
     },
   );
+
+  group('startAttachmentSend progress', () {
+    test('emits 0 -> 100% in per-chunk steps and completes done', () async {
+      final a = MemPort();
+      final b = MemPort();
+      a.peer = b;
+      b.peer = a;
+      final alice = ReliableMessenger(a, peerId: 'alice');
+
+      final handle = startAttachmentSend(
+        alice,
+        att('p', 30000),
+        maxChunkBytes: 12288,
+      );
+      expect(handle.totalBytes, 30000);
+      final snapshots = <AttachmentSendProgress>[];
+      handle.progress.listen(snapshots.add);
+
+      await handle.done;
+      await pumpEventQueue();
+
+      expect(snapshots.map((s) => s.bytesSent).toList(), [
+        0,
+        12288,
+        24576,
+        30000,
+      ]);
+      expect(snapshots.every((s) => s.totalBytes == 30000), isTrue);
+      expect(snapshots.first.fraction, 0.0);
+      expect(snapshots.last.fraction, 1.0);
+      expect(handle.bytesSent, 30000);
+
+      await alice.close();
+    });
+
+    test('empty attachment reports complete (fraction 1.0) immediately', () {
+      final progress = AttachmentSendProgress(0, 0);
+      expect(progress.fraction, 1.0);
+    });
+
+    test(
+      'sendAttachment still delivers whole (delegates to the handle)',
+      () async {
+        final a = MemPort();
+        final b = MemPort();
+        a.peer = b;
+        b.peer = a;
+        final alice = ReliableMessenger(a, peerId: 'alice');
+        final bob = ReliableMessenger(b, peerId: 'bob');
+        final receiver = AttachmentReceiver();
+        final photos = <Attachment>[];
+        receiver.completed.listen(photos.add);
+        bob.incoming.listen((m) => receiver.offer(m.text));
+
+        await sendAttachment(alice, att('p2', 5000), maxChunkBytes: 2048);
+        await pumpEventQueue();
+
+        expect(photos, hasLength(1));
+        expect(photos.single.sizeBytes, 5000);
+
+        await receiver.close();
+        await alice.close();
+        await bob.close();
+      },
+    );
+  });
 }
