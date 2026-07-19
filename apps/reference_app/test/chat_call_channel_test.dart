@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:live_captions/live_captions.dart';
 import 'package:messaging/messaging.dart';
 import 'package:reference_app/main.dart';
 import 'package:reference_app/src/loopback_port.dart';
@@ -153,4 +154,55 @@ void main() {
     expect(texts, contains('echo: hello'));
     controller.dispose();
   });
+
+  test('a caption frame from the remote side lands in captions — never as a '
+      'chat bubble — and a final revision replaces its partial', () async {
+    final (callPort, remotePort) = pairLoopbackPorts();
+    final controller = ChatDemoController(callChannelPort: callPort);
+    final remoteHuman = ReliableMessenger(remotePort, peerId: 'remote');
+
+    Caption cap(String text, {required bool isFinal}) => Caption(
+      segment: TranscriptSegment(
+        id: 'cap-1',
+        seq: 0,
+        lang: 'en',
+        text: text,
+        isFinal: isFinal,
+        startMs: 0,
+      ),
+      translations: {'fa': 'ترجمه: $text'},
+    );
+
+    await sendCaption(remoteHuman, cap('good morn', isFinal: false));
+    await pumpEventQueue();
+
+    expect(controller.entries, isEmpty); // not a bubble
+    expect(controller.captions, hasLength(1));
+    expect(controller.captions.single.segment.text, 'good morn');
+
+    await sendCaption(remoteHuman, cap('good morning', isFinal: true));
+    await pumpEventQueue();
+
+    expect(controller.captions, hasLength(1)); // replaced, not appended
+    expect(controller.captions.single.segment.text, 'good morning');
+    expect(controller.captions.single.textFor('fa'), 'ترجمه: good morning');
+
+    await remoteHuman.close();
+    controller.dispose();
+  });
+
+  test(
+    'loopback demo seeds translated captions through the real pipeline',
+    () async {
+      final controller = ChatDemoController();
+      await pumpEventQueue();
+
+      expect(controller.captions, hasLength(2));
+      expect(
+        controller.captions.first.textFor('fa'),
+        'به نشست زنده خوش آمدید.',
+      );
+      controller.dispose();
+    },
+  );
 }
