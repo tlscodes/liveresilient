@@ -46,7 +46,12 @@ class ChatScreen extends StatefulWidget {
     required this.onSend,
     this.deliveryStates = const {},
     this.attachmentProgress = const {},
+    this.onPickAttachment,
   });
+
+  /// Invoked when the user taps the attach button; the owner runs its
+  /// injected picker and starts the transfer. Null hides the button.
+  final VoidCallback? onPickAttachment;
 
   /// The full transcript, oldest first.
   final List<ChatEntry> entries;
@@ -129,6 +134,19 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.all(Spacing.s8),
             child: Row(
               children: [
+                if (widget.onPickAttachment != null) ...[
+                  Semantics(
+                    label: 'Attach file',
+                    button: true,
+                    child: ExcludeSemantics(
+                      child: IconButton(
+                        onPressed: widget.onPickAttachment,
+                        icon: const Icon(Icons.attach_file),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: Spacing.s4),
+                ],
                 Expanded(
                   child: TextField(
                     controller: _controller,

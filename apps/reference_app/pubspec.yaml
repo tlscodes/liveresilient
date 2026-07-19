@@ -52,6 +52,7 @@ dependencies:
     path: ../../packages/messaging
   messaging_webrtc_adapter:
     path: ../../packages/messaging_webrtc_adapter
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:

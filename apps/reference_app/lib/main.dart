@@ -11,6 +11,7 @@ import 'package:call_core/call_core.dart';
 import 'package:flutter/material.dart';
 import 'package:messaging/messaging.dart';
 
+import 'src/attachment_picker.dart';
 import 'src/call_screen.dart';
 import 'src/call_session.dart';
 import 'src/chat_screen.dart';
@@ -47,7 +48,9 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _index = 0;
   final CallDemoController _call = CallDemoController();
-  final ChatDemoController _chat = ChatDemoController();
+  final ChatDemoController _chat = ChatDemoController(
+    attachmentPicker: pickAttachmentFile,
+  );
 
   @override
   void initState() {
@@ -84,6 +87,7 @@ class _HomePageState extends State<HomePage> {
         onSend: _chat.sendText,
         deliveryStates: _chat.deliveryStates,
         attachmentProgress: _chat.attachmentProgress,
+        onPickAttachment: () => unawaited(_chat.pickAndSendAttachment()),
       ),
     ];
     return Scaffold(
@@ -171,7 +175,10 @@ class CallDemoController extends ChangeNotifier {
 ///   is the peer, so there is no local echo side and incoming attachments
 ///   are reassembled off the wire.
 class ChatDemoController extends ChangeNotifier {
-  ChatDemoController({DataChannelPort? callChannelPort}) {
+  ChatDemoController({
+    DataChannelPort? callChannelPort,
+    this._attachmentPicker,
+  }) {
     final DataChannelPort localPort;
     if (callChannelPort != null) {
       localPort = callChannelPort;
@@ -260,6 +267,31 @@ class ChatDemoController extends ChangeNotifier {
     final message = await _local.send(text);
     entries.add(ChatEntry(message: message));
     notifyListeners();
+  }
+
+  /// Picker injected at construction ([pickAttachmentFile] in the app, a
+  /// fake in widget tests); null hides the chat screen's attach button.
+  final Future<Attachment?> Function()? _attachmentPicker;
+
+  /// Whether [pickAndSendAttachment] can do anything (drives button
+  /// visibility).
+  bool get canPickAttachment => _attachmentPicker != null;
+
+  /// Runs the injected picker; on a chosen file, adds the bubble and
+  /// transfers it over the live channel with per-chunk progress.
+  Future<void> pickAndSendAttachment() async {
+    final picker = _attachmentPicker;
+    if (picker == null) return;
+    final attachment = await picker();
+    if (attachment == null) return; // canceled
+    entries.add(
+      ChatEntry(
+        message: _localPlaceholder('[${attachment.kind.name}]'),
+        attachment: attachment,
+      ),
+    );
+    notifyListeners();
+    await sendAttachmentWithProgress(attachment);
   }
 
   /// Sends [attachment] over the live messenger, mirroring per-chunk

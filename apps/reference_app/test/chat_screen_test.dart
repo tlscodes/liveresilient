@@ -258,6 +258,74 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
+  testWidgets('attach button is hidden without a handler, shown with one, '
+      'and tap invokes it', (tester) async {
+    var picks = 0;
+    Widget build(VoidCallback? onPick) => MaterialApp(
+      home: Scaffold(
+        body: ChatScreen(
+          entries: const [],
+          localSenderId: 'me',
+          onSend: (_) {},
+          onPickAttachment: onPick,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(build(null));
+    expect(find.byIcon(Icons.attach_file), findsNothing);
+
+    await tester.pumpWidget(build(() => picks++));
+    await tester.tap(find.bySemanticsLabel('Attach file'));
+    expect(picks, 1);
+  });
+
+  testWidgets('tapping attach runs the injected picker: the picked file '
+      'lands as an attachment bubble and its transfer completes', (
+    tester,
+  ) async {
+    final (callPort, _) = pairLoopbackPorts();
+    final controller = ChatDemoController(
+      callChannelPort: callPort,
+      attachmentPicker: () async => Attachment(
+        id: 'picked-1',
+        kind: MediaKind.file,
+        contentType: 'text/plain',
+        bytes: List<int>.filled(5 * 1024, 7),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: controller,
+            builder: (_, _) => ChatScreen(
+              entries: controller.entries,
+              localSenderId: controller.localSenderId,
+              onSend: controller.sendText,
+              attachmentProgress: controller.attachmentProgress,
+              onPickAttachment: () =>
+                  unawaited(controller.pickAndSendAttachment()),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.bySemanticsLabel('Attach file'));
+    await tester.pump(); // picker resolves, bubble added
+    await tester.pump(); // chunk handed to the messenger, progress -> 1.0
+
+    expect(find.byIcon(Icons.insert_drive_file), findsOneWidget);
+    expect(find.textContaining('text/plain'), findsOneWidget);
+    expect(controller.attachmentProgress['picked-1'], 1.0);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+
+    controller.dispose();
+    await tester.pump();
+  });
+
   for (final size in const [Size(320, 568), Size(800, 1280)]) {
     testWidgets('no overflow at ${size.width}x${size.height}', (tester) async {
       await tester.binding.setSurfaceSize(size);
