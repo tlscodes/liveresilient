@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:call_core/call_core.dart';
 import 'package:flutter/material.dart';
+import 'package:live_captions/live_captions.dart';
 import 'package:messaging/messaging.dart';
 
 import 'src/attachment_picker.dart';
@@ -88,6 +89,8 @@ class _HomePageState extends State<HomePage> {
         deliveryStates: _chat.deliveryStates,
         attachmentProgress: _chat.attachmentProgress,
         onPickAttachment: () => unawaited(_chat.pickAndSendAttachment()),
+        captions: _chat.captions,
+        captionLanguage: 'fa',
       ),
     ];
     return Scaffold(
@@ -190,6 +193,9 @@ class ChatDemoController extends ChangeNotifier {
         if (_peerAttachments.offer(message.text)) {
           return; // an attachment chunk, not chat text — already consumed
         }
+        if (CaptionFrame.tryDecode(message.text) != null) {
+          return; // caption frames are never echoed as chat
+        }
         unawaited(peer.send('echo: ${message.text}'));
       });
     }
@@ -201,9 +207,17 @@ class ChatDemoController extends ChangeNotifier {
       notifyListeners();
     });
 
+    _captionSub = _captionReceiver.received.listen((caption) {
+      _captionLog.apply(caption);
+      notifyListeners();
+    });
+
     _localSub = _local.incoming.listen((message) {
       if (_localAttachments.offer(message.text)) {
         return; // reassembling; the completed stream emits the bubble
+      }
+      if (_captionReceiver.offer(message.text)) {
+        return; // a live caption — rendered in the caption strip, not a bubble
       }
       entries.add(ChatEntry(message: message));
       notifyListeners();
@@ -220,6 +234,7 @@ class ChatDemoController extends ChangeNotifier {
 
     if (callChannelPort == null) {
       unawaited(_seedDemoAttachments());
+      _seedDemoCaptions();
     }
 
     // The messaging core is deliberately timer-free (deterministic tests);
@@ -244,6 +259,56 @@ class ChatDemoController extends ChangeNotifier {
   /// Outbound transfer progress per attachment id, 0.0 → 1.0 ([ChatScreen]
   /// draws the bubble's progress bar while < 1.0).
   final Map<String, double> attachmentProgress = {};
+
+  /// Live captions received over the data channel (call mode) or produced
+  /// by the demo pipeline (loopback mode), for the caption strip.
+  List<Caption> get captions => _captionLog.entries;
+
+  final CaptionReceiver _captionReceiver = CaptionReceiver();
+  final CaptionLog _captionLog = CaptionLog();
+  late final StreamSubscription<Caption> _captionSub;
+  CaptionPipeline? _demoCaptionPipeline;
+  StreamSubscription<Caption>? _demoCaptionSub;
+
+  /// Loopback-demo only: runs two English lines through the REAL
+  /// translation pipeline (fixed phrase table, no network) so the running
+  /// app shows the caption strip working. Call mode never uses this — there
+  /// captions arrive off the wire via [CaptionReceiver].
+  void _seedDemoCaptions() {
+    final pipeline = _demoCaptionPipeline = CaptionPipeline(
+      translator: const FixedMapTranslator({
+        'fa:Welcome to the live session.': 'به نشست زنده خوش آمدید.',
+        'fa:Captions are translated on the fly.':
+            'زیرنویس‌ها هم‌زمان ترجمه می‌شوند.',
+      }),
+      targetLanguages: ['fa'],
+    );
+    _demoCaptionSub = pipeline.captions.listen((caption) {
+      _captionLog.apply(caption);
+      notifyListeners();
+    });
+    pipeline
+      ..add(
+        TranscriptSegment(
+          id: 'demo-cap-1',
+          seq: 0,
+          lang: 'en',
+          text: 'Welcome to the live session.',
+          isFinal: true,
+          startMs: 0,
+        ),
+      )
+      ..add(
+        TranscriptSegment(
+          id: 'demo-cap-2',
+          seq: 1,
+          lang: 'en',
+          text: 'Captions are translated on the fly.',
+          isFinal: true,
+          startMs: 1500,
+        ),
+      );
+  }
 
   late final ReliableMessenger _local;
   ReliableMessenger? _peer;
@@ -354,6 +419,10 @@ class ChatDemoController extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    unawaited(_captionSub.cancel());
+    unawaited(_demoCaptionSub?.cancel());
+    unawaited(_demoCaptionPipeline?.close());
+    unawaited(_captionReceiver.close());
     unawaited(_deliverySub.cancel());
     unawaited(_localSub.cancel());
     unawaited(_peerSub?.cancel());

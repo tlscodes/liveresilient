@@ -48,6 +48,8 @@ dependencies:
     path: ../../packages/media_webrtc_flutter
   signaling:
     path: ../../packages/signaling
+  live_captions:
+    path: ../../packages/live_captions
   messaging:
     path: ../../packages/messaging
   messaging_webrtc_adapter:

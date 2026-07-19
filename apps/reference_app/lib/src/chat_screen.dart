@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:live_captions/live_captions.dart';
 import 'package:messaging/messaging.dart';
 
 import 'theme.dart';
@@ -47,7 +48,17 @@ class ChatScreen extends StatefulWidget {
     this.deliveryStates = const {},
     this.attachmentProgress = const {},
     this.onPickAttachment,
+    this.captions = const [],
+    this.captionLanguage = 'en',
   });
+
+  /// Live captions to show in the strip above the transcript (empty hides
+  /// the strip). Each is rendered via [Caption.textFor] in
+  /// [captionLanguage].
+  final List<Caption> captions;
+
+  /// Viewer language for the caption strip.
+  final String captionLanguage;
 
   /// Invoked when the user taps the attach button; the owner runs its
   /// injected picker and starts the transfer. Null hides the button.
@@ -98,6 +109,38 @@ class _ChatScreenState extends State<ChatScreen> {
     return SafeArea(
       child: Column(
         children: [
+          if (widget.captions.isNotEmpty)
+            Semantics(
+              label: 'Live captions',
+              child: ExcludeSemantics(
+                child: Container(
+                  width: double.infinity,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.s12,
+                    vertical: Spacing.s8,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Last two caption lines: current + one of context.
+                      for (final caption
+                          in widget.captions.length <= 2
+                              ? widget.captions
+                              : widget.captions.sublist(
+                                  widget.captions.length - 2,
+                                ))
+                        Text(
+                          caption.textFor(widget.captionLanguage),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: widget.entries.isEmpty
                 ? Center(

@@ -15,7 +15,8 @@ environment:
 resolution: workspace
 
 dependencies:
-  messaging: ^0.1.0
+  messaging:
+    path: ../messaging
 
 dev_dependencies:
   test: ^1.25.0

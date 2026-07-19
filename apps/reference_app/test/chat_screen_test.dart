@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:live_captions/live_captions.dart';
 import 'package:messaging/messaging.dart';
 import 'package:reference_app/main.dart';
 import 'package:reference_app/src/chat_screen.dart';
@@ -324,6 +325,50 @@ void main() {
 
     controller.dispose();
     await tester.pump();
+  });
+
+  testWidgets('caption strip shows the viewer-language text; hidden when '
+      'empty', (tester) async {
+    Caption cap(String id, String en, String fa) => Caption(
+      segment: TranscriptSegment(
+        id: id,
+        seq: 0,
+        lang: 'en',
+        text: en,
+        isFinal: true,
+        startMs: 0,
+      ),
+      translations: {'fa': fa},
+    );
+    Widget build(List<Caption> captions) => MaterialApp(
+      home: Scaffold(
+        body: ChatScreen(
+          entries: const [],
+          localSenderId: 'me',
+          onSend: (_) {},
+          captions: captions,
+          captionLanguage: 'fa',
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(build(const []));
+    expect(find.bySemanticsLabel('Live captions'), findsNothing);
+
+    await tester.pumpWidget(
+      build([
+        cap('c1', 'first line', 'خط اول'),
+        cap('c2', 'second line', 'خط دوم'),
+        cap('c3', 'third line', 'خط سوم'),
+      ]),
+    );
+
+    expect(find.bySemanticsLabel('Live captions'), findsOneWidget);
+    // Only the LAST TWO captions render, in the viewer's language.
+    expect(find.text('خط اول'), findsNothing);
+    expect(find.text('خط دوم'), findsOneWidget);
+    expect(find.text('خط سوم'), findsOneWidget);
+    expect(find.text('third line'), findsNothing);
   });
 
   for (final size in const [Size(320, 568), Size(800, 1280)]) {
