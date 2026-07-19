@@ -227,6 +227,37 @@ void main() {
     expect(find.bySemanticsLabel('You: lost, failed'), findsOneWidget);
   });
 
+  testWidgets('attachment bubble shows a determinate progress bar while the '
+      'transfer is underway, none once complete', (tester) async {
+    final attachment = Attachment(
+      id: 'up1',
+      kind: MediaKind.file,
+      contentType: 'application/pdf',
+      bytes: List<int>.filled(2048, 0),
+    );
+    Widget build(Map<String, double> progress) => MaterialApp(
+      home: Scaffold(
+        body: ChatScreen(
+          entries: [
+            ChatEntry(message: _msg('me', 0, '[file]'), attachment: attachment),
+          ],
+          localSenderId: 'me',
+          onSend: (_) {},
+          attachmentProgress: progress,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(build(const {'up1': 0.4}));
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(bar.value, 0.4);
+
+    await tester.pumpWidget(build(const {'up1': 1.0}));
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
   for (final size in const [Size(320, 568), Size(800, 1280)]) {
     testWidgets('no overflow at ${size.width}x${size.height}', (tester) async {
       await tester.binding.setSurfaceSize(size);
