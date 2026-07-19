@@ -1,14 +1,10 @@
 import 'dart:async';
 
 import 'package:call_core/call_core.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:media_webrtc/media_webrtc.dart' as mw;
-import 'package:reference_app/src/webrtc_media_session.dart';
+import 'package:test/test.dart';
 
-/// Plain (non-Flutter) fake [mw.PeerConnectionPort]. Deliberately does NOT
-/// implement `FlutterWebRtcPeerConnectionPort`, so it exercises the
-/// documented fallback branch of `WebRtcCallMediaSession.rollback()` (the
-/// port-contract gap workaround for fakes / non-Flutter adapters).
 class _FakeMediaDataChannel implements mw.MediaDataChannel {
   _FakeMediaDataChannel(this.label);
 
@@ -135,8 +131,6 @@ void main() {
       expect(portFactoryCalls, 1);
       expect(session.connectionState, MediaConnectionState.connecting);
 
-      // Second call must not re-invoke the port factory nor throw, and must
-      // leave the already-established state untouched.
       await session.start();
       expect(portFactoryCalls, 1);
       expect(session.connectionState, MediaConnectionState.connecting);
@@ -147,7 +141,6 @@ void main() {
       await session.stop();
       expect(session.connectionState, MediaConnectionState.closed);
 
-      // Second stop() must not throw (guarded by the `_stopped` flag).
       await session.stop();
       expect(session.connectionState, MediaConnectionState.closed);
     });
@@ -227,8 +220,28 @@ void main() {
       },
     );
 
-    test('rollback() on a non-Flutter port resets local signaling tracking '
-        'without throwing (documented fallback path)', () async {
+    test('local port candidates surface as LocalIceCandidateEvent with '
+        'converted fields', () async {
+      await session.start();
+      final first = session.events.firstWhere(
+        (event) => event is LocalIceCandidateEvent,
+      );
+      port.pushLocalCandidate(
+        mw.IceCandidate(
+          candidate: 'candidate:x',
+          sdpMid: '0',
+          sdpMLineIndex: 0,
+        ),
+      );
+      final event = await first as LocalIceCandidateEvent;
+
+      expect(event.candidate.candidate, 'candidate:x');
+      expect(event.candidate.sdpMid, '0');
+      expect(event.candidate.sdpMLineIndex, 0);
+    });
+
+    test('rollback() without a nativeRollback seam resets local signaling '
+        'tracking without throwing (documented fallback path)', () async {
       await session.start();
       final offer = SessionDescription(
         type: SessionDescriptionType.offer,
@@ -237,14 +250,31 @@ void main() {
       await session.setLocalDescription(offer);
       expect(session.signalingState, MediaSignalingState.haveLocalOffer);
 
-      // `port` is a plain fake, not `FlutterWebRtcPeerConnectionPort`, so
-      // `rollback()` must take the fallback branch (no
-      // `rollbackLocalDescription` call available) and simply reset the
-      // locally tracked signaling state, without throwing.
       await session.rollback();
 
       expect(session.signalingState, MediaSignalingState.stable);
     });
+
+    test(
+      'rollback() invokes the injected nativeRollback with the live port',
+      () async {
+        mw.PeerConnectionPort? rolledBack;
+        final rollbackSession = WebRtcCallMediaSession(
+          () async => port,
+          nativeRollback: (p) async => rolledBack = p,
+        );
+        await rollbackSession.start();
+        await rollbackSession.setLocalDescription(
+          SessionDescription(type: SessionDescriptionType.offer, sdp: 'v=0'),
+        );
+
+        await rollbackSession.rollback();
+
+        expect(rolledBack, same(port));
+        expect(rollbackSession.signalingState, MediaSignalingState.stable);
+        await rollbackSession.stop();
+      },
+    );
 
     test('openDataChannel delegates to the port with the negotiated default '
         'config (id 0, ordered, vck-messaging)', () async {
