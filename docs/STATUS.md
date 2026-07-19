@@ -1,3 +1,43 @@
+# STATUS — chat/UX completion pass (2026-07-19)
+
+Four gated tasks on the reference app's chat layer, each landed green and committed
+separately (`acfaa1a`, `fd1657d`, `d3febae`, `5d3fe0c`). Full workspace gate after:
+**922 tests green across 16 test directories** (was 913; signaling_server additionally
+carries 1 pre-existing skip), `dart analyze --fatal-infos --fatal-warnings` clean in the
+root workspace, `apps/reference_app`, `media_webrtc_flutter`, and `security_keychain`;
+format clean.
+
+## The four features
+
+1. **Periodic retry driver (proven)** — the app's 500 ms `Timer.periodic` drives
+   `ReliableMessenger.tick()` during chat; a `fakeAsync` test drops the first
+   transmission and proves retransmission after the 2 s retry window. Enabling change:
+   the messenger's default clock is now `package:clock`'s zone-scoped `clock`
+   (identical outside test zones).
+2. **Delivery status markers** — outbound text bubbles show pending → delivered →
+   failed from the messenger's `deliveries` stream (sendText now also adds the
+   outbound bubble; previously only the echo showed). Widget-tested with an ack gate
+   that releases the ack mid-test.
+3. **Attachment transfer progress** — `startAttachmentSend()` in `packages/messaging`
+   returns an `AttachmentSendHandle` streaming `bytesSent/totalBytes` per chunk;
+   `sendAttachment` delegates to it, so existing callers are untouched. Attachment
+   bubbles render a determinate `LinearProgressIndicator` while < 100%.
+4. **Attachment picker button** — chat screen attach button wired to an injectable
+   `Future<Attachment?> Function()` seam on `ChatDemoController`; the app injects
+   `file_selector`'s `openFile()`, widget tests inject fakes (no real dialog). A picked
+   file becomes a bubble and transfers over the live data channel with the progress bar.
+
+## Dated blockers (not claimed done)
+
+- **2026-07-19** — the platform SCTP data-channel pipe still needs a real phone: all
+  chat/attachment E2E here rides in-process ports (loopback + TLS relay). Real-device
+  run remains scheduled with the 2026-07-18 device blockers below.
+- **2026-07-19** — `pickAttachmentFile()` (real `file_selector` dialog) is exercised
+  only through its injectable seam in tests; the native dialog itself needs a manual
+  device/desktop run.
+
+---
+
 # STATUS — next-generation hardening pass (2026-07-18)
 
 Three gated waves (scout → parallel surgeons → repo gate → commit), all landed green.
