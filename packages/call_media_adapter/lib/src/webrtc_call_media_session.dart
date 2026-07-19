@@ -1,10 +1,11 @@
-/// App-side bridge: `call_core`'s [CallMediaSession] over `media_webrtc`'s
-/// [PeerConnectionPort].
+/// `call_core`'s [CallMediaSession] over `media_webrtc`'s
+/// [mw.PeerConnectionPort].
 ///
 /// `call_core` and `media_webrtc` are deliberately independent type
-/// systems; the app composition layer is where they meet. This bridge is
-/// pure mapping/delegation — no policy logic:
-/// - port [PeerConnectionStatus] stream -> [MediaConnectionChangedEvent];
+/// systems; this adapter is where they meet (the media twin of
+/// `call_signaling_adapter`). It is pure mapping/delegation — no policy
+/// logic:
+/// - port [mw.PeerConnectionStatus] stream -> [MediaConnectionChangedEvent];
 /// - port local candidates -> [LocalIceCandidateEvent];
 /// - offer/answer/description/candidate calls delegate 1:1 with type
 ///   conversion between the two `IceCandidate`/description classes.
@@ -14,26 +15,32 @@
 /// is exactly the state `call_core` needs for its glare handling.
 ///
 /// Rollback: the pure port contract has no rollback (its `SdpDescription`
-/// only admits offer/answer), so [rollback] uses the concrete
-/// [FlutterWebRtcPeerConnectionPort.rollbackLocalDescription] extra when
-/// the port is the real adapter, and only resets the tracked signaling
-/// state for test fakes (documented port-contract gap workaround).
+/// only admits offer/answer), so the platform-specific rollback is an
+/// injectable [NativeRollback] seam — the app passes the concrete
+/// platform port's rollback there; without it (test fakes, adapters with
+/// no such operation) [WebRtcCallMediaSession.rollback] only resets the
+/// tracked signaling state (documented port-contract gap workaround).
 library;
 
 import 'dart:async';
 
 import 'package:call_core/call_core.dart';
 import 'package:media_webrtc/media_webrtc.dart' as mw;
-import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
 
 /// Builds the port when the call starts (so e.g. the microphone permission
 /// prompt happens at call time, not app launch).
 typedef PortFactory = Future<mw.PeerConnectionPort> Function();
 
+/// Platform-specific local-description rollback, injected by the
+/// composition layer that knows the concrete port type.
+typedef NativeRollback = Future<void> Function(mw.PeerConnectionPort port);
+
 class WebRtcCallMediaSession implements CallMediaSession {
-  WebRtcCallMediaSession(this._portFactory);
+  WebRtcCallMediaSession(this._portFactory, {NativeRollback? nativeRollback})
+    : _nativeRollback = nativeRollback;
 
   final PortFactory _portFactory;
+  final NativeRollback? _nativeRollback;
 
   final _events = StreamController<MediaEvent>.broadcast();
   final _subscriptions = <StreamSubscription<Object?>>[];
@@ -141,9 +148,7 @@ class WebRtcCallMediaSession implements CallMediaSession {
   @override
   Future<void> rollback() async {
     final port = _requirePort();
-    if (port is FlutterWebRtcPeerConnectionPort) {
-      await port.rollbackLocalDescription();
-    }
+    await _nativeRollback?.call(port);
     _signalingState = MediaSignalingState.stable;
   }
 

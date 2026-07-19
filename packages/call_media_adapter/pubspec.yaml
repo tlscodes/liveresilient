@@ -1,0 +1,23 @@
+name: call_media_adapter
+description: >-
+  Bridges call_core's CallMediaSession onto media_webrtc's
+  PeerConnectionPort, keeping the two type systems independent (mirrors
+  call_signaling_adapter). Pure mapping/delegation — no policy logic; the
+  one platform-specific operation (native local-description rollback) is an
+  injectable seam so this package stays pure Dart.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  call_core:
+    path: ../call_core
+  media_webrtc:
+    path: ../media_webrtc
+
+dev_dependencies:
+  test: ^1.25.0

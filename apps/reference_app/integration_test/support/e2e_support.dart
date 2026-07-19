@@ -23,7 +23,7 @@ import 'package:call_signaling_adapter/call_signaling_adapter.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
 import 'package:reference_app/src/call_session.dart';
-import 'package:reference_app/src/webrtc_media_session.dart';
+import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:signaling/signaling.dart';
 import 'package:signaling_server/signaling_server.dart';
 

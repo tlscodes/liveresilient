@@ -40,6 +40,8 @@ dependencies:
   # workspace so Flutter SDK constraints never fight the root resolution).
   call_core:
     path: ../../packages/call_core
+  call_media_adapter:
+    path: ../../packages/call_media_adapter
   call_signaling_adapter:
     path: ../../packages/call_signaling_adapter
   media_webrtc:

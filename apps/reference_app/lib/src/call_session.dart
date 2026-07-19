@@ -9,14 +9,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:call_core/call_core.dart';
+import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:call_signaling_adapter/call_signaling_adapter.dart';
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
 import 'ws_connector.dart';
-
-import 'webrtc_media_session.dart';
 
 /// One live call session plus the teardown of everything it owns.
 class CallSessionHandle {
@@ -75,6 +74,13 @@ CallSessionHandle buildWebRtcCallSession({
   final gateway = SignalingClientGateway(client);
   final media = WebRtcCallMediaSession(
     () => FlutterWebRtcPeerConnectionPort.create(audio: true),
+    // The pure port contract has no rollback; the Flutter port does — the
+    // adapter package stays pure Dart and gets it through this seam.
+    nativeRollback: (port) async {
+      if (port is FlutterWebRtcPeerConnectionPort) {
+        await port.rollbackLocalDescription();
+      }
+    },
   );
   final controller = CallController(
     callId: callId,
