@@ -1,3 +1,47 @@
+# STATUS — live captions + architecture pass (2026-07-19, second pass)
+
+Workspace gate after this pass: **943 tests green across 18 test directories**
+(`tools/run_gate_loop.sh`), root + app analyze `--fatal-infos --fatal-warnings` clean.
+Commits: `2ad2b66`, `077029e`, `0cbfcdb`, `a696354`.
+
+## New capability: live translated captions (conference / live-stream use case)
+
+- **`packages/live_captions` (new, pure Dart, 16 tests)** — engine-agnostic seams
+  (`Translator`, transcript-segment stream) so real STT/MT engines plug in later;
+  `CaptionPipeline` (in-order emission under out-of-order translator latency, bounded
+  drop-oldest queue, per-language failure fallback that never drops a caption);
+  `CaptionLog` (partial→final replacement, never downgrades committed text); hardened
+  JSON `CaptionFrame` wire + `CaptionReceiver` riding the SAME ReliableMessenger as
+  chat/attachments (E2E proven beside interleaved chat text).
+- **reference_app integration** — caption frames route off the chat channel into the
+  caption strip (never chat bubbles, never echoed); loopback demo seeds two
+  English→Persian lines through the real pipeline; `ChatScreen` renders a last-two-lines
+  strip in the viewer language.
+
+## Architecture follow-ups from the 2026-07-18 core audit
+
+- **`packages/call_media_adapter` (new, 10 tests)** — call_core `CallMediaSession` over
+  media_webrtc `PeerConnectionPort` (the media twin of call_signaling_adapter). The
+  app's hand-written translation file is gone; the one platform-specific op (native
+  rollback) is an injected seam, so the package stays pure Dart.
+- **reference_app `main.dart` split** — controllers moved to
+  `src/call_demo_controller.dart` / `src/chat_demo_controller.dart`; `main.dart` is
+  composition only (451 → ~130 lines).
+- **CI glob gap** — verified already closed (commit `e58fcc9`; ci.yml line 64 covers
+  `packages/ apps/ server/ integration_test/ tool/`).
+
+## Dated blockers / deferrals (not claimed done)
+
+- **2026-07-19 — sealed-CallState + call_controller decomposition DEFERRED** (1449-line
+  file, 11 mutable flags, breaks every importer). Needs a dedicated solo session with
+  the full 119-test call_core suite as the harness; do not start it as a session tail.
+- **2026-07-19 — real STT/MT engines** for live_captions are host-app adapters by
+  design (platform audio capture + a speech/translation service or on-device model);
+  the in-repo pipeline is fully tested with injected fakes. YouTube/conference audio
+  capture is platform work, same device-bound family as the SCTP blocker below.
+
+---
+
 # STATUS — chat/UX completion pass (2026-07-19)
 
 Four gated tasks on the reference app's chat layer, each landed green and committed
