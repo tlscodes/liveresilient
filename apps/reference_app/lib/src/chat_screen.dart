@@ -44,10 +44,16 @@ class ChatScreen extends StatefulWidget {
     required this.entries,
     required this.localSenderId,
     required this.onSend,
+    this.deliveryStates = const {},
   });
 
   /// The full transcript, oldest first.
   final List<ChatEntry> entries;
+
+  /// Delivery outcome per outbound message id, fed from the messenger's
+  /// `deliveries` stream. An outbound text bubble whose id is absent here is
+  /// still pending (sent, not yet acknowledged).
+  final Map<String, DeliveryState> deliveryStates;
 
   /// Sender id treated as "me" — determines bubble alignment.
   final String localSenderId;
@@ -100,7 +106,11 @@ class _ChatScreenState extends State<ChatScreen> {
                         alignment: isMe
                             ? Alignment.centerRight
                             : Alignment.centerLeft,
-                        child: _Bubble(entry: entry, isMe: isMe),
+                        child: _Bubble(
+                          entry: entry,
+                          isMe: isMe,
+                          delivery: widget.deliveryStates[entry.message.id],
+                        ),
                       );
                     },
                   ),
@@ -142,16 +152,30 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.entry, required this.isMe});
+  const _Bubble({required this.entry, required this.isMe, this.delivery});
 
   final ChatEntry entry;
   final bool isMe;
+
+  /// Ack outcome for this outbound message; null = still pending.
+  final DeliveryState? delivery;
+
+  /// Marker shown only on my own text bubbles — those are exactly the
+  /// entries created by sendText, whose ids the delivery stream reports on.
+  bool get _showsMarker => isMe && entry.attachment == null;
+
+  String get _deliveryLabel => switch (delivery) {
+    null => 'pending',
+    DeliveryState.delivered => 'delivered',
+    DeliveryState.failed => 'failed',
+  };
 
   String get _semanticsLabel {
     final who = isMe ? 'You' : entry.message.senderId;
     final attachment = entry.attachment;
     if (attachment == null) {
-      return '$who: ${entry.message.text}';
+      final marker = _showsMarker ? ', $_deliveryLabel' : '';
+      return '$who: ${entry.message.text}$marker';
     }
     switch (attachment.kind) {
       case MediaKind.image:
@@ -192,7 +216,27 @@ class _Bubble extends StatelessWidget {
   Widget _content(BuildContext context) {
     final attachment = entry.attachment;
     if (attachment == null) {
-      return Text(entry.message.text);
+      if (!_showsMarker) return Text(entry.message.text);
+      final theme = Theme.of(context);
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(child: Text(entry.message.text)),
+          const SizedBox(width: Spacing.s4),
+          Icon(
+            switch (delivery) {
+              null => Icons.schedule,
+              DeliveryState.delivered => Icons.done,
+              DeliveryState.failed => Icons.error_outline,
+            },
+            size: 14,
+            color: delivery == DeliveryState.failed
+                ? theme.colorScheme.error
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+        ],
+      );
     }
     switch (attachment.kind) {
       case MediaKind.image:

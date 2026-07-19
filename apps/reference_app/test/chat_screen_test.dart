@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:messaging/messaging.dart';
+import 'package:reference_app/main.dart';
 import 'package:reference_app/src/chat_screen.dart';
+import 'package:reference_app/src/loopback_port.dart';
 
 ChatMessage _msg(String senderId, int seq, String text) => ChatMessage(
   id: '$senderId-$seq',
@@ -10,6 +14,33 @@ ChatMessage _msg(String senderId, int seq, String text) => ChatMessage(
   sentAtMs: 0,
   text: text,
 );
+
+/// Holds outbound frames until [release] — lets a test keep a message
+/// un-acked (marker stays pending) and then deliver the ack on demand.
+class _HoldingPort implements DataChannelPort {
+  _HoldingPort(this._inner);
+
+  final DataChannelPort _inner;
+  final List<List<int>> _held = [];
+
+  @override
+  Stream<List<int>> get inbound => _inner.inbound;
+
+  @override
+  Future<void> send(List<int> frame) async {
+    _held.add(frame);
+  }
+
+  Future<void> release() async {
+    for (final frame in _held) {
+      await _inner.send(frame);
+    }
+    _held.clear();
+  }
+
+  @override
+  Future<void> close() => _inner.close();
+}
 
 void main() {
   testWidgets('renders a plain text bubble', (tester) async {
@@ -131,6 +162,69 @@ void main() {
     await tester.pump();
 
     expect(invoked, isFalse);
+  });
+
+  testWidgets('outbound marker goes pending -> delivered when the ack '
+      'delivery event arrives', (tester) async {
+    final (callPort, remotePort) = pairLoopbackPorts();
+    // The remote human's acks are held until we release them.
+    final ackGate = _HoldingPort(remotePort);
+    final controller = ChatDemoController(callChannelPort: callPort);
+    final remoteHuman = ReliableMessenger(ackGate, peerId: 'remote');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: controller,
+            builder: (_, _) => ChatScreen(
+              entries: controller.entries,
+              localSenderId: controller.localSenderId,
+              onSend: controller.sendText,
+              deliveryStates: controller.deliveryStates,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // No bare awaits on messenger futures here: under testWidgets' FakeAsync
+    // their microtasks only run inside pump().
+    unawaited(controller.sendText('در راه'));
+    await tester.pump();
+
+    // Sent but not acknowledged: the bubble is there, marked pending.
+    expect(find.text('در راه'), findsOneWidget);
+    expect(find.byIcon(Icons.schedule), findsOneWidget);
+    expect(find.byIcon(Icons.done), findsNothing);
+
+    unawaited(ackGate.release()); // the ack lands -> delivery event fires
+    await tester.pump();
+
+    expect(find.byIcon(Icons.done), findsOneWidget);
+    expect(find.byIcon(Icons.schedule), findsNothing);
+
+    controller.dispose();
+    unawaited(remoteHuman.close());
+    await tester.pump();
+  });
+
+  testWidgets('a failed delivery renders the error marker', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatScreen(
+            entries: [ChatEntry(message: _msg('me', 0, 'lost'))],
+            localSenderId: 'me',
+            onSend: (_) {},
+            deliveryStates: const {'me-0': DeliveryState.failed},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(find.bySemanticsLabel('You: lost, failed'), findsOneWidget);
   });
 
   for (final size in const [Size(320, 568), Size(800, 1280)]) {
