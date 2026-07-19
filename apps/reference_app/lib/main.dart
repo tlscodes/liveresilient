@@ -206,7 +206,18 @@ class ChatDemoController extends ChangeNotifier {
     if (callChannelPort == null) {
       unawaited(_seedDemoAttachments());
     }
+
+    // The messaging core is deliberately timer-free (deterministic tests);
+    // the APP owns the clock. Without this driver, retransmits and
+    // failed-delivery marking would never run — sends into a dropped
+    // channel would stay silently pending forever.
+    _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      unawaited(_local.tick());
+      unawaited(_peer?.tick());
+    });
   }
+
+  Timer? _ticker;
 
   final String localSenderId = 'me';
   final List<ChatEntry> entries = [];
@@ -276,6 +287,7 @@ class ChatDemoController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _ticker?.cancel();
     unawaited(_localSub.cancel());
     unawaited(_peerSub?.cancel());
     unawaited(_localAttachmentsSub.cancel());
