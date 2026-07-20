@@ -1,3 +1,31 @@
+# STATUS — roadmap PHASE 1 + PHASE 2a (2026-07-20)
+
+Dream-roadmap progress (docs/DREAM_ROADMAP_PROMPTS.md):
+
+- **PHASE 1 — path continuity on the live call: DONE, committed.**
+  `CallController.requestRecovery()` seam (call_core, +3 tests);
+  `path_health_monitor.dart` in reference_app — the live WebRTC path scored as an
+  adaptive_transport `TransportChannel` (stats-delta probe → EWMA + circuit breaker via
+  `PathSelector`), edge-triggered escalation into the existing reconnect/ICE-restart
+  loop, active only while the call phase is `connected`; wired into the call-session
+  composition root. Adapter test proves a reconnect cycle keeps envelopes flowing.
+- **PHASE 2a — impaired-network soak: DONE.** `call_core/test/recovery_soak_test.dart`
+  (200 failure/recovery cycles under fake time: no deadlock, bounded emissions, zero
+  leaked timers, attempt counters reset every cycle) +
+  `reference_app/test/path_health_soak_test.dart` (50 loss/jitter/dead-path episodes:
+  exactly one escalation per dead stretch, none within tolerance). The app soak caught
+  and fixed a real bug: a tripped breaker ignored probe successes while open, so after
+  a reconnect the monitor now rebuilds its selector (fresh path ⇒ fresh scoring) —
+  otherwise it re-escalated in a recovery storm for up to the breaker's backoff window.
+- **PHASE 2b — sealed-CallState: still DEFERRED per the 2026-07-19 blocker below**
+  (dedicated fresh solo session with the full call_core suite as harness; scheduled as
+  the next session's opening task — do not start as a session tail).
+
+Suites after this pass: call_core 123, call_signaling_adapter 61, reference_app 53 —
+all green; analyze `--fatal-infos --fatal-warnings` clean on all three.
+
+---
+
 # STATUS — live captions + architecture pass (2026-07-19, second pass)
 
 Workspace gate after this pass: **943 tests green across 18 test directories**

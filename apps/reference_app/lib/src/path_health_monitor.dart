@@ -118,15 +118,17 @@ class WebRtcPathChannel implements TransportChannel {
 /// fires exactly once until a path delivers again (or [start] re-arms it).
 class PathHealthMonitor {
   PathHealthMonitor({
-    required this._selector,
+    required PathSelector Function() createSelector,
     required this._onUnhealthy,
     this.interval = const Duration(seconds: 2),
     this.unhealthyAfterConsecutiveFailures = 3,
-  });
+  }) : _createSelector = createSelector,
+       _selector = createSelector();
 
   static const List<int> _probePayload = <int>[0x70];
 
-  final PathSelector _selector;
+  final PathSelector Function() _createSelector;
+  PathSelector _selector;
   final Future<void> Function() _onUnhealthy;
   final Duration interval;
 
@@ -146,8 +148,19 @@ class PathHealthMonitor {
   /// Starts (or restarts) periodic probing and re-arms the unhealthy
   /// latch — callers start the monitor when the call (re)enters its
   /// connected phase, so a fresh phase gets a fresh escalation budget.
+  ///
+  /// When the previous run escalated (the latch is still down), the call
+  /// that gets here rode a reconnect/ICE restart onto a FRESH network
+  /// path — so the selector is rebuilt too. Without this, the old path's
+  /// tripped circuit breaker (whose cool-down backs off up to minutes, and
+  /// which ignores probe successes while open) would keep scoring the new
+  /// healthy path as down and re-escalate in a recovery storm.
   void start() {
     if (_disposed) return;
+    if (!_healthy) {
+      unawaited(_selector.dispose());
+      _selector = _createSelector();
+    }
     _healthy = true;
     _consecutiveFailures = 0;
     _timer ??= Timer.periodic(interval, (_) {
@@ -206,9 +219,10 @@ PathHealthMonitor buildWebRtcPathHealthMonitor({
   required Future<void> Function() onUnhealthy,
   Duration interval = const Duration(seconds: 2),
 }) {
-  final channel = WebRtcPathChannel(readCounters: readCounters);
   return PathHealthMonitor(
-    selector: PathSelector(<TransportChannel>[channel]),
+    createSelector: () => PathSelector(<TransportChannel>[
+      WebRtcPathChannel(readCounters: readCounters),
+    ]),
     onUnhealthy: onUnhealthy,
     interval: interval,
   );
