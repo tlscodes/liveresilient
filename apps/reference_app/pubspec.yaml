@@ -38,6 +38,8 @@ dependencies:
   # VoiceCallKit v2 stack (standalone path deps; the app and the
   # media_webrtc_flutter plugin package stay OUT of the root pure-Dart pub
   # workspace so Flutter SDK constraints never fight the root resolution).
+  adaptive_transport:
+    path: ../../packages/adaptive_transport
   call_core:
     path: ../../packages/call_core
   call_media_adapter:

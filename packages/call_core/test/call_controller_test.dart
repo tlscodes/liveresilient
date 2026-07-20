@@ -587,6 +587,131 @@ void main() {
     });
   });
 
+  group('4b. External requestRecovery (path-health seam)', () {
+    test('requestRecovery on a connected call runs the normal reconnect + '
+        'ICE-restart cycle with the path_unhealthy cause', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 100)),
+        ]);
+        final h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.signaling.emit(RemoteDescriptionEvent(fakeAnswer()));
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.connected);
+
+        h.log.entries.clear();
+        h.run(async, () => unawaited(h.controller.requestRecovery()));
+        async.flushMicrotasks();
+
+        final reconnecting = h.states.last;
+        expect(reconnecting.phase, CallPhase.reconnecting);
+        expect(reconnecting.reconnectAttempt, 1);
+        expect(
+          reconnecting.error,
+          isA<CallControllerException>().having(
+            (e) => e.code,
+            'code',
+            'path_unhealthy',
+          ),
+        );
+
+        async.elapse(const Duration(milliseconds: 100));
+        expect(h.log.entries, contains('media.createOffer(iceRestart:true)'));
+
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.connected);
+        expectStrictlyIncreasingSequence(h.states);
+        expectNoPendingTimers(async);
+      });
+    });
+
+    test('requestRecovery before start or after a terminal phase is a no-op '
+        'that never throws', () async {
+      late final Harness h;
+      late FakeAsync fa;
+      final before = Outcome<void>();
+      fakeAsync((async) {
+        fa = async;
+        h = Harness();
+
+        before.attach(h.run(async, h.controller.requestRecovery));
+        async.flushMicrotasks();
+        expect(before.completed, isTrue);
+        expect(before.error, isNull);
+        expect(h.states, isEmpty, reason: 'no recovery before start');
+
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.run(async, h.controller.hangUp);
+        async.flushMicrotasks();
+      });
+      // Teardown's StreamSubscription.cancel() resolves through the real
+      // event loop (see pumpEventQueue's doc) — drain it, then resume
+      // draining the same FakeAsync queue.
+      await pumpEventQueue();
+      fa.flushMicrotasks();
+      expect(h.states.last.phase, CallPhase.ended);
+
+      final afterTerminal = Outcome<void>();
+      fa.run((async) {
+        afterTerminal.attach(h.run(async, h.controller.requestRecovery));
+        async.flushMicrotasks();
+      });
+      await pumpEventQueue();
+      fa.flushMicrotasks();
+      expect(afterTerminal.completed, isTrue);
+      expect(afterTerminal.error, isNull);
+      expect(h.states.last.phase, CallPhase.ended);
+      expectNoPendingTimers(fa);
+    });
+
+    test('repeated requestRecovery while a cycle is active coalesces into one '
+        'reconnecting attempt', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 200)),
+        ]);
+        final h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.signaling.emit(RemoteDescriptionEvent(fakeAnswer()));
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+
+        h.run(async, () => unawaited(h.controller.requestRecovery()));
+        h.run(async, () => unawaited(h.controller.requestRecovery()));
+        h.run(async, () => unawaited(h.controller.requestRecovery()));
+        async.flushMicrotasks();
+
+        final reconnectingStates = h.states
+            .where((s) => s.phase == CallPhase.reconnecting)
+            .toList();
+        expect(reconnectingStates, hasLength(1));
+        expect(reconnectingStates.single.reconnectAttempt, 1);
+
+        async.elapse(const Duration(milliseconds: 200));
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.connected);
+        expectNoPendingTimers(async);
+      });
+    });
+  });
+
   group('5. Connection-timeout path', () {
     test(
       'reconnect succeeds but media stays down -> next attempt at connectionTimeout',

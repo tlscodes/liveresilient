@@ -249,6 +249,50 @@ void main() {
       await sub.cancel();
     });
 
+    test('degraded-path recovery cycle: connected -> reconnecting -> '
+        'connected reaches the core as one clean connecting gap and '
+        'signaling keeps delivering afterwards — the call continues', () async {
+      final signaling = AdapterCallSignaling(gateway);
+      final signalingEvents = <SignalingEvent>[];
+      final signalingSub = signaling.events.listen(signalingEvents.add);
+      await signaling.start(callId: 'call-1', role: CallRole.initiator);
+
+      final events = <TransportEvent>[];
+      final sub = transport.events.listen(events.add);
+      await transport.connect();
+
+      // Healthy call, then the active path degrades and the underlying
+      // signaling client switches/reconnects, then the call is back up.
+      gateway.pushState(SignalingConnectionState.connected);
+      gateway.pushState(SignalingConnectionState.reconnecting);
+      gateway.pushState(SignalingConnectionState.connected);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        events.map((e) => e.status),
+        [
+          TransportStatus.connected,
+          TransportStatus.connecting,
+          TransportStatus.connected,
+        ],
+        reason:
+            'the core must see the degradation as a plain '
+            'reconnect cycle it already knows how to recover from',
+      );
+
+      // After the switch the signaling channel still delivers for this
+      // call — the ICE-restart renegotiation can flow.
+      gateway.pushInbound(
+        testEnvelope(callId: 'call-1', type: SignalType.offer),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(signalingEvents, hasLength(1));
+      expect(signalingEvents.single, isA<RemoteDescriptionEvent>());
+
+      await sub.cancel();
+      await signalingSub.cancel();
+    });
+
     test('rapid duplicate states are collapsed: connected -> connected -> '
         'disconnected emits connected -> disconnected only', () async {
       final events = <TransportEvent>[];
