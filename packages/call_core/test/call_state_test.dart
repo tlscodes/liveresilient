@@ -279,4 +279,96 @@ void main() {
       expect(text, contains('2'));
     });
   });
+
+  group('sealed hierarchy', () {
+    late final DateTime now = DateTime.utc(2026, 1, 1);
+
+    test('the factory returns the subtype matching each phase, and a switch '
+        'over the hierarchy is exhaustive with no default', () {
+      for (final phase in CallPhase.values) {
+        final state = CallState(
+          phase: phase,
+          sequence: 1,
+          changedAt: now,
+          reconnectAttempt: phase == CallPhase.reconnecting ? 1 : 0,
+          endReason: phase == CallPhase.ended || phase == CallPhase.failed
+              ? CallEndReason.localHangup
+              : null,
+        );
+        // Exhaustive: adding a subtype without extending this switch is a
+        // compile error — that is the point of the sealed refactor.
+        final mapped = switch (state) {
+          IdleCallState() => CallPhase.idle,
+          ConnectingCallState() => CallPhase.connecting,
+          NegotiatingCallState() => CallPhase.negotiating,
+          ConnectedCallState() => CallPhase.connected,
+          ReconnectingCallState() => CallPhase.reconnecting,
+          EndingCallState() => CallPhase.ending,
+          EndedCallState() => CallPhase.ended,
+          FailedCallState() => CallPhase.failed,
+        };
+        expect(mapped, phase);
+        expect(state.phase, phase);
+      }
+    });
+
+    test(
+      'phase-specific data exists only on its subtype: reconnect fields '
+      'on ReconnectingCallState, endReason required on terminal subtypes',
+      () {
+        final reconnecting =
+            CallState(
+                  phase: CallPhase.reconnecting,
+                  sequence: 1,
+                  changedAt: now,
+                  reconnectAttempt: 3,
+                  nextRetryAt: now.add(const Duration(milliseconds: 50)),
+                )
+                as ReconnectingCallState;
+        expect(reconnecting.reconnectAttempt, 3);
+        expect(reconnecting.nextRetryAt, isNotNull);
+
+        final failed =
+            CallState(
+                  phase: CallPhase.failed,
+                  sequence: 2,
+                  changedAt: now,
+                  endReason: CallEndReason.protocolError,
+                )
+                as FailedCallState;
+        // On the subtype the reason is non-nullable — no null check needed.
+        final CallEndReason reason = failed.endReason;
+        expect(reason, CallEndReason.protocolError);
+        expect(failed, isA<TerminalCallState>());
+        expect(failed.isTerminal, isTrue);
+      },
+    );
+
+    test('direct ReconnectingCallState construction enforces attempt >= 1', () {
+      expect(
+        () => ReconnectingCallState(
+          sequence: 1,
+          changedAt: now,
+          reconnectAttempt: 0,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+      'the factory now rejects a non-zero reconnectAttempt outside '
+      'reconnecting — the impossible state the old class silently stored',
+      () {
+        expect(
+          () => CallState(
+            phase: CallPhase.connected,
+            sequence: 1,
+            changedAt: now,
+            reconnectAttempt: 3,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+  });
 }
