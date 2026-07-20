@@ -15,6 +15,7 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
+import 'path_health_monitor.dart';
 import 'ws_connector.dart';
 
 /// One live call session plus the teardown of everything it owns.
@@ -72,8 +73,13 @@ CallSessionHandle buildWebRtcCallSession({
     },
   );
   final gateway = SignalingClientGateway(client);
+  FlutterWebRtcPeerConnectionPort? livePort;
   final media = WebRtcCallMediaSession(
-    () => FlutterWebRtcPeerConnectionPort.create(audio: true),
+    () async {
+      final port = await FlutterWebRtcPeerConnectionPort.create(audio: true);
+      livePort = port;
+      return port;
+    },
     // The pure port contract has no rollback; the Flutter port does — the
     // adapter package stays pure Dart and gets it through this seam.
     nativeRollback: (port) async {
@@ -95,11 +101,29 @@ CallSessionHandle buildWebRtcCallSession({
       maxElapsed: const Duration(seconds: 15),
     ),
   );
+  // Path continuity: score the live media path from its RTC stats counters
+  // (EWMA + circuit breaker via adaptive_transport); when the path set goes
+  // unhealthy, run the controller's normal reconnect/ICE-restart recovery.
+  // The monitor probes only while the call is in its connected phase — the
+  // controller already owns recovery for setup/negotiation failures.
+  final pathMonitor = buildWebRtcPathHealthMonitor(
+    readCounters: () async => livePort?.readStatsCounters(),
+    onUnhealthy: () => controller.requestRecovery(),
+  );
+  final phaseSubscription = controller.states.listen((state) {
+    if (state.phase == CallPhase.connected) {
+      pathMonitor.start();
+    } else {
+      pathMonitor.stop();
+    }
+  });
   return CallSessionHandle(
     controller: controller,
     openChatPort: () async =>
         MediaChannelDataPort(await media.openDataChannel()),
     dispose: () async {
+      await phaseSubscription.cancel();
+      await pathMonitor.dispose();
       await controller.dispose();
       await client.dispose();
     },

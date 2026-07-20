@@ -481,7 +481,8 @@ abstract interface class CallMediaSession {
 /// `transport_stream_closed`, `signaling_stream_closed`,
 /// `media_<state>` (`media_disconnected`, `media_failed`), `media_closed`,
 /// `media_stream_closed`, `invalid_reconnect_policy`,
-/// `reconnect_exhausted`, `reconnect_connection_timeout`. A caller matching
+/// `reconnect_exhausted`, `reconnect_connection_timeout`, `path_unhealthy`
+/// (the default cause of an external `requestRecovery`). A caller matching
 /// on [code] should treat this list as non-exhaustive — new codes may be
 /// added without a breaking change.
 final class CallControllerException implements Exception {
@@ -713,6 +714,31 @@ final class CallController {
       }
 
       await _finishEnded(CallEndReason.localHangup);
+    });
+  }
+
+  /// Asks the controller to run its normal recovery loop (reconnect with
+  /// backoff, then ICE-restart renegotiation) even though no channel has
+  /// reported a failure yet — the seam for an external path-health monitor
+  /// that scored the active network path unhealthy before transport or
+  /// media noticed a hard drop.
+  ///
+  /// A no-op before [start], after a terminal phase, or after [dispose]:
+  /// external monitors race teardown, so lifecycle mismatches never throw.
+  /// Requests made while a recovery cycle is already active coalesce into
+  /// it exactly like internal failure events.
+  Future<void> requestRecovery({Object? cause}) {
+    final effectiveCause =
+        cause ??
+        const CallControllerException(
+          'path_unhealthy',
+          'External path-health monitor scored the active path unhealthy',
+        );
+    return _enqueue<void>(() async {
+      if (_disposed || _terminal || !_started) {
+        return;
+      }
+      await _beginRecovery(effectiveCause, StackTrace.current);
     });
   }
 
