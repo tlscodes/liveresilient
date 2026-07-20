@@ -55,7 +55,8 @@ void main() {
       final secondary = _ScriptedChannel('secondary', rttMs: 200);
       var recoveries = 0;
       final monitor = PathHealthMonitor(
-        selector: PathSelector(<TransportChannel>[primary, secondary]),
+        createSelector: () =>
+            PathSelector(<TransportChannel>[primary, secondary]),
         onUnhealthy: () async => recoveries++,
       );
 
@@ -92,7 +93,7 @@ void main() {
       // further send could accumulate failures. Recovery detection runs on
       // score + probe outcomes, so default breaker timings are fine.
       final monitor = PathHealthMonitor(
-        selector: PathSelector(<TransportChannel>[path]),
+        createSelector: () => PathSelector(<TransportChannel>[path]),
         onUnhealthy: () async => recoveries++,
       );
 
@@ -135,7 +136,7 @@ void main() {
       final path = _ScriptedChannel('lossy', rttMs: 30);
       var recoveries = 0;
       final monitor = PathHealthMonitor(
-        selector: PathSelector(<TransportChannel>[path]),
+        createSelector: () => PathSelector(<TransportChannel>[path]),
         onUnhealthy: () async => recoveries++,
         unhealthyAfterConsecutiveFailures: 3,
       );
@@ -160,7 +161,7 @@ void main() {
       final path = _ScriptedChannel('only');
       var recoveries = 0;
       final monitor = PathHealthMonitor(
-        selector: PathSelector(<TransportChannel>[path]),
+        createSelector: () => PathSelector(<TransportChannel>[path]),
         onUnhealthy: () async => recoveries++,
         interval: const Duration(milliseconds: 5),
       );
