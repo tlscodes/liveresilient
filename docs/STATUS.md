@@ -17,12 +17,21 @@ Dream-roadmap progress (docs/DREAM_ROADMAP_PROMPTS.md):
   and fixed a real bug: a tripped breaker ignored probe successes while open, so after
   a reconnect the monitor now rebuilds its selector (fresh path ⇒ fresh scoring) —
   otherwise it re-escalated in a recovery storm for up to the breaker's backoff window.
-- **PHASE 2b — sealed-CallState: still DEFERRED per the 2026-07-19 blocker below**
-  (dedicated fresh solo session with the full call_core suite as harness; scheduled as
-  the next session's opening task — do not start as a session tail).
+- **PHASE 2b — sealed-CallState: DONE (same day, on explicit user instruction over the
+  2026-07-19 deferral).** `CallState` is now a sealed hierarchy (Idle/Connecting/
+  Negotiating/Connected/Reconnecting/Ending + sealed `TerminalCallState` →
+  Ended/Failed). Impossible combinations are unrepresentable by construction: reconnect
+  attempt/deadline exist only on `ReconnectingCallState` (attempt ≥ 1 enforced),
+  `endReason` is non-nullable and exists only on terminal subtypes, and the factory now
+  also rejects non-zero attempts outside reconnecting (previously silently stored).
+  The unnamed factory keeps the old phase+fields calling convention and all original
+  ArgumentError contracts, and base getters preserve the read surface — the whole
+  123-test suite passed with ZERO test edits, then 4 new sealed-hierarchy tests pin
+  exhaustive switching. All downstream consumers verified green unchanged.
 
-Suites after this pass: call_core 123, call_signaling_adapter 61, reference_app 53 —
-all green; analyze `--fatal-infos --fatal-warnings` clean on all three.
+**PHASE 2 CLOSED.** Suites after this pass: call_core 127, call_signaling_adapter 61,
+call_media_adapter 10, reference_app 53 — all green; analyze
+`--fatal-infos --fatal-warnings` clean on all touched packages.
 
 ---
 
