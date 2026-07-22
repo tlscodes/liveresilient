@@ -15,6 +15,7 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
+import 'media_adaptation_driver.dart';
 import 'path_health_monitor.dart';
 import 'ws_connector.dart';
 
@@ -110,11 +111,17 @@ CallSessionHandle buildWebRtcCallSession({
     readCounters: () async => livePort?.readStatsCounters(),
     onUnhealthy: () => controller.requestRecovery(),
   );
+  // Adaptive quality: under rising loss/RTT the live session steps down
+  // bitrate → frame rate → resolution → audio-only, and recovers when
+  // conditions improve — applied via standard sender-parameter updates.
+  final adaptationDriver = MediaAdaptationDriver(port: () => livePort);
   final phaseSubscription = controller.states.listen((state) {
     if (state.phase == CallPhase.connected) {
       pathMonitor.start();
+      adaptationDriver.start();
     } else {
       pathMonitor.stop();
+      adaptationDriver.stop();
     }
   });
   return CallSessionHandle(
@@ -124,6 +131,7 @@ CallSessionHandle buildWebRtcCallSession({
     dispose: () async {
       await phaseSubscription.cancel();
       await pathMonitor.dispose();
+      await adaptationDriver.dispose();
       await controller.dispose();
       await client.dispose();
     },
