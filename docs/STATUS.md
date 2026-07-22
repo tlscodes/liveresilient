@@ -1,3 +1,34 @@
+# STATUS — DESTINATION REACHED (2026-07-22)
+
+Every roadmap phase (1, 2a, 2b) is closed. Final measured workspace gate:
+
+```
+apps/reference_app        56   packages/media_webrtc          82
+integration_test           4   packages/media_webrtc_flutter  11
+adaptive_transport       114   packages/messaging             34
+call_core                127   messaging_webrtc_adapter       10
+call_media_adapter        10   privacy_telemetry              23
+call_signaling_adapter    61   security                       75
+device_link               84   security_keychain              11
+live_captions             16   signaling                      95
+                               signed_config                 133
+TOTAL_GREEN=946   FAIL=0   (17 test directories)
+```
+
+`dart format .` exit 0 · `flutter analyze --fatal-infos --fatal-warnings` clean.
+Growth over the build: 673 → 946 green tests (+41%).
+
+Landed on the final leg: the live-call media-adaptation driver (`31a53c4`); the
+end-to-end session soak proving the path-health monitor and the adaptation driver
+coexist on one clock across 30 impaired episodes (`4af0501`); and a workspace-wide gate
+that replaced the per-package glob — the exact gap that had once hidden a red soak test.
+
+**Honesty boundary.** Every number above comes from fake-time and pure-logic suites.
+Real-device call quality, real network behaviour, and cloud-deploy figures are NOT
+claimed here and remain unmeasured — that is the honest next frontier, not a closed gate.
+
+---
+
 # STATUS — roadmap PHASE 1 + PHASE 2a (2026-07-20)
 
 Dream-roadmap progress (docs/DREAM_ROADMAP_PROMPTS.md):
