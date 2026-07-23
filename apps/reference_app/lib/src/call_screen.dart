@@ -20,6 +20,8 @@ String callPhaseLabel(CallPhase phase) {
       return 'Negotiating…';
     case CallPhase.connected:
       return 'Connected';
+    case CallPhase.degraded:
+      return 'Connected — survival mode';
     case CallPhase.reconnecting:
       return 'Reconnecting…';
     case CallPhase.ending:
@@ -28,6 +30,17 @@ String callPhaseLabel(CallPhase phase) {
       return 'Call ended';
     case CallPhase.failed:
       return 'Call failed';
+  }
+}
+
+/// Human label for [mode], shown while the call runs degraded. The wording
+/// deliberately reads as a MODE, never as an error.
+String degradedModeLabel(DegradedMode mode) {
+  switch (mode) {
+    case DegradedMode.lowRateVoice:
+      return 'Low-data voice — quality reduced to keep the call alive';
+    case DegradedMode.voiceNotes:
+      return 'Voice-note mode — clips send whenever the network allows';
   }
 }
 
@@ -60,6 +73,7 @@ class CallScreen extends StatelessWidget {
     required this.phase,
     this.reconnectAttempt = 0,
     this.endReason,
+    this.degradedMode,
     this.audioOnly = false,
     this.privacyStatus = 'E2E media · no telemetry without opt-in',
     this.onCall,
@@ -75,6 +89,9 @@ class CallScreen extends StatelessWidget {
 
   /// Why the call ended, only meaningful on a terminal [phase].
   final CallEndReason? endReason;
+
+  /// Survival mode, only meaningful while [phase] is [CallPhase.degraded].
+  final DegradedMode? degradedMode;
 
   /// Whether the session degraded to audio-only (no video track).
   final bool audioOnly;
@@ -92,6 +109,7 @@ class CallScreen extends StatelessWidget {
       phase == CallPhase.connecting ||
       phase == CallPhase.negotiating ||
       phase == CallPhase.connected ||
+      phase == CallPhase.degraded ||
       phase == CallPhase.reconnecting ||
       phase == CallPhase.ending;
 
@@ -120,6 +138,13 @@ class CallScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
+            if (phase == CallPhase.degraded && degradedMode != null) ...[
+              const SizedBox(height: Spacing.s8),
+              Chip(
+                avatar: const Icon(Icons.network_check, size: 18),
+                label: Text(degradedModeLabel(degradedMode!)),
+              ),
+            ],
             if (phase == CallPhase.reconnecting) ...[
               const SizedBox(height: Spacing.s8),
               Text(

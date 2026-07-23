@@ -135,6 +135,9 @@ void main() {
           endReason: terminalPhases.contains(phase)
               ? CallEndReason.remoteHangup
               : null,
+          degradedMode: phase == CallPhase.degraded
+              ? DegradedMode.lowRateVoice
+              : null,
         );
         expect(state.isTerminal, terminalPhases.contains(phase));
       });
@@ -294,6 +297,9 @@ void main() {
           endReason: phase == CallPhase.ended || phase == CallPhase.failed
               ? CallEndReason.localHangup
               : null,
+          degradedMode: phase == CallPhase.degraded
+              ? DegradedMode.lowRateVoice
+              : null,
         );
         // Exhaustive: adding a subtype without extending this switch is a
         // compile error — that is the point of the sealed refactor.
@@ -302,6 +308,7 @@ void main() {
           ConnectingCallState() => CallPhase.connecting,
           NegotiatingCallState() => CallPhase.negotiating,
           ConnectedCallState() => CallPhase.connected,
+          DegradedCallState() => CallPhase.degraded,
           ReconnectingCallState() => CallPhase.reconnecting,
           EndingCallState() => CallPhase.ending,
           EndedCallState() => CallPhase.ended,

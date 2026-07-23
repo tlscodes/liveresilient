@@ -712,6 +712,136 @@ void main() {
     });
   });
 
+  group('4c. Degraded survival mode (enter/exit/recovery interplay)', () {
+    void connect(FakeAsync async, Harness h) {
+      h.run(async, h.controller.start);
+      async.flushMicrotasks();
+      h.signaling.emit(RemoteDescriptionEvent(fakeAnswer()));
+      async.flushMicrotasks();
+      h.media.emit(
+        const MediaConnectionChangedEvent(MediaConnectionState.connected),
+      );
+      async.flushMicrotasks();
+      expect(h.states.last.phase, CallPhase.connected);
+    }
+
+    test('enterDegradedMode on a live call emits DegradedCallState with the '
+        'mode; exitDegradedMode returns to connected', () {
+      fakeAsync((async) {
+        final h = Harness();
+        connect(async, h);
+
+        h.run(
+          async,
+          () => unawaited(
+            h.controller.enterDegradedMode(DegradedMode.lowRateVoice),
+          ),
+        );
+        async.flushMicrotasks();
+        final degraded = h.states.last;
+        expect(degraded, isA<DegradedCallState>());
+        expect(degraded.degradedMode, DegradedMode.lowRateVoice);
+        expect(degraded.isTerminal, isFalse);
+
+        // Deepening the survival mode re-emits with the new mode.
+        h.run(
+          async,
+          () => unawaited(
+            h.controller.enterDegradedMode(DegradedMode.voiceNotes),
+          ),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.degradedMode, DegradedMode.voiceNotes);
+
+        // Re-entering the SAME mode is a no-op (no duplicate emission).
+        final count = h.states.length;
+        h.run(
+          async,
+          () => unawaited(
+            h.controller.enterDegradedMode(DegradedMode.voiceNotes),
+          ),
+        );
+        async.flushMicrotasks();
+        expect(h.states.length, count);
+
+        h.run(async, () => unawaited(h.controller.exitDegradedMode()));
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.connected);
+        expectStrictlyIncreasingSequence(h.states);
+        expectNoPendingTimers(async);
+      });
+    });
+
+    test('enterDegradedMode outside a live call and exitDegradedMode outside '
+        'degraded are silent no-ops', () {
+      fakeAsync((async) {
+        final h = Harness();
+        h.run(
+          async,
+          () => unawaited(
+            h.controller.enterDegradedMode(DegradedMode.lowRateVoice),
+          ),
+        );
+        h.run(async, () => unawaited(h.controller.exitDegradedMode()));
+        async.flushMicrotasks();
+        expect(h.states, isEmpty);
+      });
+    });
+
+    test('a degraded call still recovers: requestRecovery from degraded runs '
+        'the reconnect cycle and lands back on connected', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 100)),
+        ]);
+        final h = Harness(reconnectPolicy: policy);
+        connect(async, h);
+
+        h.run(
+          async,
+          () => unawaited(
+            h.controller.enterDegradedMode(DegradedMode.voiceNotes),
+          ),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.degraded);
+
+        h.run(async, () => unawaited(h.controller.requestRecovery()));
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.reconnecting);
+
+        async.elapse(const Duration(milliseconds: 100));
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.connected);
+        expectStrictlyIncreasingSequence(h.states);
+        expectNoPendingTimers(async);
+      });
+    });
+
+    test('a degraded call hangs up normally', () {
+      fakeAsync((async) {
+        final h = Harness();
+        connect(async, h);
+        h.run(
+          async,
+          () => unawaited(
+            h.controller.enterDegradedMode(DegradedMode.lowRateVoice),
+          ),
+        );
+        async.flushMicrotasks();
+        h.run(async, h.controller.hangUp);
+        async.flushMicrotasks();
+        expect(
+          h.states.map((s) => s.phase),
+          containsAllInOrder([CallPhase.degraded, CallPhase.ending]),
+        );
+      });
+    });
+  });
+
   group('5. Connection-timeout path', () {
     test(
       'reconnect succeeds but media stays down -> next attempt at connectionTimeout',

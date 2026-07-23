@@ -31,6 +31,22 @@ void main() {
     });
   }
 
+  testWidgets('degraded shows the survival-mode chip as a mode, not an '
+      'error, and keeps the hang-up control', (tester) async {
+    for (final mode in DegradedMode.values) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CallScreen(phase: CallPhase.degraded, degradedMode: mode),
+          ),
+        ),
+      );
+      expect(find.text(degradedModeLabel(mode)), findsOneWidget);
+      expect(find.text('Hang up'), findsOneWidget);
+      expect(find.textContaining('failed'), findsNothing);
+    }
+  });
+
   testWidgets('reconnecting shows the attempt number', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

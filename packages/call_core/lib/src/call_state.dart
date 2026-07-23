@@ -22,6 +22,13 @@ enum CallPhase {
   /// live" phase.
   connected,
 
+  /// The call is live but running in a survival mode under highly
+  /// constrained network conditions (see [DegradedCallState.mode]).
+  /// Reachable only from [connected]; returns to [connected] when
+  /// conditions recover, or proceeds to [reconnecting]/[ending] like any
+  /// live call.
+  degraded,
+
   /// Recovering from a dropped transport/media/signaling channel: waiting
   /// out backoff and/or re-running the connect + negotiate sequence. See
   /// [ReconnectingCallState.reconnectAttempt] and
@@ -40,6 +47,20 @@ enum CallPhase {
   /// budget exhaustion). See [TerminalCallState.endReason] and
   /// [CallState.error].
   failed,
+}
+
+/// The survival mode a [DegradedCallState] is running in — how the live
+/// call keeps going when the network can no longer carry normal media.
+enum DegradedMode {
+  /// Real-time voice continues on the narrowband low-rate floor of the
+  /// media quality ladder (~6 kbps class): still a live conversation, at
+  /// survival quality.
+  lowRateVoice,
+
+  /// The path cannot sustain real-time audio at all: short recorded voice
+  /// clips queue in the messaging outbox and transmit whenever the
+  /// transport briefly recovers. Half-duplex, but the call never "fails".
+  voiceNotes,
 }
 
 /// Why a [CallState] reached a terminal [CallPhase] ([CallPhase.ended] or
@@ -116,8 +137,15 @@ sealed class CallState {
     int reconnectAttempt = 0,
     DateTime? nextRetryAt,
     CallEndReason? endReason,
+    DegradedMode? degradedMode,
     Object? error,
   }) {
+    if (phase == CallPhase.degraded && degradedMode == null) {
+      throw ArgumentError('A degraded state requires a degradedMode');
+    }
+    if (phase != CallPhase.degraded && degradedMode != null) {
+      throw ArgumentError('degradedMode is only valid for degraded states');
+    }
     if (reconnectAttempt < 0) {
       throw ArgumentError.value(reconnectAttempt, 'reconnectAttempt');
     }
@@ -163,6 +191,12 @@ sealed class CallState {
       CallPhase.connected => ConnectedCallState(
         sequence: sequence,
         changedAt: changedAt,
+        error: error,
+      ),
+      CallPhase.degraded => DegradedCallState(
+        sequence: sequence,
+        changedAt: changedAt,
+        mode: degradedMode!,
         error: error,
       ),
       CallPhase.reconnecting => ReconnectingCallState(
@@ -222,6 +256,10 @@ sealed class CallState {
   /// subtypes (which override this as a required field).
   CallEndReason? get endReason => null;
 
+  /// The survival mode of a degraded-but-live call. Non-null only ever on
+  /// [DegradedCallState] (which overrides this as a required field).
+  DegradedMode? get degradedMode => null;
+
   /// The triggering error, if any — typically populated on
   /// [ReconnectingCallState] (the cause of the current recovery attempt)
   /// and [FailedCallState] (the terminal cause). Carried on every subtype,
@@ -247,6 +285,7 @@ sealed class CallState {
     ConnectingCallState() ||
     NegotiatingCallState() ||
     ConnectedCallState() ||
+    DegradedCallState() ||
     ReconnectingCallState() ||
     EndingCallState() => false,
   };
@@ -263,6 +302,7 @@ sealed class CallState {
         other.reconnectAttempt == reconnectAttempt &&
         other.nextRetryAt == nextRetryAt &&
         other.endReason == endReason &&
+        other.degradedMode == degradedMode &&
         identical(other.error, error);
   }
 
@@ -274,6 +314,7 @@ sealed class CallState {
     reconnectAttempt,
     nextRetryAt,
     endReason,
+    degradedMode,
     identityHashCode(error),
   );
 
@@ -329,6 +370,28 @@ final class ConnectedCallState extends CallState {
 
   @override
   CallPhase get phase => CallPhase.connected;
+}
+
+/// Snapshot of [CallPhase.degraded]: the call is LIVE but running in a
+/// survival [mode] because the network can no longer carry normal media.
+/// Not a failure state — the session, channels, and controller all stay
+/// up; the UI is expected to present the mode, not an error.
+final class DegradedCallState extends CallState {
+  DegradedCallState({
+    required super.sequence,
+    required super.changedAt,
+    required this.mode,
+    super.error,
+  }) : super._();
+
+  /// How the call is surviving (see [DegradedMode]).
+  final DegradedMode mode;
+
+  @override
+  CallPhase get phase => CallPhase.degraded;
+
+  @override
+  DegradedMode get degradedMode => mode;
 }
 
 /// Snapshot of [CallPhase.reconnecting] — the only subtype that carries a

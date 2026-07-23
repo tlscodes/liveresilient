@@ -91,21 +91,26 @@ void main() {
       healthyTick();
       expect(decisions, isEmpty, reason: 'healthy stats change nothing');
 
-      // Severe loss: two-step drops walk medium → minimal → audioOnly.
+      // Severe loss: two-step drops walk medium → minimal → lowRateVoice
+      // (the survival floor below audio-only).
       severeLossTick();
       expect(driver.profile, MediaProfile.minimal);
       severeLossTick();
-      expect(driver.profile, MediaProfile.audioOnly);
+      expect(driver.profile, MediaProfile.lowRateVoice);
 
       // The ladder was APPLIED to the sender, ending with video disabled
       // and the audio floor protected.
       expect(port.videoParams, hasLength(2));
       expect(port.videoParams.first.maxBitrateBps, 120000);
       expect(port.videoParams.last.enabled, isFalse);
-      expect(port.audioBitrates.last, 16000);
+      expect(
+        port.audioBitrates.last,
+        6000,
+        reason: 'the survival floor pins audio to the narrowband budget',
+      );
       expect(decisions.map((d) => d.next).toList(), [
         MediaProfile.minimal,
-        MediaProfile.audioOnly,
+        MediaProfile.lowRateVoice,
       ]);
 
       // Recovery: 8 consecutive clean samples (slow-up hysteresis) with
@@ -113,12 +118,13 @@ void main() {
       for (var i = 0; i < 8; i++) {
         healthyTick();
       }
-      expect(driver.profile, MediaProfile.minimal);
-      expect(port.videoParams.last.enabled, isTrue);
+      expect(driver.profile, MediaProfile.audioOnly);
       expect(
-        port.videoParams.last.maxBitrateBps,
-        120000,
-        reason: 'recovery re-enters the ladder at the minimal tier',
+        port.audioBitrates.last,
+        16000,
+        reason:
+            'recovery climbs one rung: survival floor back to '
+            'standard audio-only',
       );
 
       driver.stop();
@@ -162,13 +168,13 @@ void main() {
       tickWith(good: 1000, bad: 0); // baseline
       tickWith(good: 700, bad: 300);
       tickWith(good: 700, bad: 300);
-      expect(driver.profile, MediaProfile.audioOnly);
+      expect(driver.profile, MediaProfile.lowRateVoice);
 
       driver.stop();
       driver.start();
       expect(
         driver.profile,
-        MediaProfile.audioOnly,
+        MediaProfile.lowRateVoice,
         reason:
             'a reconnected call re-joins at its degraded level and '
             'earns the upgrade back through hysteresis',
