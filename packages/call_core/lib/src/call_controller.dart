@@ -742,6 +742,45 @@ final class CallController {
     });
   }
 
+  /// Marks the live call as running in survival [mode]
+  /// ([CallPhase.degraded]) — called by an external quality driver when the
+  /// path can no longer carry normal media. The call stays fully alive.
+  ///
+  /// Legal only while the call is live ([CallPhase.connected] or already
+  /// degraded — re-entering with a different [mode] re-emits). A no-op in
+  /// any other phase, after a terminal state, or after [dispose]: quality
+  /// drivers race teardown, so lifecycle mismatches never throw.
+  Future<void> enterDegradedMode(DegradedMode mode) {
+    return _enqueue<void>(() async {
+      if (_disposed || _terminal || !_started) {
+        return;
+      }
+      final phase = _state.phase;
+      if (phase != CallPhase.connected && phase != CallPhase.degraded) {
+        return;
+      }
+      if (_state.degradedMode == mode) {
+        return;
+      }
+      _emit(CallPhase.degraded, degradedMode: mode);
+    });
+  }
+
+  /// Returns a degraded call to normal [CallPhase.connected] once the
+  /// path can carry regular media again. A no-op unless the call is
+  /// currently degraded.
+  Future<void> exitDegradedMode() {
+    return _enqueue<void>(() async {
+      if (_disposed || _terminal || !_started) {
+        return;
+      }
+      if (_state.phase != CallPhase.degraded) {
+        return;
+      }
+      _emit(CallPhase.connected);
+    });
+  }
+
   /// Releases this controller's resources: tears down every channel (if
   /// not already terminal, ending the call with [CallEndReason.disposed]
   /// first), cancels all subscriptions, and closes [states]. Safe to call
@@ -1341,6 +1380,7 @@ final class CallController {
     int reconnectAttempt = 0,
     DateTime? nextRetryAt,
     CallEndReason? endReason,
+    DegradedMode? degradedMode,
     Object? error,
   }) {
     if (!_isAllowedTransition(_state.phase, phase)) {
@@ -1356,6 +1396,7 @@ final class CallController {
       reconnectAttempt: reconnectAttempt,
       nextRetryAt: nextRetryAt,
       endReason: endReason,
+      degradedMode: degradedMode,
       error: error,
     );
     _state = next;
@@ -1442,7 +1483,14 @@ final class CallController {
             to == CallPhase.ending ||
             to == CallPhase.failed,
       CallPhase.connected =>
-        to == CallPhase.reconnecting ||
+        to == CallPhase.degraded ||
+            to == CallPhase.reconnecting ||
+            to == CallPhase.ending ||
+            to == CallPhase.ended ||
+            to == CallPhase.failed,
+      CallPhase.degraded =>
+        to == CallPhase.connected ||
+            to == CallPhase.reconnecting ||
             to == CallPhase.ending ||
             to == CallPhase.ended ||
             to == CallPhase.failed,
