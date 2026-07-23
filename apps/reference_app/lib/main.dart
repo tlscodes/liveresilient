@@ -91,6 +91,7 @@ class _HomePageState extends State<HomePage> {
         deliveryStates: _chat.deliveryStates,
         attachmentProgress: _chat.attachmentProgress,
         onPickAttachment: () => unawaited(_chat.pickAndSendAttachment()),
+        onPlayAudio: _chat.playAudio,
         captions: _chat.captions,
         captionLanguage: 'fa',
       ),
