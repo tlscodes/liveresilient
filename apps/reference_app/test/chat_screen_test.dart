@@ -89,6 +89,55 @@ void main() {
     expect(find.bySemanticsLabel('Photo attachment from You'), findsOneWidget);
   });
 
+  testWidgets('voice-note and recovered-audio bubbles render with a play '
+      'affordance; tapping invokes onPlayAudio with the attachment', (
+    tester,
+  ) async {
+    final voiceNote = Attachment(
+      id: 'vn1',
+      kind: MediaKind.file,
+      contentType: 'audio/ogg',
+      bytes: List<int>.filled(64, 1),
+    );
+    final replay = Attachment(
+      id: 'gr1',
+      kind: MediaKind.file,
+      contentType: 'audio/replay',
+      bytes: List<int>.filled(32, 2),
+    );
+    final played = <Attachment>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatScreen(
+            entries: [
+              ChatEntry(
+                message: _msg('peer', 0, '[voice]'),
+                attachment: voiceNote,
+              ),
+              ChatEntry(
+                message: _msg('peer', 1, '[replay]'),
+                attachment: replay,
+              ),
+            ],
+            localSenderId: 'me',
+            onSend: (_) {},
+            onPlayAudio: played.add,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Voice note'), findsOneWidget);
+    expect(find.textContaining('Recovered audio'), findsOneWidget);
+    expect(find.byIcon(Icons.play_circle_outline), findsNWidgets(2));
+
+    await tester.tap(find.textContaining('Voice note'));
+    await tester.tap(find.textContaining('Recovered audio'));
+    expect(played.map((a) => a.id).toList(), ['vn1', 'gr1']);
+  });
+
   testWidgets('renders a file attachment bubble with name-equivalent info', (
     tester,
   ) async {

@@ -38,6 +38,17 @@ String formatBytes(int sizeBytes) {
   return '${(kb / 1024).toStringAsFixed(1)} MB';
 }
 
+/// Whether [attachment] is playable voice audio (a survival-mode voice
+/// note or a recovered gap replay).
+bool isVoiceAttachment(Attachment attachment) =>
+    attachment.contentType.startsWith('audio/');
+
+/// Human label for a voice attachment bubble.
+String voiceAttachmentLabel(Attachment attachment) =>
+    attachment.contentType == 'audio/replay'
+    ? 'Recovered audio — the part that was cut off'
+    : 'Voice note';
+
 /// A scrollable transcript of [entries] plus a text-input row.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -48,6 +59,7 @@ class ChatScreen extends StatefulWidget {
     this.deliveryStates = const {},
     this.attachmentProgress = const {},
     this.onPickAttachment,
+    this.onPlayAudio,
     this.captions = const [],
     this.captionLanguage = 'en',
   });
@@ -63,6 +75,11 @@ class ChatScreen extends StatefulWidget {
   /// Invoked when the user taps the attach button; the owner runs its
   /// injected picker and starts the transfer. Null hides the button.
   final VoidCallback? onPickAttachment;
+
+  /// Invoked when the user taps a voice bubble (voice note / recovered
+  /// audio); the owner decodes and plays the bytes through the platform
+  /// audio output. Null renders voice bubbles without a play affordance.
+  final void Function(Attachment attachment)? onPlayAudio;
 
   /// The full transcript, oldest first.
   final List<ChatEntry> entries;
@@ -163,6 +180,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: _Bubble(
                           entry: entry,
                           isMe: isMe,
+                          onPlayAudio: widget.onPlayAudio,
                           delivery: widget.deliveryStates[entry.message.id],
                           transferProgress: entry.attachment == null
                               ? null
@@ -227,10 +245,12 @@ class _Bubble extends StatelessWidget {
     required this.isMe,
     this.delivery,
     this.transferProgress,
+    this.onPlayAudio,
   });
 
   final ChatEntry entry;
   final bool isMe;
+  final void Function(Attachment attachment)? onPlayAudio;
 
   /// Ack outcome for this outbound message; null = still pending.
   final DeliveryState? delivery;
@@ -262,6 +282,10 @@ class _Bubble extends StatelessWidget {
       case MediaKind.video:
         return 'Video attachment from $who, ${formatBytes(attachment.sizeBytes)}';
       case MediaKind.file:
+        if (isVoiceAttachment(attachment)) {
+          return '${voiceAttachmentLabel(attachment)} from $who, '
+              'double tap to play';
+        }
         return 'File attachment from $who, ${attachment.contentType}, '
             '${formatBytes(attachment.sizeBytes)}';
     }
@@ -331,6 +355,26 @@ class _Bubble extends StatelessWidget {
         );
       case MediaKind.video:
       case MediaKind.file:
+        if (isVoiceAttachment(attachment)) {
+          content = InkWell(
+            onTap: onPlayAudio == null ? null : () => onPlayAudio!(attachment),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.play_circle_outline),
+                const SizedBox(width: Spacing.s8),
+                Flexible(
+                  child: Text(
+                    '${voiceAttachmentLabel(attachment)} · '
+                    '${formatBytes(attachment.sizeBytes)}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          );
+          break;
+        }
         content = Row(
           mainAxisSize: MainAxisSize.min,
           children: [

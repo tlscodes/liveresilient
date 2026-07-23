@@ -23,6 +23,7 @@ class ChatDemoController extends ChangeNotifier {
   ChatDemoController({
     DataChannelPort? callChannelPort,
     this._attachmentPicker,
+    this._audioPlayer,
   }) {
     final DataChannelPort localPort;
     if (callChannelPort != null) {
@@ -179,6 +180,24 @@ class ChatDemoController extends ChangeNotifier {
   /// Picker injected at construction (`pickAttachmentFile` in the app, a
   /// fake in widget tests); null hides the chat screen's attach button.
   final Future<Attachment?> Function()? _attachmentPicker;
+
+  /// Platform audio output for voice notes / recovered audio. Injectable:
+  /// production supplies a decoder+player, tests a recorder fake. Null =
+  /// bubbles render without playback (CI hardware has no audio out).
+  final Future<void> Function(Attachment attachment)? _audioPlayer;
+
+  /// Id of the most recently played voice attachment (UI badge + tests).
+  String? lastPlayedAudioId;
+
+  /// Plays a voice attachment through the injected player, if any.
+  void playAudio(Attachment attachment) {
+    lastPlayedAudioId = attachment.id;
+    notifyListeners();
+    final player = _audioPlayer;
+    if (player != null) {
+      unawaited(player(attachment));
+    }
+  }
 
   /// Whether [pickAndSendAttachment] can do anything (drives button
   /// visibility).
