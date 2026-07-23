@@ -36,6 +36,12 @@ enum MediaProfile {
 
   /// Video disabled; all remaining budget protects audio.
   audioOnly,
+
+  /// Survival floor: video disabled AND audio pinned to a narrowband
+  /// mono budget (~6 kbps) so the call stays intelligible on links where
+  /// even standard audio-only starves (2G-grade, congested satellite,
+  /// heavily shaped hotspots).
+  lowRateVoice,
 }
 
 /// Concrete sender parameters for a profile.
@@ -99,6 +105,14 @@ class MediaProfileParameters {
       videoMaxFramerate: 0,
       videoScaleResolutionDownBy: 1.0,
       audioMaxBitrateBps: 16000,
+    ),
+    MediaProfile.lowRateVoice: MediaProfileParameters(
+      profile: MediaProfile.lowRateVoice,
+      videoEnabled: false,
+      videoMaxBitrateBps: 0,
+      videoMaxFramerate: 0,
+      videoScaleResolutionDownBy: 1.0,
+      audioMaxBitrateBps: 6000,
     ),
   };
 

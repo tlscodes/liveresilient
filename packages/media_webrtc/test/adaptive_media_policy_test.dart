@@ -47,8 +47,8 @@ void main() {
         _sample(packetLossFraction: 0.5, rttMs: 30),
       );
 
-      expect(decision!.next, MediaProfile.audioOnly);
-      expect(policy.profile, MediaProfile.audioOnly);
+      expect(decision!.next, MediaProfile.lowRateVoice);
+      expect(policy.profile, MediaProfile.lowRateVoice);
     });
 
     test('severe loss resets both hysteresis counters', () {
@@ -414,6 +414,7 @@ void main() {
         MediaProfile.low,
         MediaProfile.minimal,
         MediaProfile.audioOnly,
+        MediaProfile.lowRateVoice,
       ]);
     });
   });

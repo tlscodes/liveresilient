@@ -182,7 +182,7 @@ void main() {
               const ImpairmentParams(lossRate: 0.10, jitterMs: 80, rttMs: 300),
         );
 
-        expect(result.finalProfile, MediaProfile.audioOnly);
+        expect(result.finalProfile, MediaProfile.lowRateVoice);
 
         // Audio-first: 10% loss is "bad" but below the severe threshold, so
         // the ladder must be walked one rung at a time, never skipped.
@@ -193,6 +193,7 @@ void main() {
           MediaProfile.low,
           MediaProfile.minimal,
           MediaProfile.audioOnly,
+          MediaProfile.lowRateVoice,
         ]);
         for (final recorded in result.decisions) {
           expect(
@@ -243,13 +244,15 @@ void main() {
           .toList();
       expect(
         [for (final r in downgrades) r.decision.next],
-        [MediaProfile.low, MediaProfile.audioOnly],
-        reason: 'severe loss: high -2-> low -2-> audioOnly',
+        [MediaProfile.low, MediaProfile.audioOnly, MediaProfile.lowRateVoice],
+        reason:
+            'severe loss: high -2-> low -2-> audioOnly -2(clamped)-> '
+            'lowRateVoice',
       );
       expect(
         downgrades.last.sampleIndex,
         lessThanOrEqualTo(impairedTicks),
-        reason: 'audioOnly must be reached during the impaired phase',
+        reason: 'the survival floor must be reached during the impaired phase',
       );
 
       // Recovery: the ladder is climbed one rung at a time back to high.
@@ -259,6 +262,7 @@ void main() {
       expect(
         [for (final r in upgrades) r.decision.next],
         [
+          MediaProfile.audioOnly,
           MediaProfile.minimal,
           MediaProfile.low,
           MediaProfile.medium,
@@ -302,8 +306,8 @@ void main() {
 
       // Bounded transition count: a naive threshold policy would flap on
       // every burst edge (~16 changes over 48 ticks); hysteresis must cap
-      // the total at the ladder depth.
-      expect(result.decisions.length, lessThanOrEqualTo(4));
+      // the total at the ladder depth (5 rungs below high).
+      expect(result.decisions.length, lessThanOrEqualTo(5));
 
       // And every change must point the same way (downward ratchet) — an
       // upgrade needs 8 consecutive clean samples, which 3-tick clean
@@ -319,8 +323,10 @@ void main() {
       }
       expect(
         result.finalProfile,
-        MediaProfile.audioOnly,
-        reason: 'repeated bad bursts ratchet down to audioOnly and hold',
+        MediaProfile.lowRateVoice,
+        reason:
+            'repeated bad bursts ratchet down to the survival floor '
+            'and hold',
       );
     });
   });
