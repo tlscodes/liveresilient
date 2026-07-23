@@ -15,6 +15,7 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
+import 'call_memory.dart';
 import 'media_adaptation_driver.dart';
 import 'path_health_monitor.dart';
 import 'survival_mode_driver.dart';
@@ -60,6 +61,7 @@ CallSessionHandle buildWebRtcCallSession({
   void Function(HttpClient client)? proxyConfigurator,
   SecurityContext? securityContext,
   ClipRecorder? recordVoiceClip,
+  AudioFrameTap? audioFrameTap,
 }) {
   final client = SignalingClient(
     endpoint: endpoint,
@@ -133,6 +135,24 @@ CallSessionHandle buildWebRtcCallSession({
             peerId: '${role.name}-survival',
           ),
   );
+  // NOTE: the survival driver and call memory share survivalMessenger via
+  // the ??= factory, so at most one messenger rides the data channel.
+  // Call memory: the outgoing-audio tail buffered before a drop is
+  // frozen at the reconnect edge and replayed to the peer once the call
+  // is live again — the cut-off sentence still arrives. Active only when
+  // the platform provides a frame tap.
+  Future<ReliableMessenger> survivalMessengerFactory() async =>
+      survivalMessenger ??= ReliableMessenger(
+        MediaChannelDataPort(await media.openDataChannel()),
+        peerId: '${role.name}-survival',
+      );
+  final callMemory = audioFrameTap == null
+      ? null
+      : CallMemory(
+          states: controller.states,
+          messenger: survivalMessengerFactory,
+          tap: audioFrameTap,
+        );
   final phaseSubscription = controller.states.listen((state) {
     // The two live-quality loops run in BOTH live phases — a degraded call
     // still needs path scoring (to escalate) and adaptation (to climb).
@@ -152,6 +172,7 @@ CallSessionHandle buildWebRtcCallSession({
         MediaChannelDataPort(await media.openDataChannel()),
     dispose: () async {
       await phaseSubscription.cancel();
+      await callMemory?.dispose();
       await survivalDriver.dispose();
       await survivalMessenger?.close();
       await pathMonitor.dispose();
