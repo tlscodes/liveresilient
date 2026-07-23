@@ -2,6 +2,7 @@
 library;
 
 export 'src/caption.dart';
+export 'src/caption_channel.dart';
 export 'src/caption_pipeline.dart';
 export 'src/caption_wire.dart';
 export 'src/transcript_segment.dart';

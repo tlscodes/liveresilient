@@ -14,8 +14,11 @@ import 'src/attachment_picker.dart';
 import 'src/call_demo_controller.dart';
 import 'src/call_screen.dart';
 import 'src/call_session.dart';
+import 'package:live_captions/live_captions.dart' show ChannelInvite;
+
 import 'src/chat_demo_controller.dart';
 import 'src/chat_screen.dart';
+import 'src/join_channel_sheet.dart';
 import 'src/theme.dart';
 
 export 'src/call_demo_controller.dart';
@@ -50,6 +53,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _index = 0;
+
+  /// The caption channel the user joined via link/id, shown as a chip in
+  /// the caption strip area (full channel session arrives with the STT
+  /// engine wiring).
+  ChannelInvite? _joinedChannel;
   final CallDemoController _call = CallDemoController();
   final ChatDemoController _chat = ChatDemoController(
     attachmentPicker: pickAttachmentFile,
@@ -97,8 +105,40 @@ class _HomePageState extends State<HomePage> {
       ),
     ];
     return Scaffold(
-      appBar: AppBar(title: Text(_index == 0 ? 'Call' : 'Chat')),
-      body: pages[_index],
+      appBar: AppBar(
+        title: Text(_index == 0 ? 'Call' : 'Chat'),
+        actions: [
+          IconButton(
+            tooltip: 'Join caption channel',
+            icon: const Icon(Icons.closed_caption),
+            onPressed: () async {
+              final invite = await showJoinChannelSheet(context);
+              if (invite != null && mounted) {
+                setState(() => _joinedChannel = invite);
+              }
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_joinedChannel != null)
+            MaterialBanner(
+              leading: const Icon(Icons.closed_caption),
+              content: Text(
+                'Caption channel ${_joinedChannel!.channelId}'
+                '${_joinedChannel!.language == null ? '' : ' · ${_joinedChannel!.language}'}',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => setState(() => _joinedChannel = null),
+                  child: const Text('Leave'),
+                ),
+              ],
+            ),
+          Expanded(child: pages[_index]),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
