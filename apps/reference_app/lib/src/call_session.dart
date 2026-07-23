@@ -17,6 +17,7 @@ import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
 import 'media_adaptation_driver.dart';
 import 'path_health_monitor.dart';
+import 'survival_mode_driver.dart';
 import 'ws_connector.dart';
 
 /// One live call session plus the teardown of everything it owns.
@@ -58,6 +59,7 @@ CallSessionHandle buildWebRtcCallSession({
   String Function(Uri uri)? proxyResolver,
   void Function(HttpClient client)? proxyConfigurator,
   SecurityContext? securityContext,
+  ClipRecorder? recordVoiceClip,
 }) {
   final client = SignalingClient(
     endpoint: endpoint,
@@ -115,8 +117,28 @@ CallSessionHandle buildWebRtcCallSession({
   // bitrate → frame rate → resolution → audio-only, and recovers when
   // conditions improve — applied via standard sender-parameter updates.
   final adaptationDriver = MediaAdaptationDriver(port: () => livePort);
+  // Survival mode: the ladder floor / a flapping path flips the call into
+  // its first-class degraded phase instead of ever failing; voice-note
+  // clips ride the chat outbox. The messenger is created lazily over this
+  // call's own data channel and reused for every clip.
+  ReliableMessenger? survivalMessenger;
+  final survivalDriver = SurvivalModeDriver(
+    call: DegradableCallHandle.of(controller),
+    adaptationDecisions: adaptationDriver.decisions,
+    recordClip: recordVoiceClip,
+    messenger: recordVoiceClip == null
+        ? null
+        : () async => survivalMessenger ??= ReliableMessenger(
+            MediaChannelDataPort(await media.openDataChannel()),
+            peerId: '${role.name}-survival',
+          ),
+  );
   final phaseSubscription = controller.states.listen((state) {
-    if (state.phase == CallPhase.connected) {
+    // The two live-quality loops run in BOTH live phases — a degraded call
+    // still needs path scoring (to escalate) and adaptation (to climb).
+    final live =
+        state.phase == CallPhase.connected || state.phase == CallPhase.degraded;
+    if (live) {
       pathMonitor.start();
       adaptationDriver.start();
     } else {
@@ -130,6 +152,8 @@ CallSessionHandle buildWebRtcCallSession({
         MediaChannelDataPort(await media.openDataChannel()),
     dispose: () async {
       await phaseSubscription.cancel();
+      await survivalDriver.dispose();
+      await survivalMessenger?.close();
       await pathMonitor.dispose();
       await adaptationDriver.dispose();
       await controller.dispose();
