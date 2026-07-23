@@ -138,6 +138,40 @@ void main() {
     expect(played.map((a) => a.id).toList(), ['vn1', 'gr1']);
   });
 
+  testWidgets('caption strip renders interim speech italic with an ellipsis '
+      'and final speech plain', (tester) async {
+    Caption cap(String id, int seq, String text, {required bool isFinal}) =>
+        Caption(
+          segment: TranscriptSegment(
+            id: id,
+            seq: seq,
+            lang: 'en',
+            text: text,
+            isFinal: isFinal,
+            startMs: seq * 1000,
+          ),
+        );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatScreen(
+            entries: const [],
+            localSenderId: 'me',
+            onSend: (_) {},
+            captions: [
+              cap('c1', 0, 'a committed line', isFinal: true),
+              cap('c2', 1, 'still forming', isFinal: false),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('a committed line'), findsOneWidget);
+    final interim = tester.widget<Text>(find.text('still forming…'));
+    expect(interim.style?.fontStyle, FontStyle.italic);
+  });
+
   testWidgets('renders a file attachment bubble with name-equivalent info', (
     tester,
   ) async {

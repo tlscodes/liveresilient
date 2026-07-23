@@ -179,6 +179,85 @@ void main() {
     });
   });
 
+  group('CaptionPipeline partial fast path', () {
+    test('a partial bypasses the translator and emits immediately with the '
+        'original text, while the final of the same id is translated and '
+        'follows', () async {
+      final translator = GatedTranslator();
+      final pipeline = CaptionPipeline(
+        translator: translator,
+        targetLanguages: ['fa'],
+      );
+      final emitted = <Caption>[];
+      pipeline.captions.listen(emitted.add);
+
+      pipeline.add(seg('s1', 0, 'hello wor', isFinal: false));
+      await Future<void>.delayed(Duration.zero);
+      expect(emitted, hasLength(1), reason: 'partial must not wait');
+      expect(emitted.single.segment.isFinal, isFalse);
+      expect(emitted.single.translations, isEmpty);
+      expect(emitted.single.textFor('fa'), 'hello wor');
+
+      pipeline.add(seg('s1', 1, 'hello world'));
+      translator.gate('hello world').complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(emitted, hasLength(2));
+      expect(emitted.last.segment.isFinal, isTrue);
+      expect(emitted.last.textFor('fa'), '[fa] hello world');
+
+      await pipeline.close();
+    });
+
+    test('a partial is never dropped by translator backpressure: queued '
+        'finals wait, partials still stream', () async {
+      final translator = GatedTranslator();
+      final pipeline = CaptionPipeline(
+        translator: translator,
+        targetLanguages: ['fa'],
+      );
+      final emitted = <Caption>[];
+      pipeline.captions.listen(emitted.add);
+
+      pipeline.add(seg('a', 0, 'slow final'));
+      pipeline.add(seg('b', 1, 'typing…', isFinal: false));
+      pipeline.add(seg('b', 2, 'typing more', isFinal: false));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        emitted.map((c) => c.segment.text).toList(),
+        ['typing…', 'typing more'],
+        reason: 'partials stream past the stalled translator',
+      );
+
+      translator.gate('slow final').complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(emitted.map((c) => c.segment.text).last, 'slow final');
+      await pipeline.close();
+    });
+
+    test(
+      'translatePartials: true restores full translation of revisions',
+      () async {
+        final translator = ThrowingTranslator({});
+        final pipeline = CaptionPipeline(
+          translator: translator,
+          targetLanguages: ['fa'],
+          translatePartials: true,
+        );
+        final emitted = <Caption>[];
+        pipeline.captions.listen(emitted.add);
+
+        pipeline.add(seg('p', 0, 'partial text', isFinal: false));
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        expect(emitted.single.textFor('fa'), '[fa] partial text');
+        await pipeline.close();
+      },
+    );
+  });
+
   group('CaptionLog', () {
     Caption cap(String id, String text, {bool isFinal = true}) =>
         Caption(segment: seg(id, 0, text, isFinal: isFinal));

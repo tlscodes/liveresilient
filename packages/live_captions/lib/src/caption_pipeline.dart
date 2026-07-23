@@ -23,6 +23,7 @@ class CaptionPipeline {
     required Translator translator,
     required List<String> targetLanguages,
     this.maxPendingSegments = 64,
+    this.translatePartials = false,
   }) : _translator = translator,
        targetLanguages = List.unmodifiable(targetLanguages) {
     if (maxPendingSegments < 1) {
@@ -42,6 +43,16 @@ class CaptionPipeline {
 
   final int maxPendingSegments;
 
+  /// Whether in-progress (non-final) segments go through the translator.
+  ///
+  /// OFF by default — the modern live-caption fast path: a partial is
+  /// emitted IMMEDIATELY with the original text only (viewers see words as
+  /// they are spoken), and the translator spends its budget exclusively on
+  /// final segments, whose translation then replaces the partial in the UI
+  /// by segment id. Turning this on restores full translation of every
+  /// revision (higher translator load and latency).
+  final bool translatePartials;
+
   final _queue = Queue<TranscriptSegment>();
   final _captions = StreamController<Caption>.broadcast();
   bool _draining = false;
@@ -57,9 +68,15 @@ class CaptionPipeline {
   /// Segments discarded because the translator could not keep up.
   int get droppedCount => _droppedCount;
 
-  /// Accepts one segment for translation.
+  /// Accepts one segment. Non-final segments take the zero-latency fast
+  /// path (no translation, immediate emission) unless [translatePartials]
+  /// is on; final segments are queued for ordered translation.
   void add(TranscriptSegment segment) {
     if (_closed) throw StateError('CaptionPipeline is closed');
+    if (!segment.isFinal && !translatePartials) {
+      _captions.add(Caption(segment: segment));
+      return;
+    }
     _queue.add(segment);
     while (_queue.length > maxPendingSegments) {
       _queue.removeFirst();

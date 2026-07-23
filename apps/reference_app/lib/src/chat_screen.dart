@@ -147,11 +147,20 @@ class _ChatScreenState extends State<ChatScreen> {
                               : widget.captions.sublist(
                                   widget.captions.length - 2,
                                 ))
+                        // Interim (not-yet-final) speech renders italic
+                        // with a trailing ellipsis — the standard live-
+                        // caption cue that the line is still forming.
                         Text(
-                          caption.textFor(widget.captionLanguage),
+                          caption.segment.isFinal
+                              ? caption.textFor(widget.captionLanguage)
+                              : '${caption.textFor(widget.captionLanguage)}…',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
+                          style: caption.segment.isFinal
+                              ? Theme.of(context).textTheme.bodySmall
+                              : Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontStyle: FontStyle.italic,
+                                ),
                         ),
                     ],
                   ),
