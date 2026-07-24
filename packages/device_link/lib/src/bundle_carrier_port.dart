@@ -11,6 +11,7 @@
 /// that runs once a contact is established between two [DtnBundleQueue]s.
 library;
 
+import 'device_link_adapter.dart' show DeviceLinkConsent;
 import 'dtn_bundle_queue.dart';
 
 /// One open exchange window between this node and a peer. Implementations
@@ -47,7 +48,12 @@ class BundleExchangeReport {
     required this.duplicates,
     required this.quotaSkipped,
     required this.interrupted,
+    this.consentDenied = false,
   });
+
+  /// True when the contact's [DeviceLinkConsent] was not granted: nothing
+  /// was offered, both queues are untouched.
+  final bool consentDenied;
 
   /// Bundle ids successfully handed to the receiver (newly stored there).
   final List<String> transferred;
@@ -101,7 +107,20 @@ class BundleExchange {
     required int nowMs,
     RetainPolicy retain = RetainPolicy.handOffAndForget,
     bool Function() isContactOpen = _alwaysOpen,
+    DeviceLinkConsent? consent,
   }) async {
+    // Consent gate: a carrier contact is a voluntary, owner-opted-in relay.
+    // When a [DeviceLinkConsent] is supplied and not granted, no bundle is
+    // offered and both queues stay exactly as they were.
+    if (consent != null && !consent.granted) {
+      return BundleExchangeReport(
+        transferred: const [],
+        duplicates: const [],
+        quotaSkipped: const [],
+        interrupted: false,
+        consentDenied: true,
+      );
+    }
     final transferred = <String>[];
     final duplicates = <String>[];
     final quotaSkipped = <String>[];

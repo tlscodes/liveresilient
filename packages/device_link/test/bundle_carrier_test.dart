@@ -225,4 +225,86 @@ void main() {
     expect(a.pendingCount, 2);
     expect(b.pendingCount, 0);
   });
+
+  group('BundleExchange · consent gate', () {
+    test(
+      'denied consent transfers nothing and leaves both queues unchanged',
+      () async {
+        final a = DtnBundleQueue();
+        final b = DtnBundleQueue();
+        a.offer(_bundle('m1'), nowMs: 0);
+        a.offer(
+          _bundle('m2', priority: MeshMessagePriority.callSignal),
+          nowMs: 0,
+        );
+        b.offer(_bundle('held'), nowMs: 0);
+
+        for (final retain in RetainPolicy.values) {
+          final report = await const BundleExchange().run(
+            sender: a,
+            receiver: b,
+            nowMs: 0,
+            retain: retain,
+            consent: _FixedConsent(granted: false),
+          );
+
+          expect(report.consentDenied, isTrue);
+          expect(report.transferred, isEmpty);
+          expect(report.duplicates, isEmpty);
+          expect(report.quotaSkipped, isEmpty);
+          expect(report.interrupted, isFalse);
+          expect(a.pendingCount, 2);
+          expect(b.pendingCount, 1);
+        }
+      },
+    );
+
+    test('granted consent behaves exactly like the ungated exchange', () async {
+      final a = DtnBundleQueue();
+      final b = DtnBundleQueue();
+      a.offer(_bundle('m1'), nowMs: 0);
+
+      final report = await const BundleExchange().run(
+        sender: a,
+        receiver: b,
+        nowMs: 0,
+        consent: _FixedConsent(granted: true),
+      );
+
+      expect(report.consentDenied, isFalse);
+      expect(report.transferred, ['m1']);
+      expect(a.pendingCount, 0);
+      expect(b.pendingCount, 1);
+    });
+
+    test(
+      'denied consent gates both directions of a bidirectional contact',
+      () async {
+        final a = DtnBundleQueue();
+        final b = DtnBundleQueue();
+        a.offer(_bundle('from-a'), nowMs: 0);
+        b.offer(_bundle('from-b'), nowMs: 0);
+
+        const bidi = SimulatedBidirectionalExchange(BundleExchange());
+        final (aToB, bToA) = await bidi.run(
+          queueA: a,
+          queueB: b,
+          nowMs: 0,
+          consent: _FixedConsent(granted: false),
+        );
+
+        expect(aToB.consentDenied, isTrue);
+        expect(bToA.consentDenied, isTrue);
+        expect(a.pendingCount, 1);
+        expect(b.pendingCount, 1);
+      },
+    );
+  });
+}
+
+class _FixedConsent implements DeviceLinkConsent {
+  const _FixedConsent({required this.granted});
+
+  @override
+  final bool granted;
 }
