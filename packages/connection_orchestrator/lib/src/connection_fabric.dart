@@ -16,7 +16,9 @@ import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:device_link/device_link.dart';
 
 import 'connectivity_snapshot.dart';
+import 'delivery_planner.dart';
 import 'lane.dart';
+import 'lane_experience.dart';
 
 /// How a single delivery ended.
 enum DeliveryOutcome {
@@ -50,13 +52,32 @@ class ConnectionFabric {
     required DtnBundleQueue fallbackQueue,
     required int Function() nowMs,
     double degradedBelowScore = 0.35,
+    LaneExperience? experience,
+    DeliveryPlanner planner = const DeliveryPlanner(),
+    String Function()? place,
   }) : _queue = fallbackQueue,
        _nowMs = nowMs,
-       _degradedBelowScore = degradedBelowScore;
+       _degradedBelowScore = degradedBelowScore,
+       experience = experience ?? LaneExperience(),
+       _planner = planner,
+       _place = place ?? (() => 'unknown');
 
   final DtnBundleQueue _queue;
   final int Function() _nowMs;
   final double _degradedBelowScore;
+
+  /// The fabric's learning memory: contextual success statistics per lane,
+  /// fed by every delivery attempt. Injectable so the app can persist it.
+  final LaneExperience experience;
+
+  final DeliveryPlanner _planner;
+
+  /// Coarse location tag resolver (e.g. current network label). Re-read on
+  /// every delivery so movement changes the learning context immediately.
+  final String Function() _place;
+
+  /// The most recent plan the conductor produced — telemetry/UI/tests.
+  DeliveryPlan? lastPlan;
 
   final Map<String, _Lane> _lanes = {};
   final _snapshots = StreamController<ConnectivitySnapshot>.broadcast();
@@ -103,16 +124,60 @@ class ConnectionFabric {
     int lifetimeMs = 24 * 60 * 60 * 1000,
   }) async {
     _checkLive();
-    for (final lane in _ranked()) {
-      final result = await lane.channel.send(payload);
-      lane.channel.health.observe(result);
-      if (result.status == SendStatus.ok ||
-          result.status == SendStatus.duplicate) {
-        // A working lane may unblock the backlog too.
-        await _drainThrough(lane);
-        _publish();
-        return DeliveryOutcome.sentLive;
-      }
+    final ctx = DeliveryContext.at(
+      _nowMs(),
+      place: _place(),
+      priority: priority,
+    );
+    final byId = {for (final l in _ranked()) l.profile.id: l};
+    final plan = _planner.plan(
+      lanes: [
+        for (final l in byId.values)
+          PlannerLaneView(
+            id: l.profile.id,
+            healthScore: l.channel.health.score(),
+            learnedScore: experience.ucbScore(l.profile.id, ctx),
+            costRank: l.profile.costRank,
+          ),
+      ],
+      context: ctx,
+      urgent: priority == MeshMessagePriority.callSignal,
+    );
+    lastPlan = plan;
+
+    _Lane? successLane;
+    switch (plan.strategy) {
+      case DeliveryStrategy.queueOnly:
+        break;
+      case DeliveryStrategy.singleBest:
+        // Best first with sequential failover; stop on first success.
+        for (final id in plan.laneIds) {
+          final lane = byId[id]!;
+          if (await _attempt(lane, payload, ctx)) {
+            successLane = lane;
+            break;
+          }
+        }
+      case DeliveryStrategy.raceFanout:
+      case DeliveryStrategy.replicate:
+        // Concurrent send on every planned lane; receivers dedupe, and
+        // every lane's outcome feeds the experience model.
+        final lanes = [for (final id in plan.laneIds) byId[id]!];
+        final results = await Future.wait([
+          for (final lane in lanes) _attempt(lane, payload, ctx),
+        ]);
+        for (var i = 0; i < lanes.length; i++) {
+          if (results[i]) {
+            successLane = lanes[i];
+            break;
+          }
+        }
+    }
+    if (successLane != null) {
+      // A working lane may unblock the backlog too.
+      await _drainThrough(successLane);
+      _publish();
+      return DeliveryOutcome.sentLive;
     }
     final admission = _queue.offer(
       DtnBundle(
@@ -145,6 +210,21 @@ class ConnectionFabric {
     }
     _publish();
     return drained;
+  }
+
+  /// One attempt on one lane: sends, updates live health AND the learned
+  /// experience model, returns whether the payload was delivered.
+  Future<bool> _attempt(
+    _Lane lane,
+    List<int> payload,
+    DeliveryContext ctx,
+  ) async {
+    final result = await lane.channel.send(payload);
+    lane.channel.health.observe(result);
+    final delivered =
+        result.status == SendStatus.ok || result.status == SendStatus.duplicate;
+    experience.record(lane.profile.id, ctx, success: delivered);
+    return delivered;
   }
 
   Future<int> _drainThrough(_Lane lane) async {
