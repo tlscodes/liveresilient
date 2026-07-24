@@ -58,13 +58,15 @@ class AssistantView extends StatelessWidget {
                       if (a.actionTaken != null) ...[
                         const SizedBox(height: 6),
                         Row(
-                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(Icons.autorenew, size: 14),
                             const SizedBox(width: 4),
-                            Text(
-                              a.actionTaken!,
-                              style: Theme.of(context).textTheme.labelSmall,
+                            Expanded(
+                              child: Text(
+                                a.actionTaken!,
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
                             ),
                           ],
                         ),
