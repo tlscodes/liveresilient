@@ -106,11 +106,57 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(stack.director.advisory.level, isNot(AdvisoryLevel.calm));
-    expect(stack.director.advisory.actionTaken, 'refreshing paths');
+    expect(stack.director.advisory.actionTaken, isNotNull);
     expect(
       lane.probes,
       greaterThan(probesBefore),
       reason: 'the director actually refreshed, not just warned',
+    );
+    final refresh = stack.director.decisions.lastWhere(
+      (d) => d.strategy == DirectorStrategy.refreshPaths,
+    );
+    expect(refresh.reason, contains('degraded'));
+    await stack.dispose();
+  });
+
+  test('a predicted slide gets a pre-emptive fallback warm-up', () async {
+    final lane = _ToggleChannel('net');
+    final stack = await boot(lane);
+    // Feed the sentinel a clearly declining score series while the lane
+    // itself is still up: mode stays live, verdict turns slipping.
+    stack.fabric.trend.observe('net', 0.9, nowMs: 0);
+    stack.fabric.trend.observe('net', 0.7, nowMs: 5000);
+    stack.fabric.trend.observe('net', 0.5, nowMs: 10000);
+    await stack.fabric.refresh();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(stack.director.advisory.level, AdvisoryLevel.caution);
+    final preWarm = stack.director.decisions.where(
+      (d) => d.strategy == DirectorStrategy.preWarmFallback,
+    );
+    expect(preWarm, isNotEmpty, reason: 'acted before anything broke');
+    expect(preWarm.first.reason, contains('slide'));
+    await stack.dispose();
+  });
+
+  test('repairs that do not help trigger judged restraint (backoff)', () async {
+    final lane = _ToggleChannel('net');
+    final stack = await boot(lane);
+    lane.health.availability = 0.1; // stays broken no matter what
+    await stack.fabric.refresh();
+    await Future<void>.delayed(Duration.zero);
+    // The director's own healing refresh publishes further snapshots that
+    // stay degraded → the pending decision is judged noEffect and the
+    // director deliberately holds instead of hammering.
+    await stack.fabric.refresh();
+    await Future<void>.delayed(Duration.zero);
+
+    final first = stack.director.decisions.last;
+    expect(first.outcome, DecisionOutcome.noEffect);
+    expect(
+      stack.director.decisions.map((d) => d.strategy),
+      contains(DirectorStrategy.holdAndObserve),
+      reason: 'restraint is itself a surfaced decision',
     );
     await stack.dispose();
   });
