@@ -13,7 +13,9 @@ import sys
 import time
 import urllib.request
 
-MODELS = ["smollm2:135m", "gemma3:270m", "qwen3:0.6b", "gemma3:1b", "qwen3:1.7b"]
+MODELS = sys.argv[2].split(",") if len(sys.argv) > 2 else [
+    "smollm2:135m", "gemma3:270m", "qwen3:0.6b", "gemma3:1b", "qwen3:1.7b",
+]
 
 SNAPSHOT = {
     "mode": "live",
@@ -99,7 +101,7 @@ def ask(model: str, prompt: str) -> tuple[str, float, float]:
         "stream": False,
         "options": {"temperature": 0.2, "num_predict": 300},
     }
-    if model.startswith("qwen3"):
+    if model.startswith(("qwen3", "assistant-coached")):
         req_body["think"] = False  # reasoning mode eats the whole token budget
     body = json.dumps(req_body).encode()
     req = urllib.request.Request("http://localhost:11434/api/generate", data=body)
