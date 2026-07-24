@@ -8,4 +8,6 @@ library;
 
 export 'src/connection_fabric.dart';
 export 'src/connectivity_snapshot.dart';
+export 'src/delivery_planner.dart';
 export 'src/lane.dart';
+export 'src/lane_experience.dart';
