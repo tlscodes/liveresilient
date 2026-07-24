@@ -15,6 +15,7 @@ import 'dart:async';
 import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:device_link/device_link.dart';
 
+import 'chunked_transfer.dart';
 import 'connectivity_snapshot.dart';
 import 'delivery_planner.dart';
 import 'lane.dart';
@@ -64,13 +65,15 @@ class ConnectionFabric {
     DeliveryPlanner planner = const DeliveryPlanner(),
     String Function()? place,
     TrendSentinel? trend,
+    bool Function()? lowBattery,
   }) : _queue = fallbackQueue,
        _nowMs = nowMs,
        _degradedBelowScore = degradedBelowScore,
        experience = experience ?? LaneExperience(),
        _planner = planner,
        _place = place ?? (() => 'unknown'),
-       trend = trend ?? TrendSentinel();
+       trend = trend ?? TrendSentinel(),
+       _lowBattery = lowBattery ?? (() => false);
 
   final DtnBundleQueue _queue;
   final int Function() _nowMs;
@@ -93,6 +96,9 @@ class ConnectionFabric {
   /// a best-lane projected to cross the failure floor fires the unhealthy
   /// hook BEFORE the lane actually dies.
   final TrendSentinel trend;
+
+  /// Battery probe: when true, energy-hungry lanes lose near-ties.
+  final bool Function() _lowBattery;
 
   final Map<String, _Lane> _lanes = {};
   final _snapshots = StreamController<ConnectivitySnapshot>.broadcast();
@@ -181,6 +187,7 @@ class ConnectionFabric {
             healthScore: l.channel.health.score(),
             learnedScore: experience.ucbScore(l.profile.id, ctx),
             costRank: l.profile.costRank,
+            energyRank: l.profile.energyRank,
           ),
       ],
       context: ctx,
@@ -188,6 +195,7 @@ class ConnectionFabric {
       bestLaneSliding:
           bestVerdict == TrendVerdict.slipping ||
           bestVerdict == TrendVerdict.failingSoon,
+      lowBattery: _lowBattery(),
     );
     lastPlan = plan;
 
@@ -239,6 +247,43 @@ class ConnectionFabric {
     return admission == BundleAdmission.stored
         ? DeliveryOutcome.queuedForLater
         : DeliveryOutcome.rejected;
+  }
+
+  /// Delivers a LARGE payload as a resumable chunked transfer: only the
+  /// chunks that did not make it live are parked in the DTN queue, so a
+  /// mid-transfer lane failure re-sends the remainder, never the whole
+  /// payload. Returns the sender-side transfer state (progress,
+  /// completeness) which the caller may persist and re-drive later.
+  Future<ResumableTransfer> deliverChunked(
+    List<int> payload, {
+    required String transferId,
+    int chunkSize = 16 * 1024,
+    MeshMessagePriority priority = MeshMessagePriority.bulk,
+    int lifetimeMs = 24 * 60 * 60 * 1000,
+    ResumableTransfer? resume,
+  }) async {
+    _checkLive();
+    final transfer =
+        resume ??
+        ResumableTransfer(
+          transferId: transferId,
+          payload: payload,
+          chunkSize: chunkSize,
+        );
+    for (final chunk in transfer.remainingChunks()) {
+      final outcome = await deliver(
+        chunk.payload,
+        bundleId: chunk.id.encode(),
+        priority: priority,
+        lifetimeMs: lifetimeMs,
+      );
+      if (outcome == DeliveryOutcome.sentLive) {
+        transfer.markDelivered(chunk.id.index);
+      }
+      // queuedForLater chunks stay in the DTN queue and drain on
+      // recovery; rejected chunks stay un-marked for the next resume.
+    }
+    return transfer;
   }
 
   /// Probes every registered lane, recomputes the mode, and — when an
