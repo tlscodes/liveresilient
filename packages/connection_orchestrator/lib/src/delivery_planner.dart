@@ -84,10 +84,16 @@ class DeliveryPlanner {
       costPenalty * lane.costRank;
 
   /// Produces the plan for this delivery.
+  ///
+  /// [bestLaneSliding] is the foresight input: when the trend watch
+  /// predicts the current best lane is heading down, non-bulk traffic is
+  /// duplicated onto the runner-up BEFORE the slide completes, so a
+  /// mid-flight lane failure costs nothing (danger-window dual-send).
   DeliveryPlan plan({
     required List<PlannerLaneView> lanes,
     required DeliveryContext context,
     required bool urgent,
+    bool bestLaneSliding = false,
   }) {
     if (lanes.isEmpty) {
       return const DeliveryPlan(
@@ -110,9 +116,13 @@ class DeliveryPlanner {
       );
     }
     // Racing spends redundant bytes; routine bulk traffic never does.
+    // Two triggers: a statistical near-tie, or foresight — the best lane
+    // is predicted to slide, so pay the redundancy before it breaks.
     if (context.priority != MeshMessagePriority.bulk &&
         ranked.length >= 2 &&
-        blendedScore(ranked[0]) - blendedScore(ranked[1]) <= raceMargin) {
+        (bestLaneSliding ||
+            blendedScore(ranked[0]) - blendedScore(ranked[1]) <=
+                raceMargin)) {
       return DeliveryPlan(
         strategy: DeliveryStrategy.raceFanout,
         laneIds: ids.take(2).toList(),

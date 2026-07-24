@@ -157,6 +157,31 @@ void main() {
       expect(plan.strategy, DeliveryStrategy.singleBest);
     });
 
+    test('predicted slide on best lane → dual-send despite a wide margin', () {
+      final presenceCtx = DeliveryContext.at(
+        _morningMs,
+        priority: MeshMessagePriority.presence,
+      );
+      final plan = planner.plan(
+        lanes: [lane('sliding-best', 0.9, 0.9), lane('backup', 0.5, 0.5)],
+        context: presenceCtx,
+        urgent: false,
+        bestLaneSliding: true,
+      );
+      expect(plan.strategy, DeliveryStrategy.raceFanout);
+      expect(plan.laneIds, ['sliding-best', 'backup']);
+    });
+
+    test('predicted slide never duplicates bulk traffic', () {
+      final plan = planner.plan(
+        lanes: [lane('a', 0.9, 0.9), lane('b', 0.5, 0.5)],
+        context: ctx,
+        urgent: false,
+        bestLaneSliding: true,
+      );
+      expect(plan.strategy, DeliveryStrategy.singleBest);
+    });
+
     test('urgent → replicate over every credible lane, skip hopeless ones', () {
       final plan = planner.plan(
         lanes: [
