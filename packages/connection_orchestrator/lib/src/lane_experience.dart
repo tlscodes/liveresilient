@@ -111,4 +111,44 @@ class LaneExperience {
   /// Evidence volume for tests/telemetry.
   double attempts(String laneId, DeliveryContext ctx) =>
       _stats[_key(laneId, ctx)]?.attempts ?? 0;
+
+  /// Serializes the learned model so the app can persist it across
+  /// restarts — the brain keeps its memories.
+  Map<String, Object?> toJson() => {
+    'totalAttempts': _totalAttempts,
+    'stats': {
+      for (final e in _stats.entries)
+        e.key: {'s': e.value.successes, 'f': e.value.failures},
+    },
+  };
+
+  /// Restores a previously serialized model. Unknown/corrupt entries are
+  /// skipped: a damaged memory file degrades to a fresh brain, never a
+  /// crash.
+  factory LaneExperience.fromJson(
+    Map<String, Object?> json, {
+    double decay = 0.98,
+    double explorationWeight = 0.25,
+  }) {
+    final exp = LaneExperience(
+      decay: decay,
+      explorationWeight: explorationWeight,
+    );
+    final total = json['totalAttempts'];
+    if (total is num) exp._totalAttempts = total.toDouble();
+    final stats = json['stats'];
+    if (stats is Map) {
+      for (final entry in stats.entries) {
+        final v = entry.value;
+        if (entry.key is! String || v is! Map) continue;
+        final s = v['s'];
+        final f = v['f'];
+        if (s is! num || f is! num || s < 0 || f < 0) continue;
+        exp._stats[entry.key as String] = _Stats()
+          ..successes = s.toDouble()
+          ..failures = f.toDouble();
+      }
+    }
+    return exp;
+  }
 }

@@ -19,6 +19,7 @@ import 'connectivity_snapshot.dart';
 import 'delivery_planner.dart';
 import 'lane.dart';
 import 'lane_experience.dart';
+import 'trend_sentinel.dart';
 
 /// How a single delivery ended.
 enum DeliveryOutcome {
@@ -55,12 +56,14 @@ class ConnectionFabric {
     LaneExperience? experience,
     DeliveryPlanner planner = const DeliveryPlanner(),
     String Function()? place,
+    TrendSentinel? trend,
   }) : _queue = fallbackQueue,
        _nowMs = nowMs,
        _degradedBelowScore = degradedBelowScore,
        experience = experience ?? LaneExperience(),
        _planner = planner,
-       _place = place ?? (() => 'unknown');
+       _place = place ?? (() => 'unknown'),
+       trend = trend ?? TrendSentinel();
 
   final DtnBundleQueue _queue;
   final int Function() _nowMs;
@@ -78,6 +81,11 @@ class ConnectionFabric {
 
   /// The most recent plan the conductor produced — telemetry/UI/tests.
   DeliveryPlan? lastPlan;
+
+  /// Proactive trend watch: every refresh feeds each lane's score in, and
+  /// a best-lane projected to cross the failure floor fires the unhealthy
+  /// hook BEFORE the lane actually dies.
+  final TrendSentinel trend;
 
   final Map<String, _Lane> _lanes = {};
   final _snapshots = StreamController<ConnectivitySnapshot>.broadcast();
@@ -207,6 +215,19 @@ class ConnectionFabric {
     final ranked = _ranked();
     if (ranked.isNotEmpty) {
       drained = await _drainThrough(ranked.first);
+    }
+    // Feed the trend watch and act on the forecast: a best lane heading
+    // for the floor triggers recovery while the call is still alive.
+    final now = _nowMs();
+    for (final lane in _lanes.values) {
+      trend.observe(lane.profile.id, lane.channel.health.score(), nowMs: now);
+    }
+    final bestNow = ranked.isEmpty ? null : ranked.first;
+    if (bestNow != null &&
+        trend.verdict(bestNow.profile.id) == TrendVerdict.failingSoon) {
+      for (final cb in _onUnhealthy) {
+        cb();
+      }
     }
     _publish();
     return drained;
