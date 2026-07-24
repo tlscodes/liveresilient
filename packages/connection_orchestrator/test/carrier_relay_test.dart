@@ -85,6 +85,73 @@ void main() {
       expect(reborn.bundlesFor('peer-b', nowMs: 5000).single.bundleId, 'live');
     });
 
+    test('spray phase: binary split halves the copy budget both sides', () {
+      final relay = CarrierRelay();
+      relay.accept(
+        CustodyBundle(
+          bundleId: 'viral',
+          destination: 'peer-z',
+          payload: [1],
+          acceptedAtMs: 0,
+          lifetimeMs: 60000,
+          copies: 8,
+        ),
+        nowMs: 0,
+      );
+      final given = relay.spraySplit('viral', nowMs: 1000);
+      expect(given.copies, 4);
+      expect(
+        relay.sprayPlanFor({}, nowMs: 1000).single.copies,
+        4,
+        reason: 'we kept the other half',
+      );
+      // Split down to 1 → wait phase: no longer offered to relays.
+      relay.spraySplit('viral', nowMs: 2000); // 4 -> keep 2
+      relay.spraySplit('viral', nowMs: 3000); // 2 -> keep 1
+      expect(relay.sprayPlanFor({}, nowMs: 3000), isEmpty);
+      expect(
+        relay.bundlesFor('peer-z', nowMs: 3000),
+        isNotEmpty,
+        reason: 'wait phase still delivers direct to the destination',
+      );
+    });
+
+    test('summary vector stops redundant bytes on repeat contact', () {
+      final relay = CarrierRelay();
+      relay.accept(bundle('m1', hops: 0), nowMs: 0);
+      final withCopies = CustodyBundle(
+        bundleId: 'm9',
+        destination: 'peer-b',
+        payload: [1],
+        acceptedAtMs: 0,
+        lifetimeMs: 60000,
+        copies: 4,
+      );
+      relay.accept(withCopies, nowMs: 0);
+      expect(relay.sprayPlanFor({}, nowMs: 0).single.bundleId, 'm9');
+      expect(
+        relay.sprayPlanFor({'m9'}, nowMs: 0),
+        isEmpty,
+        reason: 'peer already has it — zero bytes moved',
+      );
+      expect(relay.summaryVector(), containsAll(['m1', 'm9']));
+    });
+
+    test('per-peer quota keeps one chatty peer from filling the store', () {
+      final relay = CarrierRelay(maxAcceptPerPeer: 2);
+      expect(relay.accept(bundle('a1'), nowMs: 0, fromPeer: 'chatty'), isNull);
+      expect(relay.accept(bundle('a2'), nowMs: 0, fromPeer: 'chatty'), isNull);
+      expect(
+        relay.accept(bundle('a3'), nowMs: 0, fromPeer: 'chatty'),
+        CustodyRefusal.peerQuota,
+      );
+      expect(
+        relay.accept(bundle('b1'), nowMs: 0, fromPeer: 'polite'),
+        isNull,
+        reason: 'other peers unaffected',
+      );
+    });
+
     test('a full custody chain relays sender→carrier→recipient', () {
       // Sender meets carrier at t=0; carrier meets recipient at t=8h.
       final carrier = CarrierRelay();

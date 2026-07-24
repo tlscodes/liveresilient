@@ -127,7 +127,11 @@ void main() {
 
       expect(transfer.totalChunks, 5);
       expect(transfer.deliveredChunks, 2);
-      expect(queue.pendingCount, 3, reason: 'only missing chunks queued');
+      expect(
+        queue.pendingCount,
+        3 + transfer.totalParityChunks,
+        reason: 'missing data chunks + parity chunks queued, nothing more',
+      );
 
       // Lane recovers; resuming re-sends exactly the remainder.
       lane.failAfterSends = 1 << 30;
@@ -138,6 +142,65 @@ void main() {
         resume: transfer,
       );
       expect(resumed.complete, isTrue);
+      await fabric.dispose();
+    });
+
+    test('a chunk lost in transit is healed from parity — no retransmit', () {
+      final payload = List.generate(4096, (i) => (i * 31 + 5) % 256);
+      final transfer = ResumableTransfer(
+        transferId: 'healed',
+        payload: payload,
+        chunkSize: 1000, // 5 chunks: 4 full + short tail (96 bytes)
+      );
+      final r = ChunkReassembler();
+      List<int>? whole;
+      // Drop the LAST (short) data chunk — the hardest healing case —
+      // and feed everything else plus parity.
+      for (final c in transfer.remainingChunks()) {
+        if (c.id.index == 4) continue;
+        whole = r.accept(c.id.encode(), c.payload) ?? whole;
+      }
+      for (final p in transfer.remainingParityChunks()) {
+        whole = r.accept(p.id.encode(), p.payload) ?? whole;
+      }
+      expect(whole, payload, reason: 'tail chunk rebuilt to exact length');
+    });
+
+    test('chunk size adapts to link quality', () {
+      expect(adaptiveChunkSize(linkScore: 0), 2 * 1024);
+      expect(adaptiveChunkSize(linkScore: 1), 64 * 1024);
+      expect(
+        adaptiveChunkSize(linkScore: 0.5),
+        inInclusiveRange(2 * 1024, 64 * 1024),
+      );
+    });
+
+    test('refresh self-resumes an in-flight transfer to completion',
+        () async {
+      var clockMs = 0;
+      final queue = DtnBundleQueue();
+      final fabric = ConnectionFabric(
+        fallbackQueue: queue,
+        nowMs: () => clockMs,
+      );
+      final lane = _FlakyChannel('net');
+      fabric.registerLane(
+        lane,
+        const LaneProfile(id: 'net', kind: LaneKind.internet),
+      );
+      lane.failAfterSends = 1;
+
+      final payload = List.generate(3 * 1024, (i) => i % 256);
+      final transfer = await fabric.deliverChunked(
+        payload,
+        transferId: 'auto',
+        chunkSize: 1024,
+      );
+      expect(transfer.complete, isFalse);
+
+      lane.failAfterSends = 1 << 30; // link recovers
+      await fabric.refresh(); // NO caller re-drive — refresh resumes it
+      expect(transfer.complete, isTrue, reason: 'self-resumed on recovery');
       await fabric.dispose();
     });
 
