@@ -65,6 +65,9 @@ class ChatDemoController extends ChangeNotifier {
       if (_captionReceiver.offer(message.text)) {
         return; // a live caption — rendered in the caption strip, not a bubble
       }
+      if (!_receivedLedger.record(message.id)) {
+        return; // duplicate from dual-send/replicate/relay — one bubble only
+      }
       entries.add(ChatEntry(message: message));
       notifyListeners();
     });
@@ -182,6 +185,10 @@ class ChatDemoController extends ChangeNotifier {
   /// [ReliableMessenger]; the fabric is an intelligence tap, not the wire.
   final ConnectionFabric? _fabric;
 
+  /// Receive-side dedup: dual-send, replicate, and relay paths may hand
+  /// the same message id over more than once — the user sees one bubble.
+  final DeliveryLedger _receivedLedger = DeliveryLedger();
+
   Future<void> sendText(String text) async {
     final message = await _local.send(text);
     entries.add(ChatEntry(message: message));
@@ -249,6 +256,23 @@ class ChatDemoController extends ChangeNotifier {
       attachmentProgress[attachment.id] = p.fraction;
       notifyListeners();
     });
+    final fabric = _fabric;
+    if (fabric != null) {
+      // Resilience tap for large payloads: the fabric carries the bytes
+      // as a resumable, parity-protected chunked transfer, so if the
+      // live channel dies mid-file the DTN queue + self-resume finish it
+      // on recovery. Best-effort: never breaks the user's send.
+      unawaited(
+        fabric
+            .deliverChunked(attachment.bytes, transferId: attachment.id)
+            .catchError(
+              (Object _) => ResumableTransfer(
+                transferId: attachment.id,
+                payload: attachment.bytes,
+              ),
+            ),
+      );
+    }
     try {
       await handle.done;
     } finally {
