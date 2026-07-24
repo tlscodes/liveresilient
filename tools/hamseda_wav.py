@@ -9,12 +9,71 @@ import struct
 import sys
 import wave
 
+import math
+import random
+
 from voice_record_codec import (
+    FRAME,
+    LPC_ORDER,
+    SR,
     hamseda_decode,
     hamseda_encode,
     spectral_correlation,
     train_codebook,
 )
+
+
+def hamseda_decode_hq(sent, seed_book):
+    """Higher-quality synthesis from the SAME bitstream: continuous filter
+    state and pitch phase across frames (no per-frame clicks), mixed
+    pulse+noise excitation, interpolated spectra and smoothed gain."""
+    book = [list(v) for v in seed_book]
+    out = []
+    last = None
+    buf = [0.0] * LPC_ORDER
+    phase = 0.0
+    gain_state = 0.0
+    rng = random.Random(3)
+    for item in sent:
+        if item[0] == 'S' or (item[0] == 'H' and last is None):
+            # Comfort decay instead of hard zero.
+            for _ in range(FRAME):
+                gain_state *= 0.98
+                out.append(rng.uniform(-1, 1) * gain_state * 0.02)
+            continue
+        if item[0] == 'H':
+            coeffs, pitch, gain_q = last
+        elif item[0] == 'I':
+            coeffs, pitch, gain_q = book[item[1]], item[2], item[3]
+        else:
+            coeffs = [c * 0.3 for c in item[1]]
+            book.append(list(coeffs))
+            pitch, gain_q = item[2], item[3]
+        prev_coeffs = last[0] if last else coeffs
+        last = (coeffs, pitch, gain_q)
+        target_gain = gain_q / 20.0
+        f0 = SR / max(pitch, int(SR / 300))
+        frame = []
+        for i in range(FRAME):
+            a = i / FRAME
+            c = [p * (1 - a) + q * a for p, q in zip(prev_coeffs, coeffs)]
+            gain_state += (target_gain - gain_state) * 0.02
+            phase += f0 / SR
+            voiced = 1.0 if phase % 1.0 < 0.12 else 0.0
+            exc = 0.75 * voiced / 0.12 * 0.35 + 0.25 * rng.uniform(-1, 1)
+            y = exc * gain_state - sum(
+                c[j] * buf[j] for j in range(LPC_ORDER)
+            )
+            y = max(-4.0, min(4.0, y))
+            buf = [y] + buf[:-1]
+            frame.append(y)
+        out.extend(frame)
+    # Gentle de-emphasis smooths vocoder harshness.
+    smoothed, prev = [], 0.0
+    for s in out:
+        prev = 0.6 * prev + 0.4 * s
+        smoothed.append(prev)
+    return smoothed
 
 
 def read_wav(path):
@@ -45,7 +104,7 @@ def main():
     book = train_codebook(entries=64)
 
     sent, bits, _nf, learned, per_frame = hamseda_encode(sig, book)
-    dec = hamseda_decode(sent, book)
+    dec = hamseda_decode_hq(sent, book)
     write_wav(dst, dec)
 
     bps = bits / seconds

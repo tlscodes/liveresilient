@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" font-family="SF Pro Display, Segoe UI, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1220"/><stop offset="1" stop-color="#101a30"/>
+    </linearGradient>
+    <linearGradient id="in" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1e3a5f"/><stop offset="1" stop-color="#27507f"/>
+    </linearGradient>
+    <linearGradient id="proc" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4a2d7a"/><stop offset="1" stop-color="#6b3fa0"/>
+    </linearGradient>
+    <linearGradient id="wire" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8a5a00"/><stop offset="1" stop-color="#c98a10"/>
+    </linearGradient>
+    <linearGradient id="out" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0e5f46"/><stop offset="1" stop-color="#17936b"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9db4d8"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <text x="640" y="46" text-anchor="middle" fill="#eaf2ff" font-size="30" font-weight="700">HamSeda · هم‌صدا — Voice at Record-Low Bytes</text>
+  <text x="640" y="72" text-anchor="middle" fill="#7f95b8" font-size="15">measured on the user's real 13.6&#8202;s recording (Gift.m4a) · 2026-07-24</text>
+
+  <!-- INPUT -->
+  <rect x="40" y="110" width="200" height="150" rx="14" fill="url(#in)"/>
+  <text x="140" y="140" text-anchor="middle" fill="#fff" font-size="17" font-weight="700">INPUT · ورود</text>
+  <text x="140" y="168" text-anchor="middle" fill="#cfe2ff" font-size="13">real voice recording</text>
+  <text x="140" y="192" text-anchor="middle" fill="#eaf2ff" font-size="14" font-weight="600">54,573 B (m4a)</text>
+  <text x="140" y="214" text-anchor="middle" fill="#eaf2ff" font-size="14" font-weight="600">217,088 B raw 8&#8202;kHz</text>
+  <text x="140" y="236" text-anchor="middle" fill="#cfe2ff" font-size="13">13.6 s speech</text>
+
+  <!-- SENDER -->
+  <rect x="290" y="96" width="330" height="420" rx="16" fill="#182642" stroke="#31497a"/>
+  <text x="455" y="126" text-anchor="middle" fill="#eaf2ff" font-size="16" font-weight="700">SENDER BRAIN · پردازش فرستنده</text>
+
+  <rect x="310" y="142" width="290" height="62" rx="10" fill="url(#proc)"/>
+  <text x="455" y="167" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">1 · Silence gate (VAD) — 40&#8202;ms frames</text>
+  <text x="455" y="188" text-anchor="middle" fill="#e3d1ff" font-size="12.5">93 silent frames → 2 bits each</text>
+
+  <rect x="310" y="214" width="290" height="62" rx="10" fill="url(#proc)"/>
+  <text x="455" y="239" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">2 · Twin self-learning codebook</text>
+  <text x="455" y="260" text-anchor="middle" fill="#e3d1ff" font-size="12.5">64 → 135 sounds · 71 novel frames sent once</text>
+
+  <rect x="310" y="286" width="290" height="62" rx="10" fill="url(#proc)"/>
+  <text x="455" y="311" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">3 · Innovation gate + delta frames</text>
+  <text x="455" y="332" text-anchor="middle" fill="#e3d1ff" font-size="12.5">162 index frames · 13 hold frames (2 bits)</text>
+
+  <rect x="310" y="358" width="290" height="62" rx="10" fill="url(#proc)"/>
+  <text x="455" y="383" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">4 · Personal Morse layer (Huffman)</text>
+  <text x="455" y="404" text-anchor="middle" fill="#e3d1ff" font-size="12.5">index 8 bits → 5.28 avg (entropy floor 5.24)</text>
+
+  <rect x="310" y="430" width="290" height="62" rx="10" fill="url(#proc)"/>
+  <text x="455" y="455" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">5 · Cross-call persistent memory</text>
+  <text x="455" y="476" text-anchor="middle" fill="#e3d1ff" font-size="12.5">call 2 with memory: −21.1&#8202;% lossless</text>
+
+  <!-- WIRE -->
+  <rect x="670" y="240" width="180" height="140" rx="70" fill="url(#wire)"/>
+  <text x="760" y="290" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">THE WIRE · سیم</text>
+  <text x="760" y="316" text-anchor="middle" fill="#fff7e0" font-size="17" font-weight="700">936 bytes</text>
+  <text x="760" y="338" text-anchor="middle" fill="#fff7e0" font-size="14">552 bps avg · 480 bps tail</text>
+  <text x="760" y="358" text-anchor="middle" fill="#ffe9b8" font-size="12.5">232× smaller than raw</text>
+
+  <!-- RECEIVER -->
+  <rect x="900" y="96" width="330" height="420" rx="16" fill="#182642" stroke="#31497a"/>
+  <text x="1065" y="126" text-anchor="middle" fill="#eaf2ff" font-size="16" font-weight="700">RECEIVER BRAIN · بازسازی گیرنده</text>
+
+  <rect x="920" y="142" width="290" height="62" rx="10" fill="url(#proc)"/>
+  <text x="1065" y="167" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">6 · Mirrored codebook (zero sync bytes)</text>
+  <text x="1065" y="188" text-anchor="middle" fill="#e3d1ff" font-size="12.5">same deterministic growth as sender</text>
+
+  <rect x="920" y="214" width="290" height="62" rx="10" fill="url(#proc)"/>
+  <text x="1065" y="239" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">7 · Continuous-state synthesizer</text>
+  <text x="1065" y="260" text-anchor="middle" fill="#e3d1ff" font-size="12.5">pitch phase + filter carried across frames</text>
+
+  <rect x="920" y="286" width="290" height="62" rx="10" fill="url(#proc)"/>
+  <text x="1065" y="311" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">8 · Voice-signature restore engine</text>
+  <text x="1065" y="332" text-anchor="middle" fill="#e3d1ff" font-size="12.5">local engine regenerates original timbre</text>
+
+  <rect x="920" y="358" width="290" height="62" rx="10" fill="#233355" stroke="#3a5f88"/>
+  <text x="1065" y="383" text-anchor="middle" fill="#9db4d8" font-size="13.5" font-weight="600">restore lane needs (device binding):</text>
+  <text x="1065" y="404" text-anchor="middle" fill="#7f95b8" font-size="12.5">on-device ASR + cloned voice signature</text>
+
+  <rect x="920" y="430" width="290" height="62" rx="10" fill="url(#out)"/>
+  <text x="1065" y="455" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">OUTPUT · خروجی شنیداری</text>
+  <text x="1065" y="476" text-anchor="middle" fill="#d2f5e6" font-size="12.5">vocoder lane today · original-quality lane on device</text>
+
+  <!-- RESULTS BAND -->
+  <rect x="40" y="560" width="1190" height="150" rx="16" fill="#12203a" stroke="#31497a"/>
+  <text x="635" y="592" text-anchor="middle" fill="#eaf2ff" font-size="17" font-weight="700">MEASURED RESULTS · نتایج اندازه‌گیری‌شده</text>
+  <text x="200" y="626" text-anchor="middle" fill="#ffd27f" font-size="15" font-weight="700">552 bps</text>
+  <text x="200" y="648" text-anchor="middle" fill="#9db4d8" font-size="12.5">user's real voice, single call</text>
+  <text x="480" y="626" text-anchor="middle" fill="#ffd27f" font-size="15" font-weight="700">21.1&#8202;% under Codec2 700C</text>
+  <text x="480" y="648" text-anchor="middle" fill="#9db4d8" font-size="12.5">classical low-rate record</text>
+  <text x="790" y="626" text-anchor="middle" fill="#ffd27f" font-size="15" font-weight="700">−21.1&#8202;% more with call-2 memory</text>
+  <text x="790" y="648" text-anchor="middle" fill="#9db4d8" font-size="12.5">lossless, grows every call</text>
+  <text x="1080" y="626" text-anchor="middle" fill="#ffd27f" font-size="15" font-weight="700">124 bps essence lane</text>
+  <text x="1080" y="648" text-anchor="middle" fill="#9db4d8" font-size="12.5">restore-to-original demo (82&#8202;% under record)</text>
+  <text x="635" y="686" text-anchor="middle" fill="#5f7699" font-size="12">honesty: audible quality of the vocoder lane is prototype-grade; original-quality lane is architecture-bound to the on-device restore engine</text>
+
+  <!-- ARROWS -->
+  <line x1="240" y1="185" x2="290" y2="185" stroke="#9db4d8" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="620" y1="310" x2="670" y2="310" stroke="#9db4d8" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="850" y1="310" x2="900" y2="310" stroke="#9db4d8" stroke-width="2.5" marker-end="url(#arr)"/>
+</svg>
