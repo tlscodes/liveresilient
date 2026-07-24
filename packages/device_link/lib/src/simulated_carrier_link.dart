@@ -8,6 +8,7 @@ library;
 import 'dart:async';
 
 import 'bundle_carrier_port.dart';
+import 'device_link_adapter.dart' show DeviceLinkConsent;
 import 'dtn_bundle_queue.dart';
 
 /// A contact whose [isOpen] can be flipped by the test/simulation driving
@@ -84,6 +85,7 @@ class SimulatedBidirectionalExchange {
     required int nowMs,
     RetainPolicy retain = RetainPolicy.handOffAndForget,
     bool Function() isContactOpen = _defaultOpen,
+    DeviceLinkConsent? consent,
   }) async {
     final aToB = await exchange.run(
       sender: queueA,
@@ -91,6 +93,7 @@ class SimulatedBidirectionalExchange {
       nowMs: nowMs,
       retain: retain,
       isContactOpen: isContactOpen,
+      consent: consent,
     );
     final bToA = await exchange.run(
       sender: queueB,
@@ -98,6 +101,7 @@ class SimulatedBidirectionalExchange {
       nowMs: nowMs,
       retain: retain,
       isContactOpen: isContactOpen,
+      consent: consent,
     );
     return (aToB, bToA);
   }
