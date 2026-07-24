@@ -1,0 +1,222 @@
+/// The connectivity fabric: one owner for every lane this device has.
+///
+/// Design in one paragraph: callers hand the fabric a payload once and the
+/// fabric guarantees forward progress — it ranks all eligible lanes by
+/// cost-adjusted live health, tries them best-first, and when every live
+/// lane fails it parks the payload in the delay-tolerant bundle queue.
+/// Whenever a lane recovers (a later delivery or an explicit [refresh]
+/// succeeds), the fabric automatically drains the queue through the best
+/// lane, oldest-highest-priority first. Every change of truth is published
+/// as a [ConnectivitySnapshot] on a single broadcast stream.
+library;
+
+import 'dart:async';
+
+import 'package:adaptive_transport/adaptive_transport.dart';
+import 'package:device_link/device_link.dart';
+
+import 'connectivity_snapshot.dart';
+import 'lane.dart';
+
+/// How a single delivery ended.
+enum DeliveryOutcome {
+  /// Carried by a live lane immediately.
+  sentLive,
+
+  /// No live lane worked; parked durably for later carriage.
+  queuedForLater,
+
+  /// The queue refused the payload (duplicate id, expired, or full).
+  rejected,
+}
+
+class _Lane {
+  _Lane(this.channel, this.profile);
+
+  final TransportChannel channel;
+  final LaneProfile profile;
+
+  /// Cost-adjusted ranking score: live EWMA health minus a small penalty
+  /// per cost rank, so a cheap lane wins a near-tie but a clearly
+  /// healthier expensive lane still gets the traffic.
+  double score() => channel.health.score() - profile.costRank * 0.05;
+}
+
+/// The "mother" layer: registers lanes, delivers live-first with
+/// store-and-forward fallback, drains the backlog on recovery, and
+/// publishes one authoritative connectivity snapshot stream.
+class ConnectionFabric {
+  ConnectionFabric({
+    required DtnBundleQueue fallbackQueue,
+    required int Function() nowMs,
+    double degradedBelowScore = 0.35,
+  }) : _queue = fallbackQueue,
+       _nowMs = nowMs,
+       _degradedBelowScore = degradedBelowScore;
+
+  final DtnBundleQueue _queue;
+  final int Function() _nowMs;
+  final double _degradedBelowScore;
+
+  final Map<String, _Lane> _lanes = {};
+  final _snapshots = StreamController<ConnectivitySnapshot>.broadcast();
+  final List<void Function()> _onUnhealthy = [];
+  bool _disposed = false;
+  ConnectivitySnapshot? _last;
+
+  /// Single source of truth: emits after every registration change,
+  /// delivery, refresh, and drain.
+  Stream<ConnectivitySnapshot> get snapshots => _snapshots.stream;
+
+  /// Latest published snapshot (computed on demand before the first emit).
+  ConnectivitySnapshot get snapshot => _last ?? _compute();
+
+  /// Registers a lane. The channel stays owned by the caller; the fabric
+  /// never disposes channels it did not create.
+  void registerLane(TransportChannel channel, LaneProfile profile) {
+    _checkLive();
+    if (_lanes.containsKey(profile.id)) {
+      throw ArgumentError.value(profile.id, 'profile.id', 'lane id in use');
+    }
+    _lanes[profile.id] = _Lane(channel, profile);
+    _publish();
+  }
+
+  /// Removes a lane; queued bundles are unaffected and will drain through
+  /// whichever lanes remain.
+  void unregisterLane(String id) {
+    _checkLive();
+    _lanes.remove(id);
+    _publish();
+  }
+
+  /// Registers a callback fired whenever the fabric leaves [FabricMode.live]
+  /// (e.g. wire a call controller's recovery request here).
+  void onUnhealthy(void Function() callback) => _onUnhealthy.add(callback);
+
+  /// Delivers [payload]: best eligible lane first, then the rest, then the
+  /// delay-tolerant queue. Exactly one of the three outcomes happens.
+  Future<DeliveryOutcome> deliver(
+    List<int> payload, {
+    required String bundleId,
+    MeshMessagePriority priority = MeshMessagePriority.bulk,
+    int lifetimeMs = 24 * 60 * 60 * 1000,
+  }) async {
+    _checkLive();
+    for (final lane in _ranked()) {
+      final result = await lane.channel.send(payload);
+      lane.channel.health.observe(result);
+      if (result.status == SendStatus.ok ||
+          result.status == SendStatus.duplicate) {
+        // A working lane may unblock the backlog too.
+        await _drainThrough(lane);
+        _publish();
+        return DeliveryOutcome.sentLive;
+      }
+    }
+    final admission = _queue.offer(
+      DtnBundle(
+        id: bundleId,
+        payload: payload,
+        priority: priority,
+        createdAtMs: _nowMs(),
+        lifetimeMs: lifetimeMs,
+      ),
+      nowMs: _nowMs(),
+    );
+    _publish();
+    return admission == BundleAdmission.stored
+        ? DeliveryOutcome.queuedForLater
+        : DeliveryOutcome.rejected;
+  }
+
+  /// Probes every registered lane, recomputes the mode, and — when an
+  /// eligible lane is back — drains the queued backlog through it.
+  /// Returns the number of bundles delivered from the backlog.
+  Future<int> refresh() async {
+    _checkLive();
+    for (final lane in _lanes.values) {
+      await lane.channel.probe();
+    }
+    var drained = 0;
+    final ranked = _ranked();
+    if (ranked.isNotEmpty) {
+      drained = await _drainThrough(ranked.first);
+    }
+    _publish();
+    return drained;
+  }
+
+  Future<int> _drainThrough(_Lane lane) async {
+    if (_queue.pendingCount == 0) return 0;
+    return _queue.flush((bundle) async {
+      final result = await lane.channel.send(bundle.payload);
+      lane.channel.health.observe(result);
+      return result.status == SendStatus.ok ||
+          result.status == SendStatus.duplicate;
+    }, nowMs: _nowMs());
+  }
+
+  List<_Lane> _ranked() {
+    final eligible = _lanes.values.where((l) => l.profile.eligible).toList()
+      ..sort((a, b) => b.score().compareTo(a.score()));
+    return eligible;
+  }
+
+  ConnectivitySnapshot _compute() {
+    final ordered = _lanes.values.toList()
+      ..sort((a, b) => b.score().compareTo(a.score()));
+    final statuses = [
+      for (final l in ordered)
+        LaneStatus(
+          id: l.profile.id,
+          eligible: l.profile.eligible,
+          score: l.score(),
+        ),
+    ];
+    final best = _ranked().isEmpty ? null : _ranked().first;
+    final FabricMode mode;
+    if (_lanes.isEmpty) {
+      mode = FabricMode.offline;
+    } else if (best == null) {
+      mode = FabricMode.storeAndForward;
+    } else if (best.score() < _degradedBelowScore) {
+      mode = FabricMode.degraded;
+    } else {
+      mode = FabricMode.live;
+    }
+    return ConnectivitySnapshot(
+      mode: mode,
+      lanes: statuses,
+      bestLaneId: best?.profile.id,
+      pendingBundles: _queue.pendingCount,
+      atMs: _nowMs(),
+    );
+  }
+
+  void _publish() {
+    final next = _compute();
+    final wasLive = _last?.mode == FabricMode.live;
+    _last = next;
+    _snapshots.add(next);
+    if (wasLive && next.mode != FabricMode.live) {
+      for (final cb in _onUnhealthy) {
+        cb();
+      }
+    }
+  }
+
+  void _checkLive() {
+    if (_disposed) {
+      throw StateError('ConnectionFabric used after dispose');
+    }
+  }
+
+  /// Closes the snapshot stream. Channels and the queue remain owned by
+  /// the caller and are not touched.
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await _snapshots.close();
+  }
+}
