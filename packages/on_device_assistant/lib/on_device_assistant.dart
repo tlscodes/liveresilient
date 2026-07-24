@@ -11,4 +11,6 @@
 library;
 
 export 'src/assistant_port.dart';
+export 'src/llm_backed_assistant.dart';
+export 'src/model_lifecycle_manager.dart';
 export 'src/rule_based_assistant.dart';
