@@ -258,9 +258,27 @@ Future<void> sendAttachment(
 
 /// Consumes incoming chat text: routes attachment chunks to the reassembler and
 /// leaves plain chat text alone. Emits an [Attachment] when one completes.
+///
+/// Idempotent against a full re-transmission of an already-completed
+/// attachment (e.g. a sender-side retry after a drop/reconnect that resends
+/// every chunk of an attachment whose id was already delivered): the
+/// `attachmentId` — [Attachment.id], supplied by the sender and unchanged
+/// across resends, unlike a fresh per-transfer id would be — is remembered
+/// in a bounded FIFO set of the last [maxRememberedIds] completed ids. A
+/// resend of an already-seen id is reassembled (memory-bounded, cheap) but
+/// dropped SILENTLY at completion — no error surfaces to the sender, so the
+/// sender's delivery/ack bookkeeping still sees it as delivered and its send
+/// queue drains normally. Distinct attachment ids are never affected. Once
+/// an id ages out of the cap it is treated as new again on next resend.
 class AttachmentReceiver {
+  /// Cap on remembered completed-attachment ids. Bounded so a long call
+  /// cannot grow this set forever; oldest id is evicted first (FIFO) once at
+  /// capacity.
+  static const int maxRememberedIds = 256;
+
   final _reassembler = AttachmentReassembler();
   final _completed = StreamController<Attachment>.broadcast();
+  final _seenIds = <String>{};
 
   Stream<Attachment> get completed => _completed.stream;
   int get pendingCount => _reassembler.pendingCount;
@@ -271,7 +289,16 @@ class AttachmentReceiver {
     final chunk = AttachmentChunk.tryDecode(text);
     if (chunk == null) return false;
     final done = _reassembler.accept(chunk);
-    if (done != null) _completed.add(done);
+    if (done != null) {
+      if (!_seenIds.add(done.id)) {
+        // Already delivered once: drop silently, do not re-emit.
+        return true;
+      }
+      if (_seenIds.length > maxRememberedIds) {
+        _seenIds.remove(_seenIds.first); // evict oldest (FIFO)
+      }
+      _completed.add(done);
+    }
     return true;
   }
 

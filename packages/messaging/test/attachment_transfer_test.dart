@@ -279,4 +279,84 @@ void main() {
       },
     );
   });
+
+  group('AttachmentReceiver idempotency', () {
+    test(
+      'full re-transmission of an already-completed attachment id is '
+      'delivered once; sender still sees all chunks consumed (acked)',
+      () async {
+        final a = att('dup-1', 8000);
+        final chunks = AttachmentChunker.split(a, maxChunkBytes: 3000);
+        final receiver = AttachmentReceiver();
+        final photos = <Attachment>[];
+        receiver.completed.listen(photos.add);
+
+        for (final c in chunks) {
+          expect(receiver.offer(c.encode()), isTrue);
+        }
+        await pumpEventQueue();
+        expect(photos, hasLength(1));
+
+        // Sender retries the whole transfer after a reconnect: every chunk
+        // resent with the same attachmentId.
+        for (final c in chunks) {
+          expect(receiver.offer(c.encode()), isTrue); // consumed, not an error
+        }
+        await pumpEventQueue();
+        expect(photos, hasLength(1)); // not re-emitted
+      },
+    );
+
+    test('distinct attachment ids are unaffected by dedup', () async {
+      final receiver = AttachmentReceiver();
+      final photos = <Attachment>[];
+      receiver.completed.listen(photos.add);
+
+      for (final id in ['id-a', 'id-b', 'id-c']) {
+        final chunks = AttachmentChunker.split(
+          att(id, 1000),
+          maxChunkBytes: 1000,
+        );
+        for (final c in chunks) {
+          receiver.offer(c.encode());
+        }
+      }
+      await pumpEventQueue();
+      expect(photos.map((p) => p.id).toSet(), {'id-a', 'id-b', 'id-c'});
+      expect(photos, hasLength(3));
+    });
+
+    test('eviction cap: id N+cap+1 evicts the oldest, so a resend of an '
+        'evicted id is redelivered rather than dropped', () async {
+      final receiver = AttachmentReceiver();
+      final photos = <Attachment>[];
+      receiver.completed.listen(photos.add);
+
+      // Complete maxRememberedIds + 1 distinct single-chunk attachments;
+      // the first id ('evict-0') is pushed out once the cap is exceeded.
+      for (var i = 0; i < AttachmentReceiver.maxRememberedIds + 1; i++) {
+        final chunks = AttachmentChunker.split(
+          att('evict-$i', 100),
+          maxChunkBytes: 100,
+        );
+        for (final c in chunks) {
+          receiver.offer(c.encode());
+        }
+      }
+      await pumpEventQueue();
+      expect(photos, hasLength(AttachmentReceiver.maxRememberedIds + 1));
+
+      // Resending the very first (now-evicted) id is treated as new again.
+      final resend = AttachmentChunker.split(
+        att('evict-0', 100),
+        maxChunkBytes: 100,
+      );
+      for (final c in resend) {
+        receiver.offer(c.encode());
+      }
+      await pumpEventQueue();
+      expect(photos, hasLength(AttachmentReceiver.maxRememberedIds + 2));
+      expect(photos.last.id, 'evict-0');
+    });
+  });
 }
