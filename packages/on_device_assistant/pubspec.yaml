@@ -1,0 +1,19 @@
+name: on_device_assistant
+description: >-
+  Abstract port for an on-device language model assistant plus a
+  deterministic rule-based default implementation. The engine behind the
+  port is swappable (Gemma via flutter_gemma, llama.cpp over FFI, a test
+  fake) without touching callers.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  connection_orchestrator:
+    path: ../connection_orchestrator
+
+dev_dependencies:
+  test: ^1.25.0

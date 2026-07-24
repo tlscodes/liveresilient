@@ -22,6 +22,7 @@ workspace:
   - packages/media_webrtc
   - packages/messaging
   - packages/messaging_webrtc_adapter
+  - packages/on_device_assistant
   - packages/privacy_telemetry
   - packages/security
   - packages/signaling
