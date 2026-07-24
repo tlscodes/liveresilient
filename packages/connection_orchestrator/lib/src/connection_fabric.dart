@@ -249,28 +249,58 @@ class ConnectionFabric {
         : DeliveryOutcome.rejected;
   }
 
-  /// Delivers a LARGE payload as a resumable chunked transfer: only the
-  /// chunks that did not make it live are parked in the DTN queue, so a
-  /// mid-transfer lane failure re-sends the remainder, never the whole
-  /// payload. Returns the sender-side transfer state (progress,
-  /// completeness) which the caller may persist and re-drive later.
+  /// Chunked transfers still in flight, re-driven automatically by every
+  /// [refresh] so recovery resumes them with no caller involvement.
+  final Map<String, ResumableTransfer> _activeTransfers = {};
+
+  /// Delivers a LARGE payload as a resumable, parity-protected chunked
+  /// transfer: only the chunks that did not make it live are parked in
+  /// the DTN queue, so a mid-transfer lane failure re-sends the
+  /// remainder, never the whole payload. Chunk size adapts to the best
+  /// lane's live score unless [chunkSize] is given. Each parity-group
+  /// also ships an XOR parity chunk so the receiver heals one lost chunk
+  /// per group without a round-trip. Incomplete transfers self-resume on
+  /// every [refresh]. Returns the sender-side transfer state.
   Future<ResumableTransfer> deliverChunked(
     List<int> payload, {
     required String transferId,
-    int chunkSize = 16 * 1024,
+    int? chunkSize,
     MeshMessagePriority priority = MeshMessagePriority.bulk,
     int lifetimeMs = 24 * 60 * 60 * 1000,
     ResumableTransfer? resume,
   }) async {
     _checkLive();
+    final ranked = _ranked();
     final transfer =
         resume ??
+        _activeTransfers[transferId] ??
         ResumableTransfer(
           transferId: transferId,
           payload: payload,
-          chunkSize: chunkSize,
+          chunkSize:
+              chunkSize ??
+              adaptiveChunkSize(
+                linkScore: ranked.isEmpty ? 0 : ranked.first.score(),
+              ),
         );
-    for (final chunk in transfer.remainingChunks()) {
+    await _driveTransfer(transfer, priority: priority, lifetimeMs: lifetimeMs);
+    if (transfer.complete) {
+      _activeTransfers.remove(transferId);
+    } else {
+      _activeTransfers[transferId] = transfer;
+    }
+    return transfer;
+  }
+
+  Future<void> _driveTransfer(
+    ResumableTransfer transfer, {
+    required MeshMessagePriority priority,
+    required int lifetimeMs,
+  }) async {
+    for (final chunk in [
+      ...transfer.remainingChunks(),
+      ...transfer.remainingParityChunks(),
+    ]) {
       final outcome = await deliver(
         chunk.payload,
         bundleId: chunk.id.encode(),
@@ -278,12 +308,13 @@ class ConnectionFabric {
         lifetimeMs: lifetimeMs,
       );
       if (outcome == DeliveryOutcome.sentLive) {
-        transfer.markDelivered(chunk.id.index);
+        chunk.id.parity
+            ? transfer.markParityDelivered(chunk.id.index)
+            : transfer.markDelivered(chunk.id.index);
       }
       // queuedForLater chunks stay in the DTN queue and drain on
       // recovery; rejected chunks stay un-marked for the next resume.
     }
-    return transfer;
   }
 
   /// Probes every registered lane, recomputes the mode, and — when an
@@ -298,6 +329,16 @@ class ConnectionFabric {
     final ranked = _ranked();
     if (ranked.isNotEmpty) {
       drained = await _drainThrough(ranked.first);
+      // Self-resume: in-flight chunked transfers push their remainder
+      // through the recovered lane with no caller involvement.
+      for (final transfer in [..._activeTransfers.values]) {
+        await _driveTransfer(
+          transfer,
+          priority: MeshMessagePriority.bulk,
+          lifetimeMs: 24 * 60 * 60 * 1000,
+        );
+        if (transfer.complete) _activeTransfers.remove(transfer.transferId);
+      }
     }
     // Feed the trend watch and act on the forecast: a best lane heading
     // for the floor triggers recovery while the call is still alive.
