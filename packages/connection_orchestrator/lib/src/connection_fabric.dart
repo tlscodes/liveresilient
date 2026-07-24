@@ -19,6 +19,7 @@ import 'connectivity_snapshot.dart';
 import 'delivery_planner.dart';
 import 'lane.dart';
 import 'lane_experience.dart';
+import 'micro_learner.dart';
 import 'trend_sentinel.dart';
 
 /// How a single delivery ended.
@@ -39,10 +40,16 @@ class _Lane {
   final TransportChannel channel;
   final LaneProfile profile;
 
+  /// Additive ranking bias seeded from long-term place memory
+  /// (positive = this lane is expected to be good HERE).
+  double forecastBias = 0;
+
   /// Cost-adjusted ranking score: live EWMA health minus a small penalty
-  /// per cost rank, so a cheap lane wins a near-tie but a clearly
-  /// healthier expensive lane still gets the traffic.
-  double score() => channel.health.score() - profile.costRank * 0.05;
+  /// per cost rank, plus the place-forecast bias, so a cheap lane wins a
+  /// near-tie and arriving somewhere familiar pre-ranks lanes before a
+  /// single byte is sent.
+  double score() =>
+      channel.health.score() - profile.costRank * 0.05 + forecastBias;
 }
 
 /// The "mother" layer: registers lanes, delivers live-first with
@@ -116,6 +123,28 @@ class ConnectionFabric {
   void unregisterLane(String id) {
     _checkLive();
     _lanes.remove(id);
+    _publish();
+  }
+
+  /// Seeds lane ranking from the long-term place memory: on arriving at
+  /// [place], each lane mapped to a known network gets a bias derived
+  /// from its learned expected quality there (centered on 0, scaled
+  /// gently so live health still dominates once real traffic flows).
+  /// Unmapped/unknown lanes keep bias 0.
+  void applyPlaceForecast(
+    MicroLearner learner,
+    String place, {
+    required String Function(String laneId) networkOfLane,
+  }) {
+    _checkLive();
+    for (final lane in _lanes.values) {
+      final network = networkOfLane(lane.profile.id);
+      final forecasts = learner.forecastFor(place);
+      final match = forecasts.where((f) => f.networkName == network);
+      lane.forecastBias = match.isEmpty
+          ? 0
+          : (match.first.expectedQuality - 0.5) * 0.4;
+    }
     _publish();
   }
 
