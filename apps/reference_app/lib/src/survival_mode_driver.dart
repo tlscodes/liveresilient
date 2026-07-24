@@ -22,6 +22,7 @@ library;
 import 'dart:async';
 
 import 'package:call_core/call_core.dart';
+import 'package:device_link/device_link.dart';
 import 'package:media_webrtc/media_webrtc.dart';
 import 'package:messaging/messaging.dart';
 
@@ -61,6 +62,7 @@ class SurvivalModeDriver {
     required Stream<MediaPolicyDecision> adaptationDecisions,
     this.recordClip,
     this.messenger,
+    this.fallbackStore,
     this.reconnectEpisodesToDegrade = 2,
     this.reconnectWindow = const Duration(seconds: 60),
     this.stableFor = const Duration(seconds: 30),
@@ -75,6 +77,14 @@ class SurvivalModeDriver {
   final DegradableCallHandle _call;
   final ClipRecorder? recordClip;
   final Future<ReliableMessenger> Function()? messenger;
+
+  /// Last-resort durable queue for a clip whose send attempt failed (e.g.
+  /// the outbox itself threw before the clip could be handed off). Off by
+  /// default (null): with no store supplied, behavior is byte-identical to
+  /// before this seam existed — a failed send is simply dropped, same as
+  /// today. When supplied, a failed clip is offered here instead of lost,
+  /// and flushed through the messenger the moment the call reconnects.
+  final DtnBundleQueue? fallbackStore;
   final DateTime Function() _now;
 
   /// Reconnect episodes inside [reconnectWindow] that mark the path as
@@ -115,6 +125,7 @@ class SurvivalModeDriver {
           unawaited(_call.enterDegradedMode(DegradedMode.voiceNotes));
         }
         _armStableTimer();
+        unawaited(_flushFallback());
       case DegradedCallState(:final mode):
         if (mode == DegradedMode.voiceNotes) {
           _startClipLoop();
@@ -174,8 +185,9 @@ class SurvivalModeDriver {
   Future<void> _captureOne() async {
     if (_recording || _disposed) return;
     _recording = true;
+    List<int>? bytes;
     try {
-      final bytes = await recordClip!(clipLength);
+      bytes = await recordClip!(clipLength);
       if (bytes == null || bytes.isEmpty || _disposed) return;
       // Rides the existing reliable outbox: chunked, acked, retransmitted
       // on tick — so the clip goes out whenever the transport is alive,
@@ -190,10 +202,61 @@ class SurvivalModeDriver {
         ),
       );
     } catch (_) {
+      // The outbox send attempt itself failed (as opposed to being merely
+      // queued for later retransmission) — the clip is otherwise lost. If
+      // a fallback store was supplied, offer it there instead; it is
+      // flushed through the messenger the next time the call reconnects.
       // Capture/enqueue failures must never kill the loop; the next
-      // period retries with a fresh clip.
+      // period retries with a fresh clip regardless.
+      final store = fallbackStore;
+      if (store != null && bytes != null && bytes.isNotEmpty) {
+        try {
+          store.offer(
+            DtnBundle(
+              id: 'voice-note-fallback-${_clipSeq++}',
+              payload: bytes,
+              priority: MeshMessagePriority.bulk,
+              createdAtMs: _now().millisecondsSinceEpoch,
+              lifetimeMs: const Duration(minutes: 10).inMilliseconds,
+            ),
+            nowMs: _now().millisecondsSinceEpoch,
+          );
+        } catch (_) {
+          // Offer failures are swallowed too — nothing left to do.
+        }
+      }
     } finally {
       _recording = false;
+    }
+  }
+
+  /// Flushes any bundles held in [fallbackStore] through the messenger now
+  /// that the call is connected again. Fire-and-forget from [_onState]:
+  /// never throws out, and never runs after [dispose].
+  Future<void> _flushFallback() async {
+    final store = fallbackStore;
+    if (store == null || _disposed) return;
+    if (store.pendingCount == 0) return;
+    try {
+      await store.flush((bundle) async {
+        if (_disposed || messenger == null) return false;
+        try {
+          await sendAttachment(
+            await messenger!(),
+            Attachment(
+              id: bundle.id,
+              kind: MediaKind.file,
+              contentType: 'audio/ogg',
+              bytes: bundle.payload,
+            ),
+          );
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }, nowMs: _now().millisecondsSinceEpoch);
+    } catch (_) {
+      // Flush must never throw out of _onState.
     }
   }
 
