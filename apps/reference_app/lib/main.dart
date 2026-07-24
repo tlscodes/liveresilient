@@ -18,6 +18,7 @@ import 'package:live_captions/live_captions.dart' show ChannelInvite;
 
 import 'src/chat_demo_controller.dart';
 import 'src/chat_screen.dart';
+import 'src/intelligence/device_bindings.dart';
 import 'src/intelligence/foresight_card.dart';
 import 'src/intelligence/intelligence_boot.dart';
 import 'src/join_channel_sheet.dart';
@@ -29,9 +30,13 @@ export 'src/chat_demo_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Boot the intelligence circuit before the first frame: both brains
-  // restored from disk, fabric place-aware, director watching. On a real
-  // device build, pass the plugin probes and a GemmaLlmEngine here.
-  final intelligence = await bootIntelligence();
+  // restored from disk, fabric place-aware, director watching. The device
+  // binding seam supplies the real mesh radio and LLM engine when present;
+  // both are null in the demo/gate build, so the app degrades cleanly.
+  final intelligence = await bootIntelligence(
+    localMeshLane: buildLocalMeshLane(),
+    llmEngine: buildLlmEngine(),
+  );
   runApp(MyApp(intelligence: intelligence));
 }
 
