@@ -18,18 +18,28 @@ import 'package:live_captions/live_captions.dart' show ChannelInvite;
 
 import 'src/chat_demo_controller.dart';
 import 'src/chat_screen.dart';
+import 'src/intelligence/foresight_card.dart';
+import 'src/intelligence/intelligence_boot.dart';
 import 'src/join_channel_sheet.dart';
 import 'src/theme.dart';
 
 export 'src/call_demo_controller.dart';
 export 'src/chat_demo_controller.dart';
 
-void main() {
-  runApp(const MyApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Boot the intelligence circuit before the first frame: both brains
+  // restored from disk, fabric place-aware, director watching. On a real
+  // device build, pass the plugin probes and a GemmaLlmEngine here.
+  final intelligence = await bootIntelligence();
+  runApp(MyApp(intelligence: intelligence));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.intelligence});
+
+  /// Null only in widget tests that exercise screens in isolation.
+  final IntelligenceStack? intelligence;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +47,7 @@ class MyApp extends StatelessWidget {
       title: 'VoiceCallKit Reference',
       theme: buildAppTheme(Brightness.light),
       darkTheme: buildAppTheme(Brightness.dark),
-      home: const HomePage(),
+      home: HomePage(intelligence: intelligence),
     );
   }
 }
@@ -45,7 +55,9 @@ class MyApp extends StatelessWidget {
 /// Root scaffold: a [NavigationBar] switching between the Call and Chat
 /// tabs. Owns both tabs' state so the screens themselves stay pure-data.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.intelligence});
+
+  final IntelligenceStack? intelligence;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -122,6 +134,8 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Column(
         children: [
+          if (widget.intelligence != null)
+            ForesightCard(director: widget.intelligence!.director),
           if (_joinedChannel != null)
             MaterialBanner(
               leading: const Icon(Icons.closed_caption),
