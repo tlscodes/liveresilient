@@ -26,3 +26,4 @@ pubspec.lock
 # conversation transcripts / logs — never in the technical repo
 chats.md
 *.log
+models/
