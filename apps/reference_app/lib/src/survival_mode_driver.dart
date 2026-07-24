@@ -60,6 +60,7 @@ class SurvivalModeDriver {
   SurvivalModeDriver({
     required DegradableCallHandle call,
     required Stream<MediaPolicyDecision> adaptationDecisions,
+    Stream<bool>? pathFailingSoon,
     this.recordClip,
     this.messenger,
     this.fallbackStore,
@@ -72,6 +73,10 @@ class SurvivalModeDriver {
        _now = now ?? DateTime.now {
     _stateSub = call.states.listen(_onState);
     _decisionSub = adaptationDecisions.listen(_onDecision);
+    // Foresight input: the trend watch predicting the live path will fail
+    // shortly. Entering voice-note mode BEFORE the drop means the first
+    // clips ride a link that still half-works instead of a dead one.
+    _foresightSub = pathFailingSoon?.listen(_onFailingSoon);
   }
 
   final DegradableCallHandle _call;
@@ -99,6 +104,21 @@ class SurvivalModeDriver {
 
   late final StreamSubscription<CallState> _stateSub;
   late final StreamSubscription<MediaPolicyDecision> _decisionSub;
+  StreamSubscription<bool>? _foresightSub;
+
+  /// Pre-emptive degradations taken on a predicted failure (UI/tests).
+  int foresightDegrades = 0;
+
+  void _onFailingSoon(bool failingSoon) {
+    if (_disposed || !failingSoon) return;
+    final state = _call.stateOf();
+    // Act only while live audio is actually at stake and not already
+    // degraded — idempotent under a stream that repeats its verdict.
+    if (state is ConnectedCallState && state.degradedMode == null) {
+      foresightDegrades++;
+      unawaited(_call.enterDegradedMode(DegradedMode.voiceNotes));
+    }
+  }
 
   final List<DateTime> _reconnectEpisodes = <DateTime>[];
   Timer? _stableTimer;
@@ -267,5 +287,6 @@ class SurvivalModeDriver {
     _stableTimer?.cancel();
     await _stateSub.cancel();
     await _decisionSub.cancel();
+    await _foresightSub?.cancel();
   }
 }

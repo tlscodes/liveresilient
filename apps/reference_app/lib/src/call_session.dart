@@ -186,6 +186,15 @@ CallSessionHandle buildWebRtcCallSession({
   final survivalDriver = SurvivalModeDriver(
     call: DegradableCallHandle.of(controller),
     adaptationDecisions: adaptationDriver.decisions,
+    // Foresight feed: the trend watch on the live media lane. Predicting
+    // the path will fail shortly flips the call into voice-note mode
+    // BEFORE the drop, so the first clips ride a still-half-working link.
+    pathFailingSoon: fabric.snapshots.map(
+      (snapshot) =>
+          snapshot.bestLaneId != null &&
+          fabric.trend.verdict(snapshot.bestLaneId!) ==
+              TrendVerdict.failingSoon,
+    ),
     recordClip: recordVoiceClip,
     fallbackStore: resolvedFallbackQueue,
     messenger: recordVoiceClip == null

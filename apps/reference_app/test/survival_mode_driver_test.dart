@@ -132,6 +132,39 @@ void main() {
     });
   });
 
+  test('foresight: a predicted path failure enters voice-note mode BEFORE '
+      'any reconnect, and repeats are idempotent', () {
+    fakeAsync((async) {
+      final controller = _FakeCall();
+      final decisions = StreamController<mw.MediaPolicyDecision>(sync: true);
+      final foresight = StreamController<bool>(sync: true);
+      final driver = SurvivalModeDriver(
+        call: controller.handle,
+        adaptationDecisions: decisions.stream,
+        pathFailingSoon: foresight.stream,
+      );
+      controller.emitPhase(CallPhase.connected);
+      async.flushMicrotasks();
+
+      foresight.add(false); // steady verdicts change nothing
+      async.flushMicrotasks();
+      expect(controller.enteredModes, isEmpty);
+
+      foresight.add(true); // predicted failure — act pre-emptively
+      async.flushMicrotasks();
+      expect(controller.enteredModes, [DegradedMode.voiceNotes]);
+      expect(driver.foresightDegrades, 1);
+
+      foresight.add(true); // repeated verdict while degraded: no re-entry
+      async.flushMicrotasks();
+      expect(controller.enteredModes, hasLength(1));
+
+      unawaited(driver.dispose());
+      unawaited(decisions.close());
+      unawaited(foresight.close());
+    });
+  });
+
   test('a flapping path (2 reconnect episodes in the window) enters '
       'voice-note mode on reconnect; clips queue through the REAL outbox '
       'while offline and deliver when the transport recovers; stability '
