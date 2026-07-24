@@ -18,6 +18,7 @@ import 'package:live_captions/live_captions.dart' show ChannelInvite;
 
 import 'src/chat_demo_controller.dart';
 import 'src/chat_screen.dart';
+import 'src/intelligence/assistant_view.dart';
 import 'src/intelligence/device_bindings.dart';
 import 'src/intelligence/foresight_card.dart';
 import 'src/intelligence/intelligence_boot.dart';
@@ -139,8 +140,10 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Column(
         children: [
-          if (widget.intelligence != null)
+          if (widget.intelligence != null) ...[
             ForesightCard(director: widget.intelligence!.director),
+            AssistantView(director: widget.intelligence!.director),
+          ],
           if (_joinedChannel != null)
             MaterialBanner(
               leading: const Icon(Icons.closed_caption),
