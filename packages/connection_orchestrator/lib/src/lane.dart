@@ -24,6 +24,7 @@ class LaneProfile {
     required this.id,
     required this.kind,
     this.costRank = 0,
+    this.energyRank = 0,
     this.consent,
   });
 
@@ -35,6 +36,11 @@ class LaneProfile {
   /// Relative cost of using this lane: 0 = free/preferred, higher = more
   /// expensive. Used as a score penalty so a cheap lane wins a near-tie.
   final int costRank;
+
+  /// Relative battery drain of using this lane: 0 = negligible, higher =
+  /// hungrier radio (e.g. a scanning direct link). Penalized when the
+  /// device reports low battery, so resilience never flattens the phone.
+  final int energyRank;
 
   /// When set, the lane is eligible only while [DeviceLinkConsent.granted]
   /// is true. Consent is re-read on every ranking pass, so revocation

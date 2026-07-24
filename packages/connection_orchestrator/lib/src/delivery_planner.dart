@@ -29,6 +29,7 @@ class PlannerLaneView {
     required this.healthScore,
     required this.learnedScore,
     required this.costRank,
+    this.energyRank = 0,
   });
 
   final String id;
@@ -40,6 +41,9 @@ class PlannerLaneView {
   final double learnedScore;
 
   final int costRank;
+
+  /// Relative battery drain (0 = negligible); penalized on low battery.
+  final int energyRank;
 }
 
 /// The plan: strategy plus the lane ids to use, best first.
@@ -62,6 +66,7 @@ class DeliveryPlanner {
     this.costPenalty = 0.05,
     this.raceMargin = 0.15,
     this.credibleFloor = 0.2,
+    this.energyPenaltyLowBattery = 0.1,
   });
 
   /// Relative weight of live health vs learned context experience.
@@ -78,10 +83,15 @@ class DeliveryPlanner {
   /// over (they still get tried as failover in singleBest).
   final double credibleFloor;
 
-  double blendedScore(PlannerLaneView lane) =>
+  /// Extra per-energy-rank penalty applied only while the battery is low,
+  /// so a hungry radio loses near-ties exactly when it matters.
+  final double energyPenaltyLowBattery;
+
+  double blendedScore(PlannerLaneView lane, {bool lowBattery = false}) =>
       healthWeight * lane.healthScore +
       learnedWeight * lane.learnedScore -
-      costPenalty * lane.costRank;
+      costPenalty * lane.costRank -
+      (lowBattery ? energyPenaltyLowBattery * lane.energyRank : 0);
 
   /// Produces the plan for this delivery.
   ///
@@ -94,6 +104,7 @@ class DeliveryPlanner {
     required DeliveryContext context,
     required bool urgent,
     bool bestLaneSliding = false,
+    bool lowBattery = false,
   }) {
     if (lanes.isEmpty) {
       return const DeliveryPlan(
@@ -101,14 +112,14 @@ class DeliveryPlanner {
         laneIds: [],
       );
     }
-    final ranked = [...lanes]
-      ..sort((a, b) => blendedScore(b).compareTo(blendedScore(a)));
+    double score(PlannerLaneView l) => blendedScore(l, lowBattery: lowBattery);
+    final ranked = [...lanes]..sort((a, b) => score(b).compareTo(score(a)));
     final ids = [for (final l in ranked) l.id];
 
     if (urgent) {
       final credible = [
         for (final l in ranked)
-          if (blendedScore(l) >= credibleFloor) l.id,
+          if (score(l) >= credibleFloor) l.id,
       ];
       return DeliveryPlan(
         strategy: DeliveryStrategy.replicate,
@@ -121,8 +132,7 @@ class DeliveryPlanner {
     if (context.priority != MeshMessagePriority.bulk &&
         ranked.length >= 2 &&
         (bestLaneSliding ||
-            blendedScore(ranked[0]) - blendedScore(ranked[1]) <=
-                raceMargin)) {
+            score(ranked[0]) - score(ranked[1]) <= raceMargin)) {
       return DeliveryPlan(
         strategy: DeliveryStrategy.raceFanout,
         laneIds: ids.take(2).toList(),
