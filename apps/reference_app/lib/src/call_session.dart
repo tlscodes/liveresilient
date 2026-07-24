@@ -11,7 +11,10 @@ import 'dart:io';
 import 'package:call_core/call_core.dart';
 import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:call_signaling_adapter/call_signaling_adapter.dart';
+import 'package:device_link/device_link.dart' show DtnBundleQueue;
+import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
+import 'package:meta/meta.dart';
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
@@ -27,9 +30,16 @@ class CallSessionHandle {
     required this.controller,
     required this.dispose,
     this.openChatPort,
+    this.survivalFallbackQueue,
   });
 
   final CallController controller;
+
+  /// The durable (or overridden) queue backing survival-mode's fallback
+  /// store, if one was built — exposed for tests to prove restart survival
+  /// without reaching into private wiring.
+  @visibleForTesting
+  final DtnBundleQueue? survivalFallbackQueue;
 
   /// Opens the messaging layer's transport over THIS call's negotiated data
   /// channel (frames ride the call's existing DTLS transport). Both peers
@@ -62,6 +72,19 @@ CallSessionHandle buildWebRtcCallSession({
   SecurityContext? securityContext,
   ClipRecorder? recordVoiceClip,
   AudioFrameTap? audioFrameTap,
+
+  /// Directory the survival-mode fallback bundle log lives in. Injectable
+  /// so tests control it (and the app can later supply its documents dir)
+  /// without this file taking a `path_provider` dependency. Defaults to a
+  /// per-callId folder under the system temp dir.
+  Directory Function()? storageDirFactory,
+
+  /// Escape hatch: pass `false` to disable the durable fallback store
+  /// (falls back to `DtnBundleQueue`'s in-memory default) or pass a
+  /// pre-built queue to override it entirely. Defaults to a
+  /// `DurableBundleStore`-backed queue keyed on [callId].
+  DtnBundleQueue? fallbackBundleQueue,
+  bool useDurableFallbackStore = true,
 }) {
   final client = SignalingClient(
     endpoint: endpoint,
@@ -124,10 +147,25 @@ CallSessionHandle buildWebRtcCallSession({
   // clips ride the chat outbox. The messenger is created lazily over this
   // call's own data channel and reused for every clip.
   ReliableMessenger? survivalMessenger;
+  // Durable fallback: clips offered while the call has no live data channel
+  // survive a process restart too, backed by a per-call log file on disk.
+  final resolvedFallbackQueue =
+      fallbackBundleQueue ??
+      (useDurableFallbackStore
+          ? DtnBundleQueue(
+              store: DurableBundleStore.open(
+                File(
+                  '${(storageDirFactory ?? _defaultSurvivalStorageDir)().path}/'
+                  'survival_$callId.jsonl',
+                ),
+              ),
+            )
+          : null);
   final survivalDriver = SurvivalModeDriver(
     call: DegradableCallHandle.of(controller),
     adaptationDecisions: adaptationDriver.decisions,
     recordClip: recordVoiceClip,
+    fallbackStore: resolvedFallbackQueue,
     messenger: recordVoiceClip == null
         ? null
         : () async => survivalMessenger ??= ReliableMessenger(
@@ -168,6 +206,7 @@ CallSessionHandle buildWebRtcCallSession({
   });
   return CallSessionHandle(
     controller: controller,
+    survivalFallbackQueue: resolvedFallbackQueue,
     openChatPort: () async =>
         MediaChannelDataPort(await media.openDataChannel()),
     dispose: () async {
@@ -181,6 +220,17 @@ CallSessionHandle buildWebRtcCallSession({
       await client.dispose();
     },
   );
+}
+
+/// Default location for the survival-mode fallback bundle log: a stable
+/// subfolder under the system temp dir (created if absent) so restarts on
+/// the same device find the same file without a `path_provider` dependency.
+Directory _defaultSurvivalStorageDir() {
+  final dir = Directory('${Directory.systemTemp.path}/voice_call_kit_survival');
+  if (!dir.existsSync()) {
+    dir.createSync(recursive: true);
+  }
+  return dir;
 }
 
 /// Real `dart:io` WebSocket connector for [SignalingClient].
