@@ -47,6 +47,8 @@ dependencies:
     path: ../../packages/call_media_adapter
   call_signaling_adapter:
     path: ../../packages/call_signaling_adapter
+  connection_orchestrator:
+    path: ../../packages/connection_orchestrator
   device_link:
     path: ../../packages/device_link
   media_webrtc:
