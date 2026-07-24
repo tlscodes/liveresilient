@@ -167,6 +167,12 @@ class ConnectionFabric {
       priority: priority,
     );
     final byId = {for (final l in _ranked()) l.profile.id: l};
+    // Foresight feed: if the trend watch says the current best lane is
+    // heading down, the planner duplicates onto the runner-up in advance.
+    final bestId = byId.isEmpty ? null : byId.keys.first;
+    final bestVerdict = bestId == null
+        ? TrendVerdict.unknown
+        : trend.verdict(bestId);
     final plan = _planner.plan(
       lanes: [
         for (final l in byId.values)
@@ -179,6 +185,9 @@ class ConnectionFabric {
       ],
       context: ctx,
       urgent: priority == MeshMessagePriority.callSignal,
+      bestLaneSliding:
+          bestVerdict == TrendVerdict.slipping ||
+          bestVerdict == TrendVerdict.failingSoon,
     );
     lastPlan = plan;
 

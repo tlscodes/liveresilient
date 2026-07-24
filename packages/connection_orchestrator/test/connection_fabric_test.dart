@@ -85,6 +85,42 @@ void main() {
       expect(fabric.snapshot.mode, FabricMode.live);
     });
 
+    test(
+      'predicted slide on best lane duplicates non-bulk onto the backup',
+      () async {
+        final wifi = _FakeChannel('wifi');
+        final cell = _FakeChannel('cell');
+        cell.health.availability = 0.6; // clear runner-up, wide margin
+        fabric.registerLane(
+          wifi,
+          const LaneProfile(id: 'wifi', kind: LaneKind.internet),
+        );
+        fabric.registerLane(
+          cell,
+          const LaneProfile(id: 'cell', kind: LaneKind.internet, costRank: 1),
+        );
+        // Foresight: wifi is best but its score series slides hard.
+        fabric.trend.observe('wifi', 0.9, nowMs: 0);
+        fabric.trend.observe('wifi', 0.7, nowMs: 5000);
+        fabric.trend.observe('wifi', 0.5, nowMs: 10000);
+
+        final outcome = await fabric.deliver(
+          [7],
+          bundleId: 'dual',
+          priority: MeshMessagePriority.presence,
+        );
+
+        expect(outcome, DeliveryOutcome.sentLive);
+        expect(wifi.sends, 1, reason: 'primary still used');
+        expect(cell.sends, 1, reason: 'danger-window duplicate sent early');
+
+        // Same situation but bulk traffic: no duplication spend.
+        final wifiBefore = wifi.sends, cellBefore = cell.sends;
+        await fabric.deliver([8], bundleId: 'bulk1');
+        expect(wifi.sends + cell.sends, wifiBefore + cellBefore + 1);
+      },
+    );
+
     test('all lanes down → payload parked in the DTN queue', () async {
       final net = _FakeChannel('net', up: false);
       fabric.registerLane(
