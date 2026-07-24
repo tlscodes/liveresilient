@@ -77,8 +77,9 @@ class _HomePageState extends State<HomePage> {
   /// engine wiring).
   ChannelInvite? _joinedChannel;
   final CallDemoController _call = CallDemoController();
-  final ChatDemoController _chat = ChatDemoController(
+  late final ChatDemoController _chat = ChatDemoController(
     attachmentPicker: pickAttachmentFile,
+    intelligenceFabric: widget.intelligence?.fabric,
   );
 
   @override

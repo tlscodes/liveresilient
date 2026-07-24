@@ -11,7 +11,9 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:live_captions/live_captions.dart';
 import 'package:messaging/messaging.dart';
@@ -22,9 +24,10 @@ import 'loopback_port.dart';
 class ChatDemoController extends ChangeNotifier {
   ChatDemoController({
     DataChannelPort? callChannelPort,
+    ConnectionFabric? intelligenceFabric,
     this._attachmentPicker,
     this._audioPlayer,
-  }) {
+  }) : _fabric = intelligenceFabric {
     final DataChannelPort localPort;
     if (callChannelPort != null) {
       localPort = callChannelPort;
@@ -171,10 +174,28 @@ class ChatDemoController extends ChangeNotifier {
     text: text,
   );
 
+  /// The app's live connectivity brain. When present, every real user send
+  /// is also offered to the fabric so the intelligence observes actual
+  /// traffic — learning per (place, network), updating the snapshot/trend,
+  /// and letting the director narrate and self-heal on live activity rather
+  /// than only on the boot probe. Reliable delivery/ack stays owned by
+  /// [ReliableMessenger]; the fabric is an intelligence tap, not the wire.
+  final ConnectionFabric? _fabric;
+
   Future<void> sendText(String text) async {
     final message = await _local.send(text);
     entries.add(ChatEntry(message: message));
     notifyListeners();
+    final fabric = _fabric;
+    if (fabric != null) {
+      // Best-effort intelligence tap: never let a fabric hiccup break the
+      // user's chat send.
+      unawaited(
+        fabric
+            .deliver(utf8.encode(text), bundleId: message.id)
+            .catchError((Object _) => DeliveryOutcome.queuedForLater),
+      );
+    }
   }
 
   /// Picker injected at construction (`pickAttachmentFile` in the app, a
