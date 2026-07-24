@@ -1,0 +1,21 @@
+name: connection_orchestrator
+description: >-
+  Unified connectivity fabric: registers every transport lane (internet,
+  local peer, carrier), ranks them by live health and cost, delivers
+  payloads live-first with automatic store-and-forward fallback, and
+  publishes one authoritative connectivity snapshot stream.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  adaptive_transport:
+    path: ../adaptive_transport
+  device_link:
+    path: ../device_link
+
+dev_dependencies:
+  test: ^1.25.0
