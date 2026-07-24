@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:flutter/foundation.dart';
 
+import 'connectivity_playbook.dart';
 import 'intelligence_hub.dart';
 
 /// Severity of the current situation as the director judges it.
@@ -108,6 +109,7 @@ class IntelligenceDirector extends ChangeNotifier {
   final Duration refreshCooldown;
 
   final DateTime Function() _now;
+  static const _playbook = ConnectivityPlaybook();
   StreamSubscription<ConnectivitySnapshot>? _sub;
   DateTime? _lastRefreshAction;
   int _narrationSeq = 0;
@@ -208,10 +210,15 @@ class IntelligenceDirector extends ChangeNotifier {
       }
     }
 
+    // Expert playbook: the single most relevant piece of distilled
+    // knowledge serves as instant detail until live narration arrives.
+    final insight = _playbook.match(snapshot, trendVerdict);
     _advisory = DirectorAdvisory(
       level: level,
       headline: headline,
-      detail: _advisory.headline == headline ? _advisory.detail : '',
+      detail: _advisory.headline == headline && _advisory.detail.isNotEmpty
+          ? _advisory.detail
+          : insight.guidance,
       actionTaken: action ?? _advisory.actionTaken,
     );
     notifyListeners();
