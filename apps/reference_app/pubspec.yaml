@@ -46,6 +46,8 @@ dependencies:
     path: ../../packages/call_media_adapter
   call_signaling_adapter:
     path: ../../packages/call_signaling_adapter
+  device_link:
+    path: ../../packages/device_link
   media_webrtc:
     path: ../../packages/media_webrtc
   media_webrtc_flutter:
