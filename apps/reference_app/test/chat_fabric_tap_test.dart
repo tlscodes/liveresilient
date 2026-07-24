@@ -10,6 +10,7 @@ import 'package:reference_app/src/chat_demo_controller.dart';
 
 class _OkChannel implements TransportChannel {
   int sends = 0;
+  final bundleSizes = <int>[];
   @override
   String get name => 'tap-net';
   @override
@@ -23,6 +24,7 @@ class _OkChannel implements TransportChannel {
   @override
   Future<SendResult> send(List<int> payload) async {
     sends++;
+    bundleSizes.add(payload.length);
     return const SendResult(SendStatus.ok, rttMs: 20);
   }
 
@@ -49,6 +51,28 @@ void main() {
     expect(channel.sends, greaterThan(0));
     expect(fabric.snapshot.mode, FabricMode.live);
     chat.dispose();
+    await fabric.dispose();
+  });
+
+  test('an attachment rides the fabric as a resumable chunked transfer',
+      () async {
+    final channel = _OkChannel();
+    final fabric =
+        ConnectionFabric(fallbackQueue: DtnBundleQueue(), nowMs: () => 0)
+          ..registerLane(
+            channel,
+            LaneProfile(id: channel.name, kind: LaneKind.internet),
+          );
+    final bigBytes = List<int>.filled(48 * 1024, 7);
+    final transfer = await fabric.deliverChunked(
+      bigBytes,
+      transferId: 'photo-1',
+    );
+
+    expect(transfer.complete, isTrue);
+    expect(transfer.totalChunks, greaterThan(1), reason: 'actually chunked');
+    expect(channel.sends, greaterThan(transfer.totalChunks),
+        reason: 'data + parity chunks all carried');
     await fabric.dispose();
   });
 }
