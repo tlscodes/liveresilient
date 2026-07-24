@@ -11,6 +11,7 @@ import 'dart:io';
 import 'package:call_core/call_core.dart';
 import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:call_signaling_adapter/call_signaling_adapter.dart';
+import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:device_link/device_link.dart' show DtnBundleQueue;
 import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
@@ -31,9 +32,16 @@ class CallSessionHandle {
     required this.dispose,
     this.openChatPort,
     this.survivalFallbackQueue,
+    this.connectionFabric,
   });
 
   final CallController controller;
+
+  /// The session's unified connectivity fabric: every lane (live media
+  /// path today; local-peer and carrier lanes as they come online) plus
+  /// the delay-tolerant fallback queue, published as one snapshot stream
+  /// for the UI. Null on session builds that skip production wiring.
+  final ConnectionFabric? connectionFabric;
 
   /// The durable (or overridden) queue backing survival-mode's fallback
   /// store, if one was built — exposed for tests to prove restart survival
@@ -161,6 +169,20 @@ CallSessionHandle buildWebRtcCallSession({
               ),
             )
           : null);
+  // Connectivity fabric: the one owner of every lane this session has.
+  // Today it carries the live media path and shares the survival fallback
+  // queue, so `snapshot.pendingBundles` and `FabricMode` give the UI a
+  // single connectivity truth; new lanes (local peer, carrier) register
+  // here without touching the call pipeline.
+  final fabric = ConnectionFabric(
+    fallbackQueue: resolvedFallbackQueue ?? DtnBundleQueue(),
+    nowMs: () => DateTime.now().millisecondsSinceEpoch,
+  );
+  fabric.registerLane(
+    WebRtcPathChannel(readCounters: () async => livePort?.readStatsCounters()),
+    const LaneProfile(id: 'webrtc-media', kind: LaneKind.internet),
+  );
+  fabric.onUnhealthy(() => controller.requestRecovery());
   final survivalDriver = SurvivalModeDriver(
     call: DegradableCallHandle.of(controller),
     adaptationDecisions: adaptationDriver.decisions,
@@ -207,6 +229,7 @@ CallSessionHandle buildWebRtcCallSession({
   return CallSessionHandle(
     controller: controller,
     survivalFallbackQueue: resolvedFallbackQueue,
+    connectionFabric: fabric,
     openChatPort: () async =>
         MediaChannelDataPort(await media.openDataChannel()),
     dispose: () async {
@@ -215,6 +238,7 @@ CallSessionHandle buildWebRtcCallSession({
       await survivalDriver.dispose();
       await survivalMessenger?.close();
       await pathMonitor.dispose();
+      await fabric.dispose();
       await adaptationDriver.dispose();
       await controller.dispose();
       await client.dispose();
