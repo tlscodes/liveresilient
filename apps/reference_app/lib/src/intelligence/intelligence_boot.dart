@@ -65,6 +65,7 @@ Future<IntelligenceStack> bootIntelligence({
   CachingNetworkResolver? resolver,
   LlmEngine? llmEngine,
   TransportChannel? primaryLane,
+  TransportChannel? localMeshLane,
   int Function()? nowMs,
 }) async {
   final dirFactory = storageDirFactory ?? _defaultIntelligenceDir;
@@ -102,6 +103,20 @@ Future<IntelligenceStack> bootIntelligence({
     lane,
     LaneProfile(id: lane.name, kind: LaneKind.internet),
   );
+  // Local peer-to-peer lane: registered when the platform provides a mesh
+  // radio, so the fabric fails over to a direct nearby-device link the
+  // moment internet lanes die. costRank 1 keeps it slightly behind free
+  // internet at equal health, but a healthier mesh still wins.
+  if (localMeshLane != null) {
+    fabric.registerLane(
+      localMeshLane,
+      LaneProfile(
+        id: localMeshLane.name,
+        kind: LaneKind.localPeer,
+        costRank: 1,
+      ),
+    );
+  }
   // Arriving where we've been before: pre-rank from the long-term map.
   fabric.applyPlaceForecast(
     hub.learner,
