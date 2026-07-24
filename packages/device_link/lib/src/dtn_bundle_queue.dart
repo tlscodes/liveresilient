@@ -234,14 +234,23 @@ class DtnBundleQueue {
   /// Attempts to flush the queue through [forward] when a transport is up.
   /// Delivers in priority/arrival order; a bundle that forwards is removed,
   /// one that fails stops the flush (the transport just went down again) and
-  /// stays queued. Expired bundles are dropped, not delivered. Returns the
-  /// number of bundles successfully forwarded.
+  /// stays queued. A [forward] call that *throws* counts as a failed
+  /// hand-off too — the throwing bundle and everything after it stay queued
+  /// for a later attempt, exactly as if it had returned false; the
+  /// exception is swallowed here, not rethrown. Expired bundles are
+  /// dropped, not delivered. Returns the number of bundles successfully
+  /// forwarded.
   Future<int> flush(BundleForwarder forward, {required int nowMs}) async {
     _dropExpired(nowMs);
     var delivered = 0;
     for (final bundle in pendingInDeliveryOrder(nowMs)) {
       if (bundle.isExpiredAt(nowMs)) continue;
-      final ok = await forward(bundle);
+      bool ok;
+      try {
+        ok = await forward(bundle);
+      } catch (_) {
+        ok = false;
+      }
       if (!ok) break;
       _removeBundle(bundle);
       delivered++;

@@ -201,6 +201,46 @@ void main() {
       expect(forwarded, ['alive']);
       expect(q.pendingCount, 0);
     });
+
+    test('a forwarder that throws counts as a failed hand-off: the thrower '
+        'and later bundles stay queued, and a retry delivers each exactly '
+        'once', () async {
+      final q = DtnBundleQueue();
+      q.offer(
+        bundle('one', priority: MeshMessagePriority.callSignal, createdAtMs: 1),
+        nowMs: 1,
+      );
+      q.offer(
+        bundle('two', priority: MeshMessagePriority.presence, createdAtMs: 2),
+        nowMs: 2,
+      );
+      q.offer(
+        bundle('three', priority: MeshMessagePriority.bulk, createdAtMs: 3),
+        nowMs: 3,
+      );
+
+      final forwarded = <String>[];
+      final delivered = await q.flush((b) async {
+        forwarded.add(b.id);
+        if (b.id == 'two') throw StateError('transport blew up');
+        return true;
+      }, nowMs: 10);
+
+      expect(delivered, 1);
+      expect(forwarded, ['one', 'two']);
+      expect(q.pendingInDeliveryOrder(10).map((b) => b.id), ['two', 'three']);
+
+      // Retry: the thrower now succeeds, and nothing is re-delivered.
+      final retryForwarded = <String>[];
+      final retryDelivered = await q.flush((b) async {
+        retryForwarded.add(b.id);
+        return true;
+      }, nowMs: 20);
+
+      expect(retryDelivered, 2);
+      expect(retryForwarded, ['two', 'three']);
+      expect(q.pendingCount, 0);
+    });
   });
 
   group('validation', () {
