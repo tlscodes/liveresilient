@@ -25,6 +25,17 @@ ideal order-0 column entropy:      645 bps   (floor for this corpus)
 Codec2 700C reference:             700 bps
 ```
 
+## v4 — مدل مرتبه‌۱ ستونی (رکورد جدید، همان شب)
+
+کد ستون در جدول فراوانیِ ستونِ قبلی کدگذاری می‌شود (`tools/hamseda_v4_test.py`؛ escape به جدول سراسری بعد ردیف‌ها؛ کاملاً تطبیقی و بیت‌به‌بیت).
+
+```
+full band  (raw 1501): cold 1395-1869 bps · fully-warm  85 bps  [8.2x under 700C]
+row0 lane  (raw  750): cold  574-818 bps · fully-warm 203 bps
+row0 fresh-content calls 2 & 4:  638 / 574 bps  -> UNDER 700 on new speech
+audio proof of row0 quality: demo_audio/gift_row0_750bps.wav
+```
+
 ## برچسب صادقانه‌ی کیفیت و ادعا
 
 - عدد 675bps مالِ بازپخش گفتاری است که دیکشنری قبلاً دیده (سقف همگرایی هر-مخاطب)؛ تماس با محتوای کاملاً تازه امروز 1350–1450bps می‌رود و با هر تماس پایین می‌آید.
