@@ -64,6 +64,7 @@ class SurvivalModeDriver {
     this.recordClip,
     this.messenger,
     this.fallbackStore,
+    VoiceCodecBinding? tokenCodec,
     this.reconnectEpisodesToDegrade = 2,
     this.reconnectWindow = const Duration(seconds: 60),
     this.stableFor = const Duration(seconds: 30),
@@ -71,6 +72,14 @@ class SurvivalModeDriver {
     DateTime Function()? now,
   }) : _call = call,
        _now = now ?? DateTime.now {
+    // Token-voice rung availability: resolved once up front (the codec
+    // model either is or is not downloaded on this device); a late
+    // install upgrades the NEXT degradation, never a running one.
+    if (tokenCodec != null) {
+      unawaited(tokenCodec.available.then((ok) {
+        if (!_disposed) _tokenVoiceAvailable = ok;
+      }).catchError((_) {}));
+    }
     _stateSub = call.states.listen(_onState);
     _decisionSub = adaptationDecisions.listen(_onDecision);
     // Foresight input: the trend watch predicting the live path will fail
@@ -109,6 +118,14 @@ class SurvivalModeDriver {
   /// Pre-emptive degradations taken on a predicted failure (UI/tests).
   int foresightDegrades = 0;
 
+  bool _tokenVoiceAvailable = false;
+
+  /// The rung below live low-rate voice: a token-voice call when the
+  /// device has the neural codec model, otherwise voice notes.
+  DegradedMode get _floorMode => _tokenVoiceAvailable
+      ? DegradedMode.tokenVoice
+      : DegradedMode.voiceNotes;
+
   void _onFailingSoon(bool failingSoon) {
     if (_disposed || !failingSoon) return;
     final state = _call.stateOf();
@@ -116,7 +133,7 @@ class SurvivalModeDriver {
     // degraded — idempotent under a stream that repeats its verdict.
     if (state is ConnectedCallState && state.degradedMode == null) {
       foresightDegrades++;
-      unawaited(_call.enterDegradedMode(DegradedMode.voiceNotes));
+      unawaited(_call.enterDegradedMode(_floorMode));
     }
   }
 
@@ -142,7 +159,7 @@ class SurvivalModeDriver {
       case ConnectedCallState():
         _pruneEpisodes();
         if (_reconnectEpisodes.length >= reconnectEpisodesToDegrade) {
-          unawaited(_call.enterDegradedMode(DegradedMode.voiceNotes));
+          unawaited(_call.enterDegradedMode(_floorMode));
         }
         _armStableTimer();
         unawaited(_flushFallback());
@@ -152,6 +169,9 @@ class SurvivalModeDriver {
           _armStableTimer();
         } else {
           _stopClipLoop();
+          // Token voice is still a flap-driven floor mode: it clears the
+          // same way voice notes do, after a stable stretch.
+          if (mode == DegradedMode.tokenVoice) _armStableTimer();
         }
       case IdleCallState() ||
           ConnectingCallState() ||
@@ -184,7 +204,9 @@ class SurvivalModeDriver {
     _stableTimer = Timer(stableFor, () {
       if (_disposed) return;
       _reconnectEpisodes.clear();
-      if (_call.stateOf().degradedMode == DegradedMode.voiceNotes) {
+      final mode = _call.stateOf().degradedMode;
+      if (mode == DegradedMode.voiceNotes ||
+          mode == DegradedMode.tokenVoice) {
         unawaited(_call.exitDegradedMode());
       }
     });

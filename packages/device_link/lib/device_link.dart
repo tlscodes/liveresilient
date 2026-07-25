@@ -12,3 +12,4 @@ export 'src/media_frame.dart';
 export 'src/mesh_flow_control.dart';
 export 'src/push_wakeup.dart';
 export 'src/simulated_carrier_link.dart';
+export 'src/voice_codec_binding.dart';
