@@ -16,6 +16,7 @@ export 'src/lane.dart';
 export 'src/lane_experience.dart';
 export 'src/micro_learner.dart';
 export 'src/micro_datagram_lane.dart';
+export 'src/silence_suppression_vad.dart';
 export 'src/token_voice_channel.dart';
 export 'src/trend_sentinel.dart';
 export 'src/weak_link_codec.dart';
