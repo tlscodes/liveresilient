@@ -4,10 +4,12 @@
 /// expired chain must restart cleanly instead of crashing or diverging.
 library;
 
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:device_link/device_link.dart';
+import 'package:hamseda_codec/hamseda_codec.dart';
 import 'package:test/test.dart';
 
 List<List<int>> speechBlock(Random rng, int frames) => [
@@ -125,6 +127,39 @@ void main() {
       return true;
     }, nowMs: 61100);
     expect(receiver.played.last, equals(nextBlock));
+  });
+
+  test('per-contact persistence: call 2 with the saved state costs less '
+      'than call 1 and still decodes bit-exact', () async {
+    final rng = Random(9);
+    final block = speechBlock(rng, 200);
+
+    Future<(int, HamsedaState, HamsedaState)> call(
+        HamsedaState? sSt, HamsedaState? rSt) async {
+      final queue = DtnBundleQueue();
+      final sender =
+          TokenVoiceSender(nRows: 2, queue: queue, initialState: sSt);
+      final receiver = TokenVoiceReceiver(nRows: 2, initialState: rSt);
+      sender.sendBlock(block, nowMs: 0);
+      var bytes = 0;
+      await queue.flush((bundle) async {
+        bytes = bundle.payload.length;
+        receiver.offer(bundle.payload);
+        return true;
+      }, nowMs: 1);
+      expect(receiver.played.last, equals(block));
+      return (bytes, sender.state, receiver.state);
+    }
+
+    final (size1, sSt, rSt) = await call(null, null);
+    // persist via JSON like the app would, then a fresh "call 2"
+    final sWarm = HamsedaState.fromJson(
+        jsonDecode(jsonEncode(sSt.toJson())) as Map<String, dynamic>);
+    final rWarm = HamsedaState.fromJson(
+        jsonDecode(jsonEncode(rSt.toJson())) as Map<String, dynamic>);
+    final (size2, _, _) = await call(sWarm, rWarm);
+    expect(size2, lessThan(size1 ~/ 2),
+        reason: 'warm dictionary must at least halve the repeat');
   });
 
   test('out-of-order delivery replays in order through the reorder '
