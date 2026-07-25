@@ -27,3 +27,4 @@ pubspec.lock
 chats.md
 *.log
 models/
+__pycache__/
