@@ -1,4 +1,8 @@
-/// Background media transfer queue with strict voice priority.
+#!/usr/bin/env python3
+"""Writes the corrected media_queue.dart (TaggedDatagram round-robin fix)."""
+import pathlib
+
+CONTENT = '''/// Background media transfer queue with strict voice priority.
 ///
 /// Media datagrams are emitted only while the voice path reports
 /// silence, and only up to a configured spare-budget cap (bytes/second,
@@ -126,3 +130,10 @@ class MediaTransferQueue {
     return out;
   }
 }
+'''
+
+target = pathlib.Path(__file__).resolve().parent.parent / (
+    "packages/connection_orchestrator/lib/src/media_queue.dart"
+)
+target.write_text(CONTENT, encoding="utf-8")
+print(f"wrote {target}")
