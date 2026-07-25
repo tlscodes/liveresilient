@@ -27,7 +27,8 @@ class TokenVoiceSender {
     required this.nRows,
     required this.queue,
     this.blockLifetime = const Duration(seconds: 30),
-  }) : _state = HamsedaState(nRows);
+    HamsedaState? initialState,
+  }) : _state = initialState ?? HamsedaState(nRows);
 
   final int nRows;
   final DtnBundleQueue queue;
@@ -41,6 +42,10 @@ class TokenVoiceSender {
   int epochRestarts = 0;
 
   int get epoch => _epoch;
+
+  /// The current codec state — persist its JSON per contact between
+  /// calls to keep the dictionary warm (the cross-call record lever).
+  HamsedaState get state => _state;
 
   /// Encodes [columns] as the next chained block and offers it to the
   /// durable queue. Returns the bundle id.
@@ -76,9 +81,13 @@ class TokenVoiceSender {
 
 /// Receiver side: reorders delivered blocks and replays them in order.
 class TokenVoiceReceiver {
-  TokenVoiceReceiver({required this.nRows}) : _state = HamsedaState(nRows);
+  TokenVoiceReceiver({required this.nRows, HamsedaState? initialState})
+      : _state = initialState ?? HamsedaState(nRows);
 
   final int nRows;
+
+  /// The current codec state (persist per contact between calls).
+  HamsedaState get state => _state;
 
   HamsedaState _state;
   int _epoch = 0;
