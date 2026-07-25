@@ -249,24 +249,36 @@ class ColumnDict {
 }
 
 /// The full deterministic shared state of one contact relationship.
+///
+/// v4 model: the column id is coded in the frequency table of the
+/// PREVIOUS column id ([ctx]), escaping to the global column table,
+/// escaping to per-row order-1 symbols.
 class HamsedaState {
   final List<RowModel> models;
   final ColumnDict dict;
+  final Map<int, FreqTable> ctx;
 
   HamsedaState(int nRows)
       : models = [for (var i = 0; i < nRows; i++) RowModel()],
-        dict = ColumnDict();
+        dict = ColumnDict(),
+        ctx = {};
 
-  HamsedaState._(this.models, this.dict);
+  HamsedaState._(this.models, this.dict, this.ctx);
 
   int get nRows => models.length;
 
+  FreqTable ctxTable(int prevId) => ctx.putIfAbsent(prevId, FreqTable.new);
+
   HamsedaState clone() => HamsedaState._(
-      [for (final m in models) m.clone()], dict.clone());
+        [for (final m in models) m.clone()],
+        dict.clone(),
+        ctx.map((k, v) => MapEntry(k, v.clone())),
+      );
 
   Map<String, dynamic> toJson() => {
         'models': [for (final m in models) m.toJson()],
         'dict': dict.toJson(),
+        'ctx': ctx.map((k, v) => MapEntry('$k', v.toJson())),
       };
 
   factory HamsedaState.fromJson(Map<String, dynamic> j) => HamsedaState._(
@@ -275,7 +287,38 @@ class HamsedaState {
             RowModel.fromJson(m as Map<String, dynamic>)
         ],
         ColumnDict.fromJson(j['dict'] as Map<String, dynamic>),
+        ((j['ctx'] ?? <String, dynamic>{}) as Map<String, dynamic>).map(
+            (k, v) => MapEntry(
+                int.parse(k), FreqTable.fromJson(v as Map<String, dynamic>))),
       );
+}
+
+/// Applies exactly the state mutations encoding [col] would, without
+/// producing bits — shared by the raw-fallback path on both ends.
+int _learnColumn(HamsedaState st, FreqTable t, int? cidBefore,
+    List<int> col) {
+  if (cidBefore != null) t.add(cidBefore);
+  st.dict.add(col);
+  final newId = st.dict.idOf(col)!;
+  if (cidBefore == null) t.add(newId);
+  return newId;
+}
+
+void _updateWalk(List<List<int>> cols, HamsedaState st) {
+  List<int>? prev;
+  var prevId = -1;
+  for (final col in cols) {
+    final cid = st.dict.idOf(col);
+    final t = st.ctxTable(prevId);
+    final hit = cid != null && (t.has(cid) || st.dict.table.has(cid));
+    if (!hit) {
+      for (var row = 0; row < col.length; row++) {
+        st.models[row].update(prev?[row] ?? -1, col[row]);
+      }
+    }
+    prev = col;
+    prevId = _learnColumn(st, t, cid, col);
+  }
 }
 
 void _encSymbol(_RangeEncoder w, RowModel m, int prev, int sym) {
@@ -318,26 +361,81 @@ int _decSymbol(_RangeDecoder r, RowModel m, int prev) {
 
 /// Encodes [columns] against (and mutating) [state]. Symmetric with
 /// [decodeColumns]: running both from equal states keeps them equal.
+///
+/// Worst-case cap: the adaptive stream is compared against packed raw
+/// tokens; the smaller ships behind a 1-byte flag, so a cold call never
+/// costs more than raw + 1 byte. State learns identically on both paths.
 Uint8List encodeColumns(List<List<int>> columns, HamsedaState state) {
-  final w = _RangeEncoder();
-  List<int>? prev;
   for (final col in columns) {
     if (col.length != state.nRows) {
       throw ArgumentError('column arity ${col.length} != ${state.nRows}');
     }
-    final id = state.dict.idOf(col);
-    if (id != null && state.dict.table.has(id)) {
-      final (cum, f, tot) = state.dict.table.interval(id);
-      w.encode(cum, f, tot);
-    } else {
-      final (cum, f, tot) = state.dict.table.interval(-1);
-      w.encode(cum, f, tot);
-      for (var row = 0; row < col.length; row++) {
-        _encSymbol(w, state.models[row], prev?[row] ?? -1, col[row]);
+  }
+  final work = state.clone();
+  final adaptive = _encodeAdaptive(columns, work);
+  final rawBits = columns.length * state.nRows * 10;
+  if (adaptive.length * 8 <= rawBits) {
+    state.models.setAll(0, work.models);
+    state.dict.byCol
+      ..clear()
+      ..addAll(work.dict.byCol);
+    state.dict.cols
+      ..clear()
+      ..addAll(work.dict.cols);
+    state.dict.table.freq
+      ..clear()
+      ..addAll(work.dict.table.freq);
+    state.dict.table.total = work.dict.table.total;
+    state.ctx
+      ..clear()
+      ..addAll(work.ctx);
+    return Uint8List.fromList([1, ...adaptive]);
+  }
+  // plain 10-bit packing: exact raw cost, zero coder overhead
+  final out = BytesBuilder()..addByte(0);
+  var acc = 0;
+  var nbits = 0;
+  for (final col in columns) {
+    for (final sym in col) {
+      acc = (acc << 10) | sym;
+      nbits += 10;
+      while (nbits >= 8) {
+        nbits -= 8;
+        out.addByte((acc >> nbits) & 0xFF);
       }
     }
-    state.dict.add(col);
+  }
+  if (nbits > 0) out.addByte((acc << (8 - nbits)) & 0xFF);
+  _updateWalk(columns, state);
+  return out.takeBytes();
+}
+
+Uint8List _encodeAdaptive(List<List<int>> columns, HamsedaState st) {
+  final w = _RangeEncoder();
+  List<int>? prev;
+  var prevId = -1;
+  for (final col in columns) {
+    final cid = st.dict.idOf(col);
+    final t = st.ctxTable(prevId);
+    if (cid != null && t.has(cid)) {
+      final (cum, f, tot) = t.interval(cid);
+      w.encode(cum, f, tot);
+    } else {
+      final (cum, f, tot) = t.interval(-1);
+      w.encode(cum, f, tot);
+      if (cid != null && st.dict.table.has(cid)) {
+        final (gc, gf, gt) = st.dict.table.interval(cid);
+        w.encode(gc, gf, gt);
+      } else {
+        final (gc, gf, gt) = st.dict.table.interval(-1);
+        w.encode(gc, gf, gt);
+        for (var row = 0; row < col.length; row++) {
+          _encSymbol(w, st.models[row], prev?[row] ?? -1, col[row]);
+        }
+      }
+    }
     prev = col;
+    prevId = _learnColumn(st, t, cid, col);
   }
   return w.finish();
 }
@@ -345,28 +443,73 @@ Uint8List encodeColumns(List<List<int>> columns, HamsedaState state) {
 /// Decodes [nFrames] columns from [data] against (and mutating) [state].
 List<List<int>> decodeColumns(
     Uint8List data, int nFrames, HamsedaState state) {
+  if (data.isEmpty) throw StateError('empty stream');
+  final flag = data[0];
+  final body = Uint8List.sublistView(data, 1);
+  if (flag == 1) return _decodeAdaptive(body, nFrames, state);
+  if (flag != 0) throw StateError('corrupt stream: unknown flag byte');
+  var acc = 0;
+  var nbits = 0;
+  var pos = 0;
+  final cols = <List<int>>[];
+  for (var i = 0; i < nFrames; i++) {
+    final col = <int>[];
+    for (var row = 0; row < state.nRows; row++) {
+      while (nbits < 10) {
+        if (pos >= body.length) throw StateError('truncated raw stream');
+        acc = (acc << 8) | body[pos];
+        pos += 1;
+        nbits += 8;
+      }
+      nbits -= 10;
+      col.add((acc >> nbits) & 0x3FF);
+    }
+    cols.add(col);
+  }
+  _updateWalk(cols, state);
+  return cols;
+}
+
+List<List<int>> _decodeAdaptive(
+    Uint8List data, int nFrames, HamsedaState st) {
   final r = _RangeDecoder(data);
   final out = <List<int>>[];
   List<int>? prev;
+  var prevId = -1;
   for (var i = 0; i < nFrames; i++) {
-    final (id, cum, f, _) =
-        state.dict.table.symbolAt(r.decodeFreq(state.dict.table.total));
+    final t = st.ctxTable(prevId);
+    final (sym, cum, f, _) = t.symbolAt(r.decodeFreq(t.total));
     r.consume(cum, f);
     List<int> col;
-    if (id == -1) {
-      col = [
-        for (var row = 0; row < state.nRows; row++)
-          _decSymbol(r, state.models[row], prev?[row] ?? -1)
-      ];
-    } else {
-      if (id >= state.dict.cols.length) {
-        throw StateError('dictionary id $id out of range (corrupt input?)');
+    int? cid;
+    if (sym != -1) {
+      if (sym >= st.dict.cols.length) {
+        throw StateError('dictionary id $sym out of range (corrupt input?)');
       }
-      col = List.of(state.dict.cols[id]);
+      col = List.of(st.dict.cols[sym]);
+      cid = sym;
+    } else {
+      final g = st.dict.table;
+      final (gs, gc, gf, _) = g.symbolAt(r.decodeFreq(g.total));
+      r.consume(gc, gf);
+      if (gs != -1) {
+        if (gs >= st.dict.cols.length) {
+          throw StateError(
+              'dictionary id $gs out of range (corrupt input?)');
+        }
+        col = List.of(st.dict.cols[gs]);
+        cid = gs;
+      } else {
+        col = [
+          for (var row = 0; row < st.nRows; row++)
+            _decSymbol(r, st.models[row], prev?[row] ?? -1)
+        ];
+        cid = st.dict.idOf(col);
+      }
     }
-    state.dict.add(col);
     out.add(col);
     prev = col;
+    prevId = _learnColumn(st, t, cid, col);
   }
   return out;
 }
