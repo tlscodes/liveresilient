@@ -74,7 +74,10 @@ void main() {
     // buys more redundant copies inside the same byte budget. The cost
     // is added latency — acceptable here because the path already has
     // 3-5 s of delay.
-    int blockFramesFor(double loss) => loss >= 0.95 ? 225 : 75;
+    // (the trailing datagram CRC byte added for corruption detection
+    // costs one byte of budget, so the 95%-loss rung uses 210 frames
+    // instead of the previous 225 to stay under the payload cap)
+    int blockFramesFor(double loss) => loss >= 0.95 ? 210 : 75;
     const datagramsPerSecond = 10; // 10 x 60 B = 600 B/s budget
     const ticksPerSecond = datagramsPerSecond;
 
@@ -125,11 +128,17 @@ void main() {
         }
         final dg = latestDatagram;
         if (dg == null) continue;
-        sentDatagrams++;
-        sentBytes += dg.length;
-        if (dg.length > maxSeen) maxSeen = dg.length;
-        if (rng.nextDouble() < loss) continue; // dropped by the path
-        for (final (seq, bytes) in unpacker.offer(dg)) {
+        // Rate-controlled sender: spend the whole measured byte budget,
+        // not one datagram per tick — leftover budget buys extra window
+        // resends, which is pure redundancy on a >90%-loss path.
+        final byteBudgetSoFar =
+            (tick + 1) * budgetBytesPerSecond ~/ ticksPerSecond;
+        while (sentBytes + dg.length <= byteBudgetSoFar) {
+          sentDatagrams++;
+          sentBytes += dg.length;
+          if (dg.length > maxSeen) maxSeen = dg.length;
+          if (rng.nextDouble() < loss) continue; // dropped by the path
+          for (final (seq, bytes) in unpacker.offer(dg)) {
           final src = sourceBlocks[seq];
           if (src == null) continue;
           final cols = decodeColumns(bytes, blockFrames, warmDec.clone());
@@ -138,8 +147,9 @@ void main() {
               mismatches++;
             }
           }
-          playedFrames += cols.length;
-          deliveredBlocks++;
+            playedFrames += cols.length;
+            deliveredBlocks++;
+          }
         }
       }
 
