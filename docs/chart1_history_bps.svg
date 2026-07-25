@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" font-family="Helvetica,Arial,sans-serif">
+  <rect width="960" height="560" fill="#ffffff"/>
+  <text x="480" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#1a2433">Voice transmission — bits per second, 1844 → 2026 (log scale)</text>
+  <text x="480" y="56" text-anchor="middle" font-size="13" fill="#5b6b80">هر جهش بزرگ = انتزاعی‌ترشدن واحد ارسال: موج → طیف → پارامتر → توکن → معنا</text>
+
+  <!-- plot area: x 90..900, y 90..470 ; y log10 bps: 1e0..1e6 -->
+  <!-- gridlines -->
+  <g stroke="#e6ebf2" stroke-width="1">
+    <line x1="90" y1="90"  x2="900" y2="90"/>
+    <line x1="90" y1="153" x2="900" y2="153"/>
+    <line x1="90" y1="217" x2="900" y2="217"/>
+    <line x1="90" y1="280" x2="900" y2="280"/>
+    <line x1="90" y1="343" x2="900" y2="343"/>
+    <line x1="90" y1="407" x2="900" y2="407"/>
+    <line x1="90" y1="470" x2="900" y2="470"/>
+  </g>
+  <g font-size="11" fill="#8a97a8" text-anchor="end">
+    <text x="82" y="94">1M</text>
+    <text x="82" y="157">100k</text>
+    <text x="82" y="221">10k</text>
+    <text x="82" y="284">1k</text>
+    <text x="82" y="347">100</text>
+    <text x="82" y="411">10</text>
+    <text x="82" y="474">1</text>
+  </g>
+  <!-- x labels (era, not linear) -->
+  <g font-size="11" fill="#8a97a8" text-anchor="middle">
+    <text x="130" y="492">1844</text>
+    <text x="250" y="492">1939</text>
+    <text x="345" y="492">1962</text>
+    <text x="440" y="492">1976</text>
+    <text x="535" y="492">1990</text>
+    <text x="625" y="492">2017</text>
+    <text x="715" y="492">2021</text>
+    <text x="790" y="492">2022</text>
+    <text x="860" y="492">2026</text>
+  </g>
+
+  <!-- 700 bps record line -->
+  <line x1="90" y1="290" x2="900" y2="290" stroke="#b8543e" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="898" y="283" text-anchor="end" font-size="11" fill="#b8543e">700 bps — classical record (Codec2 700C)</text>
+
+  <!-- main path: waveform/parameter era (descending necklace) -->
+  <!-- y = 470 - 63.33*log10(bps): 5->426; 3000(vocoder39)->250; 64000->166; 2400->256; 13000->210; 4800->237; 600->294; 700->290; 3000->250; 1500->270; 675->286; 85->348 -->
+  <polyline fill="none" stroke="#3b6ea5" stroke-width="2"
+    points="250,250 345,166 440,256 535,210 625,290 715,250 790,270"/>
+  <polyline fill="none" stroke="#2e8b6e" stroke-width="2.5"
+    points="790,270 845,286 875,348"/>
+
+  <!-- points -->
+  <g>
+    <circle cx="130" cy="426" r="5" fill="#7a5aa0"/>
+    <circle cx="250" cy="250" r="5" fill="#3b6ea5"/>
+    <circle cx="345" cy="166" r="5" fill="#3b6ea5"/>
+    <circle cx="440" cy="256" r="5" fill="#3b6ea5"/>
+    <circle cx="535" cy="210" r="5" fill="#3b6ea5"/>
+    <circle cx="580" cy="294" r="5" fill="#9aa7b8"/>
+    <circle cx="625" cy="290" r="5" fill="#3b6ea5"/>
+    <circle cx="715" cy="250" r="5" fill="#3b6ea5"/>
+    <circle cx="790" cy="270" r="5" fill="#3b6ea5"/>
+    <circle cx="845" cy="286" r="6" fill="#2e8b6e"/>
+    <circle cx="875" cy="348" r="7" fill="#2e8b6e" stroke="#ffffff" stroke-width="2"/>
+  </g>
+  <g font-size="11.5" fill="#33404f">
+    <text x="130" y="446" text-anchor="middle">Morse telegraph ~5 (text, not voice)</text>
+    <text x="250" y="238" text-anchor="middle">Dudley vocoder '39 — first "parameters"</text>
+    <text x="352" y="154" text-anchor="middle">PCM 64k</text>
+    <text x="440" y="276" text-anchor="middle">LPC-10 2.4k</text>
+    <text x="537" y="198" text-anchor="middle">GSM 13k</text>
+    <text x="580" y="314" text-anchor="middle" fill="#75828f">MELP 600 (quality lost — abandoned)</text>
+    <text x="646" y="308" text-anchor="middle">Codec2 700C</text>
+    <text x="717" y="238" text-anchor="middle">Lyra 3k</text>
+    <text x="800" y="260" text-anchor="middle">EnCodec 1.5k tokens</text>
+    <text x="836" y="278" text-anchor="end" font-weight="700" fill="#2e8b6e">HamSeda v3 675</text>
+    <text x="866" y="368" text-anchor="end" font-weight="700" fill="#2e8b6e">v4 warm 85</text>
+  </g>
+  <text x="480" y="535" text-anchor="middle" font-size="12" fill="#5b6b80">blue = waveform/parameter era · gray = abandoned lane · green = personal token dictionary (this project, measured)</text>
+</svg>

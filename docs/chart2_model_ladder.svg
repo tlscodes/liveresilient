@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" font-family="Helvetica,Arial,sans-serif">
+  <rect width="960" height="540" fill="#ffffff"/>
+  <text x="480" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#1a2433">The prediction-model ladder on YOUR voice (measured bps, 13.6s corpus)</text>
+  <text x="480" y="56" text-anchor="middle" font-size="13" fill="#5b6b80">مرز فشرده‌سازی = کیفیت مدل پیش‌بینی؛ هر پله‌ی مدل، یک سقف را شکست</text>
+
+  <!-- bars: x from 300, scale 0.38 px/bps ; raw1501=570; v2 1255=477; v1 1222=464; v3warm 675=257; floor0 645=245; v4warm 85=32; ling 50=19 -->
+  <g font-size="13" fill="#33404f" text-anchor="end">
+    <text x="288" y="112">raw EnCodec tokens</text>
+    <text x="288" y="162">v2 · order-1 rows (gamma)</text>
+    <text x="288" y="212">v1 · column dict (gamma)</text>
+    <text x="288" y="262">v3 · PPM + arithmetic, warm</text>
+    <text x="288" y="312">order-0 entropy floor</text>
+    <text x="288" y="362">v4 · column-order-1, warm</text>
+    <text x="288" y="412">human phonetic floor (theory)</text>
+  </g>
+  <g>
+    <rect x="300" y="94"  width="570" height="28" rx="4" fill="#9ab8d6"/>
+    <rect x="300" y="144" width="477" height="28" rx="4" fill="#7fa4c2" opacity="0"/>
+    <rect x="300" y="144" width="477" height="28" rx="4" fill="#7aa5cd"/>
+    <rect x="300" y="194" width="464" height="28" rx="4" fill="#5c8fbf"/>
+    <rect x="300" y="244" width="257" height="28" rx="4" fill="#3b6ea5"/>
+    <rect x="300" y="294" width="245" height="28" rx="4" fill="#c3ccd8"/>
+    <rect x="300" y="344" width="33"  height="28" rx="4" fill="#2e8b6e"/>
+    <rect x="300" y="394" width="19"  height="28" rx="4" fill="#c3ccd8"/>
+  </g>
+  <g font-size="13" font-weight="700" fill="#33404f">
+    <text x="878" y="112">1501</text>
+    <text x="785" y="162">1255</text>
+    <text x="772" y="212">1222</text>
+    <text x="565" y="262">675</text>
+    <text x="553" y="312" fill="#75828f">645 — سقفی که v3 نمی‌توانست بشکند</text>
+    <text x="341" y="362" fill="#2e8b6e">85 — رکورد جدید (bit-exact)</text>
+    <text x="327" y="412" fill="#75828f">~50</text>
+  </g>
+
+  <!-- 700 record line at x=300+266=566 -->
+  <line x1="566" y1="80" x2="566" y2="430" stroke="#b8543e" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="566" y="450" text-anchor="middle" font-size="12" fill="#b8543e">700 bps — old world record</text>
+
+  <text x="480" y="505" text-anchor="middle" font-size="12" fill="#5b6b80">warm = converged per-contact dictionary (known speech, honest label) · blue = this project's versions · gray = theoretical bounds</text>
+</svg>

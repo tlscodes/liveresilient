@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" font-family="Helvetica,Arial,sans-serif">
+  <rect width="960" height="540" fill="#ffffff"/>
+  <text x="480" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#1a2433">Cold → warm: the per-contact dictionary converges (measured bps per call)</text>
+  <text x="480" y="56" text-anchor="middle" font-size="13" fill="#5b6b80">دیکشنری هر-مخاطب با هر تماس یاد می‌گیرد؛ حافظه‌ی مشترک = بیتِ نفرستاده</text>
+
+  <!-- plot: x 110..880 (5 slots), y 90..460 linear 0..2000bps => y=460-0.185*bps -->
+  <g stroke="#e6ebf2" stroke-width="1">
+    <line x1="110" y1="90"  x2="880" y2="90"/>
+    <line x1="110" y1="183" x2="880" y2="183"/>
+    <line x1="110" y1="275" x2="880" y2="275"/>
+    <line x1="110" y1="368" x2="880" y2="368"/>
+    <line x1="110" y1="460" x2="880" y2="460"/>
+  </g>
+  <g font-size="11" fill="#8a97a8" text-anchor="end">
+    <text x="102" y="94">2000</text>
+    <text x="102" y="187">1500</text>
+    <text x="102" y="279">1000</text>
+    <text x="102" y="372">500</text>
+    <text x="102" y="464">0</text>
+  </g>
+  <g font-size="12" fill="#8a97a8" text-anchor="middle">
+    <text x="150" y="482">call 1</text>
+    <text x="330" y="482">call 2</text>
+    <text x="510" y="482">call 3</text>
+    <text x="690" y="482">call 4</text>
+    <text x="850" y="482">converged</text>
+  </g>
+
+  <!-- 700 line: y=460-129.5=330.5 -->
+  <line x1="110" y1="331" x2="880" y2="331" stroke="#b8543e" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="878" y="324" text-anchor="end" font-size="11" fill="#b8543e">700 bps — old record</text>
+
+  <!-- v3 full band: 1668,1427,1808,1346,675 => y: 151.4, 196, 125.5, 211, 335 -->
+  <polyline fill="none" stroke="#3b6ea5" stroke-width="2.5"
+    points="150,151 330,196 510,126 690,211 850,335"/>
+  <!-- v4 full band: 1704,1465,1869,1395,85 => y: 144.8,189,114.2,202,444.3 -->
+  <polyline fill="none" stroke="#2e8b6e" stroke-width="2.5"
+    points="150,145 330,189 510,114 690,202 850,444"/>
+  <!-- v4 row0 lane: 818,638,792,574,203 => y: 308.7,342,313.5,353.8,422.4 -->
+  <polyline fill="none" stroke="#c08a3e" stroke-width="2.5"
+    points="150,309 330,342 510,314 690,354 850,422"/>
+
+  <g>
+    <circle cx="150" cy="151" r="5" fill="#3b6ea5"/><circle cx="330" cy="196" r="5" fill="#3b6ea5"/><circle cx="510" cy="126" r="5" fill="#3b6ea5"/><circle cx="690" cy="211" r="5" fill="#3b6ea5"/><circle cx="850" cy="335" r="6" fill="#3b6ea5"/>
+    <circle cx="150" cy="145" r="5" fill="#2e8b6e"/><circle cx="330" cy="189" r="5" fill="#2e8b6e"/><circle cx="510" cy="114" r="5" fill="#2e8b6e"/><circle cx="690" cy="202" r="5" fill="#2e8b6e"/><circle cx="850" cy="444" r="7" fill="#2e8b6e" stroke="#ffffff" stroke-width="2"/>
+    <circle cx="150" cy="309" r="5" fill="#c08a3e"/><circle cx="330" cy="342" r="5" fill="#c08a3e"/><circle cx="510" cy="314" r="5" fill="#c08a3e"/><circle cx="690" cy="354" r="5" fill="#c08a3e"/><circle cx="850" cy="422" r="6" fill="#c08a3e"/>
+  </g>
+
+  <g font-size="12" font-weight="700">
+    <text x="860" y="349" fill="#3b6ea5">v3 → 675</text>
+    <text x="860" y="440" fill="#2e8b6e">v4 → 85</text>
+    <text x="860" y="410" fill="#c08a3e">row0 → 203</text>
+  </g>
+  <g font-size="11" fill="#75828f">
+    <text x="330" y="358">row0 lane calls 2 &amp; 4: 638 / 574 — fresh speech already UNDER the old record</text>
+  </g>
+
+  <!-- legend -->
+  <g font-size="12" fill="#33404f">
+    <circle cx="270" cy="512" r="5" fill="#3b6ea5"/><text x="280" y="516">v3 full band</text>
+    <circle cx="390" cy="512" r="5" fill="#2e8b6e"/><text x="400" y="516">v4 full band (order-1 columns)</text>
+    <circle cx="620" cy="512" r="5" fill="#c08a3e"/><text x="630" y="516">v4 single-codebook lane (750 raw)</text>
+  </g>
+</svg>
