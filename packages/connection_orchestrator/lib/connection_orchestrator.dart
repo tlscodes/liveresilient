@@ -8,6 +8,7 @@ library;
 
 export 'src/carrier_relay.dart';
 export 'src/chunked_transfer.dart';
+export 'src/cold_start_dictionary.dart';
 export 'src/connection_fabric.dart';
 export 'src/connectivity_snapshot.dart';
 export 'src/delivery_ledger.dart';
