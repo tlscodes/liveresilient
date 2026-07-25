@@ -15,5 +15,6 @@ export 'src/delivery_planner.dart';
 export 'src/lane.dart';
 export 'src/lane_experience.dart';
 export 'src/micro_learner.dart';
+export 'src/token_voice_channel.dart';
 export 'src/trend_sentinel.dart';
 export 'src/weak_link_codec.dart';
