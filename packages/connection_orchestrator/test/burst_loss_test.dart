@@ -24,59 +24,9 @@ import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:hamseda_codec/hamseda_codec.dart';
 import 'package:test/test.dart';
 
-/// 2-state Gilbert-Elliott loss chain. Deterministic under a seeded RNG.
-class GilbertElliottLossSimulator {
-  GilbertElliottLossSimulator({
-    required this.p,
-    required this.r,
-    this.goodLossRate = 0.05,
-    this.badLossRate = 0.95,
-    int seed = 42,
-  })  : assert(p > 0 && p < 1),
-        assert(r > 0 && r < 1),
-        assert(goodLossRate >= 0 && goodLossRate <= 0.05),
-        assert(badLossRate >= 0.90 && badLossRate <= 1.0),
-        _rng = Random(seed);
-
-  /// Per-packet probability of entering a burst (Good -> Bad).
-  final double p;
-
-  /// Per-packet probability of leaving a burst (Bad -> Good);
-  /// mean burst length = 1/r packets.
-  final double r;
-
-  /// Loss rate while in the Good state.
-  final double goodLossRate;
-
-  /// Loss rate while in the Bad (burst) state.
-  final double badLossRate;
-
-  final Random _rng;
-
-  bool _inBurst = false;
-
-  /// Diagnostics: completed bursts and their packet lengths.
-  final List<int> burstLengths = [];
-  int _currentBurstLen = 0;
-
-  /// True if this packet is dropped. Advances the chain one packet.
-  bool shouldDrop() {
-    if (_inBurst) {
-      _currentBurstLen++;
-      if (_rng.nextDouble() < r) {
-        _inBurst = false;
-        burstLengths.add(_currentBurstLen);
-        _currentBurstLen = 0;
-      }
-    } else if (_rng.nextDouble() < p) {
-      _inBurst = true;
-    }
-    final rate = _inBurst ? badLossRate : goodLossRate;
-    return _rng.nextDouble() < rate;
-  }
-}
-
 /// Same warm-contact speech-like token stream as the hostile-path test.
+/// (`GilbertElliottLossSimulator` itself now lives in the library:
+/// `src/gilbert_elliott_loss.dart`.)
 List<List<int>> speechStream(int frames, int seed) {
   final rng = Random(seed);
   const n = 45;
