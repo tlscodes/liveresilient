@@ -1,0 +1,16 @@
+name: hamseda_codec
+description: >-
+  Lossless per-contact adaptive token codec for neural voice streams:
+  persistent column dictionary + PPM-style order-1 row models over a
+  carryless range coder. Deterministic and symmetric — both call ends
+  grow identical state with zero synchronization bytes; state commits
+  only on acknowledged blocks so packet loss can never diverge it.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dev_dependencies:
+  test: ^1.25.0
