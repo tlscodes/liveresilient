@@ -165,6 +165,59 @@ void main() {
     });
   });
 
+  test('token-voice rung: with the neural codec model installed, the floor '
+      'degradation is tokenVoice (not voiceNotes) and stability exits it',
+      () {
+    fakeAsync((async) {
+      final controller = _FakeCall();
+      final decisions = StreamController<mw.MediaPolicyDecision>(sync: true);
+      final foresight = StreamController<bool>(sync: true);
+      final driver = SurvivalModeDriver(
+        call: controller.handle,
+        adaptationDecisions: decisions.stream,
+        pathFailingSoon: foresight.stream,
+        tokenCodec: SimulatedVoiceCodecBinding(installed: true),
+        stableFor: const Duration(seconds: 30),
+      );
+      controller.emitPhase(CallPhase.connected);
+      async.flushMicrotasks();
+
+      foresight.add(true); // predicted failure — codec present
+      async.flushMicrotasks();
+      expect(controller.enteredModes, [DegradedMode.tokenVoice]);
+
+      async.elapse(const Duration(seconds: 31)); // stable stretch clears it
+      expect(controller.exits, 1);
+
+      unawaited(driver.dispose());
+      unawaited(decisions.close());
+      unawaited(foresight.close());
+    });
+  });
+
+  test('token-voice rung: codec NOT installed keeps the voiceNotes floor',
+      () {
+    fakeAsync((async) {
+      final controller = _FakeCall();
+      final decisions = StreamController<mw.MediaPolicyDecision>(sync: true);
+      final foresight = StreamController<bool>(sync: true);
+      final driver = SurvivalModeDriver(
+        call: controller.handle,
+        adaptationDecisions: decisions.stream,
+        pathFailingSoon: foresight.stream,
+        tokenCodec: SimulatedVoiceCodecBinding(),
+      );
+      controller.emitPhase(CallPhase.connected);
+      async.flushMicrotasks();
+      foresight.add(true);
+      async.flushMicrotasks();
+      expect(controller.enteredModes, [DegradedMode.voiceNotes]);
+      unawaited(driver.dispose());
+      unawaited(decisions.close());
+      unawaited(foresight.close());
+    });
+  });
+
   test('a flapping path (2 reconnect episodes in the window) enters '
       'voice-note mode on reconnect; clips queue through the REAL outbox '
       'while offline and deliver when the transport recovers; stability '

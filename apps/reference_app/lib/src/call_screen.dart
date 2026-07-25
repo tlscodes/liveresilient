@@ -39,6 +39,9 @@ String degradedModeLabel(DegradedMode mode) {
   switch (mode) {
     case DegradedMode.lowRateVoice:
       return 'Low-data voice — quality reduced to keep the call alive';
+    case DegradedMode.tokenVoice:
+      return 'Token-voice mode — ultra-low-data live voice on your '
+          'personal codec';
     case DegradedMode.voiceNotes:
       return 'Voice-note mode — clips send whenever the network allows';
   }

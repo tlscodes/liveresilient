@@ -57,6 +57,14 @@ enum DegradedMode {
   /// survival quality.
   lowRateVoice,
 
+  /// Real-time voice continues as a discrete neural-token stream (the
+  /// downloadable voice-quality codec + the lossless per-contact
+  /// `hamseda_codec` wire layer, sub-kilobit class). Sits between
+  /// [lowRateVoice] and [voiceNotes]: still a live full-duplex
+  /// conversation on links too weak for the ~6 kbps floor. Only entered
+  /// when the device reports the codec binding as available.
+  tokenVoice,
+
   /// The path cannot sustain real-time audio at all: short recorded voice
   /// clips queue in the messaging outbox and transmit whenever the
   /// transport briefly recovers. Half-duplex, but the call never "fails".
