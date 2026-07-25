@@ -84,21 +84,21 @@ void main() {
     var mediaBytesOnWire = 0;
 
     final live = _voiceTicks(120000, (nowMs, speaking) {
-      // All datagrams in one tick batch come from the transfer that was
-      // active at emission time — attribute them to IT, not to whoever
-      // is active after a mid-batch completion.
-      final emitterId = transport.queue.active?.id;
+      // The queue round-robins between concurrent transfers, so a single
+      // tick batch can mix datagrams from several of them. Each datagram
+      // carries its own transferId — route by that, never by whichever
+      // transfer happens to be at the head of the queue.
       for (final d in transport.queue.tick(
           nowMs: nowMs, voiceIsSpeaking: speaking)) {
-        mediaBytesOnWire += d.length;
+        mediaBytesOnWire += d.bytes.length;
         // hostile channel: 60% uniform loss + GE bursts
         if (rng.nextDouble() < 0.60 || ge.shouldDrop()) continue;
-        if (emitterId == null) return;
-        final dec = decoders.putIfAbsent(emitterId, RatelessDecoder.new);
-        dec.addDatagram(d);
-        if (dec.isComplete && !completedAt.containsKey(emitterId)) {
-          completedAt[emitterId] = nowMs;
-          transport.queue.markComplete(emitterId);
+        final id = d.transferId;
+        final dec = decoders.putIfAbsent(id, RatelessDecoder.new);
+        dec.addDatagram(d.bytes);
+        if (dec.isComplete && !completedAt.containsKey(id)) {
+          completedAt[id] = nowMs;
+          transport.queue.markComplete(id);
         }
       }
     });

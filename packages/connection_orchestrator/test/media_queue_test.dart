@@ -47,7 +47,7 @@ void main() {
       final out = q.tick(nowMs: nowMs, voiceIsSpeaking: _speaking(nowMs));
       final sec = nowMs ~/ 1000;
       for (final d in out) {
-        bytesPerSecond[sec] = (bytesPerSecond[sec] ?? 0) + d.length;
+        bytesPerSecond[sec] = (bytesPerSecond[sec] ?? 0) + d.bytes.length;
       }
     }
     expect(bytesPerSecond, isNotEmpty);
@@ -94,7 +94,7 @@ void main() {
       if (speaking != lastSpeaking) alternations++;
       lastSpeaking = speaking;
       for (final d in q.tick(nowMs: nowMs, voiceIsSpeaking: speaking)) {
-        dec.addDatagram(d);
+        dec.addDatagram(d.bytes);
       }
     }
     q.markComplete(transfer.id);
@@ -105,5 +105,33 @@ void main() {
     // ignore: avoid_print
     print('media queue (simulated): 8KB in ${(nowMs / 1000).toStringAsFixed(1)}s '
         'across $alternations speech/silence alternations');
+  });
+
+  test('two concurrent transfers make round-robin progress, neither starves',
+      () {
+    final dataA =
+        Uint8List.fromList(List.generate(6144, (_) => rng.nextInt(256)));
+    final dataB =
+        Uint8List.fromList(List.generate(6144, (_) => rng.nextInt(256)));
+    final q = MediaTransferQueue(spareBudgetBytesPerSecond: 500);
+    final tA = q.enqueue(dataA);
+    final tB = q.enqueue(dataB);
+    var nowMs = 0;
+    // Run until B (enqueued second) has received a fair share of
+    // datagrams — proves it is NOT starved behind A's unacked transfer.
+    while (tB.datagramsSent < tB.blockCount) {
+      nowMs += 20;
+      expect(nowMs, lessThan(60 * 60 * 1000), reason: 'did not converge');
+      q.tick(nowMs: nowMs, voiceIsSpeaking: _speaking(nowMs));
+      // A must never get more than a handful of datagrams ahead of B —
+      // strict head-first service (the pre-fix behavior) would instead
+      // let A run to its full blockCount before B gets anything.
+      expect(tA.datagramsSent - tB.datagramsSent, lessThanOrEqualTo(3),
+          reason: 'transfer A starved transfer B');
+    }
+    // ignore: avoid_print
+    print('round-robin: B received all ${tB.blockCount} source blocks by '
+        '${(nowMs / 1000).toStringAsFixed(1)}s while A was at '
+        '${tA.datagramsSent}/${tA.blockCount}');
   });
 }
