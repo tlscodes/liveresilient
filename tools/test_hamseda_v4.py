@@ -104,6 +104,26 @@ def main():
     except Exception:
         check('corrupt input detected (raised)', True)
 
+    # 8. bounded growth: with tiny caps, a long stream crossing both caps
+    # stays bit-exact and the state stops growing (real-time survives)
+    import hamseda_v4 as hv
+    old_dict, old_ctx2 = hv.MAX_DICT_ENTRIES, hv.MAX_CTX2_TABLES
+    hv.MAX_DICT_ENTRIES, hv.MAX_CTX2_TABLES = 200, 300
+    try:
+        big = (cols * 3)[:2500]
+        e2, d2 = hv.V4State(n_rows), hv.V4State(n_rows)
+        blob = encode(big, e2)
+        check('capped growth: long stream bit-exact',
+              decode(blob, len(big), d2) == big)
+        check('capped growth: dictionary respects the cap',
+              len(e2.dict.cols) <= 200, f'{len(e2.dict.cols)} entries')
+        check('capped growth: ctx2 respects the cap',
+              len(e2.ctx2) <= 300, f'{len(e2.ctx2)} tables')
+        check('capped growth: both ends still identical',
+              e2.to_json() == d2.to_json())
+    finally:
+        hv.MAX_DICT_ENTRIES, hv.MAX_CTX2_TABLES = old_dict, old_ctx2
+
     print(f'\n{PASS} passed, {FAIL} failed')
     sys.exit(1 if FAIL else 0)
 

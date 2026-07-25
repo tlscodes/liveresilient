@@ -15,6 +15,17 @@ const int _bot = 1 << 16;
 /// Codebook id width of the wire alphabet (EnCodec: 1024 ids per row).
 const int rawSymbols = 1024;
 
+/// Deterministic growth bounds (identical on both ends, so capping can
+/// never diverge state): once full, novel columns stop entering the
+/// dictionary (they still transmit via row models) and novel order-2
+/// contexts stop opening tables (their frames code through order-1).
+/// Overridable for tests only.
+int maxDictEntries = 4096;
+int maxCtx2Tables = 16384;
+
+/// Context id for a column outside the capped dictionary.
+const int unknownId = -2;
+
 class _RangeEncoder {
   int _low = 0;
   int _range = _mask;
@@ -271,8 +282,17 @@ class HamsedaState {
 
   FreqTable ctxTable(int prevId) => ctx.putIfAbsent(prevId, FreqTable.new);
 
-  FreqTable ctx2Table(int p2, int p1) =>
-      ctx2.putIfAbsent('$p2,$p1', FreqTable.new);
+  /// Returns null once the ctx2 cap is reached and this key is new —
+  /// the frame then codes through order-1 (same rule on both ends).
+  FreqTable? ctx2Table(int p2, int p1) {
+    final key = '$p2,$p1';
+    final existing = ctx2[key];
+    if (existing != null) return existing;
+    if (ctx2.length >= maxCtx2Tables) return null;
+    final t = FreqTable();
+    ctx2[key] = t;
+    return t;
+  }
 
   HamsedaState clone() => HamsedaState._(
         [for (final m in models) m.clone()],
@@ -305,18 +325,21 @@ class HamsedaState {
 
 /// Applies exactly the state mutations encoding [col] would, without
 /// producing bits — shared by the raw-fallback path on both ends.
-int _learnColumn(HamsedaState st, FreqTable t2, FreqTable t1,
+int _learnColumn(HamsedaState st, FreqTable? t2, FreqTable t1,
     int? cidBefore, List<int> col) {
   if (cidBefore != null) {
-    t2.add(cidBefore);
+    t2?.add(cidBefore);
     t1.add(cidBefore);
+    st.dict.add(col); // bump the existing id's global frequency
+    return cidBefore;
+  }
+  if (st.dict.cols.length >= maxDictEntries) {
+    return unknownId; // capped: column stays outside the dictionary
   }
   st.dict.add(col);
   final newId = st.dict.idOf(col)!;
-  if (cidBefore == null) {
-    t2.add(newId);
-    t1.add(newId);
-  }
+  t2?.add(newId);
+  t1.add(newId);
   return newId;
 }
 
@@ -329,7 +352,7 @@ void _updateWalk(List<List<int>> cols, HamsedaState st) {
     final t2 = st.ctx2Table(p2, p1);
     final t1 = st.ctxTable(p1);
     final hit = cid != null &&
-        (t2.has(cid) || t1.has(cid) || st.dict.table.has(cid));
+        ((t2?.has(cid) ?? false) || t1.has(cid) || st.dict.table.has(cid));
     if (!hit) {
       for (var row = 0; row < col.length; row++) {
         st.models[row].update(prev?[row] ?? -1, col[row]);
@@ -442,12 +465,14 @@ Uint8List _encodeAdaptive(List<List<int>> columns, HamsedaState st) {
     final cid = st.dict.idOf(col);
     final t2 = st.ctx2Table(p2, p1);
     final t1 = st.ctxTable(p1);
-    if (cid != null && t2.has(cid)) {
+    if (cid != null && t2 != null && t2.has(cid)) {
       final (cum, f, tot) = t2.interval(cid);
       w.encode(cum, f, tot);
     } else {
-      final (cum, f, tot) = t2.interval(-1);
-      w.encode(cum, f, tot);
+      if (t2 != null) {
+        final (cum, f, tot) = t2.interval(-1);
+        w.encode(cum, f, tot);
+      }
       if (cid != null && t1.has(cid)) {
         final (c1, f1, n1) = t1.interval(cid);
         w.encode(c1, f1, n1);
@@ -520,8 +545,14 @@ List<List<int>> _decodeAdaptive(
   for (var i = 0; i < nFrames; i++) {
     final t2 = st.ctx2Table(p2, p1);
     final t1 = st.ctxTable(p1);
-    final (sym, cum, f, _) = t2.symbolAt(r.decodeFreq(t2.total));
-    r.consume(cum, f);
+    int sym;
+    if (t2 != null) {
+      final (s, cum, f, _) = t2.symbolAt(r.decodeFreq(t2.total));
+      r.consume(cum, f);
+      sym = s;
+    } else {
+      sym = -1; // capped: level 2 was never coded
+    }
     List<int> col;
     int? cid;
     if (sym != -1) {

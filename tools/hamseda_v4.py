@@ -37,6 +37,14 @@ from hamseda_arith import (
 
 __all__ = ['V4State', 'Session', 'encode', 'decode']
 
+# Deterministic growth bounds (identical on both ends, so capping can
+# never diverge state): once full, novel columns stop entering the
+# dictionary (they still transmit via row models) and novel order-2
+# contexts stop opening tables (their frames code through order-1).
+MAX_DICT_ENTRIES = 4096
+MAX_CTX2_TABLES = 16384
+UNKNOWN_ID = -2  # context id for a column outside the capped dictionary
+
 
 class V4State:
     """Full deterministic shared state of one contact relationship."""
@@ -58,6 +66,8 @@ class V4State:
     def ctx2_table(self, key):
         t = self.ctx2.get(key)
         if t is None:
+            if len(self.ctx2) >= MAX_CTX2_TABLES:
+                return None  # capped: this frame codes through order-1
             t = FreqTable()
             self.ctx2[key] = t
         return t
@@ -115,15 +125,21 @@ class V4State:
 
 
 def _learn(st, t2, t1, cid_before, col):
-    """Identical post-frame update on both ends."""
+    """Identical post-frame update on both ends. Returns the column's
+    context id for the next frame (UNKNOWN_ID once the dict is full)."""
     if cid_before is not None:
-        t2.add(cid_before)
+        if t2 is not None:
+            t2.add(cid_before)
         t1.add(cid_before)
+        st.dict.add(col)  # bump the existing id's global frequency
+        return cid_before
+    if len(st.dict.cols) >= MAX_DICT_ENTRIES:
+        return UNKNOWN_ID  # capped: column stays outside the dictionary
     st.dict.add(col)
     new_id = st.dict.by_col[col]
-    if cid_before is None:
+    if t2 is not None:
         t2.add(new_id)
-        t1.add(new_id)
+    t1.add(new_id)
     return new_id
 
 
@@ -138,7 +154,8 @@ def _update_walk(cols, st):
         t2 = st.ctx2_table((p2, p1))
         t1 = st.ctx_table(p1)
         hit = cid is not None and (
-            t2.has(cid) or t1.has(cid) or st.dict.table.has(cid))
+            (t2 is not None and t2.has(cid)) or t1.has(cid)
+            or st.dict.table.has(cid))
         if not hit:
             for row, sym in enumerate(col):
                 st.models[row].update(prev[row] if prev else -1, sym)
@@ -213,12 +230,13 @@ def _encode_adaptive(cols, st):
         cid = st.dict.by_col.get(col)
         t2 = st.ctx2_table((p2, p1))
         t1 = st.ctx_table(p1)
-        if cid is not None and t2.has(cid):
+        if cid is not None and t2 is not None and t2.has(cid):
             cum, f, tot = t2.interval(cid)
             w.encode(cum, f, tot)
         else:
-            cum, f, tot = t2.interval(-1)
-            w.encode(cum, f, tot)
+            if t2 is not None:
+                cum, f, tot = t2.interval(-1)
+                w.encode(cum, f, tot)
             if cid is not None and t1.has(cid):
                 cum, f, tot = t1.interval(cid)
                 w.encode(cum, f, tot)
@@ -248,8 +266,11 @@ def _decode_adaptive(data, n_frames, st):
     for _ in range(n_frames):
         t2 = st.ctx2_table((p2, p1))
         t1 = st.ctx_table(p1)
-        sym, cum, f, tot = t2.symbol_at(r.decode_freq(t2.total))
-        r.consume(cum, f)
+        if t2 is not None:
+            sym, cum, f, tot = t2.symbol_at(r.decode_freq(t2.total))
+            r.consume(cum, f)
+        else:
+            sym = -1  # capped: level 2 was never coded
         col = None
         cid = None
         if sym != -1:

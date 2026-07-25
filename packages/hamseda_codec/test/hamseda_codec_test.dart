@@ -145,6 +145,27 @@ void main() {
       expect(jsonEncode(dec.toJson()), equals(jsonEncode(enc.toJson())));
     });
 
+    test('capped growth: long stream crossing both caps stays bit-exact, '
+        'state stops growing, both ends identical', () {
+      final oldDict = maxDictEntries;
+      final oldCtx2 = maxCtx2Tables;
+      maxDictEntries = 200;
+      maxCtx2Tables = 300;
+      try {
+        final cols = speechLike(2500, 2, 99);
+        final enc = HamsedaState(2);
+        final dec = HamsedaState(2);
+        final data = encodeColumns(cols, enc);
+        expect(decodeColumns(data, cols.length, dec), equals(cols));
+        expect(enc.dict.cols.length, lessThanOrEqualTo(200));
+        expect(enc.ctx2.length, lessThanOrEqualTo(300));
+        expect(jsonEncode(dec.toJson()), equals(jsonEncode(enc.toJson())));
+      } finally {
+        maxDictEntries = oldDict;
+        maxCtx2Tables = oldCtx2;
+      }
+    });
+
     test('frequency halving keeps both ends identical (long stream)', () {
       // enough symbols to cross the 65536 halving threshold repeatedly
       final cols = speechLike(4000, 2, 8);
