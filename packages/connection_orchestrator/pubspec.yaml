@@ -16,6 +16,8 @@ dependencies:
     path: ../adaptive_transport
   device_link:
     path: ../device_link
+  hamseda_codec:
+    path: ../hamseda_codec
 
 dev_dependencies:
   test: ^1.25.0
