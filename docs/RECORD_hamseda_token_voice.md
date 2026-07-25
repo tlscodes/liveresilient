@@ -36,6 +36,18 @@ row0 fresh-content calls 2 & 4:  638 / 574 bps  -> UNDER 700 on new speech
 audio proof of row0 quality: demo_audio/gift_row0_750bps.wav
 ```
 
+## نسخه‌ی محصول (order-2، در هر دو زبان — رکورد نهایی این شب)
+
+کتابخانه‌ی مرجع `tools/hamseda_v4.py` و پکیج `packages/hamseda_codec` هر دو مدل چهار-پله‌ای (زمینه‌ی مرتبه‌۲ → مرتبه‌۱ → سراسری → ردیف‌ها) + سقف بدترین-حالت raw دارند؛ خروجی دو زبان بایت‌به‌بایت یکسان است.
+
+```
+cold (any call):     capped at raw + 1 byte   (1501.2 bps measured)
+fully-warm full band:  31.8 bps  [22x under Codec2 700C, bit-exact,
+                       byte-identical Python & Dart: warm 54B fnv b5d19bd2]
+verifiers: tools/test_hamseda_v4.py (12 checks) · dart test (10) ·
+           tool/parity.dart == tools/parity_dump.py
+```
+
 ## برچسب صادقانه‌ی کیفیت و ادعا
 
 - عدد 675bps مالِ بازپخش گفتاری است که دیکشنری قبلاً دیده (سقف همگرایی هر-مخاطب)؛ تماس با محتوای کاملاً تازه امروز 1350–1450bps می‌رود و با هر تماس پایین می‌آید.
