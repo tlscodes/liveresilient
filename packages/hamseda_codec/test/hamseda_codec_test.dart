@@ -31,11 +31,17 @@ void main() {
       expect(decodeColumns(data, cols.length, dec), equals(cols));
     });
 
-    test('compresses a repetitive stream below raw token size', () {
+    test('cold call is capped at raw+1 byte; warm call compresses hard', () {
       final cols = speechLike(1000, 2, 2);
       final rawBits = 1000 * 2 * 10;
-      final data = encodeColumns(cols, HamsedaState(2));
-      expect(data.length * 8, lessThan(rawBits));
+      final st = HamsedaState(2);
+      final cold = encodeColumns(cols, st);
+      // v4 contract: a cold call may not beat raw, but can NEVER cost
+      // more than raw plus the 1-byte path flag.
+      expect(cold.length * 8, lessThanOrEqualTo(rawBits + 8));
+      final warm = encodeColumns(cols, st);
+      expect(warm.length * 8, lessThan(rawBits ~/ 4),
+          reason: 'converged dictionary must crush repeated speech');
     });
 
     test('single frame and empty stream', () {
