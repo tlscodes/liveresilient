@@ -1,4 +1,19 @@
-/// Document compression for the media transport stage.
+#!/usr/bin/env python3
+"""Phase 4a record: route the document path through our own CM engine.
+
+The compressor now tries the in-house context-mixing coder and gzip9,
+emits whichever is smaller, and prefixes a 1-byte codec tag so decode is
+never ambiguous. gzip9 stays as a guaranteed floor: the output can never
+be larger than the previous implementation plus the tag byte.
+"""
+import pathlib
+
+TARGET = pathlib.Path(
+    "/Users/behnam/Downloads/voice_call_kit_v3/packages/connection_orchestrator"
+    "/lib/src/media_codecs/text_document_compressor.dart"
+)
+
+CONTENT = '''/// Document compression for the media transport stage.
 ///
 /// Strategy per the brief: keep only the text layer (layout and embedded
 /// resources are discarded by the caller before this point — this class
@@ -62,3 +77,7 @@ class TextDocumentCompressor {
     }
   }
 }
+'''
+
+TARGET.write_text(CONTENT, encoding="utf-8")
+print(f"wrote {TARGET.name}")

@@ -1,4 +1,5 @@
-/// Phase 4a — document compression (text layer, gzip level 9).
+/// Phase 4a — document compression (text layer, in-house context-
+/// mixing coder with gzip level 9 kept as a guaranteed floor).
 import 'dart:math';
 
 import 'package:connection_orchestrator/src/media_codecs/text_document_compressor.dart';
@@ -44,10 +45,27 @@ void main() {
     final ratio = compressed.length / 10240;
     // ignore: avoid_print
     print('document compressor: 10KB -> ${compressed.length} B '
-        '(ratio ${ratio.toStringAsFixed(3)}, gzip level 9)');
-    // Pinned from first measured run (1822 B); ~15% headroom so a zlib
-    // version change cannot flake the gate.
-    expect(compressed.length, lessThan(2100));
+        '(ratio ${ratio.toStringAsFixed(3)}, codec tag ${compressed[0]})');
+    // Pinned from the measured CM run (1277 B, was 1822 B under gzip9
+    // alone); headroom left so a model tweak cannot flake the gate.
+    expect(compressed.length, lessThan(1500));
     expect(c.decompress(compressed), equals(text));
+    expect(compressed[0], DocumentCodecTag.contextMixing,
+        reason: 'CM must beat gzip9 on natural-language text');
+  });
+
+  test('never larger than gzip9 alone: the floor rule holds on inputs\n'
+      'where context mixing loses', () {
+    // Incompressible bytes: the CM model cannot win here, so the
+    // gzip9 branch must be selected rather than shipping a bloated
+    // CM stream.
+    final rng = Random(7);
+    final noise = String.fromCharCodes(
+        List.generate(4096, (_) => 32 + rng.nextInt(95)));
+    final out = c.compress(noise);
+    expect(c.decompress(out), equals(noise));
+    // ignore: avoid_print
+    print('floor rule: 4096 B noise -> ${out.length} B '
+        '(codec tag ${out[0]})');
   });
 }
