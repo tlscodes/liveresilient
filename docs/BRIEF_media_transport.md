@@ -168,16 +168,26 @@ $$\text{Payload Format: } [\text{u16 } \text{esi}] \cdot [\text{u16 } \text{bloc
 
 ---
 
-### Phase 8 — NAT Traversal Relay Allocation & Full System Integration (RFC 8489 / RFC 8656)
+### Phase 8 — NAT Traversal Relay Allocation & Full System Integration (RFC 8489 / RFC 8656 / RFC 5769 / RFC 8016)
 
-* **Build:**
+* **Build (پایه):**
   * `lib/src/transport/turn_relay_allocator.dart`: تخصیص پویای سرورهای STUN/TURN (RFC 8489 / RFC 8656) جهت مدیریت تغییرات IP/Port (Cellular to Wi-Fi roaming) و عبور از NAT.
   * `lib/src/resilient_media_transport.dart`: رابط واحد (Facade) که تمامی لایه‌ها (Rateless Stream, Codecs, Priority Queue, TLS Configuration, Relay Allocator) را زیر یک API قرار می‌دهد (`send(file, type)` / `onReceived`).
-* **Test File:** `test/resilient_media_transport_test.dart`
-* **معیار پذیرش:**
+* **Build (پیشرفته — closed 2026-07-26):**
+  * `stun_message.dart`: کدک کامل پیام STUN — تجزیه‌ی ساخت‌یافته با کوکی جادویی و هم‌ترازی ۴ بایتی، MESSAGE-INTEGRITY (HMAC-SHA1، §14.5) و MESSAGE-INTEGRITY-SHA256 (§14.6) با قاعده‌ی بازنویسی طول «انگار آخرین attribute است»، FINGERPRINT با CRC-32 XOR 0x5354554E (§14.7)، کلید کوتاه‌مدت و بلندمدت (MD5 سه‌بخشی، §9.2.2) — همه علیه بردار رسمی RFC 5769 §2.1 بایت‌به‌بایت تأیید شده.
+  * `channel_relay.dart`: فریم‌بندی ChannelData (RFC 8656 §12.4) با شماره کانال 0x4000-0x7FFF و پدینگ ۴ بایتی؛ چرخه‌ی عمر مجوز ۳۰۰ ثانیه (§9.3) و کانال ۶۰۰ ثانیه (§12.2)؛ ارسال بدون مجوز به‌جای سیاه‌چاله‌ی بی‌صدا با استثنا شکست می‌خورد.
+  * `mobility_relay_allocator.dart`: جابه‌جایی TURN سبک RFC 8016 — تیکت جابه‌جایی هنگام Allocate، رومینگ سلولی↔وای‌فای با یک Refresh از آدرس جدید و حفظ همان relayed address؛ رد تیکت (437) به re-allocate کامل fallback می‌کند.
+  * سیم‌کشی facade: پارامتر `relayLink` — دیتاگرام سیم به‌صورت ChannelData بیرونی‌ترین لایه (رله قبل از لایه‌ی امن و carriage آن را برمی‌دارد)؛ replay زیر لایه‌ی کانال هم رد می‌شود؛ فریم کانالِ غریبه هرگز به لایه‌ی نشست نمی‌رسد.
+* **Test Files:** `test/resilient_media_transport_test.dart` · `test/phase8_advanced_relay_test.dart` (14 tests) · `connection_orchestrator/test/phase8_wire_integration_test.dart` (4 tests)
+* **معیار پذیرش (همه پاس — اعداد اندازه‌گیری‌شده‌ی تست 2026-07-26، شبیه‌سازی/لوکال):**
   - انتقال هم‌زمان عکس، سند و ویدیو در یک نشست ۱۲۰ ثانیه‌ای تحت شرایط پراتلاف شبکه.
   - عدم اختلال در اولویت و نرخ ارسال صوت (Voice path intact).
-  - موفقیت کامل اجرای حلقه تست اصلی پروژه (`bash tools/run_gate_loop.sh`).
+  - بردار رسمی RFC 5769 §2.1: تجزیه + MESSAGE-INTEGRITY + FINGERPRINT هر سه سبز؛ هر بایتِ دست‌کاری‌شده هر دو را می‌شکند.
+  - کارایی کدک STUN: اندازه‌گیری‌شده 37.5µs بر پیام (~27k msg/s).
+  - سربار ChannelData: ۴ بایت در برابر ۳۶ بایت Send indication — صرفه‌جویی 1600B/s در صوت 50 datagram/s.
+  - سربار کل پشته‌ی رله+امن روی facade: اندازه‌گیری‌شده 11 بایت بر دیتاگرام (89→100).
+  - رومینگ با تیکت: همان relayed address، صفر Allocate اضافه؛ رد تیکت → fallback با Allocate دوم (هر دو تست‌شده).
+  - `dart analyze` پاک و `bash tools/run_gate_loop.sh` سبز.
 
 ---
 
