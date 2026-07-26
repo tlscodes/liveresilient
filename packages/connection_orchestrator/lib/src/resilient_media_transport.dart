@@ -46,6 +46,7 @@ class ResilientMediaTransport {
     MediaTransferQueue? queue,
     this.carriage,
     this.relayAllocator,
+    this.relayLink,
     this.secureSession,
     TlsParameterNormalizer? tlsParameters,
   })  : queue = queue ?? MediaTransferQueue(),
@@ -66,6 +67,12 @@ class ResilientMediaTransport {
 
   /// Phase 8 relay side. Null means no relay is in use (direct path only).
   final TurnRelayAllocator? relayAllocator;
+
+  /// Phase 8 advanced: bound TURN channel for the relayed path. When set,
+  /// every wire datagram travels as ChannelData (RFC 8656 section 12.4 —
+  /// 4-byte header instead of a ~36-byte Send indication), applied OUTERMOST
+  /// so the relay strips it before the secure-session and carriage layers.
+  final ChannelRelayLink? relayLink;
 
   /// The TLS 1.3 client parameter set this transport negotiates with.
   final TlsParameterNormalizer tlsParameters;
@@ -100,9 +107,16 @@ class ResilientMediaTransport {
       throw StateError('wireTick needs a MediaCarriage; none was configured');
     }
     final session = secureSession;
+    final relay = relayLink;
+    Uint8List frame(TaggedDatagram d) {
+      final sealed =
+          session == null ? wire.wrap(d) : session.seal(wire.wrap(d));
+      return relay == null ? sealed : relay.wrap(sealed);
+    }
+
     return [
       for (final d in queue.tick(nowMs: nowMs, voiceIsSpeaking: voiceIsSpeaking))
-        session == null ? wire.wrap(d) : session.seal(wire.wrap(d)),
+        frame(d),
     ];
   }
 
@@ -119,7 +133,9 @@ class ResilientMediaTransport {
       );
     }
     final session = secureSession;
-    return wire.unwrap(session == null ? bytes : session.open(bytes));
+    final relay = relayLink;
+    final unrelayed = relay == null ? bytes : relay.unwrap(bytes);
+    return wire.unwrap(session == null ? unrelayed : session.open(unrelayed));
   }
 
   /// Compress per type and enqueue. Returns (transfer, compressedSize).

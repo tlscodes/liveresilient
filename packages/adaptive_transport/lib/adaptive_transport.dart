@@ -19,4 +19,7 @@ export 'src/hkdf_key_schedule.dart';
 export 'src/scram_exporter_auth.dart';
 export 'src/path_validation.dart';
 export 'src/secure_transport_session.dart';
+export 'src/stun_message.dart';
+export 'src/channel_relay.dart';
+export 'src/mobility_relay_allocator.dart';
 export 'src/turn_relay_allocator.dart';
