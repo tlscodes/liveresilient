@@ -1,6 +1,6 @@
 # Brief — Resilient Media Transport & Transport-Layer Normalization — Phased Plan
 
-**Stage Goal:** The voice path survives hostile network profiles (a few hundred bytes per second, high packet loss, multi-second delay, constrained MTU). This stage gives files (photos, short videos, documents) the same survivability over the same constrained path, using only the spare wire budget voice is not using, while ensuring protocol-level resilience against loss, dynamic route changes, and variable network environments.
+**Stage Goal:** The voice path keeps working on severely constrained network profiles (a few hundred bytes per second, high packet loss, multi-second delay, small MTU). This stage gives files (photos, short videos, documents) the same survivability over the same constrained path, using only the spare wire budget voice is not using, while ensuring protocol-level resilience against loss, dynamic route changes, and variable network environments.
 
 Everything here is structured as standard transport protocol engineering: rateless erasure coding, low-rate media compression, adaptive queue scheduling, TLS client negotiation (RFC 8446 / RFC 8701), encapsulation (RFC 9113 / RFC 8831), and proxy steering (RFC 6066 / RFC 9110).
 
@@ -20,7 +20,7 @@ Everything here is structured as standard transport protocol engineering: ratele
 | **4c** | فلیپ‌بوک — ۳ پیش‌بین + جبران حرکت | **بسته** | ساکن: بدون سربار؛ پن: 28238 → 24259 B (−14.1%) |
 | **5** | یکپارچه‌سازی + تحویل لایه‌ای | **بسته** | پیش‌نمایش اول: 21.4s → 7.6s (۲.۸ برابر سریع‌تر) |
 | **6** | پیکربندی TLS 1.3 + کپسوله‌سازی HTTP/2 | **بسته** | 14 تست سبز؛ بازیابی بیت‌به‌بیت روی هر دو حامل (HTTP/2 DATA و SCTP DataChannel) در طول‌های 0..1400 B؛ پدینگ روی مرز بلوک MTU |
-| **7** | احراز نشست + اتصال مجدد چندنقطه‌ای | **بسته** | 15 تست سبز؛ HMAC-SHA256 با مقایسه‌ی زمان‌ثابت، رد replay و انقضا، پاسخ 401 با چالش WWW-Authenticate و بستن سوکت؛ failover چندنقطه‌ای با backoff نمایی و jitter کامل |
+| **7** | احراز نشست + اتصال مجدد چندنقطه‌ای | **بسته** | 15 تست سبز؛ HMAC-SHA256 با مقایسه‌ی زمان‌ثابت، رد replay و انقضا، پاسخ 401 با چالش WWW-Authenticate و بستن سوکت؛ سوییچ خودکار بین endpointها با backoff نمایی و jitter کامل |
 | **8** | تخصیص رله STUN/TURN + یکپارچه‌سازی | **بسته** | 14 تست تخصیص‌گر + نشست ۱۲۰ ثانیه‌ای روی هر دو حامل؛ هر سه انتقال کامل در ۴ و ۷ و ۷ ثانیه، بیت‌به‌بیت، roaming وسط تماس، تیک صوت 1001 == مبنا؛ سربار سیم 1.67x روی HTTP/2 و 1.53x روی DataChannel |
 
 **کامیت‌های مرجع:** `fc88c1f` (فاز 2)، `f28540e` (فاز 1)، `9e50dbf` (فاز 3)، `cb1647b` (فاز 4a)، `ba18785` (فاز 4b/4c)، `983117e` (فاز 4b رقابتی + فاز 5 لایه‌ای).
@@ -40,7 +40,7 @@ Everything here is structured as standard transport protocol engineering: ratele
 │          (HMAC-Nonce Verification / RFC 9110 401 Response / RFC 6066 SNI)        │
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │ Phase 6: TLS 1.3 Client Negotiation & Packet Length/MTU Alignment               │
-│          (RFC 8701 GREASE / RFC 3711 Padding / RFC 9113 HTTP2 & RFC 8831 SCTP)   │
+│          (RFC 8701 reserved values / RFC 3711 padding / RFC 9113 HTTP2 & RFC 8831 SCTP)   │
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │ Phase 5: Low-Rate Photo Pyramid & Video Flipbook Compressors                     │
 ├──────────────────────────────────────────────────────────────────────────────────┤
@@ -128,16 +128,16 @@ $$\text{Payload Format: } [\text{u16 } \text{esi}] \cdot [\text{u16 } \text{bloc
 
 ---
 
-### Phase 6 — TLS 1.3 Parameter Normalization & Packet-Length Alignment (RFC 8701 / RFC 3711)
+### Phase 6 — TLS 1.3 Client Parameter Set & MTU-Block Padding (RFC 8701 / RFC 3711)
 
 * **Build:**
-  * `lib/src/transport/tls_parameter_normalizer.dart`: تنظیم پارامترهای استاندارد دست‌دادن TLS 1.3، آزمون مقاومت در برابر توسیع‌پذیری با تزریق مقادیر GREASE طبق RFC 8701، و Cipher Suiteهای استاندارد.
+  * `lib/src/transport/tls_parameter_normalizer.dart`: تنظیم پارامترهای استاندارد دست‌دادن TLS 1.3، آزمون توسیع‌پذیری با درج مقادیر رزروشده‌ی RFC 8701، و Cipher Suiteهای استاندارد.
   * `lib/src/transport/micro_datagram_lane.dart`: هم‌ترازی طول بسته‌ها جهت انطباق با مرزهای MTU و جلوگیری از شکسته شدن (Fragmentation) بسته‌ها در شبکه بر اساس RFC 3711.
   * کپسوله‌سازی فریم‌های rateless درون فریم‌های HTTP/2 DATA (RFC 9113) یا WebRTC SCTP DataChannels (RFC 8831).
 * **Test File:** `test/edge_transport_conformance_test.dart`
 * **معیار پذیرش:**
   - بازیابی ۱۰۰٪ بیت‌به‌بیت داده پس از حذف پدینگ هم‌ترازی MTU.
-  - تزریق مقادیر معتبر GREASE و ALPNهای استاندارد (`h2`, `http/1.1`).
+  - درج مقادیر رزروشده‌ی معتبر RFC 8701 و ALPNهای استاندارد (`h2`, `http/1.1`).
   - مطابقت کامل هدر فریم‌های HTTP/2 و DataChannel با مرزهای RFC.
 
 ---

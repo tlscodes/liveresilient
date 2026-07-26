@@ -1,9 +1,10 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-/// Normalizes datagram length so it does not vary with payload content,
-/// per RFC 3711 style padding (SRTP). One trailing byte records the pad
-/// length so the original payload can be restored bit-exact.
+/// Pads a datagram up to a whole number of MTU blocks, per RFC 3711 style
+/// padding (SRTP), so its length on the wire is a multiple of the block
+/// size instead of a function of the payload. One trailing byte records
+/// the pad length so the original payload can be restored bit-exact.
 class MicroDatagramLane {
   MicroDatagramLane({Random? random}) : _random = random ?? Random.secure();
 
