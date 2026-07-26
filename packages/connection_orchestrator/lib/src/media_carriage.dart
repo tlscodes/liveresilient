@@ -1,5 +1,5 @@
 /// Phase 8 — the wire side of the media facade: taking a queued rateless
-/// datagram from length-normalized bytes to something an ordinary carrier
+/// datagram from MTU-block-padded bytes to something an ordinary carrier
 /// accepts, and back again.
 ///
 /// The queue hands out `TaggedDatagram(transferId, bytes)`, where the transfer
@@ -14,8 +14,8 @@
 ///   as a 2-byte big-endian prefix inside the message. That is 2 bytes of real
 ///   overhead, stated plainly rather than hidden.
 ///
-/// Both paths pad to an MTU block boundary first (RFC 3711 style), so datagram
-/// length does not vary with payload content.
+/// Both paths pad to an MTU block boundary first (RFC 3711 style), so every
+/// datagram is a whole number of blocks.
 library;
 
 import 'dart:math';
