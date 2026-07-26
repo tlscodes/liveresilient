@@ -46,11 +46,19 @@ class ResilientMediaTransport {
     MediaTransferQueue? queue,
     this.carriage,
     this.relayAllocator,
+    this.secureSession,
     TlsParameterNormalizer? tlsParameters,
   })  : queue = queue ?? MediaTransferQueue(),
         tlsParameters = tlsParameters ?? TlsParameterNormalizer();
 
   final MediaTransferQueue queue;
+
+  /// Phase 7 advanced wire security: when set, every wire datagram carries a
+  /// sequence header, incoming datagrams must clear the session's anti-replay
+  /// window (replays throw [ReplayedDatagramException]), and admitted traffic
+  /// drives the session's HKDF key-rotation budget. Null keeps the plain wire
+  /// format earlier phases were measured with.
+  final SecureTransportSession? secureSession;
 
   /// Phase 6/8 wire side: MTU-aligned padding plus carrier framing. Null keeps
   /// the pure-queue behavior earlier phases were measured with.
@@ -91,13 +99,18 @@ class ResilientMediaTransport {
     if (wire == null) {
       throw StateError('wireTick needs a MediaCarriage; none was configured');
     }
+    final session = secureSession;
     return [
       for (final d in queue.tick(nowMs: nowMs, voiceIsSpeaking: voiceIsSpeaking))
-        wire.wrap(d),
+        session == null ? wire.wrap(d) : session.seal(wire.wrap(d)),
     ];
   }
 
   /// Reverses [wireTick] for one datagram taken off the wire.
+  ///
+  /// With a [secureSession], the sequence header is checked first: a replayed
+  /// or stale datagram throws [ReplayedDatagramException] before any carriage
+  /// parsing happens.
   CarriedDatagram receiveFromWire(Uint8List bytes) {
     final wire = carriage;
     if (wire == null) {
@@ -105,7 +118,8 @@ class ResilientMediaTransport {
         'receiveFromWire needs a MediaCarriage; none was configured',
       );
     }
-    return wire.unwrap(bytes);
+    final session = secureSession;
+    return wire.unwrap(session == null ? bytes : session.open(bytes));
   }
 
   /// Compress per type and enqueue. Returns (transfer, compressedSize).

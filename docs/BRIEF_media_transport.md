@@ -154,7 +154,8 @@ $$\text{Payload Format: } [\text{u16 } \text{esi}] \cdot [\text{u16 } \text{bloc
   * `authenticated_relay_server.dart` → `MutualRelaySession`: ترکیب سه مورد بالا — establish با SCRAM+exporter، پذیرش پیام با پنجره‌ی ضدتکرار، چرخش خودکار کلید با بودجه‌ی پیام.
   * `path_validation.dart`: اعتبارسنجی مسیر بعد از سوییچ endpoint سبک PATH_CHALLENGE/RESPONSE در RFC 9000 §8.2 اما با پاسخ HMAC-بسته به کلید نشست، + توکن تداوم نشست HKDF-مشتق که با bump شدن epoch باطل می‌شود.
   * `multi_homed_connector.dart` → `HappyEyeballsRacer` و `ValidatedSwitcher`: اتصال موازی پلکانی RFC 8305 §5 (تأخیر پیش‌فرض 250ms، آزادسازی زودهنگام پله هنگام شکست، دورانداختن اتصال بازنده) + سوییچی که فقط مسیرِ اعتبارسنجی‌شده را برای رسانه آزاد می‌کند.
-* **Test Files:** `test/session_authentication_test.dart` · `test/phase7_advanced_auth_test.dart` (24 tests)
+  * `secure_transport_session.dart` + سیم‌کشی در `ResilientMediaTransport` (پارامتر `secureSession`): هر دیتاگرام سیم با هدر ترتیب u48 مهر می‌شود (سربار دقیقاً ۶ بایت، تست‌شده)، دیتاگرام تکراری قبل از رسیدن به decoder با `ReplayedDatagramException` رد می‌شود، ترافیک پذیرفته‌شده بودجه‌ی چرخش کلید را جلو می‌برد، و توکن تداوم/اعتبارسنج مسیر به کلید epoch جاری گره خورده‌اند — مسیر زنده واقعاً از مکانیزم‌های فاز ۷ استفاده می‌کند، نه فقط تست‌ها.
+* **Test Files:** `test/session_authentication_test.dart` · `test/phase7_advanced_auth_test.dart` (24 tests) · `connection_orchestrator/test/phase7_wire_integration_test.dart` (7 tests، اتصال facade)
 * **معیار پذیرش (همه پاس — اعداد اندازه‌گیری‌شده‌ی تست 2026-07-26، شبیه‌سازی/لوکال):**
   - نانس‌های معتبر نشست را برقرار می‌سازند؛ درخواست‌های نامعتبر پاسخ HTTP 401 گرفته و بسته می‌شوند.
   - سوییچ خودکار کلاینت بین انتهای مسیرهای مختلف هنگام قطعی کانال فعلی.
