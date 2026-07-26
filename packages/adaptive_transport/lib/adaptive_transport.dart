@@ -18,4 +18,5 @@ export 'src/anti_replay_window.dart';
 export 'src/hkdf_key_schedule.dart';
 export 'src/scram_exporter_auth.dart';
 export 'src/path_validation.dart';
+export 'src/secure_transport_session.dart';
 export 'src/turn_relay_allocator.dart';
