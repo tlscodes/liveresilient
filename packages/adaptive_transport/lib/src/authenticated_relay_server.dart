@@ -4,6 +4,10 @@ import 'dart:typed_data';
 import 'package:clock/clock.dart';
 import 'package:crypto/crypto.dart';
 
+import 'anti_replay_window.dart';
+import 'hkdf_key_schedule.dart';
+import 'scram_exporter_auth.dart';
+
 /// Session-establishment credential a client presents on the first message of a
 /// relay connection.
 ///
@@ -187,5 +191,82 @@ class AuthenticatedRelayServer {
       diff |= a[i] ^ b[i];
     }
     return diff == 0;
+  }
+}
+
+/// A fully authenticated relay session: SCRAM mutual auth (RFC 5802) bound to
+/// the connection's TLS 1.3 exporter (RFC 8446 section 7.5), then per-message
+/// anti-replay via a counter+bitmap window and HKDF-driven key rotation
+/// (RFC 5869).
+///
+/// Compared to [AuthenticatedRelayServer]'s single-shot HMAC credential, this
+/// upgrades every axis:
+///  * mutual — the client also verifies the server (ServerSignature);
+///  * channel-bound — a proof captured on one TLS connection is useless on
+///    any other, because the exporter value differs;
+///  * O(1) replay defense — bitmap window instead of a growing nonce set;
+///  * forward-ratcheted — traffic keys rotate by epoch and old keys are wiped.
+class MutualRelaySession {
+  MutualRelaySession._({
+    required this.sessionId,
+    required RotatingKeySchedule keySchedule,
+    required AntiReplayWindow replayWindow,
+  })  : _keySchedule = keySchedule,
+        _replayWindow = replayWindow;
+
+  /// Runs the server side of the SCRAM exchange. Returns null (auth failed)
+  /// or an established session whose traffic keys are derived from the
+  /// exporter and the handshake, so both directions start from a fresh,
+  /// connection-unique secret.
+  static ({MutualRelaySession session, Uint8List serverSignature})?
+      establish({
+    required ScramVerifier verifier,
+    required String clientNonce,
+    required String serverNonce,
+    required Uint8List tlsExporter,
+    required Uint8List clientProof,
+    int replayWindowSize = 1024,
+    int messagesPerEpoch = 1 << 20,
+  }) {
+    final server = ScramServer(verifier: verifier);
+    final serverSignature = server.verifyClientProof(
+      clientNonce: clientNonce,
+      serverNonce: serverNonce,
+      channelBinding: tlsExporter,
+      clientProof: clientProof,
+    );
+    if (serverSignature == null) return null;
+    final trafficSecret = Hkdf.derive(
+      ikm: Uint8List.fromList([...verifier.storedKey, ...tlsExporter]),
+      salt: Uint8List.fromList(utf8.encode('$clientNonce$serverNonce')),
+      info: Uint8List.fromList(utf8.encode('relay traffic secret')),
+      length: 32,
+    );
+    final session = MutualRelaySession._(
+      sessionId: 'scram-$clientNonce$serverNonce',
+      keySchedule: RotatingKeySchedule(
+        initialSecret: trafficSecret,
+        messagesPerEpoch: messagesPerEpoch,
+      ),
+      replayWindow: AntiReplayWindow(windowSize: replayWindowSize),
+    );
+    return (session: session, serverSignature: serverSignature);
+  }
+
+  final String sessionId;
+  final RotatingKeySchedule _keySchedule;
+  final AntiReplayWindow _replayWindow;
+
+  int get keyEpoch => _keySchedule.epoch;
+  Uint8List get trafficKey => _keySchedule.currentKey;
+  AntiReplayWindow get replayWindow => _replayWindow;
+
+  /// Admits one protected message: the sequence number must clear the replay
+  /// window, and the epoch counter advances the key schedule when its budget
+  /// is spent. Returns false for replayed/stale sequence numbers.
+  bool admitMessage(int sequenceNumber) {
+    if (!_replayWindow.accept(sequenceNumber)) return false;
+    _keySchedule.recordMessage();
+    return true;
   }
 }

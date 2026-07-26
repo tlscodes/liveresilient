@@ -147,3 +147,155 @@ class MultiHomedConnector<T> {
     _cursor = (_cursor + 1) % _endpoints.length;
   }
 }
+
+/// Result of a raced connect: which endpoint won, the connection, how many
+/// attempts were started, and how long the winner took.
+class RacedConnection<T> {
+  RacedConnection({
+    required this.endpoint,
+    required this.connection,
+    required this.attemptsStarted,
+    required this.elapsed,
+  });
+
+  final RelayEndpoint endpoint;
+  final T connection;
+  final int attemptsStarted;
+  final Duration elapsed;
+}
+
+/// Staggered parallel connection racing per Happy Eyeballs v2 (RFC 8305
+/// section 5): attempt endpoint 0 immediately, start the next attempt every
+/// [connectionAttemptDelay] (RFC 8305 recommends 250 ms) without waiting for
+/// the previous one to fail, and take the first success. Losing attempts are
+/// handed to [discard] so their sockets can be closed.
+///
+/// Sequential fallback waits full timeouts serially; racing bounds the added
+/// latency of a dead first endpoint to one stagger delay instead.
+class HappyEyeballsRacer<T> {
+  HappyEyeballsRacer({
+    required List<RelayEndpoint> endpoints,
+    required Future<T> Function(RelayEndpoint endpoint) connect,
+    this.connectionAttemptDelay = const Duration(milliseconds: 250),
+    void Function(T connection)? discard,
+    DateTime Function()? now,
+  })  : _endpoints = List<RelayEndpoint>.unmodifiable(endpoints),
+        _connect = connect,
+        _discard = discard,
+        _now = now ?? DateTime.now {
+    if (_endpoints.isEmpty) {
+      throw ArgumentError.value(endpoints, 'endpoints', 'must not be empty');
+    }
+    if (connectionAttemptDelay <= Duration.zero) {
+      throw ArgumentError.value(connectionAttemptDelay,
+          'connectionAttemptDelay', 'must be positive');
+    }
+  }
+
+  final List<RelayEndpoint> _endpoints;
+  final Future<T> Function(RelayEndpoint) _connect;
+  final void Function(T)? _discard;
+  final DateTime Function() _now;
+
+  final Duration connectionAttemptDelay;
+
+  /// Races the endpoints; completes with the first successful connection or
+  /// throws [NoReachableEndpointException] when every attempt failed.
+  Future<RacedConnection<T>> race() {
+    final started = _now();
+    final result = Completer<RacedConnection<T>>();
+    var attemptsStarted = 0;
+    var failures = 0;
+    Object? lastError;
+    Timer? stagger;
+
+    void launch(int index) {
+      if (result.isCompleted || index >= _endpoints.length) return;
+      attemptsStarted++;
+      final endpoint = _endpoints[index];
+      _connect(endpoint).then((connection) {
+        if (result.isCompleted) {
+          _discard?.call(connection);
+          return;
+        }
+        stagger?.cancel();
+        result.complete(RacedConnection(
+          endpoint: endpoint,
+          connection: connection,
+          attemptsStarted: attemptsStarted,
+          elapsed: _now().difference(started),
+        ));
+      }).catchError((Object error) {
+        lastError = error;
+        failures++;
+        if (result.isCompleted) return;
+        if (failures == _endpoints.length) {
+          stagger?.cancel();
+          result.completeError(
+            NoReachableEndpointException(attemptsStarted, lastError),
+          );
+        } else if (attemptsStarted < _endpoints.length) {
+          // A failure releases the stagger early (RFC 8305 section 5): start
+          // the next candidate now instead of waiting out the delay.
+          stagger?.cancel();
+          launch(attemptsStarted);
+          if (attemptsStarted < _endpoints.length) {
+            stagger = Timer.periodic(
+              connectionAttemptDelay,
+              (_) => launch(attemptsStarted),
+            );
+          }
+        }
+      });
+    }
+
+    launch(0);
+    if (_endpoints.length > 1) {
+      stagger = Timer.periodic(
+        connectionAttemptDelay,
+        (_) => launch(attemptsStarted),
+      );
+    }
+    return result.future;
+  }
+}
+
+/// Wraps a [MultiHomedConnector]-style switch with mandatory post-switch path
+/// validation: after connecting on a new endpoint the caller runs its
+/// challenge/response probe, and only a validated connection is released to
+/// carry media. An unvalidated path is discarded and counted.
+class ValidatedSwitcher<T> {
+  ValidatedSwitcher({
+    required Future<T> Function(RelayEndpoint endpoint) connect,
+    required Future<bool> Function(RelayEndpoint endpoint, T connection)
+        validatePath,
+    void Function(T connection)? discard,
+  })  : _connect = connect,
+        _validatePath = validatePath,
+        _discard = discard;
+
+  final Future<T> Function(RelayEndpoint) _connect;
+  final Future<bool> Function(RelayEndpoint, T) _validatePath;
+  final void Function(T)? _discard;
+
+  int _switches = 0;
+  int _validationFailures = 0;
+
+  int get switchCount => _switches;
+  int get validationFailureCount => _validationFailures;
+
+  /// Connects to [endpoint] and returns the connection only after the path
+  /// validation probe passed. Throws [StateError] when validation fails, so a
+  /// caller can fall back to the next endpoint.
+  Future<T> switchTo(RelayEndpoint endpoint) async {
+    final connection = await _connect(endpoint);
+    final ok = await _validatePath(endpoint, connection);
+    if (!ok) {
+      _validationFailures++;
+      _discard?.call(connection);
+      throw StateError('path validation failed for $endpoint');
+    }
+    _switches++;
+    return connection;
+  }
+}
