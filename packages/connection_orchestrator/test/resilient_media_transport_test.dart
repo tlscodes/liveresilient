@@ -6,7 +6,10 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:connection_orchestrator/src/gilbert_elliott_loss.dart';
+import 'package:connection_orchestrator/src/media_carriage.dart';
+import 'package:security/security.dart';
 import 'package:connection_orchestrator/src/media_codecs/flipbook_video_compressor.dart';
 import 'package:connection_orchestrator/src/media_codecs/low_rate_image_compressor.dart';
 import 'package:connection_orchestrator/src/media_queue.dart';
@@ -193,4 +196,184 @@ void main() {
         'monolithic (${layers.length} layers, '
         '${layers.map((l) => l.length).join('+')} B)');
   });
+
+  // ------------------------------------------------------------- phase 8
+  // Everything above rides the queue directly. This closes the stage: the
+  // same 120 s hostile session, but every datagram goes out through the
+  // full wire path — MTU-aligned padding, carrier framing — and the relay
+  // allocation is maintained across a mid-call roam.
+  for (final carrier in MediaCarrier.values) {
+    test('phase 8 — photo + flipbook + document over the ${carrier.name} '
+        'carrier during a 120s hostile call, with a mid-call relay roam',
+        () async {
+      final rng = Random(5);
+
+      final document = Uint8List.fromList(utf8.encode(
+          'گزارش وضعیت: مسیر رله جابه‌جا شد، صدا همان‌طور مقدم است. ' * 30));
+      const imgC = LowRateImageCompressor();
+      const w = 320, h = 240, ch = 4;
+      final photoPx = Uint8List(w * h * ch);
+      for (var i = 0; i < photoPx.length; i++) {
+        photoPx[i] = ((i ~/ ch) % w) & 0xFF;
+      }
+      final photoLevels = imgC.encodeProgressive(photoPx, w, h, ch);
+      final photoBytes = BytesBuilder();
+      for (final l in photoLevels) {
+        photoBytes.add([l.width, l.height & 0xFF, l.bytes.length ~/ 256,
+            l.bytes.length & 0xFF]);
+        photoBytes.add(l.bytes);
+      }
+      final photo = photoBytes.toBytes();
+
+      const vidC = FlipbookVideoCompressor();
+      final vidFrames = List.generate(
+          3,
+          (t) => Uint8List.fromList(
+              List.generate(160 * 120, (i) => (i % 160 + t * 9) & 0xFF)));
+      final flip = vidC.encode(vidFrames, 160, 120);
+      final flipBytes = BytesBuilder();
+      for (final f in flip) {
+        flipBytes.add([f.index, f.temporal ? 1 : 0, f.bytes.length ~/ 256,
+            f.bytes.length & 0xFF]);
+        flipBytes.add(f.bytes);
+      }
+      final flipbook = flipBytes.toBytes();
+
+      // --- relay: two TURN servers, scripted transport ---
+      var relayPort = 49152;
+      final allocator = TurnRelayAllocator(
+        servers: const [
+          HostPort(host: '198.51.100.1', port: 3478),
+          HostPort(host: '198.51.100.2', port: 3478),
+        ],
+        issuer: TurnCredentialsIssuer(sharedSecret: 'turn-shared-secret'),
+        userId: 'call-phase8',
+        allocate: (request) async => TurnAllocation(
+          tuple: request.tuple,
+          relayedAddress: HostPort(
+            host: request.tuple.serverAddress.host,
+            port: relayPort++,
+          ),
+          serverReflexiveAddress: HostPort(
+            host: '203.0.113.7',
+            port: request.tuple.localAddress.port,
+          ),
+          expiresAt: DateTime.now().add(request.lifetime),
+          credentials: request.credentials,
+        ),
+        refresh: (_, lifetime) async => DateTime.now().add(lifetime),
+      );
+
+      final transport = ResilientMediaTransport(
+        queue: MediaTransferQueue(spareBudgetBytesPerSecond: 500),
+        carriage: MediaCarriage(
+          carrier: carrier,
+          mtuBlockSize: 16,
+          random: Random(21),
+        ),
+        relayAllocator: allocator,
+      );
+
+      // ALPN must offer h2 for the HTTP/2 carrier to be negotiable at all.
+      expect(transport.alpnProtocols, contains('h2'));
+      expect(
+        transport.tlsParameters
+            .buildCipherSuites()
+            .any(transport.tlsParameters.isGreaseValue),
+        isTrue,
+      );
+
+      const cellular = HostPort(host: '10.20.30.40', port: 50000);
+      const wifi = HostPort(host: '192.168.1.24', port: 50001);
+      final onCellular = await transport.ensureRelay(localAddress: cellular);
+      expect(onCellular, isNotNull);
+      expect(allocator.allocateCount, 1);
+
+      final (tPhoto, sPhoto) = transport.send(photo, MediaType.photo);
+      final (tFlip, sFlip) = transport.send(flipbook, MediaType.flipbook);
+      final (tDoc, sDoc) = transport.send(document, MediaType.document);
+
+      final ge = GilbertElliottLossSimulator(p: 0.04, r: 0.1, seed: 8);
+      final decoders = <int, RatelessDecoder>{};
+      final completedAt = <int, int>{};
+      var wireBytes = 0;
+      var roamedAt = -1;
+
+      // Voice keeps its own 20 ms cadence; media only moves in the gaps.
+      final baseline = _voiceTicks(120000, null);
+      final live = <int>[];
+      for (var nowMs = 0; nowMs <= 120000; nowMs += 20) {
+        final speaking = _speaking(nowMs);
+        if (speaking && nowMs % 60 == 0) live.add(nowMs);
+
+        // Cellular -> Wi-Fi at 60 s: the 5-tuple moves, so RFC 8656 says the
+        // old allocation is dead and a new one must be made. Media must not
+        // notice.
+        if (nowMs == 60000) {
+          final onWifi = await transport.ensureRelay(localAddress: wifi);
+          expect(onWifi!.tuple.localAddress, wifi);
+          expect(
+            onWifi.relayedAddress,
+            isNot(onCellular!.relayedAddress),
+            reason: 'a roamed client gets a new relayed address',
+          );
+          roamedAt = nowMs;
+        }
+
+        for (final wire in transport.wireTick(
+            nowMs: nowMs, voiceIsSpeaking: speaking)) {
+          wireBytes += wire.length;
+          if (rng.nextDouble() < 0.60 || ge.shouldDrop()) continue;
+          final carried = transport.receiveFromWire(wire);
+          final dec =
+              decoders.putIfAbsent(carried.transferId, RatelessDecoder.new);
+          dec.addDatagram(carried.bytes);
+          if (dec.isComplete && !completedAt.containsKey(carried.transferId)) {
+            completedAt[carried.transferId] = nowMs;
+            transport.queue.markComplete(carried.transferId);
+          }
+        }
+      }
+
+      expect(live, equals(baseline),
+          reason: 'voice tick schedule must be untouched by media or roaming');
+      expect(roamedAt, 60000);
+      expect(allocator.roamCount, 1);
+      expect(allocator.allocateCount, 2);
+
+      final originals = {
+        tPhoto.id: photo,
+        tFlip.id: flipbook,
+        tDoc.id: document,
+      };
+      expect(completedAt.length, 3,
+          reason: 'photo, flipbook and document must ALL complete in 120s '
+              'over the ${carrier.name} carrier');
+      for (final id in completedAt.keys) {
+        final media = ResilientMediaTransport.receive(decoders[id]!);
+        expect(media.bytes, equals(originals[id]),
+            reason: 'transfer $id must be bit-exact after padding removal');
+      }
+
+      await transport.releaseRelay();
+      expect(allocator.currentAllocation, isNull);
+      expect(allocator.releaseCount, 1);
+
+      final wireRate = wireBytes / 120;
+      // Every datagram the queue emitted, padded and framed, versus its
+      // raw size — the true cost of the wire path, loss-independent.
+      final overhead = wireBytes / transport.queue.bytesEmitted;
+      // ignore: avoid_print
+      print('phase8 (simulated, ${carrier.name}): compressed photo=$sPhoto '
+          'flipbook=$sFlip doc=$sDoc B; all 3 complete at '
+          '${completedAt.values.map((t) => '${t ~/ 1000}s').join(', ')}; '
+          'wire ${wireRate.toStringAsFixed(1)} B/s including padding + '
+          'framing (${overhead.toStringAsFixed(2)}x the raw datagram bytes); voice ticks ${live.length} == baseline ${baseline.length}; '
+          'relay allocations ${allocator.allocateCount} '
+          '(roams ${allocator.roamCount})');
+      expect(wireRate, lessThanOrEqualTo(1500),
+          reason: 'length normalization and framing may cost bytes, but the '
+              'lane must stay inside the hostile-profile ceiling');
+    }, timeout: const Timeout(Duration(minutes: 3)));
+  }
 }

@@ -18,6 +18,8 @@ dependencies:
     path: ../device_link
   hamseda_codec:
     path: ../hamseda_codec
+  security:
+    path: ../security
 
 dev_dependencies:
   test: ^1.25.0

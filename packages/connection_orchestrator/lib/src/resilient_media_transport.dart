@@ -16,6 +16,9 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:adaptive_transport/adaptive_transport.dart';
+
+import 'media_carriage.dart';
 import 'media_codecs/live_context_compressor.dart';
 import 'media_codecs/media_frontends.dart';
 import 'media_queue.dart';
@@ -39,11 +42,71 @@ class ReceivedMedia {
 }
 
 class ResilientMediaTransport {
-  ResilientMediaTransport({MediaTransferQueue? queue})
-      : queue = queue ?? MediaTransferQueue();
+  ResilientMediaTransport({
+    MediaTransferQueue? queue,
+    this.carriage,
+    this.relayAllocator,
+    TlsParameterNormalizer? tlsParameters,
+  })  : queue = queue ?? MediaTransferQueue(),
+        tlsParameters = tlsParameters ?? TlsParameterNormalizer();
 
   final MediaTransferQueue queue;
+
+  /// Phase 6/8 wire side: MTU-aligned padding plus carrier framing. Null keeps
+  /// the pure-queue behavior earlier phases were measured with.
+  final MediaCarriage? carriage;
+
+  /// Phase 8 relay side. Null means no relay is in use (direct path only).
+  final TurnRelayAllocator? relayAllocator;
+
+  /// The TLS 1.3 client parameter set this transport negotiates with.
+  final TlsParameterNormalizer tlsParameters;
+
   static const _cm = LiveContextCompressor();
+
+  /// Standard ALPN identifiers offered on the TLS handshake (RFC 7301
+  /// registrations; `h2` is the one the HTTP/2 carrier needs).
+  List<String> get alpnProtocols => TlsParameterNormalizer.standardAlpnProtocols;
+
+  /// Makes sure a relay allocation is in place for [localAddress], allocating,
+  /// refreshing or re-allocating as RFC 8656 requires. Returns null when this
+  /// transport was built without a relay allocator.
+  Future<TurnAllocation?> ensureRelay({required HostPort localAddress}) async {
+    final allocator = relayAllocator;
+    if (allocator == null) return null;
+    return allocator.ensure(localAddress: localAddress);
+  }
+
+  /// Releases the relay allocation, if any (RFC 8656 section 7).
+  Future<void> releaseRelay() => relayAllocator?.release() ?? Future.value();
+
+  /// One tick of the media queue, framed for the wire.
+  ///
+  /// Requires a [carriage]; without one there is no wire format to produce.
+  List<Uint8List> wireTick({
+    required int nowMs,
+    required bool voiceIsSpeaking,
+  }) {
+    final wire = carriage;
+    if (wire == null) {
+      throw StateError('wireTick needs a MediaCarriage; none was configured');
+    }
+    return [
+      for (final d in queue.tick(nowMs: nowMs, voiceIsSpeaking: voiceIsSpeaking))
+        wire.wrap(d),
+    ];
+  }
+
+  /// Reverses [wireTick] for one datagram taken off the wire.
+  CarriedDatagram receiveFromWire(Uint8List bytes) {
+    final wire = carriage;
+    if (wire == null) {
+      throw StateError(
+        'receiveFromWire needs a MediaCarriage; none was configured',
+      );
+    }
+    return wire.unwrap(bytes);
+  }
 
   /// Compress per type and enqueue. Returns (transfer, compressedSize).
   (MediaTransfer, int) send(Uint8List bytes, MediaType type) {
