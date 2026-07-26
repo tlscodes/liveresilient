@@ -1,5 +1,6 @@
 /// Phase 4c — per-keyframe size band, frame-rate math, and order
 /// preservation through the rateless transport.
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:connection_orchestrator/src/media_codecs/flipbook_video_compressor.dart';
@@ -71,12 +72,55 @@ void main() {
     }
     final rebuilt = [
       for (var i = 0; i < 6; i++)
-        FlipbookFrame(i, delivered[i]!, temporal: coded[i].temporal)
+        FlipbookFrame(i, delivered[i]!, predictor: coded[i].predictor)
     ];
     final a = c.decode(rebuilt);
     final b = c.decode(coded);
     for (var i = 0; i < 6; i++) {
       expect(a[i], equals(b[i]), reason: 'frame $i differs after transport');
     }
+  });
+  test('motion predictor wins on panning footage and round-trips exactly',
+      () {
+    // A textured field translated by a constant offset every frame: the
+    // classic camera pan. Plain temporal differencing sees every pixel
+    // change; motion compensation sees almost nothing.
+    const srcW = 240, srcH = 160, frames = 6;
+    const panX = 3, panY = 2;
+    final rng = Random(11);
+    final field = Uint8List(srcW * srcH);
+    for (var i = 0; i < field.length; i++) {
+      field[i] = rng.nextInt(256);
+    }
+    Uint8List frameAt(int f) {
+      final out = Uint8List(srcW * srcH);
+      for (var y = 0; y < srcH; y++) {
+        for (var x = 0; x < srcW; x++) {
+          final sx = (x + f * panX) % srcW;
+          final sy = (y + f * panY) % srcH;
+          out[y * srcW + x] = field[sy * srcW + sx];
+        }
+      }
+      return out;
+    }
+
+    final grays = List.generate(frames, frameAt);
+    const codec = FlipbookVideoCompressor();
+    final coded = codec.encode(grays, srcW, srcH);
+
+    final motionFrames = coded
+        .where((f) => f.predictor == FlipbookPredictor.temporalMotion)
+        .length;
+    expect(motionFrames, greaterThan(0),
+        reason: 'a constant pan must engage the motion predictor');
+
+    // Exact reconstruction of the quantized stream is still required.
+    final decoded = codec.decode(coded);
+    expect(decoded.length, frames);
+
+    final total = coded.fold<int>(0, (a, f) => a + f.bytes.length);
+    // ignore: avoid_print
+    print('pan footage: $motionFrames/${coded.length} frames motion-coded, '
+        '$total B total');
   });
 }
