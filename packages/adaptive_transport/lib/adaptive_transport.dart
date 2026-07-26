@@ -14,4 +14,8 @@ export 'src/tls_parameter_normalizer.dart';
 export 'src/frame_encapsulator.dart';
 export 'src/authenticated_relay_server.dart';
 export 'src/multi_homed_connector.dart';
+export 'src/anti_replay_window.dart';
+export 'src/hkdf_key_schedule.dart';
+export 'src/scram_exporter_auth.dart';
+export 'src/path_validation.dart';
 export 'src/turn_relay_allocator.dart';

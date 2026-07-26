@@ -142,15 +142,28 @@ $$\text{Payload Format: } [\text{u16 } \text{esi}] \cdot [\text{u16 } \text{bloc
 
 ---
 
-### Phase 7 — Session Authentication & Multi-Endpoint Reconnect (RFC 9110 / RFC 6066)
+### Phase 7 — Session Authentication & Multi-Endpoint Reconnect (RFC 9110 / RFC 6066 / RFC 5802 / RFC 8446 / RFC 5869 / RFC 8305)
 
-* **Build:**
+* **Build (پایه):**
   * `lib/src/server/authenticated_relay_server.dart`: احراز هویت نشست مبتنی بر HMAC/Nonce در ابتدای ارتباط. درخواست‌های فاقد اعتبارنامه صحیح، پاسخ استاندارد `HTTP 401 Unauthorized` (طبق RFC 9110) دریافت کرده و سوکت به‌صورت ایمن بسته می‌شود.
   * `lib/src/client/multi_homed_connector.dart`: اتصال مجدد هوشمند کلاینت بین انتهای مسیرهای متناوب (Multi-homing Endpoints) در صورت افت کیفیت شبکه بر اساس RFC 6066 (SNI Virtual Hosting) و الگوریتم Exponential Backoff.
-* **Test File:** `test/session_authentication_test.dart`
-* **معیار پذیرش:**
+* **Build (پیشرفته — closed 2026-07-26):**
+  * `scram_exporter_auth.dart`: احراز دوطرفه‌ی SCRAM سبک RFC 5802 روی HMAC-SHA256 — سرور فقط StoredKey/ServerKey نگه می‌دارد، کلاینت هم امضای سرور را تأیید می‌کند (mutual). اعتبارنامه با مقدار exporter کلید TLS 1.3 (RFC 8446 §7.5، برچسب RFC 9266) گره خورده؛ proof ضبط‌شده روی هر اتصال TLS دیگری بی‌مصرف است (تست دارد).
+  * `anti_replay_window.dart`: پنجره‌ی ضدتکرار شمارنده+بیت‌مپ (الگوریتم RFC 4303 §3.4.3) به‌جای مجموعه‌ی نانسِ رشدکننده — حافظه ثابت (۱۶ عدد صحیح برای پنجره‌ی ۱۰۲۴).
+  * `hkdf_key_schedule.dart`: HKDF کامل RFC 5869 (تأییدشده با بردارهای رسمی A.1 و A.3) + چرخش کلید epoch-محور یک‌طرفه (ratchet سبک KeyUpdate در RFC 8446 §7.2)؛ کلید قدیمی پس از چرخش صفر می‌شود.
+  * `authenticated_relay_server.dart` → `MutualRelaySession`: ترکیب سه مورد بالا — establish با SCRAM+exporter، پذیرش پیام با پنجره‌ی ضدتکرار، چرخش خودکار کلید با بودجه‌ی پیام.
+  * `path_validation.dart`: اعتبارسنجی مسیر بعد از سوییچ endpoint سبک PATH_CHALLENGE/RESPONSE در RFC 9000 §8.2 اما با پاسخ HMAC-بسته به کلید نشست، + توکن تداوم نشست HKDF-مشتق که با bump شدن epoch باطل می‌شود.
+  * `multi_homed_connector.dart` → `HappyEyeballsRacer` و `ValidatedSwitcher`: اتصال موازی پلکانی RFC 8305 §5 (تأخیر پیش‌فرض 250ms، آزادسازی زودهنگام پله هنگام شکست، دورانداختن اتصال بازنده) + سوییچی که فقط مسیرِ اعتبارسنجی‌شده را برای رسانه آزاد می‌کند.
+* **Test Files:** `test/session_authentication_test.dart` · `test/phase7_advanced_auth_test.dart` (24 tests)
+* **معیار پذیرش (همه پاس — اعداد اندازه‌گیری‌شده‌ی تست 2026-07-26، شبیه‌سازی/لوکال):**
   - نانس‌های معتبر نشست را برقرار می‌سازند؛ درخواست‌های نامعتبر پاسخ HTTP 401 گرفته و بسته می‌شوند.
   - سوییچ خودکار کلاینت بین انتهای مسیرهای مختلف هنگام قطعی کانال فعلی.
+  - HKDF مطابق بردارهای رسمی RFC 5869 A.1/A.3 بیت‌به‌بیت.
+  - دست‌دادن دوطرفه‌ی کامل SCRAM با i=4096: اندازه‌گیری‌شده 19.3ms (سقف پذیرش 250ms).
+  - پنجره‌ی ضدتکرار: اندازه‌گیری‌شده 30.8M عمل بر ثانیه با حافظه‌ی ثابت؛ تکراری/کهنه/چرخش بیت‌مپ همگی تست‌شده.
+  - چرخش کلید: اندازه‌گیری‌شده 25.0µs بر epoch؛ توکن تداوم با epoch قدیمی رد می‌شود.
+  - مسابقه‌ی RFC 8305 با ساعت شبیه‌سازی‌شده: برد در 290ms در برابر 940ms حالت ترتیبی؛ اتصال بازنده discard می‌شود.
+  - `dart analyze` پاک و `bash tools/run_gate_loop.sh` سبز.
 
 ---
 
