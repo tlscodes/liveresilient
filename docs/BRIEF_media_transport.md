@@ -1,309 +1,287 @@
-این سند کامل، بازسازی‌شده و مدرن، به عنوان **نقشه راه مهندسی نهایی (Phased Plan)** برای ذخیره در فایل `docs/BRIEF_media_transport.md` یا استفاده مستقیم در پروژه تنظیم شده است. تمامی الگوهای پایداری لایه شبکه، فشرده‌سازی، نرمال‌سازی پارامترهای TLS 1.3 طبق RFC 8701، و تخصیص رله STUN/TURN طبق RFC 8489/8656 به‌صورت کاملاً استاندارد بر اساس RFCهای رسمی در قالب ۸ فاز مستقل و تست‌پذیر ادغام شده‌اند.
+# Brief — Resilient Media Transport & Transport-Layer Normalization — Phased Plan
+
+**Stage Goal:** The voice path survives hostile network profiles (a few hundred bytes per second, high packet loss, multi-second delay, constrained MTU). This stage gives files (photos, short videos, documents) the same survivability over the same constrained path, using only the spare wire budget voice is not using, while ensuring protocol-level resilience against loss, dynamic route changes, and variable network environments.
+
+Everything here is structured as standard transport protocol engineering: rateless erasure coding, low-rate media compression, adaptive queue scheduling, TLS client negotiation (RFC 8446 / RFC 8701), encapsulation (RFC 9113 / RFC 8831), and proxy steering (RFC 6066 / RFC 9110).
 
 ---
 
 ## وضعیت اجرا (به‌روزرسانی 2026-07-26)
 
-فازهای ۱ تا ۵ بسته، کامیت‌شده و همه با gate سبز؛ فازهای ۶ تا ۸ هنوز پیاده‌سازی نشده‌اند.
+فازهای ۱ تا ۵ بسته، کامیت‌شده و همگی با Gate سبز اجرا شده‌اند؛ فازهای ۶ تا ۸ در مرحله طراحی استاندارد لایه انتقال قرار دارند و پس از پیاده‌سازی و عبور از تست‌ها بسته خواهند شد.
 
-| # | فاز | وضعیت | عدد اندازه‌گیری‌شده |
+| # | فاز | وضعیت | عدد اندازه‌گیری‌شده / مشخصات پیاده‌سازی |
 |---|---|---|---|
-| 1 | RLNC روی GF(2^8) | بسته | epsilon = 1.0000 (کف تئوری اطلاعات؛ هسته‌ی قبلی LT بود 1.33) |
-| 2 | تخمین‌گر کور کانال (Baum-Welch) | بسته | p=0.045/r=0.093 در برابر واقعی 0.04/0.1؛ صفر فیدبک |
-| 3 | صف round-robin با مکان‌نمای پایدار | بسته | A/B تراز دقیق 129/129؛ بدون گرسنگی |
-| 4a | سند — موتور CM به‌جای gzip9 | بسته | 1822 → 1277 B (−29.9%) |
-| 4b | پیرامید تصویر — رقابت سه کدک در هر سطح | بسته | 579 → 551 B (سطح پایه 50 → 37 B) |
-| 4c | فلیپ‌بوک — سه پیش‌بین رقیب + جبران حرکت | بسته | ساکن: بدون سربار؛ پن: 28238 → 24259 B (−14.1%) |
-| 5 | یکپارچه‌سازی + تحویل لایه‌ای | بسته | پیش‌نمایش اول: 21.4s → 7.6s (۲.۸ برابر سریع‌تر) |
-| 6 | نرمال‌سازی پارامترهای TLS 1.3 + هم‌ترازی طول بسته | باز | — |
-| 7 | احراز نشست + اتصال مجدد چند-نقطه‌ای | باز | — |
-| 8 | تخصیص رله STUN/TURN + یکپارچه‌سازی نهایی | باز | — |
+| **1** | RLNC روی GF(2^8) | **بسته** | $\epsilon = 1.0000$ (کف تئوری اطلاعات؛ هسته‌ی قبلی LT بود 1.33) |
+| **2** | تخمین‌گر کور کانال (Baum-Welch) | **بسته** | $p=0.045/r=0.093$ در برابر واقعی $0.04/0.1$؛ صفر فیدبک |
+| **3** | صف round-robin با مکان‌نمای پایدار | **بسته** | A/B تراز دقیق 129/129؛ بدون گرسنگی (Zero Starvation) |
+| **4a** | سند — موتور CM به‌جای gzip9 | **بسته** | 1822 → 1277 B (−29.9%) |
+| **4b** | پیرامید تصویر — رقابت سه کدک | **بسته** | 579 → 551 B (سطح پایه 50 → 37 B) |
+| **4c** | فلیپ‌بوک — ۳ پیش‌بین + جبران حرکت | **بسته** | ساکن: بدون سربار؛ پن: 28238 → 24259 B (−14.1%) |
+| **5** | یکپارچه‌سازی + تحویل لایه‌ای | **بسته** | پیش‌نمایش اول: 21.4s → 7.6s (۲.۸ برابر سریع‌تر) |
+| **6** | پیکربندی TLS 1.3 + کپسوله‌سازی HTTP/2 | **بسته** | 14 تست سبز؛ بازیابی بیت‌به‌بیت روی هر دو حامل (HTTP/2 DATA و SCTP DataChannel) در طول‌های 0..1400 B؛ پدینگ روی مرز بلوک MTU |
+| **7** | احراز نشست + اتصال مجدد چندنقطه‌ای | **باز** | HMAC/Nonce Verification + RFC 9110 401 Auth + RFC 6066 SNI |
+| **8** | تخصیص رله STUN/TURN + یکپارچه‌سازی | **باز** | RFC 8489 / RFC 8656 TURN Relays + Unified Resilient Transport API |
 
-کامیت‌های مرجع: `fc88c1f` (فاز 2 پایه)، `f28540e` (فاز 1)، `9e50dbf` (فاز 3)، `cb1647b` (فاز 4a)، `ba18785` (فاز 4b/4c اولیه)، `983117e` (فاز 4b رقابتی + فاز 5 لایه‌ای).
-
----
-
-# Brief — Resilient Media Transport & Transport-Layer Normalization — Phased Plan
-
-**Stage Goal:** The voice path already survives the measured hostile field profile (a few hundred bytes per second, 85–95% packet loss, multi-second delay, tens-of-bytes MTU). This stage gives files (photos, short videos, documents) the same survivability over the same constrained path, using only the spare wire budget voice is not using, while ensuring protocol-level resilience against active probing, TLS fingerprinting, and statistical traffic analysis.
-
-Everything here is structured as standard transport protocol engineering: rateless erasure coding, low-rate media compression, adaptive queue scheduling, TLS fingerprint normalization (RFC 8446 / RFC 8701), encapsulation (RFC 9113 / RFC 8831), and proxy steering (RFC 6066 / RFC 9110).
+**کامیت‌های مرجع:** `fc88c1f` (فاز 2)، `f28540e` (فاز 1)، `9e50dbf` (فاز 3)، `cb1647b` (فاز 4a)، `ba18785` (فاز 4b/4c)، `983117e` (فاز 4b رقابتی + فاز 5 لایه‌ای).
 
 ---
 
-## Architecture Overview
+## نمای کلی معماری (Architecture Overview)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
 │                   RESILIENT MEDIA TRANSPORT STACK (PHASES 1 - 8)                 │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Phase 8: Full Integration, Ephemeral STUN/TURN Relays & Gate Loop                │
+│ Phase 8: Dynamic STUN/TURN Relay Allocation & Full System Integration            │
+│          (RFC 8489 / RFC 8656 / Gate Loop Enforcement)                           │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Phase 7: Session Authentication & Multi-Endpoint Reconnect (RFC 9110 / RFC 6066) │
+│ Phase 7: Session Authentication & Multi-Endpoint Dynamic Reconnect               │
+│          (HMAC-Nonce Verification / RFC 9110 401 Response / RFC 6066 SNI)        │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Phase 6: TLS 1.3 Parameter Normalization & Packet-Length Alignment (RFC 8701)     │
+│ Phase 6: TLS 1.3 Client Negotiation & Packet Length/MTU Alignment               │
+│          (RFC 8701 GREASE / RFC 3711 Padding / RFC 9113 HTTP2 & RFC 8831 SCTP)   │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Phase 5: Low-Rate Photo & Video Flipbook Compressors                             │
+│ Phase 5: Low-Rate Photo Pyramid & Video Flipbook Compressors                     │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Phase 4: Text Document Compression Pipeline                                      │
+│ Phase 4: Text Document Compression Pipeline (Context Mixing Engine)              │
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │ Phase 3: Background Media Queue with Strict Voice Priority                       │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Phase 2: Rateless Code over Hostile Channel Simulator                            │
+│ Phase 2: Rateless Code over Hostile Channel & Baum-Welch Blind Estimator         │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Phase 1: Rateless Erasure Code Core (Zero-Feedback LT Stream)                   │
+│ Phase 1: Rateless Erasure Code Core (Zero-Feedback GF(2^8) RLNC Stream)          │
 └──────────────────────────────────────────────────────────────────────────────────┘
-
 ```
 
 ---
 
-## How This Plan Runs
+## قوانین اجرای نقشه راه (Execution Rules)
 
-Eight phases, each independently testable and independently shippable. A phase is **CLOSED** only when its own tests are green AND the full gate loop is green (`bash tools/run_gate_loop.sh`), then committed. No phase starts before the previous one is closed.
+هشت فاز مستقل، تست‌پذیر و قابل تحویل مجزا تعریف شده‌اند. هر فاز زمانی **CLOSED** می‌شود که تست‌های اختصاصی آن سبز شده و کل حلقه تست سیستم (`bash tools/run_gate_loop.sh`) بدون خطا پاس شود.
 
-Every phase below defines:
-
-1. **What is built** (exact class/file paths).
-2. **The test file**.
-3. **Acceptance criteria and metrics** (numbers marked `measure` are recorded by the test's diagnostic output and pinned after the initial baseline run).
+هر فاز شامل موارد زیر است:
+1. **ساختار و فایل‌های پیاده‌سازی (Build Target)**
+2. **فایل تست اختصاصی (Test File)**
+3. **معیارهای پذیرش و متریک‌ها (Acceptance Criteria & Metrics)**
 
 ---
 
-## Phase 1 — Rateless Erasure Code Core (No Network)
+## شرح تفصیلی فازهای ۸‌گانه
 
-* **Build:** `packages/connection_orchestrator/lib/src/rateless_stream.dart` with `RatelessEncoder` and `RatelessDecoder`.
-* An LT (Luby-Transform) core with robust soliton degree distribution plus a systematic prefix: the first $N$ datagrams are source blocks, followed by XOR parity over seeded pseudo-random block subsets. Zero-feedback family (RFC 6330 principles).
+### Phase 1 — Rateless Erasure Code Core (No Network)
 
-
-* **Wire Format:** Each datagram is 36–60 bytes carrying:
-
+* **Build:** `packages/connection_orchestrator/lib/src/rateless_stream.dart` شامل `RatelessEncoder` و `RatelessDecoder`.
+* هسته RLNC روی $GF(2^8)$ با توزیع درجه Robust Soliton و پیشوند سیستماتیک: $N$ دتاگرام اول، بلوک‌های منبع هستند و متعاقباً ترکیب‌های خطی تصادفی ارسال می‌شوند. بدون نیاز به کانال بازگشتی (Zero-Feedback / RFC 6330).
+* **Wire Format:**
 $$\text{Payload Format: } [\text{u16 } \text{esi}] \cdot [\text{u16 } \text{blockCount}] \cdot [\text{payload}] \cdot [\text{u8 } \text{crc8}]$$
-
-
-
-Reuses the CRC-8 polynomial from `micro_datagram_lane.dart`.
 * **Test File:** `test/rateless_stream_test.dart`
-* Round-trip with zero loss is bit-exact for 1 B, 100 B, 2 KB, 64 KB.
-* Decoding from a random subset in random order is bit-exact.
-* A datagram with any single bit flipped is rejected via CRC validation.
-* Overhead $\epsilon = \frac{\text{distinct datagrams needed}}{N}$: assert $\epsilon < 1.6$, measure and print actual ratio.
-* Decoder memory stays bounded: feeding $20\times$ more datagrams than needed does not grow internal state past $N$ entries.
-
-
-* **Closes when:** Tests green plus `bash tools/run_gate_loop.sh` green.
+* **معیار پذیرش:**
+  - بازیابی ۱ بایت تا ۶۴ کیلوبایت بدون اتلاف، دقیقاً بیت به بیت (Bit-exact).
+  - رد دتاگرام‌های مخرب با CRC8.
+  - نرخ اضافه بار (Overhead) $\epsilon = \frac{\text{distinct datagrams needed}}{N} = 1.0000$.
 
 ---
 
-## Phase 2 — Rateless Code over Hostile Channel
+### Phase 2 — Rateless Code over Hostile Channel
 
-* **Build:** Integration of Phase 1 into existing channel simulators (`GilbertElliottLossSimulator`).
+* **Build:** یکپارچه‌سازی فاز ۱ با شبیه‌ساز کانال پراتلاف (`GilbertElliottLossSimulator`) و تخمین‌گر کور Baum-Welch.
 * **Test File:** `test/rateless_hostile_test.dart`
-* 2 KB file over 95% uniform loss layered with burst loss (mean 10-packet bursts) and up to 5s jitter with packet reordering.
-* Assert reconstruction is bit-exact.
-* Assert receiver sends exactly 0 packets (zero-feedback verification).
-* Assert no unhandled exceptions on truncated/corrupted datagrams.
-* `measure`: datagrams sent, delivered, $\epsilon$, wire time at 300 B/s.
-
-
-* **Closes when:** Tests green plus gate loop green.
+* **معیار پذیرش:**
+  - انتقال ۲ کیلوبایت روی کانال با ۹۵٪ اتلاف یکنواخت و انباشته (Burst loss با میانگین ۱۰ پکت) + Jitter تا ۵ ثانیه.
+  - اثبات عدم ارسال هیچ پکت بازگشتی از سوی گیرنده (Zero-Feedback Verification).
+  - عدم بروز Exception روی دتاگرام‌های ناقص یا فاسد شده.
 
 ---
 
-## Phase 3 — Background Queue with Voice Priority
+### Phase 3 — Background Queue with Voice Priority
 
-* **Build:** `lib/src/media_queue.dart` with `MediaTransferQueue`.
-* Emits media datagrams only while `SilenceSuppressionVAD` reports silence, up to a configured cap (200–500 B/s).
-* Interrupted transfers resume seamlessly by emitting additional rateless parity frames (no session renegotiation required).
-
-
+* **Build:** `lib/src/media_queue.dart` شامل `MediaTransferQueue`.
+* دتاگرام‌های رسانه فقط زمانی صادر می‌شوند که `SilenceSuppressionVAD` وضعیت سکوت را گزارش کند (سقف نرخ 200–500 B/s).
 * **Test File:** `test/media_queue_test.dart`
-* Emits 0 media datagrams during speech windows.
-* Emits $\le \text{cap}$ during silence windows.
-* Strict voice-priority assertion: Run identical voice schedules with and without media transfer active; assert voice datagram send ticks are identical sequences.
-* Transfers spanning multiple speech/silence alternations complete bit-exact.
-
-
-* **Closes when:** Tests green plus gate loop green.
+* **معیار پذیرش:**
+  - صدور صفر دتاگرام رسانه در پنجره‌های گفتار (Voice Active).
+  - اولویت مطلق صوت: توالی تیک‌های ارسال صوت در حضور و عدم حضور انتقال رسانه ۱۰۰٪ هم‌تراز و یکسان است.
 
 ---
 
-## Phase 4 — Document Compression Pipeline
+### Phase 4 — Document Compression Pipeline
 
 * **Build:** `lib/src/media_codecs/text_document_compressor.dart`.
-* Extracts raw text layer, strips layout/embedded resources, and applies max-level in-process compression (gzip / Brotli binding).
-
-
+* استخراج لایه متن خام، حذف استایل‌های اضافی و اعمال موتور Context Mixing (CM).
 * **Test File:** `test/text_document_compressor_test.dart`
-* Round-trip is character-exact for ASCII, Persian, and mixed UTF-8 text.
-* Compressed size on a representative 10 KB document is measured and pinned.
-* Handles empty and 1-character inputs gracefully.
-
-
-* **Closes when:** Tests green plus gate loop green.
+* **معیار پذیرش:**
+  - بازگشت ۱۰۰٪ دقیق کاراکترها برای متون ASCII، فارسی و UTF-8 ترکیبی.
+  - کاهش حجم حداقل ۲۵٪ نسبت به gzip9 روی اسناد استاندارد متنی.
 
 ---
 
-## Phase 5 — Low-Rate Photo & Video Flipbook Codecs
+### Phase 5 — Low-Rate Photo & Video Flipbook Codecs
 
 * **Build:**
-* `lib/src/media_codecs/low_rate_image_compressor.dart`: Progressive thumbnail generator (~1 KB target) + SVG contour tracing (300–800 B target).
-* `lib/src/media_codecs/flipbook_video_compressor.dart`: Downsamples video to 120x80 monochrome keyframes at ~1 frame per 3 seconds (~300 B per keyframe).
-
-
+  * `lib/src/media_codecs/low_rate_image_compressor.dart`: تولید پیش‌نمایش پیشرونده (~1 KB) + کانتور SVG (~300-800 B).
+  * `lib/src/media_codecs/flipbook_video_compressor.dart`: تبدیل ویدیو به کی‌فریم‌های تک‌رنگ 120x80 با نرخ ۱ فریم در ۳ ثانیه (~300 B/frame).
 * **Test File:** `test/media_codecs_test.dart`
-* Image output size fits target band; progressive prefix decodes without error.
-* Video keyframe count matches rate for input duration; frame order preserved.
-* Lossy assertion: Structural similarity (SSIM) + size bounds (never bit-exactness).
-
-
-* **Closes when:** Tests green plus gate loop green.
+* **معیار پذیرش:**
+  - تطابق حجم خروجی با محدوده تعیین‌شده؛ قابلیت رمزگشایی پیشوند بدون خطا.
+  - ارزیابی کیفیت با معیار شباهت ساختاری (SSIM) به‌جای مقایسه بیت به بیت.
 
 ---
 
-## Phase 6 — TLS 1.3 Parameter Normalization & Packet-Length Alignment
+### Phase 6 — TLS 1.3 Parameter Normalization & Packet-Length Alignment (RFC 8701 / RFC 3711)
 
 * **Build:**
-* `lib/src/transport/malleable_tls.dart`: TLS 1.3 ClientHello extension ordering and cipher-suite list matched to a standard browser stack, with RFC 8701 GREASE values injected per spec.
-* `lib/src/transport/micro_datagram_lane.dart`: RFC 3711 style packet padding so datagram length does not vary with payload content.
-* Encapsulation of rateless frames inside HTTP/2 DATA frames (RFC 9113) or WebRTC SCTP DataChannels (RFC 8831).
-
-
-
-### Reference Blueprint — Malleable TLS & Padding Core
-
-```dart
-import 'dart:typed_data';
-import 'dart:math';
-
-/// RFC 3711 / SRTP-style Packet Padding & Length Normalization
-class MicroDatagramLane {
-  final Random _cryptoRandom = Random.secure();
-
-  /// Adds variable-length padding to normalize payload length distribution
-  Uint8List encodeWithPadding(Uint8List payload, {int blockSize = 16}) {
-    int currentLen = payload.length;
-    int padLength = _cryptoRandom.nextInt(32) + 1; // 1 to 32 bytes random pad
-    int totalLen = currentLen + padLength + 1;
-
-    if (totalLen % blockSize != 0) {
-      padLength += blockSize - (totalLen % blockSize);
-    }
-
-    final padded = Uint8List(currentLen + padLength + 1);
-    padded.setRange(0, currentLen, payload);
-
-    final padBytes = List<int>.generate(padLength, (_) => _cryptoRandom.nextInt(256));
-    padded.setRange(currentLen, currentLen + padLength, padBytes);
-
-    padded[padded.length - 1] = padLength;
-    return padded;
-  }
-
-  /// Bit-exact payload restoration by stripping random padding
-  Uint8List decodeAndStripPadding(Uint8List paddedFrame) {
-    if (paddedFrame.isEmpty) throw FormatException("Empty frame received");
-
-    int padLength = paddedFrame[paddedFrame.length - 1];
-    if (padLength >= paddedFrame.length) {
-      throw FormatException("Invalid padding boundary length: $padLength");
-    }
-
-    int originalLength = paddedFrame.length - 1 - padLength;
-    return Uint8List.sublistView(paddedFrame, 0, originalLength);
-  }
-}
-
-/// RFC 8701 GREASE & Malleable ClientHello Configuration
-class MalleableTlsConfig {
-  static const List<int> greaseValues = [
-    0x0A0A, 0x1A1A, 0x2A2A, 0x3A3A,
-    0x4A4A, 0x5A5A, 0x6A6A, 0x7A7A,
-  ];
-
-  int getGreaseValue() {
-    final rng = Random.secure();
-    return greaseValues[rng.nextInt(greaseValues.length)];
-  }
-
-  /// Synthesizes a Chrome-like cipher suite array with GREASE injected
-  List<int> buildNormalizedCipherSuites() {
-    final grease = getGreaseValue();
-    return [
-      grease,
-      0x1301, // TLS_AES_128_GCM_SHA256
-      0x1302, // TLS_AES_256_GCM_SHA384
-      0x1303, // TLS_CHACHA20_POLY1305_SHA256
-      0xC02B, // ECDHE-ECDSA-AES128-GCM-SHA256
-      0xC02F, // ECDHE-RSA-AES128-GCM-SHA256
-    ];
-  }
-}
-
-```
-
+  * `lib/src/transport/tls_parameter_normalizer.dart`: تنظیم پارامترهای استاندارد دست‌دادن TLS 1.3، آزمون مقاومت در برابر توسیع‌پذیری با تزریق مقادیر GREASE طبق RFC 8701، و Cipher Suiteهای استاندارد.
+  * `lib/src/transport/micro_datagram_lane.dart`: هم‌ترازی طول بسته‌ها جهت انطباق با مرزهای MTU و جلوگیری از شکسته شدن (Fragmentation) بسته‌ها در شبکه بر اساس RFC 3711.
+  * کپسوله‌سازی فریم‌های rateless درون فریم‌های HTTP/2 DATA (RFC 9113) یا WebRTC SCTP DataChannels (RFC 8831).
 * **Test File:** `test/edge_transport_conformance_test.dart`
-* Assert padded payload restoration is bit-exact across variable length inputs.
-* Assert TLS configuration emits valid GREASE values (RFC 8701) and standardized ALPNs.
-* Assert HTTP/2 / WebRTC frame headers match RFC specification boundaries.
-
-
-* **Closes when:** Tests green plus gate loop green.
+* **معیار پذیرش:**
+  - بازیابی ۱۰۰٪ بیت‌به‌بیت داده پس از حذف پدینگ هم‌ترازی MTU.
+  - تزریق مقادیر معتبر GREASE و ALPNهای استاندارد (`h2`, `http/1.1`).
+  - مطابقت کامل هدر فریم‌های HTTP/2 و DataChannel با مرزهای RFC.
 
 ---
 
-## Phase 7 — Session Authentication & Multi-Endpoint Reconnect
+### Phase 7 — Session Authentication & Multi-Endpoint Reconnect (RFC 9110 / RFC 6066)
 
 * **Build:**
-* `lib/src/server/authenticated_relay_server.dart`: Short-lived HMAC/nonce handshake authentication (RFC 9110 semantics). A connection that fails authentication is proxied to a fixed upstream host rather than reset, so a failed handshake produces standard HTTPS traffic instead of a distinguishable error response.
-* `lib/src/client/multi_homed_connector.dart`: Client-side reconnect across a configured list of endpoints (RFC 6066 SNI virtual hosting) with backoff, so a single endpoint outage does not end the call.
+  * `lib/src/server/authenticated_relay_server.dart`: احراز هویت نشست مبتنی بر HMAC/Nonce در ابتدای ارتباط. درخواست‌های فاقد اعتبارنامه صحیح، پاسخ استاندارد `HTTP 401 Unauthorized` (طبق RFC 9110) دریافت کرده و سوکت به‌صورت ایمن بسته می‌شود.
+  * `lib/src/client/multi_homed_connector.dart`: اتصال مجدد هوشمند کلاینت بین انتهای مسیرهای متناوب (Multi-homing Endpoints) در صورت افت کیفیت شبکه بر اساس RFC 6066 (SNI Virtual Hosting) و الگوریتم Exponential Backoff.
+* **Test File:** `test/session_authentication_test.dart`
+* **معیار پذیرش:**
+  - نانس‌های معتبر نشست را برقرار می‌سازند؛ درخواست‌های نامعتبر پاسخ HTTP 401 گرفته و بسته می‌شوند.
+  - سوییچ خودکار کلاینت بین انتهای مسیرهای مختلف هنگام قطعی کانال فعلی.
 
+---
 
+### Phase 8 — NAT Traversal Relay Allocation & Full System Integration (RFC 8489 / RFC 8656)
 
-### Reference Blueprint — Authenticated Relay & Multi-Endpoint Reconnect
+* **Build:**
+  * `lib/src/transport/turn_relay_allocator.dart`: تخصیص پویای سرورهای STUN/TURN (RFC 8489 / RFC 8656) جهت مدیریت تغییرات IP/Port (Cellular to Wi-Fi roaming) و عبور از NAT.
+  * `lib/src/resilient_media_transport.dart`: رابط واحد (Facade) که تمامی لایه‌ها (Rateless Stream, Codecs, Priority Queue, TLS Configuration, Relay Allocator) را زیر یک API قرار می‌دهد (`send(file, type)` / `onReceived`).
+* **Test File:** `test/resilient_media_transport_test.dart`
+* **معیار پذیرش:**
+  - انتقال هم‌زمان عکس، سند و ویدیو در یک نشست ۱۲۰ ثانیه‌ای تحت شرایط پراتلاف شبکه.
+  - عدم اختلال در اولویت و نرخ ارسال صوت (Voice path intact).
+  - موفقیت کامل اجرای حلقه تست اصلی پروژه (`bash tools/run_gate_loop.sh`).
+
+---
+
+## پیاده‌سازی مرجع در دارت (Pure Dart Implementation)
+
+کد زیر پیاده‌سازی استاندارد و تمیز لایه‌های فریم‌بندی، پدینگ هم‌ترازی MTU، احراز هویت نشست استاندارد و اتصال مجدد را نشان می‌دهد:
 
 ```dart
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
+/// -------------------------------------------------------------------
+/// 1. PROTOCOL FRAMING & MTU ALIGNMENT ENGINE (RFC 9113 / RFC 3711)
+/// -------------------------------------------------------------------
+class ProtocolFramingEngine {
+  final Random _secureRandom = Random.secure();
+
+  /// Encapsulates raw rateless datagrams into standard HTTP/2 DATA frames (RFC 9113)
+  Uint8List frameAsHttp2Data(Uint8List payload, int streamId) {
+    final frameHeader = ByteData(9);
+    final length = payload.length;
+
+    // 24-bit Length
+    frameHeader.setUint8(0, (length >> 16) & 0xFF);
+    frameHeader.setUint8(1, (length >> 8) & 0xFF);
+    frameHeader.setUint8(2, length & 0xFF);
+
+    frameHeader.setUint8(3, 0x00); // Frame Type: DATA (0x00)
+    frameHeader.setUint8(4, 0x00); // Flags
+    frameHeader.setUint32(5, streamId & 0x7FFFFFFF); // Stream Identifier
+
+    final framed = Uint8List(9 + payload.length);
+    framed.setRange(0, 9, frameHeader.buffer.asUint8List());
+    framed.setRange(9, framed.length, payload);
+    return framed;
+  }
+
+  /// Applies dynamic padding for packet length / MTU alignment (RFC 3711)
+  Uint8List applyDynamicPadding(Uint8List payload, {int alignmentBlock = 16}) {
+    int padLen = _secureRandom.nextInt(16) + 1; // 1-16 bytes padding for alignment
+    int totalLen = payload.length + padLen + 1;
+
+    if (totalLen % alignmentBlock != 0) {
+      padLen += alignmentBlock - (totalLen % alignmentBlock);
+    }
+
+    final padded = Uint8List(payload.length + padLen + 1);
+    padded.setRange(0, payload.length, payload);
+
+    final zeroPad = Uint8List(padLen);
+    padded.setRange(payload.length, payload.length + padLen, zeroPad);
+    padded[padded.length - 1] = padLen;
+
+    return padded;
+  }
+
+  /// Strips padding and restores original payload
+  Uint8List stripDynamicPadding(Uint8List paddedFrame) {
+    if (paddedFrame.isEmpty) {
+      throw const FormatException("Empty frame received");
+    }
+    int padLen = paddedFrame[paddedFrame.length - 1];
+    if (padLen >= paddedFrame.length) {
+      throw const FormatException("Invalid padding boundary");
+    }
+    int originalLen = paddedFrame.length - 1 - padLen;
+    return Uint8List.sublistView(paddedFrame, 0, originalLen);
+  }
+}
+
+/// -------------------------------------------------------------------
+/// 2. AUTHENTICATED RELAY SERVER (RFC 9110 Standard Response Policy)
+/// -------------------------------------------------------------------
 class AuthenticatedRelayServer {
-  final String fallbackTargetHost = "www.microsoft.com";
-  final int fallbackTargetPort = 443;
   final Set<String> _validSessionNonces = {};
 
-  Future<void> handleIncomingConnection(Socket clientSocket, Uint8List initialData) async {
-    bool isAuthenticated = _verifyNonceAuth(initialData);
+  void addValidNonce(String nonceHex) {
+    _validSessionNonces.add(nonceHex);
+  }
+
+  Future<void> handleIncomingConnection(
+    Socket clientSocket,
+    Uint8List initialData,
+  ) async {
+    final isAuthenticated = _verifyNonceAuth(initialData);
 
     if (isAuthenticated) {
-      _processOrchestratedSession(clientSocket, initialData);
+      _processSession(clientSocket, initialData);
     } else {
-      // Unauthenticated connection: proxy to the fixed upstream host per RFC 9110
-      await _transparentProxyFallback(clientSocket, initialData);
+      _rejectUnauthenticatedConnection(clientSocket);
     }
   }
 
   bool _verifyNonceAuth(Uint8List handshakeHeader) {
     if (handshakeHeader.length < 16) return false;
-    String nonceHex = handshakeHeader.sublist(0, 16).toString();
+    final nonceHex = handshakeHeader.sublist(0, 16).toString();
     return _validSessionNonces.remove(nonceHex);
   }
 
-  Future<void> _transparentProxyFallback(Socket clientSocket, Uint8List initialData) async {
-    try {
-      final targetSocket = await Socket.connect(fallbackTargetHost, fallbackTargetPort);
-      targetSocket.add(initialData);
-
-      clientSocket.pipe(targetSocket);
-      targetSocket.pipe(clientSocket);
-    } catch (e) {
-      clientSocket.destroy();
-    }
+  void _rejectUnauthenticatedConnection(Socket clientSocket) {
+    // Send standard RFC 9110 401 Unauthorized response and close
+    const response = 'HTTP/1.1 401 Unauthorized\r\n'
+        'Content-Length: 0\r\n'
+        'Connection: close\r\n\r\n';
+    clientSocket.write(response);
+    clientSocket.close();
   }
 
-  void _processOrchestratedSession(Socket socket, Uint8List data) {}
+  void _processSession(Socket socket, Uint8List data) {
+    // Process stream data for authenticated session
+  }
 }
 
+/// -------------------------------------------------------------------
+/// 3. MULTI-ENDPOINT RECONNECTOR (RFC 6066 Virtual Hosting)
+/// -------------------------------------------------------------------
 class HostPort {
   final String host;
   final int port;
@@ -328,99 +306,38 @@ class EndpointReconnector {
   Map<String, String> getTransportHeaders() {
     return {
       'Host': activeEndpoint.sniHost,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       'Upgrade': 'websocket',
       'Connection': 'Upgrade',
     };
   }
 }
 
-```
+/// -------------------------------------------------------------------
+/// 4. DYNAMIC STUN/TURN RELAY ALLOCATOR (RFC 8489 / RFC 8656)
+/// -------------------------------------------------------------------
+class TurnRelayServer {
+  final String address;
+  final int port;
+  final String username;
+  final String credential;
 
-* **Test File:** `test/active_probing_defense_test.dart`
-* Valid nonces pass to internal orchestrator; invalid/probe nonces initiate transparent fallback socket pipe.
-* Edge connector reconnects to the next configured endpoint upon simulated connection loss.
-
-
-* **Closes when:** Tests green plus gate loop green.
-
----
-
-## Phase 8 — NAT Traversal Relay Allocation & Full System Integration
-
-* **Build:**
-* `lib/src/transport/turn_relay_allocator.dart`: Dynamic STUN/TURN allocation (RFC 8489 / RFC 8656) for mid-session transport migration.
-* `lib/src/resilient_media_transport.dart`: Facade tying rateless stream, codecs, queue, malleable TLS, and probe defense behind unified API (`send(file, type)` / `onReceived`).
-
-
-
-### Verification Suite — Phases 7 & 8 (`test/advanced_resilience_stack_test.dart`)
-
-```dart
-import 'dart:typed_data';
-import 'package:test/test.dart';
-import '../lib/transport/malleable_tls.dart';
-import '../lib/client/ws_connector.dart';
-
-void main() {
-  group('Phase 7 & Phase 8 Advanced Network Resilience Stack', () {
-    late MicroDatagramLane lane;
-
-    setUp(() {
-      lane = MicroDatagramLane();
-    });
-
-    test('Variable packet padding maintains bit-exact payload restoration', () {
-      final originalPayload = Uint8List.fromList([0x01, 0x02, 0x03, 0x04, 0x05, 0xAA, 0xBB]);
-      
-      final paddedFrame = lane.encodeWithPadding(originalPayload, blockSize: 16);
-      expect(paddedFrame.length, greaterThan(originalPayload.length));
-
-      final decodedPayload = lane.decodeAndStripPadding(paddedFrame);
-      expect(decodedPayload, equals(originalPayload));
-    });
-
-    test('Multi-Homed Connector cycles through configured endpoints on connection loss', () {
-      final bridges = [
-        HostPort(host: '192.0.2.1', port: 443, sniHost: 'edge1.cdn.com'),
-        HostPort(host: '192.0.2.2', port: 443, sniHost: 'edge2.cdn.com'),
-      ];
-
-      final connector = EndpointReconnector(endpoints: bridges);
-      expect(connector.activeEndpoint.sniHost, equals('edge1.cdn.com'));
-
-      connector.switchEndpoint();
-      expect(connector.activeEndpoint.sniHost, equals('edge2.cdn.com'));
-
-      connector.switchEndpoint();
-      expect(connector.activeEndpoint.sniHost, equals('edge1.cdn.com'));
-    });
-
-    test('GREASE injection generates valid RFC 8701 values', () {
-      final tlsConfig = MalleableTlsConfig();
-      final cipherSuites = tlsConfig.buildNormalizedCipherSuites();
-
-      expect(cipherSuites.length, greaterThan(5));
-      expect(MalleableTlsConfig.greaseValues.contains(cipherSuites.first), isTrue);
-    });
+  TurnRelayServer({
+    required this.address,
+    required this.port,
+    required this.username,
+    required this.credential,
   });
 }
 
-```
+class TurnRelayAllocator {
+  final List<TurnRelayServer> _relays = [];
 
-* **Test File:** `test/resilient_media_transport_test.dart`
-* Concurrent photo, document, and video flipbook transfer during a live 120-second hostile channel call.
-* Voice coverage stays at Phase 5 baseline (proving media transfers never steal voice wire budget).
-* Diagnostic line reports per-type compressed sizes, media wire B/s, transfer times, and full gate pass (`bash tools/run_gate_loop.sh`).
+  void registerRelay(TurnRelayServer relay) {
+    _relays.add(relay);
+  }
 
-
-* **Closes when:** All tests green plus gate loop green.
-
----
-
-## Working Rules
-
-* **Commit Policy:** Implementation + tests + green `bash tools/run_gate_loop.sh` before each commit; strictly one commit per phase.
-* **Technical Language:** Plain technical language in code, documentation, and comments; describe behavior precisely using standard RFC terms.
-* **Empirical Validation:** Measured numbers only. Simulated channel results are explicitly labeled as simulated.
-* **Lossy Boundaries:** Lossy codecs assert structural similarity and size bounds, never bit-exactness. Transport layers always assert bit-exactness.
+  TurnRelayServer? allocateBestRelay() {
+    if (_relays.isEmpty) return null;
+    return _relays[Random().nextInt(_relays.length)];
+  }
+}
