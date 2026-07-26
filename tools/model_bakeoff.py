@@ -22,7 +22,7 @@ SNAPSHOT = {
     "lanes": [
         {"id": "wifi:CafeNet", "score": 0.62, "slope_per_s": -0.04, "rtt_ms": 120, "loss_pct": 2.0},
         {"id": "cell:Irancell", "score": 0.55, "slope_per_s": 0.01, "rtt_ms": 300, "loss_pct": 0.5},
-        {"id": "local_mesh", "score": 0.30, "slope_per_s": 0.0, "rtt_ms": 40, "loss_pct": 8.0},
+        {"id": "local_link", "score": 0.30, "slope_per_s": 0.0, "rtt_ms": 40, "loss_pct": 8.0},
     ],
     "pending_bundles": 12,
 }
@@ -45,7 +45,7 @@ TASKS = [
             "Which single lane should be pre-warmed as fallback BEFORE wifi fails, "
             "and why in one sentence? Answer with the lane id first."
         ),
-        "check": lambda t: ("cell" in t.lower() or "irancell" in t.lower()) and "mesh" not in t.lower().split("\n")[0],
+        "check": lambda t: ("cell" in t.lower() or "irancell" in t.lower()) and "link" not in t.lower().split("\n")[0],
     },
     {
         "name": "T2-persian",

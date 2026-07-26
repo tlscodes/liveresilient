@@ -26,7 +26,7 @@ void main() {
         () async {
           final envelope = await AuthenticatedEnvelope.create(
             signer: senderSigner,
-            payload: utf8.encode('hello mesh'),
+            payload: utf8.encode('hello link'),
             nowMs: nowMs,
           );
 

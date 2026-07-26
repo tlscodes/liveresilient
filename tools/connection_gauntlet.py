@@ -30,35 +30,35 @@ import urllib.request
 # lane: id, up, rtt_ms, loss_pct, trend (falling|flat|rising), score
 STEPS = [
     ("calm start", [
-        ("wifi", True, 45, 0.5, "flat", 0.9), ("cell", True, 180, 1.0, "flat", 0.6), ("mesh", False, 0, 100, "flat", 0.0)]),
+        ("wifi", True, 45, 0.5, "flat", 0.9), ("cell", True, 180, 1.0, "flat", 0.6), ("link", False, 0, 100, "flat", 0.0)]),
     ("wifi begins to slide", [
-        ("wifi", True, 90, 2.0, "falling", 0.7), ("cell", True, 180, 1.0, "flat", 0.6), ("mesh", False, 0, 100, "flat", 0.0)]),
+        ("wifi", True, 90, 2.0, "falling", 0.7), ("cell", True, 180, 1.0, "flat", 0.6), ("link", False, 0, 100, "flat", 0.0)]),
     ("wifi sliding hard", [
-        ("wifi", True, 300, 8.0, "falling", 0.45), ("cell", True, 190, 1.2, "flat", 0.6), ("mesh", False, 0, 100, "flat", 0.0)]),
+        ("wifi", True, 300, 8.0, "falling", 0.45), ("cell", True, 190, 1.2, "flat", 0.6), ("link", False, 0, 100, "flat", 0.0)]),
     ("wifi dies", [
-        ("wifi", False, 0, 100, "falling", 0.0), ("cell", True, 200, 1.5, "flat", 0.6), ("mesh", False, 0, 100, "flat", 0.0)]),
+        ("wifi", False, 0, 100, "falling", 0.0), ("cell", True, 200, 1.5, "flat", 0.6), ("link", False, 0, 100, "flat", 0.0)]),
     ("cell flaps down", [
-        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "falling", 0.1), ("mesh", False, 0, 100, "flat", 0.0)]),
+        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "falling", 0.1), ("link", False, 0, 100, "flat", 0.0)]),
     ("total blackout", [
-        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "flat", 0.0), ("mesh", False, 0, 100, "flat", 0.0)]),
-    ("nearby device appears (mesh only)", [
-        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "flat", 0.0), ("mesh", True, 60, 12.0, "flat", 0.35)]),
-    ("mesh only, high loss", [
-        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "flat", 0.0), ("mesh", True, 70, 15.0, "flat", 0.3)]),
-    ("mesh degrades past usable", [
-        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "flat", 0.0), ("mesh", True, 90, 35.0, "falling", 0.15)]),
+        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "flat", 0.0), ("link", False, 0, 100, "flat", 0.0)]),
+    ("nearby device appears (link only)", [
+        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "flat", 0.0), ("link", True, 60, 12.0, "flat", 0.35)]),
+    ("link only, high loss", [
+        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "flat", 0.0), ("link", True, 70, 15.0, "flat", 0.3)]),
+    ("link degrades past usable", [
+        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "flat", 0.0), ("link", True, 90, 35.0, "falling", 0.15)]),
     ("cell flickers back weak", [
-        ("wifi", False, 0, 100, "flat", 0.0), ("cell", True, 350, 4.0, "rising", 0.4), ("mesh", True, 90, 30.0, "flat", 0.15)]),
+        ("wifi", False, 0, 100, "flat", 0.0), ("cell", True, 350, 4.0, "rising", 0.4), ("link", True, 90, 30.0, "flat", 0.15)]),
     ("cell stabilising", [
-        ("wifi", False, 0, 100, "flat", 0.0), ("cell", True, 250, 2.0, "rising", 0.55), ("mesh", True, 80, 25.0, "flat", 0.2)]),
+        ("wifi", False, 0, 100, "flat", 0.0), ("cell", True, 250, 2.0, "rising", 0.55), ("link", True, 80, 25.0, "flat", 0.2)]),
     ("cell flaps down again", [
-        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "falling", 0.1), ("mesh", True, 80, 18.0, "flat", 0.25)]),
+        ("wifi", False, 0, 100, "flat", 0.0), ("cell", False, 0, 100, "falling", 0.1), ("link", True, 80, 18.0, "flat", 0.25)]),
     ("wifi returns weak but rising", [
-        ("wifi", True, 150, 3.0, "rising", 0.5), ("cell", False, 0, 100, "flat", 0.1), ("mesh", True, 80, 18.0, "flat", 0.25)]),
+        ("wifi", True, 150, 3.0, "rising", 0.5), ("cell", False, 0, 100, "flat", 0.1), ("link", True, 80, 18.0, "flat", 0.25)]),
     ("wifi recovering", [
-        ("wifi", True, 80, 1.0, "rising", 0.75), ("cell", True, 220, 2.0, "rising", 0.5), ("mesh", True, 80, 18.0, "flat", 0.25)]),
+        ("wifi", True, 80, 1.0, "rising", 0.75), ("cell", True, 220, 2.0, "rising", 0.5), ("link", True, 80, 18.0, "flat", 0.25)]),
     ("fully recovered", [
-        ("wifi", True, 50, 0.5, "flat", 0.9), ("cell", True, 180, 1.0, "flat", 0.6), ("mesh", True, 70, 10.0, "flat", 0.35)]),
+        ("wifi", True, 50, 0.5, "flat", 0.9), ("cell", True, 180, 1.0, "flat", 0.6), ("link", True, 70, 10.0, "flat", 0.35)]),
 ]
 
 USABLE_LOSS = 20.0
@@ -170,7 +170,7 @@ def model_decider(model: str):
             "condition. A lane delivers only if UP with loss under 20%.\n"
             f"Step {i} — {desc}. Lanes:\n" + lane_table(lanes) + "\n"
             + ("Recent decisions: " + ", ".join(history[-3:]) + "\n" if history else "")
-            + 'Reply ONLY JSON: {"send_via": "wifi"|"cell"|"mesh"|"queue"}. '
+            + 'Reply ONLY JSON: {"send_via": "wifi"|"cell"|"link"|"queue"}. '
             "Prefer a healthy rising lane; queue only when nothing is usable; "
             "avoid pointless lane switching."
         )

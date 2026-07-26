@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:device_link/device_link.dart';
 import 'package:test/test.dart';
 
-class _RecordingBroadcaster implements MeshBroadcaster {
+class _RecordingBroadcaster implements LinkBroadcaster {
   final List<MediaFrame> broadcasted = [];
 
   @override
@@ -13,7 +13,7 @@ class _RecordingBroadcaster implements MeshBroadcaster {
 }
 
 void main() {
-  group('CryptoMediaFrameAuthenticator over MeshMessageProcessor', () {
+  group('CryptoMediaFrameAuthenticator over LinkMessageProcessor', () {
     const nowMs = 1000000;
 
     late CryptoEnvelopeSigner originSigner;
@@ -22,7 +22,7 @@ void main() {
     late CryptoMediaFrameAuthenticator originAuthenticator;
     late CryptoMediaFrameAuthenticator relayAuthenticator;
     late _RecordingBroadcaster broadcaster;
-    late MeshSeenCache seenCache;
+    late LinkSeenCache seenCache;
     late List<MediaFrame> delivered;
 
     setUp(() async {
@@ -40,15 +40,15 @@ void main() {
         verifier: verifier,
       );
       broadcaster = _RecordingBroadcaster();
-      seenCache = MeshSeenCache();
+      seenCache = LinkSeenCache();
       delivered = [];
     });
 
-    MeshMessageProcessor buildProcessor({
+    LinkMessageProcessor buildProcessor({
       required CryptoMediaFrameAuthenticator authenticator,
       bool forwardingEnabled = false,
     }) {
-      return MeshMessageProcessor(
+      return LinkMessageProcessor(
         authenticator: authenticator,
         broadcaster: broadcaster,
         seenCache: seenCache,
@@ -81,8 +81,8 @@ void main() {
       final first = await processor.process(frame, nowMs: nowMs);
       final second = await processor.process(frame, nowMs: nowMs + 10);
 
-      expect(first, MeshDisposition.delivered);
-      expect(second, MeshDisposition.duplicate);
+      expect(first, LinkDisposition.delivered);
+      expect(second, LinkDisposition.duplicate);
       expect(delivered, hasLength(1));
     });
 
@@ -106,7 +106,7 @@ void main() {
 
         final result = await processor.process(tampered, nowMs: nowMs);
 
-        expect(result, MeshDisposition.invalid);
+        expect(result, LinkDisposition.invalid);
         expect(delivered, isEmpty);
       },
     );
@@ -136,7 +136,7 @@ void main() {
 
         final result = await processor.process(forged, nowMs: nowMs);
 
-        expect(result, MeshDisposition.invalid);
+        expect(result, LinkDisposition.invalid);
         expect(delivered, isEmpty);
       },
     );
@@ -152,7 +152,7 @@ void main() {
 
       final result = await processor.process(origin, nowMs: nowMs);
 
-      expect(result, MeshDisposition.deliveredAndForwarded);
+      expect(result, LinkDisposition.deliveredAndForwarded);
       expect(delivered, hasLength(1));
       expect(broadcaster.broadcasted, hasLength(1));
 
@@ -170,10 +170,10 @@ void main() {
       // downstream device (the shared one above already marked this
       // messageId seen from the first hop).
       final downstreamDelivered = <MediaFrame>[];
-      final downstreamProcessor = MeshMessageProcessor(
+      final downstreamProcessor = LinkMessageProcessor(
         authenticator: relayAuthenticator,
         broadcaster: broadcaster,
-        seenCache: MeshSeenCache(),
+        seenCache: LinkSeenCache(),
         onDeliver: (envelope) async {
           downstreamDelivered.add(envelope);
         },
@@ -182,7 +182,7 @@ void main() {
         forwarded,
         nowMs: nowMs + 10,
       );
-      expect(downstreamResult, MeshDisposition.delivered);
+      expect(downstreamResult, LinkDisposition.delivered);
       expect(downstreamDelivered, hasLength(1));
     });
 
@@ -210,7 +210,7 @@ void main() {
 
       final result = await processor.process(hop2, nowMs: nowMs);
 
-      expect(result, MeshDisposition.hopLimitReached);
+      expect(result, LinkDisposition.hopLimitReached);
       expect(delivered, hasLength(1));
       expect(broadcaster.broadcasted, isEmpty);
     });
@@ -237,7 +237,7 @@ void main() {
 
       final result = await processor.process(malformed, nowMs: nowMs);
 
-      expect(result, MeshDisposition.rejected);
+      expect(result, LinkDisposition.rejected);
       expect(delivered, isEmpty);
     });
 

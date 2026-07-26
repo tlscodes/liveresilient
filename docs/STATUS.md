@@ -207,7 +207,7 @@ wave 3 in this commit.
 
 ## Modernized (behaviour-preserving)
 
-Dart 3 `final class`/`sealed` sweep across packages (GuardedMeshOutcome is now a true
+Dart 3 `final class`/`sealed` sweep across packages (GuardedLinkOutcome is now a true
 sealed hierarchy, source-compatible); `abstract final class XorFec`; const wire frames;
 structural equality on HostPort/CallState; explicit LinkedHashMap where eviction relies
 on order; single lazily-initialized secure RNG; enum-declaration-order pinning tests;

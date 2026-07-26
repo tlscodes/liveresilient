@@ -62,7 +62,7 @@ void main() {
   DtnBundle bundleLike(String id) => DtnBundle(
     id: id,
     payload: [1, 2, 3],
-    priority: MeshMessagePriority.bulk,
+    priority: LinkMessagePriority.bulk,
     createdAtMs: clockMs,
     lifetimeMs: 60000,
   );
@@ -107,7 +107,7 @@ void main() {
         final outcome = await fabric.deliver(
           [7],
           bundleId: 'dual',
-          priority: MeshMessagePriority.presence,
+          priority: LinkMessagePriority.presence,
         );
 
         expect(outcome, DeliveryOutcome.sentLive);

@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 980" width="1400" height="980" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#141d30"/>
+    </linearGradient>
+  </defs>
+  <rect width="1400" height="980" fill="url(#bg)"/>
+
+  <text x="60" y="56" fill="#eaf2ff" font-size="27" font-weight="700">Old Agora apps vs this kit — what they had, what we have now</text>
+  <text x="60" y="84" fill="#8fa3bf" font-size="15">Audited from the four legacy projects (2026-07-24). Key finding: despite the name, the old apps had NO real captions at all.</text>
+
+  <!-- column headers -->
+  <rect x="60" y="116" width="380" height="44" rx="10" fill="#2a3852"/>
+  <text x="250" y="144" text-anchor="middle" fill="#c7d5ea" font-size="16" font-weight="700">Feature</text>
+  <rect x="456" y="116" width="440" height="44" rx="10" fill="#3a2a33"/>
+  <text x="676" y="144" text-anchor="middle" fill="#ffb3c0" font-size="16" font-weight="700">OLD — Agora apps (vendor cloud)</text>
+  <rect x="912" y="116" width="428" height="44" rx="10" fill="#173a2a"/>
+  <text x="1126" y="144" text-anchor="middle" fill="#c9ffe2" font-size="16" font-weight="700">NOW — voice_call_kit (own stack, tested)</text>
+
+  <!-- rows -->
+  <g font-size="13.5">
+    <!-- row 1 -->
+    <rect x="60" y="172" width="1280" height="78" rx="10" fill="#131c2e"/>
+    <text x="80" y="204" fill="#eaf2ff" font-weight="600">Join a channel</text>
+    <text x="470" y="198" fill="#d98a98">Type a 6-digit code; sandbox had a custom</text>
+    <text x="470" y="216" fill="#d98a98">agora:// deeplink. No web links.</text>
+    <text x="926" y="198" fill="#7fbf9f">One parser, three forms: bare id/code, vck:// deeplink,</text>
+    <text x="926" y="216" fill="#7fbf9f">https web link — each with ?lang, validated live in the UI,</text>
+    <text x="926" y="234" fill="#7fbf9f">round-tripping invite generators. (12 tests)</text>
+
+    <!-- row 2 -->
+    <rect x="60" y="258" width="1280" height="78" rx="10" fill="#0f1626"/>
+    <text x="80" y="290" fill="#eaf2ff" font-weight="600">Live captions</text>
+    <text x="470" y="284" fill="#ff8fa3" font-weight="700">NONE. Zero STT, zero caption UI, zero</text>
+    <text x="470" y="302" fill="#d98a98">translation — only a speech audio profile flag.</text>
+    <text x="926" y="284" fill="#7fbf9f">Real pipeline: ordered translation, per-language fan-out,</text>
+    <text x="926" y="302" fill="#7fbf9f">zero-latency interim captions (italic…), bounded queues,</text>
+    <text x="926" y="320" fill="#7fbf9f">failure fallback — never drops a line. (31 tests)</text>
+
+    <!-- row 3 -->
+    <rect x="60" y="344" width="1280" height="78" rx="10" fill="#131c2e"/>
+    <text x="80" y="376" fill="#eaf2ff" font-weight="600">Roles &amp; speaking rights</text>
+    <text x="470" y="370" fill="#d98a98">admins array ⇒ Agora publisher; everyone else</text>
+    <text x="470" y="388" fill="#d98a98">force-muted client-side (bypassable).</text>
+    <text x="926" y="370" fill="#7fbf9f">host / speaker / listener enforced in the channel core —</text>
+    <text x="926" y="388" fill="#7fbf9f">a listener's publish is rejected by code, not by a mute</text>
+    <text x="926" y="406" fill="#7fbf9f">flag; host promotes explicitly.</text>
+
+    <!-- row 4 -->
+    <rect x="60" y="430" width="1280" height="78" rx="10" fill="#0f1626"/>
+    <text x="80" y="462" fill="#eaf2ff" font-weight="600">Member language</text>
+    <text x="470" y="456" fill="#d98a98">A free-text group field, written once,</text>
+    <text x="470" y="474" fill="#d98a98">never read by any logic. Dead data.</text>
+    <text x="926" y="456" fill="#7fbf9f">Live routing: every member declares a language, captions</text>
+    <text x="926" y="474" fill="#7fbf9f">arrive translated per member; the pipeline retargets as</text>
+    <text x="926" y="492" fill="#7fbf9f">languages join and leave.</text>
+
+    <!-- row 5 -->
+    <rect x="60" y="516" width="1280" height="78" rx="10" fill="#131c2e"/>
+    <text x="80" y="548" fill="#eaf2ff" font-weight="600">Presence / host loss</text>
+    <text x="470" y="542" fill="#d98a98">Host-offline timer ⇒ hard "Host went offline",</text>
+    <text x="470" y="560" fill="#d98a98">room effectively over.</text>
+    <text x="926" y="542" fill="#7fbf9f">Heartbeat deadline for EVERY member; a lost host is</text>
+    <text x="926" y="560" fill="#7fbf9f">expired like anyone else and captions keep flowing —</text>
+    <text x="926" y="578" fill="#7fbf9f">the channel survives its creator.</text>
+
+    <!-- row 6 -->
+    <rect x="60" y="602" width="1280" height="78" rx="10" fill="#0f1626"/>
+    <text x="80" y="634" fill="#eaf2ff" font-weight="600">Security &amp; tokens</text>
+    <text x="470" y="628" fill="#ff8fa3" font-weight="700">App certificate hard-coded in the client;</text>
+    <text x="470" y="646" fill="#d98a98">tokens minted on-device (leakable), 24h expiry.</text>
+    <text x="926" y="628" fill="#7fbf9f">No vendor cloud, no embedded secrets: E2E identity +</text>
+    <text x="926" y="646" fill="#7fbf9f">signed config + keychain storage already in the kit's</text>
+    <text x="926" y="664" fill="#7fbf9f">security packages (170 tests).</text>
+
+    <!-- row 7 -->
+    <rect x="60" y="688" width="1280" height="78" rx="10" fill="#131c2e"/>
+    <text x="80" y="720" fill="#eaf2ff" font-weight="600">Hard-network survival</text>
+    <text x="470" y="714" fill="#d98a98">Whatever Agora's cloud does — opaque,</text>
+    <text x="470" y="732" fill="#d98a98">no client-side degradation model at all.</text>
+    <text x="926" y="714" fill="#7fbf9f">Full survival stack: 6-rung quality ladder to 6 kbps voice,</text>
+    <text x="926" y="732" fill="#7fbf9f">degraded phase, voice-note fallback, call memory replay,</text>
+    <text x="926" y="750" fill="#7fbf9f">path-health reconnects — all soak-tested.</text>
+
+    <!-- row 8 -->
+    <rect x="60" y="774" width="1280" height="78" rx="10" fill="#0f1626"/>
+    <text x="80" y="806" fill="#eaf2ff" font-weight="600">Dependency &amp; cost</text>
+    <text x="470" y="800" fill="#d98a98">Agora RTC cloud + Firebase per room-minute —</text>
+    <text x="470" y="818" fill="#d98a98">vendor bill and vendor availability.</text>
+    <text x="926" y="800" fill="#7fbf9f">Own WebRTC + own signaling; captions ride the call's</text>
+    <text x="926" y="818" fill="#7fbf9f">existing data channel at a few bytes per line.</text>
+  </g>
+
+  <!-- honesty footer -->
+  <rect x="60" y="876" width="1280" height="64" rx="10" fill="#0f2438" stroke="#4f9cf9" stroke-width="1.5"/>
+  <text x="80" y="902" fill="#bcdcff" font-size="14" font-weight="600">What the old apps still have that we haven't wired yet (honest gaps):</text>
+  <text x="80" y="924" fill="#8fb8e8" font-size="13.5">a real STT engine (ours is an injectable seam), multi-device channel transport (needs the relay/real devices), Google sign-in, payments/paywall, emoji reactions.</text>
+</svg>

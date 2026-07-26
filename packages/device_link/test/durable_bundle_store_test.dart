@@ -3,12 +3,12 @@ import 'dart:io';
 
 import 'package:device_link/durable_store.dart';
 import 'package:device_link/src/dtn_bundle_queue.dart';
-import 'package:device_link/src/mesh_flow_control.dart';
+import 'package:device_link/src/link_flow_control.dart';
 import 'package:test/test.dart';
 
 DtnBundle _bundle(
   String id, {
-  MeshMessagePriority priority = MeshMessagePriority.bulk,
+  LinkMessagePriority priority = LinkMessagePriority.bulk,
 }) {
   return DtnBundle(
     id: id,
@@ -48,9 +48,9 @@ void main() {
     're-open survives with identical live set, order, and payload bytes',
     () {
       final store = DurableBundleStore.open(logFile);
-      store.put(_bundle('a', priority: MeshMessagePriority.callSignal));
+      store.put(_bundle('a', priority: LinkMessagePriority.callSignal));
       store.put(_bundle('b'));
-      store.put(_bundle('c', priority: MeshMessagePriority.presence));
+      store.put(_bundle('c', priority: LinkMessagePriority.presence));
 
       final reopened = DurableBundleStore.open(logFile);
       final values = reopened.values().toList();
@@ -60,8 +60,8 @@ void main() {
         expect(b.createdAtMs, 1000);
         expect(b.lifetimeMs, 60000);
       }
-      expect(values[0].priority, MeshMessagePriority.callSignal);
-      expect(values[2].priority, MeshMessagePriority.presence);
+      expect(values[0].priority, LinkMessagePriority.callSignal);
+      expect(values[2].priority, LinkMessagePriority.presence);
     },
   );
 
@@ -106,7 +106,7 @@ void main() {
     final store = DurableBundleStore.open(logFile);
     final queue = DtnBundleQueue(store: store);
     queue.offer(
-      _bundle('x', priority: MeshMessagePriority.callSignal),
+      _bundle('x', priority: LinkMessagePriority.callSignal),
       nowMs: 1000,
     );
     queue.offer(_bundle('y'), nowMs: 1001);

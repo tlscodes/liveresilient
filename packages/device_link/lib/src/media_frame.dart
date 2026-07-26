@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-String generateMeshMessageId() {
+String generateLinkMessageId() {
   final random = Random.secure();
   final bytes = List<int>.generate(
     16,
@@ -58,11 +58,11 @@ abstract interface class MediaFrameAuthenticator {
   Future<MediaFrame> createForwardedEnvelope(MediaFrame envelope);
 }
 
-abstract interface class MeshBroadcaster {
+abstract interface class LinkBroadcaster {
   Future<void> broadcast(MediaFrame envelope);
 }
 
-enum MeshDisposition {
+enum LinkDisposition {
   delivered,
   deliveredAndForwarded,
   duplicate,
@@ -72,13 +72,13 @@ enum MeshDisposition {
   rejected,
 }
 
-class MeshSeenCache {
+class LinkSeenCache {
   final int maximumEntries;
 
   final LinkedHashMap<String, int> _expiresByMessageId =
       LinkedHashMap<String, int>();
 
-  MeshSeenCache({this.maximumEntries = 8192}) : assert(maximumEntries > 0);
+  LinkSeenCache({this.maximumEntries = 8192}) : assert(maximumEntries > 0);
 
   /// Returns true when the message ID has not been seen.
   bool markIfNew({
@@ -119,10 +119,10 @@ class MeshSeenCache {
   }
 }
 
-class MeshMessageProcessor {
+class LinkMessageProcessor {
   final MediaFrameAuthenticator authenticator;
-  final MeshBroadcaster broadcaster;
-  final MeshSeenCache seenCache;
+  final LinkBroadcaster broadcaster;
+  final LinkSeenCache seenCache;
 
   final bool forwardingEnabled;
   final int maximumLifetimeMs;
@@ -130,7 +130,7 @@ class MeshMessageProcessor {
 
   final Future<void> Function(MediaFrame envelope) onDeliver;
 
-  MeshMessageProcessor({
+  LinkMessageProcessor({
     required this.authenticator,
     required this.broadcaster,
     required this.seenCache,
@@ -140,21 +140,21 @@ class MeshMessageProcessor {
     this.maximumAllowedHops = 8,
   });
 
-  Future<MeshDisposition> process(
+  Future<LinkDisposition> process(
     MediaFrame envelope, {
     required int nowMs,
   }) async {
     if (!_hasValidBounds(envelope, nowMs)) {
-      return MeshDisposition.rejected;
+      return LinkDisposition.rejected;
     }
 
     if (envelope.isExpiredAt(nowMs)) {
-      return MeshDisposition.expired;
+      return LinkDisposition.expired;
     }
 
     // Invalid frames are not delivered or forwarded.
     if (!await authenticator.verify(envelope)) {
-      return MeshDisposition.invalid;
+      return LinkDisposition.invalid;
     }
 
     final isNew = seenCache.markIfNew(
@@ -164,17 +164,17 @@ class MeshMessageProcessor {
     );
 
     if (!isNew) {
-      return MeshDisposition.duplicate;
+      return LinkDisposition.duplicate;
     }
 
     await onDeliver(envelope);
 
     if (!forwardingEnabled) {
-      return MeshDisposition.delivered;
+      return LinkDisposition.delivered;
     }
 
     if (!envelope.canBeForwarded) {
-      return MeshDisposition.hopLimitReached;
+      return LinkDisposition.hopLimitReached;
     }
 
     final forwarded = await authenticator.createForwardedEnvelope(envelope);
@@ -190,7 +190,7 @@ class MeshMessageProcessor {
 
     await broadcaster.broadcast(forwarded);
 
-    return MeshDisposition.deliveredAndForwarded;
+    return LinkDisposition.deliveredAndForwarded;
   }
 
   bool _hasValidBounds(MediaFrame envelope, int nowMs) {
@@ -208,7 +208,7 @@ class MeshMessageProcessor {
     // signed overflow and skip the maximumLifetimeMs check entirely
     // (found by fuzzing — see
     // packages/device_link/test/parser_robustness_test.dart, target
-    // `mesh_frame`). Any legitimate frame already satisfies this: a
+    // `link_frame`). Any legitimate frame already satisfies this: a
     // non-expired frame has expiresAtMs > nowMs and expiresAtMs <=
     // createdAtMs + maximumLifetimeMs, so createdAtMs > nowMs -
     // maximumLifetimeMs follows from the (overflow-safe) checks below.

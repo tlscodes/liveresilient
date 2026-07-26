@@ -11,7 +11,7 @@ library;
 
 import 'dart:math' as math;
 
-import 'package:device_link/device_link.dart' show MeshMessagePriority;
+import 'package:device_link/device_link.dart' show LinkMessagePriority;
 
 /// The situation a delivery happens in. Buckets are coarse on purpose:
 /// enough to distinguish regimes, small enough to learn fast.
@@ -19,7 +19,7 @@ class DeliveryContext {
   const DeliveryContext({
     required this.timeBucket,
     this.place = 'unknown',
-    this.priority = MeshMessagePriority.bulk,
+    this.priority = LinkMessagePriority.bulk,
   });
 
   /// Derives the context from a wall-clock ms timestamp: four six-hour
@@ -27,7 +27,7 @@ class DeliveryContext {
   factory DeliveryContext.at(
     int nowMs, {
     String place = 'unknown',
-    MeshMessagePriority priority = MeshMessagePriority.bulk,
+    LinkMessagePriority priority = LinkMessagePriority.bulk,
   }) {
     final hour = DateTime.fromMillisecondsSinceEpoch(nowMs).hour;
     return DeliveryContext(
@@ -44,7 +44,7 @@ class DeliveryContext {
   /// "home"/"transit"). Never a precise position — a label, not a place.
   final String place;
 
-  final MeshMessagePriority priority;
+  final LinkMessagePriority priority;
 
   String get key => '$timeBucket|$place';
 }

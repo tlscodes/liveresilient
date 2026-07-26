@@ -20,7 +20,7 @@ library;
 
 import 'dart:convert';
 
-import 'media_frame.dart' show MeshSeenCache;
+import 'media_frame.dart' show LinkSeenCache;
 
 /// Fixed-schema wakeup payload: an opaque call ID plus its validity window.
 final class PushWakeupPayload {
@@ -164,10 +164,10 @@ enum PushWakeupResult { accepted, duplicate, expired, malformed }
 /// platform redelivers the push.
 class PushWakeupProcessor {
   /// Tolerated forward clock skew for `issuedAtMs`, mirroring
-  /// `MeshMessageProcessor`'s bound check.
+  /// `LinkMessageProcessor`'s bound check.
   static const int maxClockSkewMs = 60 * 1000;
 
-  final MeshSeenCache _seenCallIds;
+  final LinkSeenCache _seenCallIds;
 
   /// Invoked exactly once per accepted call ID. The app treats this as
   /// "a call may exist for opaque id X" and must confirm real call state
@@ -177,7 +177,7 @@ class PushWakeupProcessor {
   PushWakeupProcessor({
     int maximumTrackedCallIds = 1024,
     this.onIncomingCallAnnounced,
-  }) : _seenCallIds = MeshSeenCache(maximumEntries: maximumTrackedCallIds);
+  }) : _seenCallIds = LinkSeenCache(maximumEntries: maximumTrackedCallIds);
 
   /// Decodes and handles a raw push payload. Structural problems (bad JSON,
   /// unknown keys, oversize, invalid fields) are [PushWakeupResult.malformed].

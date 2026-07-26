@@ -42,7 +42,7 @@ class ReliableMessenger {
 
   /// Insertion-ordered, capped de-dup set: oldest id is evicted once
   /// [maxSeenEntries] is exceeded, so a long-lived peer connection cannot
-  /// grow this unboundedly (mirrors `MeshSeenCache` in device_link).
+  /// grow this unboundedly (mirrors `LinkSeenCache` in device_link).
   final _seen = LinkedHashSet<String>();
   final _incoming = StreamController<ChatMessage>.broadcast();
   final _deliveries = StreamController<(String, DeliveryState)>.broadcast();

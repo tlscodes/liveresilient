@@ -14,12 +14,12 @@
 ///   traffic while normal paths work;
 /// - **forwarding off by default**: this adapter delivers frames only
 ///   between directly-connected consenting peers. Multi-hop relay exists
-///   solely in `MeshMessageProcessor` (same package) and stays disabled
+///   solely in `LinkMessageProcessor` (same package) and stays disabled
 ///   unless the user opts in there as well;
 /// - every frame is wrapped in an [AuthenticatedEnvelope]; unauthenticated
 ///   or replayed frames are dropped before reaching the application.
 ///
-/// Designed from the v2 blueprint role, replacing the v1 `mesh_channel`
+/// Designed from the v2 blueprint role, replacing the v1 `link_channel`
 /// (which auto-joined peers and forwarded without authentication).
 library;
 

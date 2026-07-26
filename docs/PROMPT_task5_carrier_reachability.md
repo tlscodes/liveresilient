@@ -46,7 +46,7 @@ CI-testable with no network and no device.
 1. **Review & invariants.** Read `dtn_bundle_queue.dart`,
    `bundle_carrier_port.dart`, `simulated_carrier_link.dart`. Confirm in
    writing: opaque payloads, priority/expiry consistency with
-   `MeshMessageProcessor`, non-eviction of a higher-priority bundle, and that
+   `LinkMessageProcessor`, non-eviction of a higher-priority bundle, and that
    `BundleExchange` reuses `flush`'s stop-on-first-failure so an interrupted
    contact never half-removes a bundle.
 2. **Consent gate in the exchange.** Ensure `BundleExchange.run` cannot move

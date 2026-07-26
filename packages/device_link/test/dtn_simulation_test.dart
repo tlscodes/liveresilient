@@ -15,7 +15,7 @@ void main() {
   test('100+ offline/online episodes: exactly-once delivery, priority order, '
       'no expired delivery, capacity respected', () async {
     final random = Random(42);
-    final priorities = MeshMessagePriority.values;
+    final priorities = LinkMessagePriority.values;
 
     final queue = DtnBundleQueue(maxBundles: 32, maxBytes: 4096);
 

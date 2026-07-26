@@ -132,7 +132,7 @@ void main() {
     test('near-tie on non-bulk traffic → race the top two', () {
       final presenceCtx = DeliveryContext.at(
         _morningMs,
-        priority: MeshMessagePriority.presence,
+        priority: LinkMessagePriority.presence,
       );
       final plan = planner.plan(
         lanes: [
@@ -160,7 +160,7 @@ void main() {
     test('predicted slide on best lane → dual-send despite a wide margin', () {
       final presenceCtx = DeliveryContext.at(
         _morningMs,
-        priority: MeshMessagePriority.presence,
+        priority: LinkMessagePriority.presence,
       );
       final plan = planner.plan(
         lanes: [lane('sliding-best', 0.9, 0.9), lane('backup', 0.5, 0.5)],
@@ -266,7 +266,7 @@ void main() {
         final outcome = await fabric.deliver(
           [1],
           bundleId: 'urgent',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
         );
 
         expect(outcome, DeliveryOutcome.sentLive);
@@ -300,7 +300,7 @@ void main() {
         final outcome = await fabric.deliver(
           [1],
           bundleId: 'x',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
         );
 
         expect(outcome, DeliveryOutcome.queuedForLater);

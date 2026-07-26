@@ -32,10 +32,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Boot the intelligence circuit before the first frame: both brains
   // restored from disk, fabric place-aware, director watching. The device
-  // binding seam supplies the real mesh radio and LLM engine when present;
+  // binding seam supplies the real link radio and LLM engine when present;
   // both are null in the demo/gate build, so the app degrades cleanly.
   final intelligence = await bootIntelligence(
-    localMeshLane: buildLocalMeshLane(),
+    localLinkLane: buildLocalLinkLane(),
     llmEngine: buildLlmEngine(),
   );
   runApp(MyApp(intelligence: intelligence));

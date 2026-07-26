@@ -103,8 +103,8 @@ void main() {
         final b = DtnBundle(
           id: 'b${nextId++}',
           payload: List<int>.filled(1 + random.nextInt(64), 7),
-          priority: MeshMessagePriority
-              .values[random.nextInt(MeshMessagePriority.values.length)],
+          priority: LinkMessagePriority
+              .values[random.nextInt(LinkMessagePriority.values.length)],
           createdAtMs: nowMs,
           lifetimeMs: 500 + random.nextInt(20000),
         );

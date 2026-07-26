@@ -13,12 +13,12 @@ import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:device_link/device_link.dart' show DeviceLinkConsent;
 import 'package:on_device_assistant/on_device_assistant.dart' show LlmEngine;
 
-import 'local_mesh_lane.dart';
+import 'local_link_lane.dart';
 
 /// Owner opt-in for the voluntary local relay. Defaults to not granted:
-/// the mesh lane stays dark until the user explicitly turns nearby-device
+/// the link lane stays dark until the user explicitly turns nearby-device
 /// relaying on in settings, at which point this flips to `true`.
-class MeshRelayConsent implements DeviceLinkConsent {
+class LinkRelayConsent implements DeviceLinkConsent {
   bool _granted = false;
   @override
   bool get granted => _granted;
@@ -26,27 +26,27 @@ class MeshRelayConsent implements DeviceLinkConsent {
   void setGranted(bool value) => _granted = value;
 }
 
-/// Builds the local peer-to-peer lane if the platform exposes a mesh radio.
+/// Builds the local peer-to-peer lane if the platform exposes a link radio.
 ///
 /// Returns `null` in the demo / test build (no plugin). On a real device,
 /// bind a Wi-Fi Direct / BLE plugin (e.g. flutter_p2p_connection,
 /// flutter_blue_plus) here by filling the three closures:
 ///
-///   final binding = LocalMeshBinding(
+///   final binding = LocalLinkBinding(
 ///     discoverAndConnect: () => plugin.discover().then((_) => plugin.connectNearest()),
 ///     sendBytes: (bytes) => plugin.send(bytes),
 ///     peerCount: () => plugin.connectedPeers.length,
 ///   );
-///   return buildLocalMeshLane(binding: binding, consent: consent);
-TransportChannel? buildLocalMeshLane({
-  LocalMeshBinding? binding,
+///   return buildLocalLinkLane(binding: binding, consent: consent);
+TransportChannel? buildLocalLinkLane({
+  LocalLinkBinding? binding,
   DeviceLinkConsent? consent,
 }) {
   // No platform radio wired in the demo/gate build → no lane.
   if (binding == null) return null;
-  return LocalMeshLane(
+  return LocalLinkLane(
     binding: binding,
-    consent: consent ?? MeshRelayConsent(),
+    consent: consent ?? LinkRelayConsent(),
   );
 }
 

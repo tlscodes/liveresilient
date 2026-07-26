@@ -85,7 +85,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       // A dead-but-registered lane is "degraded" (the fabric keeps trying
-      // it as failover); the payload is already parked in the queue.
+      // it as a lane switch); the payload is already parked in the queue.
       expect(stack.director.advisory.level, isNot(AdvisoryLevel.calm));
       expect(
         stack.director.advisory.headline.toLowerCase(),
@@ -142,7 +142,7 @@ void main() {
   test('repairs that do not help trigger judged restraint (backoff)', () async {
     final lane = _ToggleChannel('net');
     final stack = await boot(lane);
-    lane.health.availability = 0.1; // stays broken no matter what
+    lane.health.availability = 0.1; // stays below the switch threshold for the whole test
     await stack.fabric.refresh();
     await Future<void>.delayed(Duration.zero);
     // The director's own healing refresh publishes further snapshots that

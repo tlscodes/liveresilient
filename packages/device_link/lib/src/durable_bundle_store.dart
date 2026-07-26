@@ -9,7 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'dtn_bundle_queue.dart' show BundleStore, DtnBundle;
-import 'mesh_flow_control.dart' show MeshMessagePriority;
+import 'link_flow_control.dart' show LinkMessagePriority;
 
 /// A [BundleStore] backed by an append-only log file. Each line is one JSON
 /// record: `{"op":"put", ...bundle fields}` or `{"op":"remove","id":...}`.
@@ -76,7 +76,7 @@ class DurableBundleStore implements BundleStore {
     return DtnBundle(
       id: record['id'] as String,
       payload: base64Decode(record['payload'] as String),
-      priority: MeshMessagePriority.values.byName(record['priority'] as String),
+      priority: LinkMessagePriority.values.byName(record['priority'] as String),
       createdAtMs: record['createdAtMs'] as int,
       lifetimeMs: record['lifetimeMs'] as int,
     );

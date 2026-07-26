@@ -25,7 +25,7 @@ class _FakeAuthenticator implements MediaFrameAuthenticator {
   }
 }
 
-class _FakeBroadcaster implements MeshBroadcaster {
+class _FakeBroadcaster implements LinkBroadcaster {
   final List<MediaFrame> broadcasted = [];
 
   @override
@@ -58,36 +58,36 @@ void main() {
   late _FakeBroadcaster broadcaster;
   late List<MediaFrame> delivered;
 
-  MeshMessageProcessor innerProcessor() {
+  LinkMessageProcessor innerProcessor() {
     broadcaster = _FakeBroadcaster();
     delivered = [];
-    return MeshMessageProcessor(
+    return LinkMessageProcessor(
       authenticator: _FakeAuthenticator(),
       broadcaster: broadcaster,
-      seenCache: MeshSeenCache(),
+      seenCache: LinkSeenCache(),
       onDeliver: (envelope) async => delivered.add(envelope),
     );
   }
 
-  GuardedMeshProcessor guarded(MeshFlowControlConfig config) {
-    return GuardedMeshProcessor(inner: innerProcessor(), config: config);
+  GuardedLinkProcessor guarded(LinkFlowControlConfig config) {
+    return GuardedLinkProcessor(inner: innerProcessor(), config: config);
   }
 
-  group('MeshFlowControlConfig', () {
+  group('LinkFlowControlConfig', () {
     test('rejects out-of-range knobs at construction', () {
       const badConfigs = [
-        MeshFlowControlConfig(perPeerWindowMs: 0),
-        MeshFlowControlConfig(maxMessagesPerPeerPerWindow: 0),
-        MeshFlowControlConfig(maxGlobalMessagesPerSecond: 0),
-        MeshFlowControlConfig(burstAllowance: -1),
-        MeshFlowControlConfig(maxTrackedPeers: 0),
-        MeshFlowControlConfig(priorityReserveFraction: 0.6),
-        MeshFlowControlConfig(priorityReserveFraction: -0.1),
+        LinkFlowControlConfig(perPeerWindowMs: 0),
+        LinkFlowControlConfig(maxMessagesPerPeerPerWindow: 0),
+        LinkFlowControlConfig(maxGlobalMessagesPerSecond: 0),
+        LinkFlowControlConfig(burstAllowance: -1),
+        LinkFlowControlConfig(maxTrackedPeers: 0),
+        LinkFlowControlConfig(priorityReserveFraction: 0.6),
+        LinkFlowControlConfig(priorityReserveFraction: -0.1),
       ];
 
       for (final config in badConfigs) {
         expect(
-          () => GuardedMeshProcessor(inner: innerProcessor(), config: config),
+          () => GuardedLinkProcessor(inner: innerProcessor(), config: config),
           throwsArgumentError,
         );
       }
@@ -95,8 +95,8 @@ void main() {
 
     test('defaults are valid', () {
       expect(
-        guarded(const MeshFlowControlConfig()),
-        isA<GuardedMeshProcessor>(),
+        guarded(const LinkFlowControlConfig()),
+        isA<GuardedLinkProcessor>(),
       );
     });
   });
@@ -104,7 +104,7 @@ void main() {
   group('per-peer quota', () {
     test('caps admissions per peer inside the sliding window', () async {
       final processor = guarded(
-        const MeshFlowControlConfig(
+        const LinkFlowControlConfig(
           perPeerWindowMs: 10000,
           maxMessagesPerPeerPerWindow: 3,
           maxGlobalMessagesPerSecond: 1000,
@@ -115,35 +115,35 @@ void main() {
         final outcome = await processor.process(
           _frame(messageId: 'peer-a-msg-$i'),
           peerId: 'peer-a',
-          priority: MeshMessagePriority.presence,
+          priority: LinkMessagePriority.presence,
           nowMs: nowMs + i,
         );
-        expect(outcome.disposition, MeshDisposition.delivered);
+        expect(outcome.disposition, LinkDisposition.delivered);
       }
 
       final overQuota = await processor.process(
         _frame(messageId: 'peer-a-msg-3'),
         peerId: 'peer-a',
-        priority: MeshMessagePriority.presence,
+        priority: LinkMessagePriority.presence,
         nowMs: nowMs + 3,
       );
-      expect(overQuota.rejection, MeshFlowRejection.peerQuotaExceeded);
+      expect(overQuota.rejection, LinkFlowRejection.peerQuotaExceeded);
 
       // Other peers are unaffected by peer-a's quota.
       final otherPeer = await processor.process(
         _frame(messageId: 'peer-b-msg-0'),
         peerId: 'peer-b',
-        priority: MeshMessagePriority.presence,
+        priority: LinkMessagePriority.presence,
         nowMs: nowMs + 3,
       );
-      expect(otherPeer.disposition, MeshDisposition.delivered);
+      expect(otherPeer.disposition, LinkDisposition.delivered);
     });
 
     test(
       'window slides: the peer is admitted again after it elapses',
       () async {
         final processor = guarded(
-          const MeshFlowControlConfig(
+          const LinkFlowControlConfig(
             perPeerWindowMs: 10000,
             maxMessagesPerPeerPerWindow: 1,
             maxGlobalMessagesPerSecond: 1000,
@@ -154,7 +154,7 @@ void main() {
           (await processor.process(
             _frame(messageId: 'm-0'),
             peerId: 'peer-a',
-            priority: MeshMessagePriority.bulk,
+            priority: LinkMessagePriority.bulk,
             nowMs: nowMs,
           )).admitted,
           isTrue,
@@ -163,16 +163,16 @@ void main() {
           (await processor.process(
             _frame(messageId: 'm-1'),
             peerId: 'peer-a',
-            priority: MeshMessagePriority.bulk,
+            priority: LinkMessagePriority.bulk,
             nowMs: nowMs + 5000,
           )).rejection,
-          MeshFlowRejection.peerQuotaExceeded,
+          LinkFlowRejection.peerQuotaExceeded,
         );
         expect(
           (await processor.process(
             _frame(messageId: 'm-2'),
             peerId: 'peer-a',
-            priority: MeshMessagePriority.bulk,
+            priority: LinkMessagePriority.bulk,
             nowMs: nowMs + 10001,
           )).admitted,
           isTrue,
@@ -183,17 +183,17 @@ void main() {
 
   group('rate limit and priority shedding', () {
     // capacity 10, reserve 0.2 → thresholds: callSignal 1, presence 3, bulk 5.
-    const config = MeshFlowControlConfig(
+    const config = LinkFlowControlConfig(
       maxGlobalMessagesPerSecond: 10,
       burstAllowance: 0,
       maxMessagesPerPeerPerWindow: 1000,
       priorityReserveFraction: 0.2,
     );
 
-    Future<GuardedMeshOutcome> send(
-      GuardedMeshProcessor processor,
+    Future<GuardedLinkOutcome> send(
+      GuardedLinkProcessor processor,
       int index,
-      MeshMessagePriority priority,
+      LinkMessagePriority priority,
     ) {
       return processor.process(
         _frame(messageId: 'msg-$index'),
@@ -212,13 +212,13 @@ void main() {
         // Bulk admitted while tokens >= 5 (10..5 → six sends).
         for (var i = 0; i < 6; i++) {
           expect(
-            (await send(processor, index++, MeshMessagePriority.bulk)).admitted,
+            (await send(processor, index++, LinkMessagePriority.bulk)).admitted,
             isTrue,
           );
         }
         expect(
-          (await send(processor, index++, MeshMessagePriority.bulk)).rejection,
-          MeshFlowRejection.rateLimited,
+          (await send(processor, index++, LinkMessagePriority.bulk)).rejection,
+          LinkFlowRejection.rateLimited,
         );
 
         // Presence still passes until tokens fall below 3.
@@ -227,7 +227,7 @@ void main() {
             (await send(
               processor,
               index++,
-              MeshMessagePriority.presence,
+              LinkMessagePriority.presence,
             )).admitted,
             isTrue,
           );
@@ -236,9 +236,9 @@ void main() {
           (await send(
             processor,
             index++,
-            MeshMessagePriority.presence,
+            LinkMessagePriority.presence,
           )).rejection,
-          MeshFlowRejection.rateLimited,
+          LinkFlowRejection.rateLimited,
         );
 
         // Call signaling drains the bucket to zero.
@@ -247,7 +247,7 @@ void main() {
             (await send(
               processor,
               index++,
-              MeshMessagePriority.callSignal,
+              LinkMessagePriority.callSignal,
             )).admitted,
             isTrue,
           );
@@ -256,9 +256,9 @@ void main() {
           (await send(
             processor,
             index++,
-            MeshMessagePriority.callSignal,
+            LinkMessagePriority.callSignal,
           )).rejection,
-          MeshFlowRejection.rateLimited,
+          LinkFlowRejection.rateLimited,
         );
       },
     );
@@ -270,7 +270,7 @@ void main() {
         await processor.process(
           _frame(messageId: 'drain-$i'),
           peerId: 'peer-drain-$i',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
           nowMs: nowMs,
         );
       }
@@ -278,10 +278,10 @@ void main() {
         (await processor.process(
           _frame(messageId: 'blocked'),
           peerId: 'peer-x',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
           nowMs: nowMs,
         )).rejection,
-        MeshFlowRejection.rateLimited,
+        LinkFlowRejection.rateLimited,
       );
 
       // 500ms at 10 msg/s mints 5 tokens.
@@ -289,7 +289,7 @@ void main() {
         (await processor.process(
           _frame(messageId: 'refilled'),
           peerId: 'peer-x',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
           nowMs: nowMs + 500,
         )).admitted,
         isTrue,
@@ -300,26 +300,26 @@ void main() {
       final processor = guarded(config);
 
       for (var i = 0; i < 10; i++) {
-        await send(processor, i, MeshMessagePriority.callSignal);
+        await send(processor, i, LinkMessagePriority.callSignal);
       }
       expect(
         (await processor.process(
           _frame(messageId: 'rewind', createdAtMs: nowMs - 5000),
           peerId: 'peer-x',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
           nowMs: nowMs - 1000,
         )).rejection,
-        MeshFlowRejection.rateLimited,
+        LinkFlowRejection.rateLimited,
       );
     });
   });
 
   group('inner processor semantics preserved through the guard', () {
-    late GuardedMeshProcessor processor;
+    late GuardedLinkProcessor processor;
 
     setUp(() {
       processor = guarded(
-        const MeshFlowControlConfig(maxGlobalMessagesPerSecond: 1000),
+        const LinkFlowControlConfig(maxGlobalMessagesPerSecond: 1000),
       );
     });
 
@@ -331,10 +331,10 @@ void main() {
           expiresAtMs: nowMs,
         ),
         peerId: 'peer-a',
-        priority: MeshMessagePriority.callSignal,
+        priority: LinkMessagePriority.callSignal,
         nowMs: nowMs,
       );
-      expect(outcome.disposition, MeshDisposition.expired);
+      expect(outcome.disposition, LinkDisposition.expired);
       expect(delivered, isEmpty);
     });
 
@@ -344,18 +344,18 @@ void main() {
       final first = await processor.process(
         frame,
         peerId: 'peer-a',
-        priority: MeshMessagePriority.callSignal,
+        priority: LinkMessagePriority.callSignal,
         nowMs: nowMs,
       );
       final second = await processor.process(
         frame,
         peerId: 'peer-b',
-        priority: MeshMessagePriority.callSignal,
+        priority: LinkMessagePriority.callSignal,
         nowMs: nowMs + 1,
       );
 
-      expect(first.disposition, MeshDisposition.delivered);
-      expect(second.disposition, MeshDisposition.duplicate);
+      expect(first.disposition, LinkDisposition.delivered);
+      expect(second.disposition, LinkDisposition.duplicate);
       expect(delivered, hasLength(1));
     });
 
@@ -363,10 +363,10 @@ void main() {
       final outcome = await processor.process(
         _frame(messageId: 'no-forward'),
         peerId: 'peer-a',
-        priority: MeshMessagePriority.callSignal,
+        priority: LinkMessagePriority.callSignal,
         nowMs: nowMs,
       );
-      expect(outcome.disposition, MeshDisposition.delivered);
+      expect(outcome.disposition, LinkDisposition.delivered);
       expect(broadcaster.broadcasted, isEmpty);
     });
 
@@ -375,7 +375,7 @@ void main() {
         () => processor.process(
           _frame(messageId: 'no-peer'),
           peerId: '',
-          priority: MeshMessagePriority.bulk,
+          priority: LinkMessagePriority.bulk,
           nowMs: nowMs,
         ),
         throwsArgumentError,
@@ -384,11 +384,11 @@ void main() {
   });
 
   group('simulated multi-peer load (seeded, fake clock)', () {
-    Future<({GuardedMeshProcessor processor, _SimulationTally tally})>
+    Future<({GuardedLinkProcessor processor, _SimulationTally tally})>
     runSimulation({
       required int peerCount,
       required int messagesPerPeer,
-      required MeshFlowControlConfig config,
+      required LinkFlowControlConfig config,
       required int seed,
       int spanMs = 2000,
       int duplicateEvery = 0,
@@ -402,7 +402,7 @@ void main() {
             ({
               int atMs,
               String peerId,
-              MeshMessagePriority priority,
+              LinkMessagePriority priority,
               MediaFrame frame,
             })
           >[];
@@ -410,8 +410,8 @@ void main() {
       for (var p = 0; p < peerCount; p++) {
         for (var m = 0; m < messagesPerPeer; m++) {
           final atMs = nowMs + random.nextInt(spanMs);
-          final priority = MeshMessagePriority
-              .values[random.nextInt(MeshMessagePriority.values.length)];
+          final priority = LinkMessagePriority
+              .values[random.nextInt(LinkMessagePriority.values.length)];
           final isDuplicate =
               duplicateEvery > 0 &&
               sequence > 0 &&
@@ -447,14 +447,14 @@ void main() {
         );
 
         switch (outcome.rejection) {
-          case MeshFlowRejection.peerQuotaExceeded:
+          case LinkFlowRejection.peerQuotaExceeded:
             tally.quotaShed++;
-          case MeshFlowRejection.rateLimited:
+          case LinkFlowRejection.rateLimited:
             tally.rateShed++;
           case null:
             switch (outcome.disposition!) {
-              case MeshDisposition.delivered:
-              case MeshDisposition.deliveredAndForwarded:
+              case LinkDisposition.delivered:
+              case LinkDisposition.deliveredAndForwarded:
                 tally.admittedByPriority.update(
                   event.priority,
                   (count) => count + 1,
@@ -465,13 +465,13 @@ void main() {
                   ifAbsent: () => 1,
                 );
                 tally.deliveredFrames.add(event.frame);
-              case MeshDisposition.duplicate:
+              case LinkDisposition.duplicate:
                 tally.duplicates++;
-              case MeshDisposition.expired:
+              case LinkDisposition.expired:
                 tally.expired++;
-              case MeshDisposition.invalid:
-              case MeshDisposition.hopLimitReached:
-              case MeshDisposition.rejected:
+              case LinkDisposition.invalid:
+              case LinkDisposition.hopLimitReached:
+              case LinkDisposition.rejected:
                 tally.other++;
             }
         }
@@ -484,7 +484,7 @@ void main() {
         peerCount: 5,
         messagesPerPeer: 4,
         seed: 11,
-        config: const MeshFlowControlConfig(
+        config: const LinkFlowControlConfig(
           maxMessagesPerPeerPerWindow: 10,
           maxGlobalMessagesPerSecond: 100,
           burstAllowance: 50,
@@ -497,7 +497,7 @@ void main() {
     });
 
     test('10 peers: per-peer quota holds under a hammering burst', () async {
-      const config = MeshFlowControlConfig(
+      const config = LinkFlowControlConfig(
         perPeerWindowMs: 10000,
         maxMessagesPerPeerPerWindow: 5,
         maxGlobalMessagesPerSecond: 1000,
@@ -529,7 +529,7 @@ void main() {
         seed: 42,
         duplicateEvery: 25,
         expiredEvery: 40,
-        config: const MeshFlowControlConfig(
+        config: const LinkFlowControlConfig(
           perPeerWindowMs: 10000,
           maxMessagesPerPeerPerWindow: 3,
           maxGlobalMessagesPerSecond: 20,
@@ -538,7 +538,7 @@ void main() {
         ),
       );
 
-      double admittedFraction(MeshMessagePriority priority) {
+      double admittedFraction(LinkMessagePriority priority) {
         final sent = tally.sentByPriority[priority]!;
         return sent == 0 ? 1 : tally.admittedByPriority[priority]! / sent;
       }
@@ -549,12 +549,12 @@ void main() {
 
       // Lowest priority is shed first: admission rate is ordered.
       expect(
-        admittedFraction(MeshMessagePriority.callSignal),
-        greaterThanOrEqualTo(admittedFraction(MeshMessagePriority.presence)),
+        admittedFraction(LinkMessagePriority.callSignal),
+        greaterThanOrEqualTo(admittedFraction(LinkMessagePriority.presence)),
       );
       expect(
-        admittedFraction(MeshMessagePriority.presence),
-        greaterThanOrEqualTo(admittedFraction(MeshMessagePriority.bulk)),
+        admittedFraction(LinkMessagePriority.presence),
+        greaterThanOrEqualTo(admittedFraction(LinkMessagePriority.bulk)),
       );
 
       // Invariants under load: no expired frame was ever delivered, and the
@@ -583,56 +583,56 @@ void main() {
           expiresAtMs: probeAtMs,
         ),
         peerId: 'probe-peer',
-        priority: MeshMessagePriority.callSignal,
+        priority: LinkMessagePriority.callSignal,
         nowMs: probeAtMs,
       );
-      expect(expiredProbe.disposition, MeshDisposition.expired);
+      expect(expiredProbe.disposition, LinkDisposition.expired);
 
       final replayedId = tally.deliveredFrames.first.messageId;
       final duplicateProbe = await processor.process(
         _frame(messageId: replayedId, createdAtMs: probeAtMs),
         peerId: 'probe-peer',
-        priority: MeshMessagePriority.callSignal,
+        priority: LinkMessagePriority.callSignal,
         nowMs: probeAtMs,
       );
-      expect(duplicateProbe.disposition, MeshDisposition.duplicate);
+      expect(duplicateProbe.disposition, LinkDisposition.duplicate);
     });
   });
 
-  group('GuardedMeshOutcome sealed hierarchy', () {
+  group('GuardedLinkOutcome sealed hierarchy', () {
     test('an exhaustive switch (no default) matches both variants', () {
-      String describe(GuardedMeshOutcome outcome) {
+      String describe(GuardedLinkOutcome outcome) {
         return switch (outcome) {
-          AdmittedMeshOutcome(disposition: final d) => 'admitted:$d',
-          ShedMeshOutcome(rejection: final r) => 'shed:$r',
+          AdmittedLinkOutcome(disposition: final d) => 'admitted:$d',
+          ShedLinkOutcome(rejection: final r) => 'shed:$r',
         };
       }
 
-      final admitted = GuardedMeshOutcome.admitted(MeshDisposition.delivered);
-      final shed = GuardedMeshOutcome.shed(MeshFlowRejection.rateLimited);
+      final admitted = GuardedLinkOutcome.admitted(LinkDisposition.delivered);
+      final shed = GuardedLinkOutcome.shed(LinkFlowRejection.rateLimited);
 
-      expect(admitted, isA<AdmittedMeshOutcome>());
-      expect(shed, isA<ShedMeshOutcome>());
-      expect(describe(admitted), 'admitted:MeshDisposition.delivered');
-      expect(describe(shed), 'shed:MeshFlowRejection.rateLimited');
+      expect(admitted, isA<AdmittedLinkOutcome>());
+      expect(shed, isA<ShedLinkOutcome>());
+      expect(describe(admitted), 'admitted:LinkDisposition.delivered');
+      expect(describe(shed), 'shed:LinkFlowRejection.rateLimited');
 
       // The pre-existing getter surface survives on the base type.
       expect(admitted.admitted, isTrue);
-      expect(admitted.disposition, MeshDisposition.delivered);
+      expect(admitted.disposition, LinkDisposition.delivered);
       expect(admitted.rejection, isNull);
       expect(shed.admitted, isFalse);
       expect(shed.disposition, isNull);
-      expect(shed.rejection, MeshFlowRejection.rateLimited);
+      expect(shed.rejection, LinkFlowRejection.rateLimited);
     });
   });
 }
 
 class _SimulationTally {
-  final Map<MeshMessagePriority, int> sentByPriority = {
-    for (final priority in MeshMessagePriority.values) priority: 0,
+  final Map<LinkMessagePriority, int> sentByPriority = {
+    for (final priority in LinkMessagePriority.values) priority: 0,
   };
-  final Map<MeshMessagePriority, int> admittedByPriority = {
-    for (final priority in MeshMessagePriority.values) priority: 0,
+  final Map<LinkMessagePriority, int> admittedByPriority = {
+    for (final priority in LinkMessagePriority.values) priority: 0,
   };
   final Map<String, int> deliveredByPeer = {};
   final List<MediaFrame> deliveredFrames = [];

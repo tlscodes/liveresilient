@@ -50,7 +50,7 @@ class FileBundleStore implements BundleStore {
           bundles[id] = DtnBundle(
             id: id,
             payload: base64Decode(record['payload'] as String),
-            priority: MeshMessagePriority.values[record['priority'] as int],
+            priority: LinkMessagePriority.values[record['priority'] as int],
             createdAtMs: record['createdAtMs'] as int,
             lifetimeMs: record['lifetimeMs'] as int,
           );

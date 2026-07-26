@@ -9,3 +9,5 @@ export 'src/host_port.dart';
 export 'src/reachability_prober.dart';
 export 'src/relay_pool.dart';
 export 'src/transport_channel.dart';
+export 'src/micro_datagram_lane.dart';
+export 'src/tls_parameter_normalizer.dart';
