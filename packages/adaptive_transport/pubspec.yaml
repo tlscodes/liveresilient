@@ -12,6 +12,7 @@ resolution: workspace
 
 dependencies:
   clock: ^1.1.1
+  crypto: ^3.0.3
   security:
     path: ../security
   signed_config:

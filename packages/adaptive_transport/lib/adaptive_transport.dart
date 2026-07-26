@@ -12,3 +12,5 @@ export 'src/transport_channel.dart';
 export 'src/micro_datagram_lane.dart';
 export 'src/tls_parameter_normalizer.dart';
 export 'src/frame_encapsulator.dart';
+export 'src/authenticated_relay_server.dart';
+export 'src/multi_homed_connector.dart';
