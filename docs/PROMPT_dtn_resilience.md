@@ -20,7 +20,7 @@ store-and-forward layer, all pure Dart:
   reconnect), and receiver-side playback UI.
 - `packages/device_link` — `DtnBundleQueue` (RFC 9171 store-carry-forward:
   priority + lifetime + de-dup + bounded shedding, `BundleStore` seam),
-  `MeshMessageProcessor`, `GuardedMeshProcessor`, `AuthenticatedEnvelope`.
+  `LinkMessageProcessor`, `GuardedLinkProcessor`, `AuthenticatedEnvelope`.
 
 ## Objective
 Inspect, test, simulate, debug, and where needed extend the delay-tolerant
@@ -32,7 +32,7 @@ duplication, or unbounded growth.
 1. The bundle payload is opaque to the queue and to any carrier — the queue
    never inspects or needs to decrypt it.
 2. Priority ordering and lifetime expiry are consistent between
-   `DtnBundleQueue` and `MeshMessageProcessor` (same `MeshMessagePriority`,
+   `DtnBundleQueue` and `LinkMessageProcessor` (same `LinkMessagePriority`,
    same expiry semantics).
 3. Capacity shedding never evicts a higher-priority bundle to store a
    lower-priority one.
@@ -106,7 +106,7 @@ duplication, or unbounded growth.
       re-probe-on-network-change are each asserted, with no leaked timers.
 
 ## One worked path
-Start read-only: map `DtnBundleQueue` + `MeshMessageProcessor` and list the
+Start read-only: map `DtnBundleQueue` + `LinkMessageProcessor` and list the
 shared invariants → add the durable store + its test → add the simulation →
 wire the driver fallback + its test → build `ReachabilityProber` on the
 existing `PathSelector`/circuit-breaker + its tests → run the gate → fix and

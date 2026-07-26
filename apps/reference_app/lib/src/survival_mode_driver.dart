@@ -257,7 +257,7 @@ class SurvivalModeDriver {
             DtnBundle(
               id: 'voice-note-fallback-${_clipSeq++}',
               payload: bytes,
-              priority: MeshMessagePriority.bulk,
+              priority: LinkMessagePriority.bulk,
               createdAtMs: _now().millisecondsSinceEpoch,
               lifetimeMs: const Duration(minutes: 10).inMilliseconds,
             ),

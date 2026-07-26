@@ -35,7 +35,7 @@ void main() {
         DtnBundle(
           id: 'clip-1',
           payload: const [1, 2, 3],
-          priority: MeshMessagePriority.presence,
+          priority: LinkMessagePriority.presence,
           createdAtMs: now,
           lifetimeMs: 60000,
         ),
@@ -45,7 +45,7 @@ void main() {
         DtnBundle(
           id: 'clip-2',
           payload: const [4, 5, 6],
-          priority: MeshMessagePriority.presence,
+          priority: LinkMessagePriority.presence,
           createdAtMs: now + 1,
           lifetimeMs: 60000,
         ),
@@ -86,7 +86,7 @@ void main() {
       DtnBundle(
         id: 'clip-default',
         payload: const [9],
-        priority: MeshMessagePriority.presence,
+        priority: LinkMessagePriority.presence,
         createdAtMs: now,
         lifetimeMs: 60000,
       ),

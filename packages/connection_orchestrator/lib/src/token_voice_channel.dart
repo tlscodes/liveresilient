@@ -68,7 +68,7 @@ class TokenVoiceSender {
       DtnBundle(
         id: id,
         payload: [...header.buffer.asUint8List(), ...data],
-        priority: MeshMessagePriority.callSignal,
+        priority: LinkMessagePriority.callSignal,
         createdAtMs: nowMs,
         lifetimeMs: blockLifetime.inMilliseconds,
       ),

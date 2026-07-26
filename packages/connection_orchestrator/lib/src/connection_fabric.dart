@@ -163,7 +163,7 @@ class ConnectionFabric {
   Future<DeliveryOutcome> deliver(
     List<int> payload, {
     required String bundleId,
-    MeshMessagePriority priority = MeshMessagePriority.bulk,
+    LinkMessagePriority priority = LinkMessagePriority.bulk,
     int lifetimeMs = 24 * 60 * 60 * 1000,
   }) async {
     _checkLive();
@@ -191,7 +191,7 @@ class ConnectionFabric {
           ),
       ],
       context: ctx,
-      urgent: priority == MeshMessagePriority.callSignal,
+      urgent: priority == LinkMessagePriority.callSignal,
       bestLaneSliding:
           bestVerdict == TrendVerdict.slipping ||
           bestVerdict == TrendVerdict.failingSoon,
@@ -265,7 +265,7 @@ class ConnectionFabric {
     List<int> payload, {
     required String transferId,
     int? chunkSize,
-    MeshMessagePriority priority = MeshMessagePriority.bulk,
+    LinkMessagePriority priority = LinkMessagePriority.bulk,
     int lifetimeMs = 24 * 60 * 60 * 1000,
     ResumableTransfer? resume,
   }) async {
@@ -294,7 +294,7 @@ class ConnectionFabric {
 
   Future<void> _driveTransfer(
     ResumableTransfer transfer, {
-    required MeshMessagePriority priority,
+    required LinkMessagePriority priority,
     required int lifetimeMs,
   }) async {
     for (final chunk in [
@@ -334,7 +334,7 @@ class ConnectionFabric {
       for (final transfer in [..._activeTransfers.values]) {
         await _driveTransfer(
           transfer,
-          priority: MeshMessagePriority.bulk,
+          priority: LinkMessagePriority.bulk,
           lifetimeMs: 24 * 60 * 60 * 1000,
         );
         if (transfer.complete) _activeTransfers.remove(transfer.transferId);

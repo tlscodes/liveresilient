@@ -40,7 +40,7 @@ class FakeMediaFrameAuthenticator implements MediaFrameAuthenticator {
   }
 }
 
-class FakeMeshBroadcaster implements MeshBroadcaster {
+class FakeLinkBroadcaster implements LinkBroadcaster {
   final List<MediaFrame> broadcasted = [];
 
   @override
@@ -72,15 +72,15 @@ MediaFrame _frame({
 }
 
 void main() {
-  group('MeshMessageProcessor', () {
+  group('LinkMessageProcessor', () {
     late FakeMediaFrameAuthenticator authenticator;
-    late FakeMeshBroadcaster broadcaster;
-    late MeshSeenCache seenCache;
+    late FakeLinkBroadcaster broadcaster;
+    late LinkSeenCache seenCache;
     late List<MediaFrame> delivered;
     const nowMs = 1000000;
 
-    MeshMessageProcessor buildProcessor({bool forwardingEnabled = false}) {
-      return MeshMessageProcessor(
+    LinkMessageProcessor buildProcessor({bool forwardingEnabled = false}) {
+      return LinkMessageProcessor(
         authenticator: authenticator,
         broadcaster: broadcaster,
         seenCache: seenCache,
@@ -93,8 +93,8 @@ void main() {
 
     setUp(() {
       authenticator = FakeMediaFrameAuthenticator();
-      broadcaster = FakeMeshBroadcaster();
-      seenCache = MeshSeenCache();
+      broadcaster = FakeLinkBroadcaster();
+      seenCache = LinkSeenCache();
       delivered = [];
     });
 
@@ -105,8 +105,8 @@ void main() {
       final first = await processor.process(frame, nowMs: nowMs);
       final second = await processor.process(frame, nowMs: nowMs + 10);
 
-      expect(first, MeshDisposition.delivered);
-      expect(second, MeshDisposition.duplicate);
+      expect(first, LinkDisposition.delivered);
+      expect(second, LinkDisposition.duplicate);
       expect(delivered, hasLength(1));
     });
 
@@ -119,7 +119,7 @@ void main() {
 
       final result = await processor.process(frame, nowMs: nowMs);
 
-      expect(result, MeshDisposition.expired);
+      expect(result, LinkDisposition.expired);
       expect(delivered, isEmpty);
     });
 
@@ -130,7 +130,7 @@ void main() {
 
       final result = await processor.process(frame, nowMs: nowMs);
 
-      expect(result, MeshDisposition.rejected);
+      expect(result, LinkDisposition.rejected);
       expect(delivered, isEmpty);
       expect(authenticator.verifyCalls, isEmpty);
     });
@@ -142,7 +142,7 @@ void main() {
 
       final result = await processor.process(frame, nowMs: nowMs);
 
-      expect(result, MeshDisposition.delivered);
+      expect(result, LinkDisposition.delivered);
       expect(delivered, hasLength(1));
       expect(broadcaster.broadcasted, isEmpty);
     });
@@ -154,7 +154,7 @@ void main() {
 
       final result = await processor.process(frame, nowMs: nowMs);
 
-      expect(result, MeshDisposition.hopLimitReached);
+      expect(result, LinkDisposition.hopLimitReached);
       expect(delivered, hasLength(1));
       expect(broadcaster.broadcasted, isEmpty);
     });
@@ -166,7 +166,7 @@ void main() {
 
       final result = await processor.process(frame, nowMs: nowMs);
 
-      expect(result, MeshDisposition.deliveredAndForwarded);
+      expect(result, LinkDisposition.deliveredAndForwarded);
       expect(delivered, hasLength(1));
       expect(broadcaster.broadcasted, hasLength(1));
       expect(broadcaster.broadcasted.single.hopCount, 1);
@@ -186,10 +186,10 @@ void main() {
     });
   });
 
-  group('generateMeshMessageId', () {
+  group('generateLinkMessageId', () {
     test('produces non-empty, distinct ids across calls', () {
-      final a = generateMeshMessageId();
-      final b = generateMeshMessageId();
+      final a = generateLinkMessageId();
+      final b = generateLinkMessageId();
 
       expect(a, isNotEmpty);
       expect(b, isNotEmpty);
@@ -197,10 +197,10 @@ void main() {
     });
   });
 
-  group('MeshSeenCache', () {
+  group('LinkSeenCache', () {
     test('inserting beyond maximumEntries evicts the oldest entry '
         '(FIFO by insertion order)', () {
-      final cache = MeshSeenCache(maximumEntries: 2);
+      final cache = LinkSeenCache(maximumEntries: 2);
       const nowMs = 1000000;
       const farExpiry = nowMs + 60000;
 
@@ -232,7 +232,7 @@ void main() {
 
     test('an entry whose expiry has passed is purged on the next call and can '
         'be re-added as new', () {
-      final cache = MeshSeenCache();
+      final cache = LinkSeenCache();
       const nowMs = 1000000;
 
       expect(

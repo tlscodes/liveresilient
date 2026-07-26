@@ -27,7 +27,7 @@ Ed25519-signed manifest for endpoint discovery.
 │                            breaker                       │
 ├──────────────────────────────────────────────────────────┤
 │ device_link                 consent-gated nearby link     │
-│ (degraded mode only)       authenticated envelopes, mesh │
+│ (degraded mode only)       authenticated envelopes, link │
 │                            processor (forwarding opt-in) │
 ├──────────────────────────────────────────────────────────┤
 │ security                   identity store (Ed25519/TOFU) │
@@ -66,7 +66,7 @@ Ed25519-signed manifest for endpoint discovery.
 - **device_link** — a last-resort path between nearby consenting devices:
   every frame Ed25519-signed (`AuthenticatedEnvelope`), replay-rejected,
   and the adapter activates only when the user opted in AND the network is
-  degraded. Multi-hop forwarding exists (`MeshMessageProcessor`) but ships
+  degraded. Multi-hop forwarding exists (`LinkMessageProcessor`) but ships
   **off by default** with hop and lifetime caps.
 - **security** — device identity (audited-crypto adapters, TOFU pinning,
   safety numbers, key-change alerts) and mandatory log redaction.

@@ -11,7 +11,7 @@
 /// Signing/verification are delegated to adapters over an audited
 /// cryptography library — no custom crypto lives here.
 ///
-/// Designed from the v2 blueprint role (no v1 equivalent; the v1 local mesh
+/// Designed from the v2 blueprint role (no v1 equivalent; the v1 local link
 /// frames were unauthenticated).
 library;
 

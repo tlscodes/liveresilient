@@ -1,7 +1,7 @@
 /// Evolutionary tuning bench for the delivery brain.
 ///
 /// Generates seeded random multi-factor crisis timelines (lane slides,
-/// flaps, blackouts, mesh-only phases, recoveries), runs the REAL
+/// flaps, blackouts, link-only phases, recoveries), runs the REAL
 /// [ConnectionFabric] + [DeliveryPlanner] + [TrendSentinel] through each,
 /// and scores: live delivery reward minus redundancy spend minus queue
 /// latency. A small evolution loop then searches the planner/sentinel
@@ -32,10 +32,10 @@ class Scenario {
   final List<Map<String, LaneState>> steps;
 
   /// Random but structured: phases of calm, slide, flap, blackout,
-  /// mesh-only and recovery, so the timelines look like real crises.
+  /// link-only and recovery, so the timelines look like real crises.
   factory Scenario.random(Random rng, {int length = 20}) {
     final steps = <Map<String, LaneState>>[];
-    var wifi = 0.9, cell = 0.6, mesh = 0.0;
+    var wifi = 0.9, cell = 0.6, link = 0.0;
     var phase = 0;
     for (var i = 0; i < length; i++) {
       if (i % 4 == 3) phase = rng.nextInt(5);
@@ -49,7 +49,7 @@ class Scenario {
         case 3: // blackout pressure
           wifi = (wifi - 0.4).clamp(0.0, 1.0);
           cell = (cell - 0.4).clamp(0.0, 1.0);
-          mesh = rng.nextBool() ? 0.3 : 0.0;
+          link = rng.nextBool() ? 0.3 : 0.0;
         case 4: // recovery
           wifi = (wifi + 0.3).clamp(0.0, 1.0);
           cell = (cell + 0.2).clamp(0.0, 0.7);
@@ -57,7 +57,7 @@ class Scenario {
       steps.add({
         'wifi': LaneState(wifi > 0.05, wifi),
         'cell': LaneState(cell > 0.05, cell),
-        'mesh': LaneState(mesh > 0.05, mesh),
+        'link': LaneState(link > 0.05, link),
       });
     }
     return Scenario(steps);
@@ -150,7 +150,7 @@ Future<double> scoreGenome(Genome genome, List<Scenario> scenarios) async {
     var clockMs = 0;
     final queue = DtnBundleQueue();
     final channels = {
-      for (final id in ['wifi', 'cell', 'mesh']) id: ScriptedChannel(id),
+      for (final id in ['wifi', 'cell', 'link']) id: ScriptedChannel(id),
     };
     final fabric = ConnectionFabric(
       fallbackQueue: queue,
@@ -173,7 +173,7 @@ Future<double> scoreGenome(Genome genome, List<Scenario> scenarios) async {
         e.value,
         LaneProfile(
           id: e.key,
-          kind: e.key == 'mesh' ? LaneKind.localPeer : LaneKind.internet,
+          kind: e.key == 'link' ? LaneKind.localPeer : LaneKind.internet,
           costRank: i++,
         ),
       );
@@ -192,7 +192,7 @@ Future<double> scoreGenome(Genome genome, List<Scenario> scenarios) async {
       final outcome = await fabric.deliver(
         [s],
         bundleId: 'b$s',
-        priority: MeshMessagePriority.presence,
+        priority: LinkMessagePriority.presence,
         lifetimeMs: 120000,
       );
       if (outcome == DeliveryOutcome.sentLive) delivered++;

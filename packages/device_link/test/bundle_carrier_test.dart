@@ -3,7 +3,7 @@ import 'package:test/test.dart';
 
 DtnBundle _bundle(
   String id, {
-  MeshMessagePriority priority = MeshMessagePriority.presence,
+  LinkMessagePriority priority = LinkMessagePriority.presence,
   int createdAtMs = 0,
   int lifetimeMs = 10000,
   int bytes = 4,
@@ -89,13 +89,13 @@ void main() {
     final a = DtnBundleQueue();
     final b = DtnBundleQueue();
     a.offer(
-      _bundle('bulk-old', priority: MeshMessagePriority.bulk, createdAtMs: 0),
+      _bundle('bulk-old', priority: LinkMessagePriority.bulk, createdAtMs: 0),
       nowMs: 0,
     );
     a.offer(
       _bundle(
         'call-old',
-        priority: MeshMessagePriority.callSignal,
+        priority: LinkMessagePriority.callSignal,
         createdAtMs: 1,
       ),
       nowMs: 1,
@@ -103,7 +103,7 @@ void main() {
     a.offer(
       _bundle(
         'presence-new',
-        priority: MeshMessagePriority.presence,
+        priority: LinkMessagePriority.presence,
         createdAtMs: 2,
       ),
       nowMs: 2,
@@ -146,7 +146,7 @@ void main() {
       a.offer(
         _bundle(
           'first',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
           createdAtMs: 0,
         ),
         nowMs: 0,
@@ -154,7 +154,7 @@ void main() {
       a.offer(
         _bundle(
           'second',
-          priority: MeshMessagePriority.presence,
+          priority: LinkMessagePriority.presence,
           createdAtMs: 1,
         ),
         nowMs: 1,
@@ -234,7 +234,7 @@ void main() {
         final b = DtnBundleQueue();
         a.offer(_bundle('m1'), nowMs: 0);
         a.offer(
-          _bundle('m2', priority: MeshMessagePriority.callSignal),
+          _bundle('m2', priority: LinkMessagePriority.callSignal),
           nowMs: 0,
         );
         b.offer(_bundle('held'), nowMs: 0);

@@ -107,13 +107,13 @@ class _PushWakeupFuzzTarget extends FuzzTarget {
   }
 }
 
-class _MeshFrameCase {
+class _LinkFrameCase {
   final MediaFrame frame;
   final int nowMs;
   final bool forwardingEnabled;
   final bool signatureValid;
 
-  _MeshFrameCase({
+  _LinkFrameCase({
     required this.frame,
     required this.nowMs,
     required this.forwardingEnabled,
@@ -145,21 +145,21 @@ class _StubAuthenticator implements MediaFrameAuthenticator {
       );
 }
 
-class _StubBroadcaster implements MeshBroadcaster {
+class _StubBroadcaster implements LinkBroadcaster {
   @override
   Future<void> broadcast(MediaFrame envelope) async {}
 }
 
-/// `MeshMessageProcessor.process`: return-based contract (never throws with
+/// `LinkMessageProcessor.process`: return-based contract (never throws with
 /// a correctly-behaving authenticator stub); any frame it does NOT reject
 /// must have a sane, overflow-free lifetime. Regression coverage for the
 /// 64-bit lifetime-subtraction overflow found by this suite and fixed in
 /// `media_frame.dart` (`_hasValidBounds`).
-class _MeshFrameFuzzTarget extends FuzzTarget {
+class _LinkFrameFuzzTarget extends FuzzTarget {
   static const int maximumLifetimeMs = 10 * 60 * 1000;
 
   @override
-  String get name => 'mesh_frame';
+  String get name => 'link_frame';
 
   String _idValue(FuzzRng rng) =>
       rng.chance(0.5) ? rng.token(rng.intIn(1, 22)) : rng.hostileString();
@@ -185,7 +185,7 @@ class _MeshFrameFuzzTarget extends FuzzTarget {
       ciphertext: rng.bytes(rng.nextInt(256)),
       signature: rng.bytes(rng.chance(0.5) ? 64 : rng.nextInt(96)),
     );
-    final fuzzCase = _MeshFrameCase(
+    final fuzzCase = _LinkFrameCase(
       frame: frame,
       nowMs: nowMs,
       forwardingEnabled: rng.chance(0.5),
@@ -194,7 +194,7 @@ class _MeshFrameFuzzTarget extends FuzzTarget {
     return FuzzCase(
       fuzzCase,
       () =>
-          'meshFrame{v:${frame.version}, messageId:'
+          'linkFrame{v:${frame.version}, messageId:'
           '${jsonEncode(frame.messageId)}, createdAtMs:${frame.createdAtMs}, '
           'expiresAtMs:${frame.expiresAtMs}, maxHops:${frame.maxHops}, '
           'hopCount:${frame.hopCount}, nowMs:${fuzzCase.nowMs}, '
@@ -205,11 +205,11 @@ class _MeshFrameFuzzTarget extends FuzzTarget {
 
   @override
   Future<FuzzOutcome> execute(Object? input) async {
-    final fuzzCase = input! as _MeshFrameCase;
-    final processor = MeshMessageProcessor(
+    final fuzzCase = input! as _LinkFrameCase;
+    final processor = LinkMessageProcessor(
       authenticator: _StubAuthenticator(fuzzCase.signatureValid),
       broadcaster: _StubBroadcaster(),
-      seenCache: MeshSeenCache(maximumEntries: 64),
+      seenCache: LinkSeenCache(maximumEntries: 64),
       onDeliver: (_) async {},
       forwardingEnabled: fuzzCase.forwardingEnabled,
       maximumLifetimeMs: maximumLifetimeMs,
@@ -218,7 +218,7 @@ class _MeshFrameFuzzTarget extends FuzzTarget {
       fuzzCase.frame,
       nowMs: fuzzCase.nowMs,
     );
-    if (disposition == MeshDisposition.rejected) {
+    if (disposition == LinkDisposition.rejected) {
       return FuzzOutcome.reject;
     }
     final frame = fuzzCase.frame;
@@ -269,6 +269,6 @@ void main() {
   group('parser robustness (structured-mutation fuzzing)', () {
     _runAndAssert(_EnvelopeFuzzTarget());
     _runAndAssert(_PushWakeupFuzzTarget());
-    _runAndAssert(_MeshFrameFuzzTarget());
+    _runAndAssert(_LinkFrameFuzzTarget());
   });
 }

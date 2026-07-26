@@ -12,7 +12,7 @@ DtnBundle _bundle(String id, {int createdAtMs = 1000, List<int>? payload}) =>
     DtnBundle(
       id: id,
       payload: payload ?? List<int>.filled(8, id.hashCode % 256),
-      priority: MeshMessagePriority.bulk,
+      priority: LinkMessagePriority.bulk,
       createdAtMs: createdAtMs,
       lifetimeMs: const Duration(minutes: 10).inMilliseconds,
     );

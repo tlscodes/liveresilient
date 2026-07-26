@@ -1,7 +1,7 @@
-/// Inbound flow control for mesh message processing (blueprint §8.3 gaps:
+/// Inbound flow control for link message processing (blueprint §8.3 gaps:
 /// per-peer quota, global rate limit, message priority).
 ///
-/// Implemented as a wrapper around [MeshMessageProcessor] rather than a
+/// Implemented as a wrapper around [LinkMessageProcessor] rather than a
 /// rewrite, so the existing processor semantics — TTL bounds, signature
 /// verification, duplicate suppression, and the off-by-default
 /// `forwardingEnabled` kill-switch — are untouched. A message only reaches
@@ -18,10 +18,10 @@ import 'media_frame.dart';
 
 /// Message classes in ascending importance. Under load the limiter drops
 /// lower classes first: `bulk` before `presence` before `callSignal`.
-enum MeshMessagePriority { bulk, presence, callSignal }
+enum LinkMessagePriority { bulk, presence, callSignal }
 
-/// Validated knobs for [GuardedMeshProcessor]. Defaults are conservative.
-class MeshFlowControlConfig {
+/// Validated knobs for [GuardedLinkProcessor]. Defaults are conservative.
+class LinkFlowControlConfig {
   /// Sliding-window length for the per-peer quota.
   final int perPeerWindowMs;
 
@@ -46,7 +46,7 @@ class MeshFlowControlConfig {
   /// deterministic lowest-priority-first shedding.
   final double priorityReserveFraction;
 
-  const MeshFlowControlConfig({
+  const LinkFlowControlConfig({
     this.perPeerWindowMs = 10 * 1000,
     this.maxMessagesPerPeerPerWindow = 30,
     this.maxGlobalMessagesPerSecond = 50,
@@ -59,7 +59,7 @@ class MeshFlowControlConfig {
   int get bucketCapacity => maxGlobalMessagesPerSecond + burstAllowance;
 
   /// Throws [ArgumentError] on any out-of-range knob. Called by
-  /// [GuardedMeshProcessor] so an invalid config can never be installed.
+  /// [GuardedLinkProcessor] so an invalid config can never be installed.
   void validate() {
     if (perPeerWindowMs <= 0) {
       throw ArgumentError.value(
@@ -107,64 +107,64 @@ class MeshFlowControlConfig {
 }
 
 /// Why a message was shed before reaching the inner processor.
-enum MeshFlowRejection { peerQuotaExceeded, rateLimited }
+enum LinkFlowRejection { peerQuotaExceeded, rateLimited }
 
 /// Outcome of a guarded process call: either the inner processor's
 /// disposition (admitted) or a flow-control rejection (shed).
 ///
-/// A true `sealed class` with exactly two variants ([AdmittedMeshOutcome],
-/// [ShedMeshOutcome]) so callers can exhaustively `switch` on the outcome.
+/// A true `sealed class` with exactly two variants ([AdmittedLinkOutcome],
+/// [ShedLinkOutcome]) so callers can exhaustively `switch` on the outcome.
 /// The pre-existing public surface — `admitted`/`disposition`/`rejection`
 /// getters and the `.admitted(...)`/`.shed(...)` factory constructors — is
 /// preserved unchanged on the base type so every existing call site
 /// compiles as-is; the factories now return the concrete subtype.
-sealed class GuardedMeshOutcome {
+sealed class GuardedLinkOutcome {
   /// Set when the message was admitted to the inner processor.
-  MeshDisposition? get disposition;
+  LinkDisposition? get disposition;
 
   /// Set when flow control shed the message before processing.
-  MeshFlowRejection? get rejection;
+  LinkFlowRejection? get rejection;
 
-  const GuardedMeshOutcome();
+  const GuardedLinkOutcome();
 
-  const factory GuardedMeshOutcome.admitted(MeshDisposition disposition) =
-      AdmittedMeshOutcome;
+  const factory GuardedLinkOutcome.admitted(LinkDisposition disposition) =
+      AdmittedLinkOutcome;
 
-  const factory GuardedMeshOutcome.shed(MeshFlowRejection rejection) =
-      ShedMeshOutcome;
+  const factory GuardedLinkOutcome.shed(LinkFlowRejection rejection) =
+      ShedLinkOutcome;
 
   bool get admitted => rejection == null;
 }
 
 /// The message was admitted to the inner processor.
-final class AdmittedMeshOutcome extends GuardedMeshOutcome {
+final class AdmittedLinkOutcome extends GuardedLinkOutcome {
   @override
-  final MeshDisposition disposition;
+  final LinkDisposition disposition;
 
   @override
-  MeshFlowRejection? get rejection => null;
+  LinkFlowRejection? get rejection => null;
 
-  const AdmittedMeshOutcome(this.disposition);
+  const AdmittedLinkOutcome(this.disposition);
 }
 
 /// Flow control shed the message before it reached the inner processor.
-final class ShedMeshOutcome extends GuardedMeshOutcome {
+final class ShedLinkOutcome extends GuardedLinkOutcome {
   @override
-  final MeshFlowRejection rejection;
+  final LinkFlowRejection rejection;
 
   @override
-  MeshDisposition? get disposition => null;
+  LinkDisposition? get disposition => null;
 
-  const ShedMeshOutcome(this.rejection);
+  const ShedLinkOutcome(this.rejection);
 }
 
-/// Wraps a [MeshMessageProcessor] with per-peer quotas, a global
+/// Wraps a [LinkMessageProcessor] with per-peer quotas, a global
 /// token-bucket rate limit, and priority-aware shedding. The inner
 /// processor (and its `forwardingEnabled = false` default kill-switch)
 /// is left untouched.
-class GuardedMeshProcessor {
-  final MeshMessageProcessor inner;
-  final MeshFlowControlConfig config;
+class GuardedLinkProcessor {
+  final LinkMessageProcessor inner;
+  final LinkFlowControlConfig config;
 
   /// Insertion-ordered by last activity; least-recently-active evicted.
   final LinkedHashMap<String, List<int>> _admittedAtMsByPeer =
@@ -173,9 +173,9 @@ class GuardedMeshProcessor {
   double _tokens;
   int _lastRefillMs;
 
-  GuardedMeshProcessor({
+  GuardedLinkProcessor({
     required this.inner,
-    this.config = const MeshFlowControlConfig(),
+    this.config = const LinkFlowControlConfig(),
   }) : _tokens = (config.maxGlobalMessagesPerSecond + config.burstAllowance)
            .toDouble(),
        _lastRefillMs = 0 {
@@ -185,10 +185,10 @@ class GuardedMeshProcessor {
   /// Current token count, exposed for tests/telemetry.
   double get availableTokens => _tokens;
 
-  Future<GuardedMeshOutcome> process(
+  Future<GuardedLinkOutcome> process(
     MediaFrame envelope, {
     required String peerId,
-    required MeshMessagePriority priority,
+    required LinkMessagePriority priority,
     required int nowMs,
   }) async {
     if (peerId.isEmpty) {
@@ -198,24 +198,24 @@ class GuardedMeshProcessor {
     _refillTokens(nowMs);
 
     if (_isPeerOverQuota(peerId, nowMs)) {
-      return const GuardedMeshOutcome.shed(MeshFlowRejection.peerQuotaExceeded);
+      return const GuardedLinkOutcome.shed(LinkFlowRejection.peerQuotaExceeded);
     }
 
     if (_tokens < _admissionThreshold(priority)) {
-      return const GuardedMeshOutcome.shed(MeshFlowRejection.rateLimited);
+      return const GuardedLinkOutcome.shed(LinkFlowRejection.rateLimited);
     }
 
     _tokens -= 1;
     _recordPeerAdmission(peerId, nowMs);
 
     final disposition = await inner.process(envelope, nowMs: nowMs);
-    return GuardedMeshOutcome.admitted(disposition);
+    return GuardedLinkOutcome.admitted(disposition);
   }
 
   /// A message may spend a token only while the bucket holds at least one
   /// token plus the reserve kept for higher-priority classes.
-  double _admissionThreshold(MeshMessagePriority priority) {
-    final stepsBelowTop = MeshMessagePriority.callSignal.index - priority.index;
+  double _admissionThreshold(LinkMessagePriority priority) {
+    final stepsBelowTop = LinkMessagePriority.callSignal.index - priority.index;
     return 1 +
         config.bucketCapacity * config.priorityReserveFraction * stepsBelowTop;
   }

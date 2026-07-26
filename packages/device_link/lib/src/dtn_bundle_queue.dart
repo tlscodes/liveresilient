@@ -10,7 +10,7 @@
 ///
 /// This class owns ONLY the scheduling policy: priority ordering, lifetime
 /// expiry, de-duplication, and bounded-capacity shedding (lowest priority,
-/// then oldest, dropped first — mirroring [MeshMessagePriority] shedding in
+/// then oldest, dropped first — mirroring [LinkMessagePriority] shedding in
 /// this package). Persistence is a seam ([BundleStore]); the in-memory
 /// store ships here, a disk/SQLite store is the app's platform concern. The
 /// payload is opaque bytes — expected to already be end-to-end ciphertext,
@@ -19,7 +19,7 @@ library;
 
 import 'dart:collection';
 
-import 'mesh_flow_control.dart' show MeshMessagePriority;
+import 'link_flow_control.dart' show LinkMessagePriority;
 
 /// One stored bundle awaiting a transport.
 class DtnBundle {
@@ -51,7 +51,7 @@ class DtnBundle {
   /// Opaque bytes to deliver — expected to be end-to-end ciphertext.
   final List<int> payload;
 
-  final MeshMessagePriority priority;
+  final LinkMessagePriority priority;
 
   /// Creation time on the caller's clock.
   final int createdAtMs;

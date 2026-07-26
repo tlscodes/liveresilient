@@ -1,13 +1,12 @@
-/// A local peer-to-peer transport lane (Wi-Fi Direct / BLE) exposed to the
-/// fabric as a standard [TransportChannel].
+/// A direct device-to-device transport lane (Wi-Fi Direct / BLE) exposed to
+/// the fabric as a standard [TransportChannel].
 ///
-/// When internet infrastructure is unreachable, nearby devices can still
-/// carry traffic directly. The actual radio (Wi-Fi Direct, BLE) binds
-/// through an injected [LocalMeshBinding]; this class owns the transport
-/// contract, consent gating, and health scoring so the fabric treats it
-/// like any other lane and switches to it automatically. No obfuscation,
-/// no infrastructure impersonation — a plain direct link between two
-/// consenting devices.
+/// When the network is unreachable, two nearby devices can still exchange
+/// traffic over the local radio. The radio itself binds through an injected
+/// [LocalLinkBinding]; this class owns the transport contract, consent
+/// gating, and health scoring so the fabric treats it like any other lane
+/// and switches to it automatically. The wire format is the same standard
+/// framing used on every other lane, between two consenting devices.
 library;
 
 import 'package:adaptive_transport/adaptive_transport.dart';
@@ -15,8 +14,8 @@ import 'package:device_link/device_link.dart' show DeviceLinkConsent;
 
 /// Native P2P radio surface — bound with one closure each over the chosen
 /// plugin (e.g. flutter_p2p_connection, flutter_blue_plus) in main.dart.
-class LocalMeshBinding {
-  const LocalMeshBinding({
+class LocalLinkBinding {
+  const LocalLinkBinding({
     required this.discoverAndConnect,
     required this.sendBytes,
     required this.peerCount,
@@ -34,15 +33,15 @@ class LocalMeshBinding {
   final int Function() peerCount;
 }
 
-/// Consent-gated local mesh channel.
-class LocalMeshLane implements TransportChannel {
-  LocalMeshLane({required this._binding, required this._consent});
+/// Consent-gated local link channel.
+class LocalLinkLane implements TransportChannel {
+  LocalLinkLane({required this._binding, required this._consent});
 
-  final LocalMeshBinding _binding;
+  final LocalLinkBinding _binding;
   final DeviceLinkConsent _consent;
 
   @override
-  String get name => 'local-mesh';
+  String get name => 'local-link';
 
   @override
   final ChannelHealth health = ChannelHealth(
@@ -63,7 +62,7 @@ class LocalMeshLane implements TransportChannel {
 
   @override
   Future<SendResult> send(List<int> payload) async {
-    // The mesh lane is a voluntary, owner-opted-in relay: no consent,
+    // The link lane is a voluntary, owner-opted-in relay: no consent,
     // nothing leaves the device.
     if (!_consent.granted) {
       return const SendResult(SendStatus.unavailable);

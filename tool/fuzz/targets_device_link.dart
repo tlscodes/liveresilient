@@ -3,7 +3,7 @@
 /// Targets:
 ///  - `envelope`     → [AuthenticatedEnvelope.fromBytes] (wire bytes).
 ///  - `push_wakeup`  → [PushWakeupPayload.decode] (raw push string).
-///  - `mesh_frame`   → [MeshMessageProcessor.process] fed field-mutated
+///  - `link_frame`   → [LinkMessageProcessor.process] fed field-mutated
 ///    [MediaFrame]s through a correctly-behaving stub authenticator; the
 ///    contract here is *return-based*: any thrown exception is a finding,
 ///    and accepted frames must satisfy the processor's own lifetime bounds.
@@ -109,14 +109,14 @@ class PushWakeupFuzzTarget extends FuzzTarget {
   }
 }
 
-/// The concrete case fed to `MeshMessageProcessor.process`.
-class MeshFrameCase {
+/// The concrete case fed to `LinkMessageProcessor.process`.
+class LinkFrameCase {
   final MediaFrame frame;
   final int nowMs;
   final bool forwardingEnabled;
   final bool signatureValid;
 
-  MeshFrameCase({
+  LinkFrameCase({
     required this.frame,
     required this.nowMs,
     required this.forwardingEnabled,
@@ -148,22 +148,22 @@ class _StubAuthenticator implements MediaFrameAuthenticator {
       );
 }
 
-class _StubBroadcaster implements MeshBroadcaster {
+class _StubBroadcaster implements LinkBroadcaster {
   @override
   Future<void> broadcast(MediaFrame envelope) async {}
 }
 
-/// `MeshMessageProcessor.process` under hostile field values: it must
-/// return a [MeshDisposition] (never throw — a correct authenticator stub is
+/// `LinkMessageProcessor.process` under hostile field values: it must
+/// return a [LinkDisposition] (never throw — a correct authenticator stub is
 /// wired in, so the StateError guard for misbehaving authenticators cannot
 /// legitimately fire), and any *non-rejected* frame must have a sane
 /// lifetime: `0 < expiresAtMs - createdAtMs <= maximumLifetimeMs` without
 /// 64-bit overflow.
-class MeshFrameFuzzTarget extends FuzzTarget {
+class LinkFrameFuzzTarget extends FuzzTarget {
   static const int maximumLifetimeMs = 10 * 60 * 1000;
 
   @override
-  String get name => 'mesh_frame';
+  String get name => 'link_frame';
 
   String _idValue(FuzzRng rng) =>
       rng.chance(0.5) ? rng.token(rng.intIn(1, 22)) : rng.hostileString();
@@ -189,7 +189,7 @@ class MeshFrameFuzzTarget extends FuzzTarget {
       ciphertext: rng.bytes(rng.nextInt(256)),
       signature: rng.bytes(rng.chance(0.5) ? 64 : rng.nextInt(96)),
     );
-    final fuzzCase = MeshFrameCase(
+    final fuzzCase = LinkFrameCase(
       frame: frame,
       nowMs: nowMs,
       forwardingEnabled: rng.chance(0.5),
@@ -198,7 +198,7 @@ class MeshFrameFuzzTarget extends FuzzTarget {
     return FuzzCase(
       fuzzCase,
       () =>
-          'meshFrame{v:${frame.version}, messageId:'
+          'linkFrame{v:${frame.version}, messageId:'
           '${jsonEncode(frame.messageId)}, createdAtMs:${frame.createdAtMs}, '
           'expiresAtMs:${frame.expiresAtMs}, maxHops:${frame.maxHops}, '
           'hopCount:${frame.hopCount}, nowMs:${fuzzCase.nowMs}, '
@@ -209,11 +209,11 @@ class MeshFrameFuzzTarget extends FuzzTarget {
 
   @override
   Future<FuzzOutcome> execute(Object? input) async {
-    final fuzzCase = input! as MeshFrameCase;
-    final processor = MeshMessageProcessor(
+    final fuzzCase = input! as LinkFrameCase;
+    final processor = LinkMessageProcessor(
       authenticator: _StubAuthenticator(fuzzCase.signatureValid),
       broadcaster: _StubBroadcaster(),
-      seenCache: MeshSeenCache(maximumEntries: 64),
+      seenCache: LinkSeenCache(maximumEntries: 64),
       onDeliver: (_) async {},
       forwardingEnabled: fuzzCase.forwardingEnabled,
       maximumLifetimeMs: maximumLifetimeMs,
@@ -222,7 +222,7 @@ class MeshFrameFuzzTarget extends FuzzTarget {
       fuzzCase.frame,
       nowMs: fuzzCase.nowMs,
     );
-    if (disposition == MeshDisposition.rejected) {
+    if (disposition == LinkDisposition.rejected) {
       return FuzzOutcome.reject;
     }
     // Bounds invariant: anything the processor did NOT reject must have a
@@ -248,5 +248,5 @@ class MeshFrameFuzzTarget extends FuzzTarget {
 List<FuzzTarget> deviceLinkFuzzTargets() => [
   EnvelopeFuzzTarget(),
   PushWakeupFuzzTarget(),
-  MeshFrameFuzzTarget(),
+  LinkFrameFuzzTarget(),
 ];

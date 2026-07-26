@@ -15,7 +15,7 @@
 ///  - [DeliveryStrategy.queueOnly]: nothing credible is up; park it.
 library;
 
-import 'package:device_link/device_link.dart' show MeshMessagePriority;
+import 'package:device_link/device_link.dart' show LinkMessagePriority;
 
 import 'lane_experience.dart';
 
@@ -129,7 +129,7 @@ class DeliveryPlanner {
     // Racing spends redundant bytes; routine bulk traffic never does.
     // Two triggers: a statistical near-tie, or foresight — the best lane
     // is predicted to slide, so pay the redundancy before it breaks.
-    if (context.priority != MeshMessagePriority.bulk &&
+    if (context.priority != LinkMessagePriority.bulk &&
         ranked.length >= 2 &&
         (bestLaneSliding ||
             score(ranked[0]) - score(ranked[1]) <= raceMargin)) {

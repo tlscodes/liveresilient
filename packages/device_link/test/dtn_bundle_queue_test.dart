@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 
 DtnBundle bundle(
   String id, {
-  MeshMessagePriority priority = MeshMessagePriority.bulk,
+  LinkMessagePriority priority = LinkMessagePriority.bulk,
   int createdAtMs = 0,
   int lifetimeMs = 60000,
   int sizeBytes = 4,
@@ -61,13 +61,13 @@ void main() {
     test('highest priority first, oldest first within a priority', () {
       final q = DtnBundleQueue();
       q.offer(
-        bundle('bulk-old', priority: MeshMessagePriority.bulk, createdAtMs: 1),
+        bundle('bulk-old', priority: LinkMessagePriority.bulk, createdAtMs: 1),
         nowMs: 1,
       );
       q.offer(
         bundle(
           'signal',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
           createdAtMs: 5,
         ),
         nowMs: 5,
@@ -75,13 +75,13 @@ void main() {
       q.offer(
         bundle(
           'presence',
-          priority: MeshMessagePriority.presence,
+          priority: LinkMessagePriority.presence,
           createdAtMs: 3,
         ),
         nowMs: 3,
       );
       q.offer(
-        bundle('bulk-new', priority: MeshMessagePriority.bulk, createdAtMs: 2),
+        bundle('bulk-new', priority: LinkMessagePriority.bulk, createdAtMs: 2),
         nowMs: 2,
       );
 
@@ -98,13 +98,13 @@ void main() {
     test('at count capacity a higher-priority arrival evicts the weakest '
         'resident; a lower-priority arrival is refused instead', () {
       final q = DtnBundleQueue(maxBundles: 2);
-      q.offer(bundle('b1', priority: MeshMessagePriority.bulk), nowMs: 0);
-      q.offer(bundle('b2', priority: MeshMessagePriority.bulk), nowMs: 0);
+      q.offer(bundle('b1', priority: LinkMessagePriority.bulk), nowMs: 0);
+      q.offer(bundle('b2', priority: LinkMessagePriority.bulk), nowMs: 0);
 
       // callSignal arrives full: it evicts a bulk resident.
       expect(
         q.offer(
-          bundle('sig', priority: MeshMessagePriority.callSignal),
+          bundle('sig', priority: LinkMessagePriority.callSignal),
           nowMs: 0,
         ),
         BundleAdmission.stored,
@@ -116,16 +116,16 @@ void main() {
       // is not more important than the weakest resident is refused.
       final weakest = q
           .pendingInDeliveryOrder(0)
-          .where((b) => b.priority == MeshMessagePriority.bulk)
+          .where((b) => b.priority == LinkMessagePriority.bulk)
           .length;
       expect(weakest, 1);
       // fill so both slots are callSignal, then a bulk must be refused.
       q.offer(
-        bundle('sig2', priority: MeshMessagePriority.callSignal),
+        bundle('sig2', priority: LinkMessagePriority.callSignal),
         nowMs: 0,
       );
       expect(
-        q.offer(bundle('late', priority: MeshMessagePriority.bulk), nowMs: 0),
+        q.offer(bundle('late', priority: LinkMessagePriority.bulk), nowMs: 0),
         BundleAdmission.rejectedFull,
       );
     });
@@ -152,13 +152,13 @@ void main() {
         'the first failure (transport dropped again)', () async {
       final q = DtnBundleQueue();
       q.offer(
-        bundle('bulk', priority: MeshMessagePriority.bulk, createdAtMs: 1),
+        bundle('bulk', priority: LinkMessagePriority.bulk, createdAtMs: 1),
         nowMs: 1,
       );
       q.offer(
         bundle(
           'signal',
-          priority: MeshMessagePriority.callSignal,
+          priority: LinkMessagePriority.callSignal,
           createdAtMs: 2,
         ),
         nowMs: 2,
@@ -166,7 +166,7 @@ void main() {
       q.offer(
         bundle(
           'presence',
-          priority: MeshMessagePriority.presence,
+          priority: LinkMessagePriority.presence,
           createdAtMs: 3,
         ),
         nowMs: 3,
@@ -207,15 +207,15 @@ void main() {
         'once', () async {
       final q = DtnBundleQueue();
       q.offer(
-        bundle('one', priority: MeshMessagePriority.callSignal, createdAtMs: 1),
+        bundle('one', priority: LinkMessagePriority.callSignal, createdAtMs: 1),
         nowMs: 1,
       );
       q.offer(
-        bundle('two', priority: MeshMessagePriority.presence, createdAtMs: 2),
+        bundle('two', priority: LinkMessagePriority.presence, createdAtMs: 2),
         nowMs: 2,
       );
       q.offer(
-        bundle('three', priority: MeshMessagePriority.bulk, createdAtMs: 3),
+        bundle('three', priority: LinkMessagePriority.bulk, createdAtMs: 3),
         nowMs: 3,
       );
 
@@ -250,7 +250,7 @@ void main() {
         () => DtnBundle(
           id: 'x',
           payload: const [],
-          priority: MeshMessagePriority.bulk,
+          priority: LinkMessagePriority.bulk,
           createdAtMs: 0,
           lifetimeMs: 1,
         ),

@@ -41,7 +41,7 @@ see the version-currency notes below the dependency table.
 | adaptive_transport | 2.0.0 | `packages/adaptive_transport` | Transport selection/fallback. |
 | call_core | 2.0.0 | `packages/call_core` | Transport-agnostic call state machine. |
 | call_signaling_adapter | 2.0.0 | `packages/call_signaling_adapter` | Bridges call_core to signaling. |
-| device_link | 2.0.0 | `packages/device_link` | Local-peer envelopes, push wakeup, mesh forwarding. |
+| device_link | 2.0.0 | `packages/device_link` | Local-peer envelopes, push wakeup, link forwarding. |
 | media_webrtc | 2.0.0 | `packages/media_webrtc` | Pure-Dart WebRTC media plumbing. |
 | privacy_telemetry | 2.0.0 | `packages/privacy_telemetry` | Redaction-safe telemetry. |
 | security | 2.0.0 | `packages/security` | Ed25519 identity engine, log redaction. |

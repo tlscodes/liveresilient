@@ -1,4 +1,4 @@
-/// The consent-gated local peer-to-peer mesh lane and its failover role.
+/// The consent-gated local peer-to-peer link lane and its failover role.
 library;
 
 import 'dart:io';
@@ -7,7 +7,7 @@ import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:device_link/device_link.dart' show DeviceLinkConsent;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/intelligence/intelligence_boot.dart';
-import 'package:reference_app/src/intelligence/local_mesh_lane.dart';
+import 'package:reference_app/src/intelligence/local_link_lane.dart';
 import 'package:reference_app/src/intelligence/network_name_resolver.dart';
 
 class _ToggleChannel implements TransportChannel {
@@ -33,19 +33,19 @@ class _ToggleChannel implements TransportChannel {
 
 void main() {
   late Directory tempDir;
-  setUp(() => tempDir = Directory.systemTemp.createTempSync('mesh_'));
+  setUp(() => tempDir = Directory.systemTemp.createTempSync('link_'));
   tearDown(() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  group('LocalMeshLane', () {
-    LocalMeshLane lane({
+  group('LocalLinkLane', () {
+    LocalLinkLane lane({
       required bool granted,
       required int peers,
       bool sendOk = true,
-    }) => LocalMeshLane(
+    }) => LocalLinkLane(
       consent: _consent(granted),
-      binding: LocalMeshBinding(
+      binding: LocalLinkBinding(
         discoverAndConnect: () async => peers > 0,
         sendBytes: (_) async => sendOk,
         peerCount: () => peers,
@@ -68,14 +68,14 @@ void main() {
     });
   });
 
-  testWidgets('fabric fails over to the mesh lane when internet dies', (
+  testWidgets('fabric fails over to the link lane when internet dies', (
     tester,
   ) async {
     await tester.runAsync(() async {
       final internet = _ToggleChannel('net');
-      final mesh = LocalMeshLane(
+      final link = LocalLinkLane(
         consent: _consent(true),
-        binding: LocalMeshBinding(
+        binding: LocalLinkBinding(
           discoverAndConnect: () async => true,
           sendBytes: (_) async => true,
           peerCount: () => 2,
@@ -84,7 +84,7 @@ void main() {
       final stack = await bootIntelligence(
         storageDirFactory: () => tempDir,
         primaryLane: internet,
-        localMeshLane: mesh,
+        localLinkLane: link,
         nowMs: () => 0,
         resolver: CachingNetworkResolver(
           HardwareNetworkResolver(
@@ -98,7 +98,7 @@ void main() {
       internet.health.availability = 0;
       final outcome = await stack.fabric.deliver([1], bundleId: 'x');
 
-      // Internet lane is dead; the mesh lane carries it live — no queue.
+      // Internet lane is dead; the link lane carries it live — no queue.
       expect(outcome.name, 'sentLive');
       expect(stack.fabric.snapshot.pendingBundles, 0);
       await stack.dispose();
