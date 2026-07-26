@@ -18,11 +18,24 @@ import 'dart:typed_data';
 import 'live_context_compressor.dart';
 import 'media_frontends.dart';
 
+/// How a pyramid level's plane was prepared before entropy coding.
+enum LevelCoder {
+  /// 2D Paeth prediction over the whole plane.
+  fixedPaeth,
+
+  /// Per-row choice among six predictors, one id byte per row.
+  adaptiveRow,
+
+  /// The plane is already a pyramid residual; code it directly.
+  rawResidual,
+}
+
 class ProgressiveLevel {
-  ProgressiveLevel(this.width, this.height, this.bytes);
+  ProgressiveLevel(this.width, this.height, this.bytes, this.coder);
   final int width;
   final int height;
   final Uint8List bytes; // compressed payload for this level
+  final LevelCoder coder;
 }
 
 class DecodedThumbnail {
@@ -98,18 +111,36 @@ class LowRateImageCompressor {
       for (var i = 0; i < gray.length; i++) {
         q[i] = gray[i] >> 4; // 4-bit quantize
       }
-      final Uint8List coded;
+      // The plane this level has to convey: the image itself for the
+      // base level, the residual against the upsampled predecessor for
+      // every level after it.
+      final Uint8List plane;
       if (prevQ == null) {
-        coded = SpatialResidual.paeth(q, lw, lh, 1);
+        plane = q;
       } else {
         final pred = _upsample(prevQ, prevW, prevH, lw, lh);
-        final residual = Uint8List(q.length);
+        plane = Uint8List(q.length);
         for (var i = 0; i < q.length; i++) {
-          residual[i] = (q[i] - pred[i]) & 0x0F;
+          plane[i] = (q[i] - pred[i]) & 0x0F;
         }
-        coded = residual;
       }
-      out.add(ProgressiveLevel(lw, lh, _cm.compress(coded)));
+      // Three candidate preparations, smallest compressed output wins.
+      final candidates = <LevelCoder, Uint8List>{
+        LevelCoder.fixedPaeth: _cm.compress(
+            SpatialResidual.paeth(plane, lw, lh, 1)),
+        LevelCoder.adaptiveRow:
+            _cm.compress(AdaptiveFilter.forward(plane, lw, lh, 1)),
+        LevelCoder.rawResidual: _cm.compress(plane),
+      };
+      var bestCoder = LevelCoder.fixedPaeth;
+      var best = candidates[bestCoder]!;
+      candidates.forEach((coder, bytes) {
+        if (bytes.length < best.length) {
+          best = bytes;
+          bestCoder = coder;
+        }
+      });
+      out.add(ProgressiveLevel(lw, lh, best, bestCoder));
       prevQ = q;
       prevW = lw;
       prevH = lh;
@@ -128,15 +159,26 @@ class LowRateImageCompressor {
     var prevW = 0, prevH = 0;
     for (final level in received) {
       final payload = _cm.decompress(level.bytes);
+      final Uint8List plane;
+      switch (level.coder) {
+        case LevelCoder.fixedPaeth:
+          plane = SpatialResidual.unPaeth(
+              payload, level.width, level.height, 1);
+        case LevelCoder.adaptiveRow:
+          plane = AdaptiveFilter.inverse(
+              payload, level.width, level.height, 1);
+        case LevelCoder.rawResidual:
+          plane = payload;
+      }
       final Uint8List q;
       if (prevQ == null) {
-        q = SpatialResidual.unPaeth(payload, level.width, level.height, 1);
+        q = plane;
       } else {
         final pred =
             _upsample(prevQ, prevW, prevH, level.width, level.height);
-        q = Uint8List(payload.length);
-        for (var i = 0; i < payload.length; i++) {
-          q[i] = (payload[i] + pred[i]) & 0x0F;
+        q = Uint8List(plane.length);
+        for (var i = 0; i < plane.length; i++) {
+          q[i] = (plane[i] + pred[i]) & 0x0F;
         }
       }
       prevQ = q;
