@@ -44,10 +44,6 @@ class ResilientFallbackTransportChain {
       );
     }
 
-    return PathSelector(
-      channels,
-      config: config,
-      breakerConfig: breakerConfig,
-    );
+    return PathSelector(channels, config: config, breakerConfig: breakerConfig);
   }
 }

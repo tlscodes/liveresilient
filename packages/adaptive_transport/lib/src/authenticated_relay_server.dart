@@ -95,10 +95,10 @@ class AuthenticatedRelayServer {
     this.nonceLifetime = const Duration(seconds: 30),
     this.authScheme = 'HMAC-SHA256',
     this.realm = 'relay',
-  })  : _sharedKeys = Map<String, Uint8List>.unmodifiable(
-          sharedKeys.map((k, v) => MapEntry(k, Uint8List.fromList(v))),
-        ),
-        assert(sharedKeys.isNotEmpty, 'at least one shared key is required');
+  }) : _sharedKeys = Map<String, Uint8List>.unmodifiable(
+         sharedKeys.map((k, v) => MapEntry(k, Uint8List.fromList(v))),
+       ),
+       assert(sharedKeys.isNotEmpty, 'at least one shared key is required');
 
   final Map<String, Uint8List> _sharedKeys;
   final Duration nonceLifetime;
@@ -173,11 +173,11 @@ class AuthenticatedRelayServer {
   }
 
   HandshakeOutcome _reject(HandshakeRejection rejection) => HandshakeOutcome(
-        statusCode: 401,
-        rejection: rejection,
-        closeConnection: true,
-        wwwAuthenticate: '$authScheme realm="$realm"',
-      );
+    statusCode: 401,
+    rejection: rejection,
+    closeConnection: true,
+    wwwAuthenticate: '$authScheme realm="$realm"',
+  );
 
   void _pruneSpentNonces(DateTime now) {
     _spentNonces.removeWhere((_, expiresAt) => !expiresAt.isAfter(now));
@@ -211,15 +211,14 @@ class MutualRelaySession {
     required this.sessionId,
     required RotatingKeySchedule keySchedule,
     required AntiReplayWindow replayWindow,
-  })  : _keySchedule = keySchedule,
-        _replayWindow = replayWindow;
+  }) : _keySchedule = keySchedule,
+       _replayWindow = replayWindow;
 
   /// Runs the server side of the SCRAM exchange. Returns null (auth failed)
   /// or an established session whose traffic keys are derived from the
   /// exporter and the handshake, so both directions start from a fresh,
   /// connection-unique secret.
-  static ({MutualRelaySession session, Uint8List serverSignature})?
-      establish({
+  static ({MutualRelaySession session, Uint8List serverSignature})? establish({
     required ScramVerifier verifier,
     required String clientNonce,
     required String serverNonce,

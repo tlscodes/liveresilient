@@ -72,11 +72,15 @@ class Http2DataFrame {
   /// frame, a non-DATA type, or a zero stream identifier.
   static Http2DataFrame decode(Uint8List frame) {
     if (frame.length < headerLength) {
-      throw FormatException('HTTP/2 frame shorter than header: ${frame.length}');
+      throw FormatException(
+        'HTTP/2 frame shorter than header: ${frame.length}',
+      );
     }
     final int length = (frame[0] << 16) | (frame[1] << 8) | frame[2];
     if (frame[3] != frameTypeData) {
-      throw FormatException('Not a DATA frame: type 0x${frame[3].toRadixString(16)}');
+      throw FormatException(
+        'Not a DATA frame: type 0x${frame[3].toRadixString(16)}',
+      );
     }
     if (frame.length != headerLength + length) {
       throw FormatException(
@@ -84,7 +88,8 @@ class Http2DataFrame {
         'body is ${frame.length - headerLength}',
       );
     }
-    final int streamId = ((frame[5] & 0x7F) << 24) |
+    final int streamId =
+        ((frame[5] & 0x7F) << 24) |
         (frame[6] << 16) |
         (frame[7] << 8) |
         frame[8];
@@ -179,8 +184,9 @@ class SctpDataChannelFramer {
 /// The fixed HTTP/2 client connection preface (RFC 9113 section 3.4):
 /// "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", sent before any frame; it MUST be
 /// followed by a SETTINGS frame.
-final Uint8List http2ConnectionPreface =
-    Uint8List.fromList(ascii.encode('PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n'));
+final Uint8List http2ConnectionPreface = Uint8List.fromList(
+  ascii.encode('PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n'),
+);
 
 /// RFC 9113 section 6.5 SETTINGS frame: stream 0, zero or more
 /// 6-byte (u16 identifier, u32 value) pairs; an ACK carries no payload.
@@ -204,8 +210,10 @@ class Http2SettingsFrame {
 
   Uint8List encode() {
     if (ack && settings.isNotEmpty) {
-      throw ArgumentError('SETTINGS ACK must carry an empty payload '
-          '(RFC 9113 section 6.5)');
+      throw ArgumentError(
+        'SETTINGS ACK must carry an empty payload '
+        '(RFC 9113 section 6.5)',
+      );
     }
     final int length = settings.length * 6;
     final frame = Uint8List(Http2DataFrame.headerLength + length);
@@ -234,20 +242,24 @@ class Http2SettingsFrame {
   static Http2SettingsFrame decode(Uint8List frame) {
     if (frame.length < Http2DataFrame.headerLength) {
       throw FormatException(
-          'SETTINGS frame shorter than header: ${frame.length}');
+        'SETTINGS frame shorter than header: ${frame.length}',
+      );
     }
     if (frame[3] != frameTypeSettings) {
       throw FormatException(
-          'Not a SETTINGS frame: type 0x${frame[3].toRadixString(16)}');
+        'Not a SETTINGS frame: type 0x${frame[3].toRadixString(16)}',
+      );
     }
     final int length = (frame[0] << 16) | (frame[1] << 8) | frame[2];
-    final int streamId = ((frame[5] & 0x7F) << 24) |
+    final int streamId =
+        ((frame[5] & 0x7F) << 24) |
         (frame[6] << 16) |
         (frame[7] << 8) |
         frame[8];
     if (streamId != 0) {
       throw FormatException(
-          'SETTINGS must be on stream 0, got stream $streamId');
+        'SETTINGS must be on stream 0, got stream $streamId',
+      );
     }
     if (frame.length != Http2DataFrame.headerLength + length) {
       throw FormatException('SETTINGS length mismatch: header says $length');
@@ -255,15 +267,19 @@ class Http2SettingsFrame {
     final bool ack = (frame[4] & flagAck) != 0;
     if (ack && length != 0) {
       throw const FormatException(
-          'SETTINGS ACK with non-empty payload (FRAME_SIZE_ERROR)');
+        'SETTINGS ACK with non-empty payload (FRAME_SIZE_ERROR)',
+      );
     }
     if (length % 6 != 0) {
       throw FormatException(
-          'SETTINGS payload not a multiple of 6: $length (FRAME_SIZE_ERROR)');
+        'SETTINGS payload not a multiple of 6: $length (FRAME_SIZE_ERROR)',
+      );
     }
     final settings = <int, int>{};
-    final bd = frame.buffer
-        .asByteData(frame.offsetInBytes, frame.lengthInBytes);
+    final bd = frame.buffer.asByteData(
+      frame.offsetInBytes,
+      frame.lengthInBytes,
+    );
     for (var o = Http2DataFrame.headerLength; o < frame.length; o += 6) {
       settings[bd.getUint16(o)] = bd.getUint32(o + 2);
     }
@@ -293,8 +309,11 @@ class Http2HeadersFrame {
 
   Uint8List encode() {
     if (streamId <= 0 || streamId > 0x7FFFFFFF) {
-      throw ArgumentError.value(streamId, 'streamId',
-          'HEADERS requires a non-zero 31-bit stream identifier');
+      throw ArgumentError.value(
+        streamId,
+        'streamId',
+        'HEADERS requires a non-zero 31-bit stream identifier',
+      );
     }
     final int length = headerBlockFragment.length;
     final frame = Uint8List(Http2DataFrame.headerLength + length);
@@ -302,31 +321,37 @@ class Http2HeadersFrame {
     frame[1] = (length >> 8) & 0xFF;
     frame[2] = length & 0xFF;
     frame[3] = frameTypeHeaders;
-    frame[4] = (endHeaders ? flagEndHeaders : 0) |
-        (endStream ? flagEndStream : 0);
+    frame[4] =
+        (endHeaders ? flagEndHeaders : 0) | (endStream ? flagEndStream : 0);
     frame[5] = (streamId >> 24) & 0x7F;
     frame[6] = (streamId >> 16) & 0xFF;
     frame[7] = (streamId >> 8) & 0xFF;
     frame[8] = streamId & 0xFF;
-    frame.setRange(Http2DataFrame.headerLength, frame.length,
-        headerBlockFragment);
+    frame.setRange(
+      Http2DataFrame.headerLength,
+      frame.length,
+      headerBlockFragment,
+    );
     return frame;
   }
 
   static Http2HeadersFrame decode(Uint8List frame) {
     if (frame.length < Http2DataFrame.headerLength) {
       throw FormatException(
-          'HEADERS frame shorter than header: ${frame.length}');
+        'HEADERS frame shorter than header: ${frame.length}',
+      );
     }
     if (frame[3] != frameTypeHeaders) {
       throw FormatException(
-          'Not a HEADERS frame: type 0x${frame[3].toRadixString(16)}');
+        'Not a HEADERS frame: type 0x${frame[3].toRadixString(16)}',
+      );
     }
     final int length = (frame[0] << 16) | (frame[1] << 8) | frame[2];
     if (frame.length != Http2DataFrame.headerLength + length) {
       throw FormatException('HEADERS length mismatch: header says $length');
     }
-    final int streamId = ((frame[5] & 0x7F) << 24) |
+    final int streamId =
+        ((frame[5] & 0x7F) << 24) |
         (frame[6] << 16) |
         (frame[7] << 8) |
         frame[8];
@@ -335,8 +360,10 @@ class Http2HeadersFrame {
     }
     return Http2HeadersFrame(
       streamId: streamId,
-      headerBlockFragment:
-          Uint8List.sublistView(frame, Http2DataFrame.headerLength),
+      headerBlockFragment: Uint8List.sublistView(
+        frame,
+        Http2DataFrame.headerLength,
+      ),
       endHeaders: (frame[4] & flagEndHeaders) != 0,
       endStream: (frame[4] & flagEndStream) != 0,
     );
@@ -379,8 +406,7 @@ class DcepDataChannelOpen {
     if (labelBytes.length > 0xFFFF || protocolBytes.length > 0xFFFF) {
       throw ArgumentError('label/protocol exceed u16 length fields');
     }
-    final body =
-        Uint8List(12 + labelBytes.length + protocolBytes.length);
+    final body = Uint8List(12 + labelBytes.length + protocolBytes.length);
     final bd = body.buffer.asByteData();
     body[0] = messageType;
     body[1] = channelType;
@@ -391,7 +417,9 @@ class DcepDataChannelOpen {
     body.setRange(12, 12 + labelBytes.length, labelBytes);
     body.setRange(12 + labelBytes.length, body.length, protocolBytes);
     return DataChannelMessage(
-        ppid: SctpDataChannelFramer.ppidDcep, payload: body);
+      ppid: SctpDataChannelFramer.ppidDcep,
+      payload: body,
+    );
   }
 
   static DcepDataChannelOpen decode(DataChannelMessage message) {
@@ -400,20 +428,24 @@ class DcepDataChannelOpen {
     }
     final b = message.payload;
     if (b.length < 12) {
-      throw FormatException('DATA_CHANNEL_OPEN shorter than fixed header: '
-          '${b.length}');
+      throw FormatException(
+        'DATA_CHANNEL_OPEN shorter than fixed header: '
+        '${b.length}',
+      );
     }
     if (b[0] != messageType) {
       throw FormatException(
-          'Not DATA_CHANNEL_OPEN: type 0x${b[0].toRadixString(16)}');
+        'Not DATA_CHANNEL_OPEN: type 0x${b[0].toRadixString(16)}',
+      );
     }
     final bd = b.buffer.asByteData(b.offsetInBytes, b.lengthInBytes);
     final labelLen = bd.getUint16(8);
     final protocolLen = bd.getUint16(10);
     if (b.length != 12 + labelLen + protocolLen) {
       throw FormatException(
-          'DATA_CHANNEL_OPEN length mismatch: header says '
-          '${12 + labelLen + protocolLen}, body is ${b.length}');
+        'DATA_CHANNEL_OPEN length mismatch: header says '
+        '${12 + labelLen + protocolLen}, body is ${b.length}',
+      );
     }
     return DcepDataChannelOpen(
       channelType: b[1],
@@ -432,16 +464,15 @@ class DcepDataChannelAck {
   static const int messageType = 0x02;
 
   DataChannelMessage encode() => DataChannelMessage(
-        ppid: SctpDataChannelFramer.ppidDcep,
-        payload: Uint8List.fromList(const [messageType]),
-      );
+    ppid: SctpDataChannelFramer.ppidDcep,
+    payload: Uint8List.fromList(const [messageType]),
+  );
 
   static DcepDataChannelAck decode(DataChannelMessage message) {
     if (message.ppid != SctpDataChannelFramer.ppidDcep) {
       throw FormatException('DCEP requires PPID 50, got ${message.ppid}');
     }
-    if (message.payload.length != 1 ||
-        message.payload[0] != messageType) {
+    if (message.payload.length != 1 || message.payload[0] != messageType) {
       throw const FormatException('Malformed DATA_CHANNEL_ACK');
     }
     return const DcepDataChannelAck();

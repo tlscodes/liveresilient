@@ -57,80 +57,102 @@ class ScriptedClient implements DuplexByteStream {
 }
 
 void main() {
-  group('live pass-through', () {
-    late RealityGate gate;
-    late ScriptedClient client;
+  group(
+    'live pass-through',
+    () {
+      late RealityGate gate;
+      late ScriptedClient client;
 
-    setUp(() {
-      client = ScriptedClient();
-      gate = RealityGate(
-        authenticator: RealityAuthenticator(
-          credentials: [
-            RealityCredential.fromSharedSecret(
-              Uint8List.fromList(List<int>.filled(32, 0x11)),
-            ),
-          ],
-        ),
-        relay: PassThroughRelay(
-          connector: connectFallbackSocket,
-          target: const FallbackTarget(host: _liveHost),
-        ),
-      );
-    });
-
-    test('an unauthenticated hello gets $_liveHost\'s own Server Hello',
-        () async {
-      final hello = UtlsClientHelloBuilder(
-        profile: UtlsClientProfile.chrome120,
-        random: Random.secure(),
-      ).build(serverName: _liveHost);
-      final record = UtlsClientHelloBuilder.wrapInRecord(hello);
-
-      final outcome = gate.handle(client, onAdmitted: (_, __, ___) {
-        fail('an unregistered short id must never be admitted');
+      setUp(() {
+        client = ScriptedClient();
+        gate = RealityGate(
+          authenticator: RealityAuthenticator(
+            credentials: [
+              RealityCredential.fromSharedSecret(
+                Uint8List.fromList(List<int>.filled(32, 0x11)),
+              ),
+            ],
+          ),
+          relay: PassThroughRelay(
+            connector: connectFallbackSocket,
+            target: const FallbackTarget(host: _liveHost),
+          ),
+        );
       });
-      await Future<void>.delayed(Duration.zero);
-      client.send(record);
 
-      final result = await outcome.timeout(const Duration(seconds: 20));
-      expect(result.admitted, isFalse);
-      expect(result.stats!.bytesToUpstream, greaterThanOrEqualTo(record.length));
-
-      final response = client.received;
-      expect(response, isNotEmpty,
-          reason: 'the real server must have answered');
-      // Either answer proves the point. 0x16 is a server_hello; 0x15 is an
-      // alert — which is what this hello actually earns, because the
-      // builder sends a placeholder key share rather than a real X25519
-      // public key, and the server rejects it. The alert is *the server's*,
-      // byte-for-byte, which is exactly the property under test: a prober
-      // sees the fallback host's own behavior, including its failures.
-      expect(response[0], anyOf(0x16, 0x15),
-          reason: 'first record back is a TLS record from the real server');
-      if (response[0] == 0x16) {
-        expect(response[5], 0x02, reason: 'its message is a server_hello');
-      }
-      expect(response.sublist(1, 3), [0x03, 0x03],
-          reason: 'a real TLS 1.2/1.3 record version');
-      expect(result.stats!.bytesToClient, response.length);
-    });
-
-    test('the relay adds no latency budget of its own to the decision',
+      test(
+        'an unauthenticated hello gets $_liveHost\'s own Server Hello',
         () async {
-      final hello = UtlsClientHelloBuilder(
-        profile: UtlsClientProfile.chrome120,
-        random: Random.secure(),
-      ).build(serverName: _liveHost);
-      final record = UtlsClientHelloBuilder.wrapInRecord(hello);
+          final hello = UtlsClientHelloBuilder(
+            profile: UtlsClientProfile.chrome120,
+            random: Random.secure(),
+          ).build(serverName: _liveHost);
+          final record = UtlsClientHelloBuilder.wrapInRecord(hello);
 
-      final outcome = gate.handle(client, onAdmitted: (_, __, ___) {});
-      await Future<void>.delayed(Duration.zero);
-      client.send(record);
-      final result = await outcome.timeout(const Duration(seconds: 20));
+          final outcome = gate.handle(
+            client,
+            onAdmitted: (_, __, ___) {
+              fail('an unregistered short id must never be admitted');
+            },
+          );
+          await Future<void>.delayed(Duration.zero);
+          client.send(record);
 
-      // `elapsed` covers only first-byte-to-decision, not the upstream
-      // connect that follows it.
-      expect(result.elapsed.inMilliseconds, lessThan(50));
-    });
-  }, skip: _liveEnabled ? null : 'set PROBE_DEFENSE_LIVE=1 to run');
+          final result = await outcome.timeout(const Duration(seconds: 20));
+          expect(result.admitted, isFalse);
+          expect(
+            result.stats!.bytesToUpstream,
+            greaterThanOrEqualTo(record.length),
+          );
+
+          final response = client.received;
+          expect(
+            response,
+            isNotEmpty,
+            reason: 'the real server must have answered',
+          );
+          // Either answer proves the point. 0x16 is a server_hello; 0x15 is an
+          // alert — which is what this hello actually earns, because the
+          // builder sends a placeholder key share rather than a real X25519
+          // public key, and the server rejects it. The alert is *the server's*,
+          // byte-for-byte, which is exactly the property under test: a prober
+          // sees the fallback host's own behavior, including its failures.
+          expect(
+            response[0],
+            anyOf(0x16, 0x15),
+            reason: 'first record back is a TLS record from the real server',
+          );
+          if (response[0] == 0x16) {
+            expect(response[5], 0x02, reason: 'its message is a server_hello');
+          }
+          expect(response.sublist(1, 3), [
+            0x03,
+            0x03,
+          ], reason: 'a real TLS 1.2/1.3 record version');
+          expect(result.stats!.bytesToClient, response.length);
+        },
+      );
+
+      test(
+        'the relay adds no latency budget of its own to the decision',
+        () async {
+          final hello = UtlsClientHelloBuilder(
+            profile: UtlsClientProfile.chrome120,
+            random: Random.secure(),
+          ).build(serverName: _liveHost);
+          final record = UtlsClientHelloBuilder.wrapInRecord(hello);
+
+          final outcome = gate.handle(client, onAdmitted: (_, __, ___) {});
+          await Future<void>.delayed(Duration.zero);
+          client.send(record);
+          final result = await outcome.timeout(const Duration(seconds: 20));
+
+          // `elapsed` covers only first-byte-to-decision, not the upstream
+          // connect that follows it.
+          expect(result.elapsed.inMilliseconds, lessThan(50));
+        },
+      );
+    },
+    skip: _liveEnabled ? null : 'set PROBE_DEFENSE_LIVE=1 to run',
+  );
 }

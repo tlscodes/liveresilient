@@ -71,8 +71,8 @@ class _RangeDecoder {
   int _r = 1;
 
   _RangeDecoder(Uint8List data)
-      : _data = Uint8List(data.length + 8)..setRange(0, data.length, data),
-        _code = 0 {
+    : _data = Uint8List(data.length + 8)..setRange(0, data.length, data),
+      _code = 0 {
     _code = (_data[0] << 24) | (_data[1] << 16) | (_data[2] << 8) | _data[3];
   }
 
@@ -111,22 +111,23 @@ class FreqTable {
   final Map<int, int> freq;
   int total;
 
-  FreqTable()
-      : freq = {-1: 1},
-        total = 1;
+  FreqTable() : freq = {-1: 1}, total = 1;
 
   FreqTable._(this.freq, this.total);
 
   FreqTable clone() => FreqTable._(Map.of(freq), total);
 
-  Map<String, dynamic> toJson() =>
-      {'f': freq.map((k, v) => MapEntry('$k', v)), 't': total};
+  Map<String, dynamic> toJson() => {
+    'f': freq.map((k, v) => MapEntry('$k', v)),
+    't': total,
+  };
 
   factory FreqTable.fromJson(Map<String, dynamic> j) => FreqTable._(
-        (j['f'] as Map<String, dynamic>)
-            .map((k, v) => MapEntry(int.parse(k), v as int)),
-        j['t'] as int,
-      );
+    (j['f'] as Map<String, dynamic>).map(
+      (k, v) => MapEntry(int.parse(k), v as int),
+    ),
+    j['t'] as int,
+  );
 
   void add(int sym) {
     if (!freq.containsKey(sym)) {
@@ -181,25 +182,25 @@ class RowModel {
   final Map<int, FreqTable> ctx;
   final FreqTable glob;
 
-  RowModel()
-      : ctx = {},
-        glob = FreqTable();
+  RowModel() : ctx = {}, glob = FreqTable();
 
   RowModel._(this.ctx, this.glob);
 
-  RowModel clone() => RowModel._(
-      ctx.map((k, v) => MapEntry(k, v.clone())), glob.clone());
+  RowModel clone() =>
+      RowModel._(ctx.map((k, v) => MapEntry(k, v.clone())), glob.clone());
 
   Map<String, dynamic> toJson() => {
-        'c': ctx.map((k, v) => MapEntry('$k', v.toJson())),
-        'g': glob.toJson(),
-      };
+    'c': ctx.map((k, v) => MapEntry('$k', v.toJson())),
+    'g': glob.toJson(),
+  };
 
   factory RowModel.fromJson(Map<String, dynamic> j) => RowModel._(
-        (j['c'] as Map<String, dynamic>).map((k, v) => MapEntry(
-            int.parse(k), FreqTable.fromJson(v as Map<String, dynamic>))),
-        FreqTable.fromJson(j['g'] as Map<String, dynamic>),
-      );
+    (j['c'] as Map<String, dynamic>).map(
+      (k, v) =>
+          MapEntry(int.parse(k), FreqTable.fromJson(v as Map<String, dynamic>)),
+    ),
+    FreqTable.fromJson(j['g'] as Map<String, dynamic>),
+  );
 
   FreqTable tablesFor(int prev) => ctx.putIfAbsent(prev, FreqTable.new);
 
@@ -215,28 +216,20 @@ class ColumnDict {
   final List<List<int>> cols;
   final FreqTable table;
 
-  ColumnDict()
-      : byCol = {},
-        cols = [],
-        table = FreqTable();
+  ColumnDict() : byCol = {}, cols = [], table = FreqTable();
 
   ColumnDict._(this.byCol, this.cols, this.table);
 
   static String _key(List<int> col) => col.join(',');
 
-  ColumnDict clone() => ColumnDict._(
-        Map.of(byCol),
-        [for (final c in cols) List.of(c)],
-        table.clone(),
-      );
+  ColumnDict clone() => ColumnDict._(Map.of(byCol), [
+    for (final c in cols) List.of(c),
+  ], table.clone());
 
-  Map<String, dynamic> toJson() =>
-      {'cols': cols, 'table': table.toJson()};
+  Map<String, dynamic> toJson() => {'cols': cols, 'table': table.toJson()};
 
   factory ColumnDict.fromJson(Map<String, dynamic> j) {
-    final cols = [
-      for (final c in j['cols'] as List) List<int>.from(c as List)
-    ];
+    final cols = [for (final c in j['cols'] as List) List<int>.from(c as List)];
     final d = ColumnDict._(
       {for (var i = 0; i < cols.length; i++) _key(cols[i]): i},
       cols,
@@ -271,10 +264,10 @@ class HamsedaState {
   final Map<String, FreqTable> ctx2; // 'prev2,prev1' -> table of ids
 
   HamsedaState(int nRows)
-      : models = [for (var i = 0; i < nRows; i++) RowModel()],
-        dict = ColumnDict(),
-        ctx = {},
-        ctx2 = {};
+    : models = [for (var i = 0; i < nRows; i++) RowModel()],
+      dict = ColumnDict(),
+      ctx = {},
+      ctx2 = {};
 
   HamsedaState._(this.models, this.dict, this.ctx, this.ctx2);
 
@@ -295,38 +288,44 @@ class HamsedaState {
   }
 
   HamsedaState clone() => HamsedaState._(
-        [for (final m in models) m.clone()],
-        dict.clone(),
-        ctx.map((k, v) => MapEntry(k, v.clone())),
-        ctx2.map((k, v) => MapEntry(k, v.clone())),
-      );
+    [for (final m in models) m.clone()],
+    dict.clone(),
+    ctx.map((k, v) => MapEntry(k, v.clone())),
+    ctx2.map((k, v) => MapEntry(k, v.clone())),
+  );
 
   Map<String, dynamic> toJson() => {
-        'models': [for (final m in models) m.toJson()],
-        'dict': dict.toJson(),
-        'ctx': ctx.map((k, v) => MapEntry('$k', v.toJson())),
-        'ctx2': ctx2.map((k, v) => MapEntry(k, v.toJson())),
-      };
+    'models': [for (final m in models) m.toJson()],
+    'dict': dict.toJson(),
+    'ctx': ctx.map((k, v) => MapEntry('$k', v.toJson())),
+    'ctx2': ctx2.map((k, v) => MapEntry(k, v.toJson())),
+  };
 
   factory HamsedaState.fromJson(Map<String, dynamic> j) => HamsedaState._(
-        [
-          for (final m in j['models'] as List)
-            RowModel.fromJson(m as Map<String, dynamic>)
-        ],
-        ColumnDict.fromJson(j['dict'] as Map<String, dynamic>),
-        ((j['ctx'] ?? <String, dynamic>{}) as Map<String, dynamic>).map(
-            (k, v) => MapEntry(
-                int.parse(k), FreqTable.fromJson(v as Map<String, dynamic>))),
-        ((j['ctx2'] ?? <String, dynamic>{}) as Map<String, dynamic>).map(
-            (k, v) =>
-                MapEntry(k, FreqTable.fromJson(v as Map<String, dynamic>))),
-      );
+    [
+      for (final m in j['models'] as List)
+        RowModel.fromJson(m as Map<String, dynamic>),
+    ],
+    ColumnDict.fromJson(j['dict'] as Map<String, dynamic>),
+    ((j['ctx'] ?? <String, dynamic>{}) as Map<String, dynamic>).map(
+      (k, v) =>
+          MapEntry(int.parse(k), FreqTable.fromJson(v as Map<String, dynamic>)),
+    ),
+    ((j['ctx2'] ?? <String, dynamic>{}) as Map<String, dynamic>).map(
+      (k, v) => MapEntry(k, FreqTable.fromJson(v as Map<String, dynamic>)),
+    ),
+  );
 }
 
 /// Applies exactly the state mutations encoding [col] would, without
 /// producing bits — shared by the raw-fallback path on both ends.
-int _learnColumn(HamsedaState st, FreqTable? t2, FreqTable t1,
-    int? cidBefore, List<int> col) {
+int _learnColumn(
+  HamsedaState st,
+  FreqTable? t2,
+  FreqTable t1,
+  int? cidBefore,
+  List<int> col,
+) {
   if (cidBefore != null) {
     t2?.add(cidBefore);
     t1.add(cidBefore);
@@ -351,7 +350,8 @@ void _updateWalk(List<List<int>> cols, HamsedaState st) {
     final cid = st.dict.idOf(col);
     final t2 = st.ctx2Table(p2, p1);
     final t1 = st.ctxTable(p1);
-    final hit = cid != null &&
+    final hit =
+        cid != null &&
         ((t2?.has(cid) ?? false) || t1.has(cid) || st.dict.table.has(cid));
     if (!hit) {
       for (var row = 0; row < col.length; row++) {
@@ -499,8 +499,7 @@ Uint8List _encodeAdaptive(List<List<int>> columns, HamsedaState st) {
 }
 
 /// Decodes [nFrames] columns from [data] against (and mutating) [state].
-List<List<int>> decodeColumns(
-    Uint8List data, int nFrames, HamsedaState state) {
+List<List<int>> decodeColumns(Uint8List data, int nFrames, HamsedaState state) {
   if (data.isEmpty) throw StateError('empty stream');
   final flag = data[0];
   final body = Uint8List.sublistView(data, 1);
@@ -535,8 +534,7 @@ List<int> _dictColAt(HamsedaState st, int id) {
   return List.of(st.dict.cols[id]);
 }
 
-List<List<int>> _decodeAdaptive(
-    Uint8List data, int nFrames, HamsedaState st) {
+List<List<int>> _decodeAdaptive(Uint8List data, int nFrames, HamsedaState st) {
   final r = _RangeDecoder(data);
   final out = <List<int>>[];
   List<int>? prev;
@@ -574,7 +572,7 @@ List<List<int>> _decodeAdaptive(
         } else {
           col = [
             for (var row = 0; row < st.nRows; row++)
-              _decSymbol(r, st.models[row], prev?[row] ?? -1)
+              _decSymbol(r, st.models[row], prev?[row] ?? -1),
           ];
           cid = st.dict.idOf(col);
         }

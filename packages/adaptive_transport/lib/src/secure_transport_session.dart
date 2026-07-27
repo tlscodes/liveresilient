@@ -8,7 +8,8 @@ class ReplayedDatagramException implements Exception {
   ReplayedDatagramException(this.sequence);
   final int sequence;
   @override
-  String toString() => 'ReplayedDatagramException: sequence $sequence '
+  String toString() =>
+      'ReplayedDatagramException: sequence $sequence '
       'was already admitted or is stale';
 }
 
@@ -20,7 +21,7 @@ class ReplayedDatagramException implements Exception {
 /// continuity tokens automatically.
 class SecureTransportSession {
   SecureTransportSession({required MutualRelaySession session})
-      : _session = session;
+    : _session = session;
 
   final MutualRelaySession _session;
 
@@ -57,7 +58,8 @@ class SecureTransportSession {
     if (wire.length < _headerLength) {
       throw ArgumentError.value(wire.length, 'wire', 'shorter than the header');
     }
-    final seq = (wire[0] << 40) |
+    final seq =
+        (wire[0] << 40) |
         (wire[1] << 32) |
         (wire[2] << 24) |
         (wire[3] << 16) |
@@ -76,9 +78,9 @@ class SecureTransportSession {
 
   /// Continuity token for re-attaching this session on a new endpoint without
   /// a full SCRAM re-handshake. Bound to session id + current epoch.
-  Uint8List mintContinuityToken() =>
-      SessionContinuityToken(sessionKey: _session.trafficKey)
-          .mint(sessionId: _session.sessionId, epoch: _session.keyEpoch);
+  Uint8List mintContinuityToken() => SessionContinuityToken(
+    sessionKey: _session.trafficKey,
+  ).mint(sessionId: _session.sessionId, epoch: _session.keyEpoch);
 
   /// Server-side check of a presented continuity token against the session's
   /// current epoch.

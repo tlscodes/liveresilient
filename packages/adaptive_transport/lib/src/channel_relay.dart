@@ -51,8 +51,9 @@ class ChannelRelayLink {
     final number = view.getUint16(0);
     if (number != channelNumber) {
       throw FormatException(
-          'frame for channel 0x${number.toRadixString(16)}, '
-          'this link is 0x${channelNumber.toRadixString(16)}');
+        'frame for channel 0x${number.toRadixString(16)}, '
+        'this link is 0x${channelNumber.toRadixString(16)}',
+      );
     }
     final length = view.getUint16(2);
     if (headerBytes + length > frame.length) {

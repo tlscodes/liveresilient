@@ -92,10 +92,10 @@ void main() {
 
       expect(reader.add(wire.sublist(0, 3)), isEmpty);
       expect(reader.add(wire.sublist(3, 9)), [
-        [1, 2, 3]
+        [1, 2, 3],
       ]);
       expect(reader.add(wire.sublist(9)), [
-        [4, 5]
+        [4, 5],
       ]);
     });
 
@@ -108,7 +108,7 @@ void main() {
       ]);
       expect(messages, [
         [9],
-        [8, 8]
+        [8, 8],
       ]);
     });
 
@@ -143,16 +143,18 @@ void main() {
     test('rejects a length header above the receive limit', () {
       final reader = GrpcFrameReader();
       final header = Uint8List(GrpcMessageFramer.headerLength);
-      ByteData.sublistView(header)
-          .setUint32(1, GrpcMessageFramer.maxMessageLength + 1);
+      ByteData.sublistView(
+        header,
+      ).setUint32(1, GrpcMessageFramer.maxMessageLength + 1);
       expect(() => reader.add(header), throwsFormatException);
     });
 
     test('accepts a length header exactly at the receive limit', () {
       final reader = GrpcFrameReader();
       final header = Uint8List(GrpcMessageFramer.headerLength);
-      ByteData.sublistView(header)
-          .setUint32(1, GrpcMessageFramer.maxMessageLength);
+      ByteData.sublistView(
+        header,
+      ).setUint32(1, GrpcMessageFramer.maxMessageLength);
       // Body absent, so nothing is emitted — but the header is not rejected.
       expect(reader.add(header), isEmpty);
     });
@@ -164,11 +166,11 @@ void main() {
     late Set<Uri> failing;
 
     EdgeBridgeConnector connector() => (uri) async {
-          if (failing.contains(uri)) throw StateError('edge $uri down');
-          final connection = _FakeEdgeConnection(uri);
-          opened.add(connection);
-          return connection;
-        };
+      if (failing.contains(uri)) throw StateError('edge $uri down');
+      final connection = _FakeEdgeConnection(uri);
+      opened.add(connection);
+      return connection;
+    };
 
     setUp(() {
       endpoints = [
@@ -182,10 +184,8 @@ void main() {
 
     test('rejects an empty endpoint pool', () {
       expect(
-        () => DomesticEdgeBridgeLane(
-          endpoints: const [],
-          connector: connector(),
-        ),
+        () =>
+            DomesticEdgeBridgeLane(endpoints: const [], connector: connector()),
         throwsArgumentError,
       );
     });
@@ -220,12 +220,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       }
 
-      expect(used, [
-        endpoints[0],
-        endpoints[1],
-        endpoints[2],
-        endpoints[0],
-      ]);
+      expect(used, [endpoints[0], endpoints[1], endpoints[2], endpoints[0]]);
     });
 
     test('skips a dead endpoint and reports the reachable one', () async {
@@ -274,30 +269,35 @@ void main() {
       expect(lane.health.pathDegraded, isTrue);
     });
 
-    test('health-check interval backs off on failure and resets on success',
-        () async {
-      failing.addAll(endpoints);
-      final lane = DomesticEdgeBridgeLane(
-        endpoints: endpoints,
-        connector: connector(),
-        minHealthCheckInterval: const Duration(seconds: 1),
-        maxHealthCheckInterval: const Duration(seconds: 4),
-      );
-      addTearDown(lane.dispose);
+    test(
+      'health-check interval backs off on failure and resets on success',
+      () async {
+        failing.addAll(endpoints);
+        final lane = DomesticEdgeBridgeLane(
+          endpoints: endpoints,
+          connector: connector(),
+          minHealthCheckInterval: const Duration(seconds: 1),
+          maxHealthCheckInterval: const Duration(seconds: 4),
+        );
+        addTearDown(lane.dispose);
 
-      expect(lane.healthCheckInterval, const Duration(seconds: 1));
-      await lane.probe();
-      expect(lane.healthCheckInterval, const Duration(seconds: 2));
-      await lane.probe();
-      expect(lane.healthCheckInterval, const Duration(seconds: 4));
-      await lane.probe();
-      expect(lane.healthCheckInterval, const Duration(seconds: 4),
-          reason: 'clamped at the ceiling');
+        expect(lane.healthCheckInterval, const Duration(seconds: 1));
+        await lane.probe();
+        expect(lane.healthCheckInterval, const Duration(seconds: 2));
+        await lane.probe();
+        expect(lane.healthCheckInterval, const Duration(seconds: 4));
+        await lane.probe();
+        expect(
+          lane.healthCheckInterval,
+          const Duration(seconds: 4),
+          reason: 'clamped at the ceiling',
+        );
 
-      failing.clear();
-      expect(await lane.probe(), isTrue);
-      expect(lane.healthCheckInterval, const Duration(seconds: 1));
-    });
+        failing.clear();
+        expect(await lane.probe(), isTrue);
+        expect(lane.healthCheckInterval, const Duration(seconds: 1));
+      },
+    );
 
     test('surfaces whole messages from chunked inbound bytes', () async {
       final lane = DomesticEdgeBridgeLane(
@@ -317,7 +317,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(received, [
-        [7, 7, 7]
+        [7, 7, 7],
       ]);
     });
 

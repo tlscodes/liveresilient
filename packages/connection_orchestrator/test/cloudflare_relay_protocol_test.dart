@@ -139,83 +139,93 @@ void main() {
   /// One gRPC-framed media frame carrying [seq] as its only payload byte.
   Uint8List frameFor(int seq) => framer.encode([seq]);
 
-  test('websocket lane: frames reach the peer in order, byte-identical',
-      () async {
-    const session = 'ws-order';
-    final lane = WebSocketRelayLane(relayUri: relay.wsUri(session, 'a'));
-    addTearDown(lane.dispose);
+  test(
+    'websocket lane: frames reach the peer in order, byte-identical',
+    () async {
+      const session = 'ws-order';
+      final lane = WebSocketRelayLane(relayUri: relay.wsUri(session, 'a'));
+      addTearDown(lane.dispose);
 
-    // The peer attaches first so nothing is queued.
-    final peer = await WebSocket.connect(relay.wsUri(session, 'b').toString());
-    addTearDown(peer.close);
-    final received = <Uint8List>[];
-    final reader = GrpcFrameReader();
-    final done = Completer<void>();
-    peer.listen((data) {
-      received.addAll(reader.add(data as List<int>));
-      if (received.length == 8) done.complete();
-    });
+      // The peer attaches first so nothing is queued.
+      final peer = await WebSocket.connect(
+        relay.wsUri(session, 'b').toString(),
+      );
+      addTearDown(peer.close);
+      final received = <Uint8List>[];
+      final reader = GrpcFrameReader();
+      final done = Completer<void>();
+      peer.listen((data) {
+        received.addAll(reader.add(data as List<int>));
+        if (received.length == 8) done.complete();
+      });
 
-    for (var seq = 0; seq < 8; seq++) {
-      final result = await lane.send(frameFor(seq));
-      expect(result.delivered, isTrue, reason: 'frame $seq was not accepted');
-    }
-    await done.future.timeout(const Duration(seconds: 5));
+      for (var seq = 0; seq < 8; seq++) {
+        final result = await lane.send(frameFor(seq));
+        expect(result.delivered, isTrue, reason: 'frame $seq was not accepted');
+      }
+      await done.future.timeout(const Duration(seconds: 5));
 
-    expect([for (final f in received) f.single], [0, 1, 2, 3, 4, 5, 6, 7]);
-  });
+      expect([for (final f in received) f.single], [0, 1, 2, 3, 4, 5, 6, 7]);
+    },
+  );
 
-  test('websocket lane: frames sent before the peer attaches are not lost',
-      () async {
-    const session = 'ws-backlog';
-    final lane = WebSocketRelayLane(relayUri: relay.wsUri(session, 'a'));
-    addTearDown(lane.dispose);
+  test(
+    'websocket lane: frames sent before the peer attaches are not lost',
+    () async {
+      const session = 'ws-backlog';
+      final lane = WebSocketRelayLane(relayUri: relay.wsUri(session, 'a'));
+      addTearDown(lane.dispose);
 
-    for (var seq = 0; seq < 4; seq++) {
-      expect((await lane.send(frameFor(seq))).delivered, isTrue);
-    }
+      for (var seq = 0; seq < 4; seq++) {
+        expect((await lane.send(frameFor(seq))).delivered, isTrue);
+      }
 
-    // The peer arrives late and still receives the backlog, in order.
-    final peer = await WebSocket.connect(relay.wsUri(session, 'b').toString());
-    addTearDown(peer.close);
-    final reader = GrpcFrameReader();
-    final received = <Uint8List>[];
-    final done = Completer<void>();
-    peer.listen((data) {
-      received.addAll(reader.add(data as List<int>));
-      if (received.length == 4) done.complete();
-    });
-    await done.future.timeout(const Duration(seconds: 5));
+      // The peer arrives late and still receives the backlog, in order.
+      final peer = await WebSocket.connect(
+        relay.wsUri(session, 'b').toString(),
+      );
+      addTearDown(peer.close);
+      final reader = GrpcFrameReader();
+      final received = <Uint8List>[];
+      final done = Completer<void>();
+      peer.listen((data) {
+        received.addAll(reader.add(data as List<int>));
+        if (received.length == 4) done.complete();
+      });
+      await done.future.timeout(const Duration(seconds: 5));
 
-    expect([for (final f in received) f.single], [0, 1, 2, 3]);
-  });
+      expect([for (final f in received) f.single], [0, 1, 2, 3]);
+    },
+  );
 
-  test('http lane: a poll returns concatenated frames the reader splits',
-      () async {
-    const session = 'http-order';
-    final lane = HttpLongPollLane(sendUri: relay.httpUri(session, 'a'));
-    addTearDown(lane.dispose);
+  test(
+    'http lane: a poll returns concatenated frames the reader splits',
+    () async {
+      const session = 'http-order';
+      final lane = HttpLongPollLane(sendUri: relay.httpUri(session, 'a'));
+      addTearDown(lane.dispose);
 
-    expect(await lane.probe(), isTrue, reason: 'HEAD is the liveness probe');
+      expect(await lane.probe(), isTrue, reason: 'HEAD is the liveness probe');
 
-    for (var seq = 0; seq < 5; seq++) {
-      expect((await lane.send(frameFor(seq))).delivered, isTrue);
-    }
+      for (var seq = 0; seq < 5; seq++) {
+        expect((await lane.send(frameFor(seq))).delivered, isTrue);
+      }
 
-    // The peer polls once and gets all five frames in one body.
-    final client = HttpClient();
-    addTearDown(() => client.close(force: true));
-    final request = await client.getUrl(relay.httpUri(session, 'b'));
-    final response = await request.close();
-    expect(response.statusCode, HttpStatus.ok);
+      // The peer polls once and gets all five frames in one body.
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+      final request = await client.getUrl(relay.httpUri(session, 'b'));
+      final response = await request.close();
+      expect(response.statusCode, HttpStatus.ok);
 
-    final body = <int>[];
-    await for (final chunk in response) {
-      body.addAll(chunk);
-    }
-    final messages = GrpcFrameReader().add(body);
-    expect([for (final m in messages) m.single], [0, 1, 2, 3, 4]);
-  });
+      final body = <int>[];
+      await for (final chunk in response) {
+        body.addAll(chunk);
+      }
+      final messages = GrpcFrameReader().add(body);
+      expect([for (final m in messages) m.single], [0, 1, 2, 3, 4]);
+    },
+  );
 
   test('http lane: an empty inbox answers 204 and stays empty', () async {
     const session = 'http-empty';

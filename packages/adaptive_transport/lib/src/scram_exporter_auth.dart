@@ -93,13 +93,18 @@ Uint8List scramAuthMessage({
   required Uint8List channelBinding,
 }) {
   if (channelBinding.length != tlsExporterLength) {
-    throw ArgumentError.value(channelBinding.length, 'channelBinding',
-        'must be a $tlsExporterLength-byte TLS exporter value');
+    throw ArgumentError.value(
+      channelBinding.length,
+      'channelBinding',
+      'must be a $tlsExporterLength-byte TLS exporter value',
+    );
   }
   return Uint8List.fromList([
     ...utf8.encode('n=$username,r=$clientNonce\n'),
-    ...utf8.encode('r=$clientNonce$serverNonce,'
-        's=${base64.encode(salt)},i=$iterations\n'),
+    ...utf8.encode(
+      'r=$clientNonce$serverNonce,'
+      's=${base64.encode(salt)},i=$iterations\n',
+    ),
     ...utf8.encode('c='),
     ...channelBinding,
     ...utf8.encode(',r=$clientNonce$serverNonce'),
@@ -109,7 +114,7 @@ Uint8List scramAuthMessage({
 /// Client side: computes ClientProof and verifies the server's signature.
 class ScramClient {
   ScramClient({required this.username, required String password})
-      : _password = Uint8List.fromList(utf8.encode(password));
+    : _password = Uint8List.fromList(utf8.encode(password));
 
   final String username;
   final Uint8List _password;
@@ -140,10 +145,7 @@ class ScramClient {
     for (var i = 0; i < proof.length; i++) {
       proof[i] = clientKey[i] ^ signature[i];
     }
-    _serverKeyCheck = _hmac(
-      _hmac(salted, utf8.encode('Server Key')),
-      auth,
-    );
+    _serverKeyCheck = _hmac(_hmac(salted, utf8.encode('Server Key')), auth);
     return proof;
   }
 

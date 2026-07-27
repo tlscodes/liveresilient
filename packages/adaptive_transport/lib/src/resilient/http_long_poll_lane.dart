@@ -14,11 +14,11 @@ class HttpLongPollLane implements TransportChannel {
     Uri? healthCheckUri,
     Duration requestTimeout = const Duration(seconds: 5),
     HttpClient? client,
-  })  : _sendUri = sendUri,
-        _healthCheckUri = healthCheckUri ?? sendUri,
-        _requestTimeout = requestTimeout,
-        _client = client ?? HttpClient(),
-        health = ChannelHealth(reliabilityPrior: 0.6, bandwidth: 0.3);
+  }) : _sendUri = sendUri,
+       _healthCheckUri = healthCheckUri ?? sendUri,
+       _requestTimeout = requestTimeout,
+       _client = client ?? HttpClient(),
+       health = ChannelHealth(reliabilityPrior: 0.6, bandwidth: 0.3);
 
   final Uri _sendUri;
   final Uri _healthCheckUri;
@@ -56,8 +56,7 @@ class HttpLongPollLane implements TransportChannel {
   Future<SendResult> send(List<int> payload) async {
     final started = DateTime.now();
     try {
-      final request =
-          await _client.postUrl(_sendUri).timeout(_requestTimeout);
+      final request = await _client.postUrl(_sendUri).timeout(_requestTimeout);
       request.headers.contentType = ContentType.binary;
       request.add(payload);
       final response = await request.close().timeout(_requestTimeout);

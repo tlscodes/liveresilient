@@ -170,7 +170,9 @@ class TrafficShaper {
       case LengthDistribution.none:
         return 0;
       case LengthDistribution.uniform:
-        return policy.maxPadding == 0 ? 0 : _random.nextInt(policy.maxPadding + 1);
+        return policy.maxPadding == 0
+            ? 0
+            : _random.nextInt(policy.maxPadding + 1);
       case LengthDistribution.gaussian:
         final draw = _gaussian(policy.gaussianMean, policy.gaussianStdDev);
         return draw.round().clamp(0, policy.maxPadding);
@@ -208,8 +210,7 @@ class TrafficShaper {
         '${frame.length}',
       );
     }
-    final padLength =
-        (frame[frame.length - 2] << 8) | frame[frame.length - 1];
+    final padLength = (frame[frame.length - 2] << 8) | frame[frame.length - 1];
     final originalLength = frame.length - trailerBytes - padLength;
     if (originalLength < 0) {
       throw FormatException('invalid padding boundary length: $padLength');

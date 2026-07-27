@@ -17,8 +17,8 @@ String fnv(List<int> bytes) {
 }
 
 void main(List<String> args) {
-  final d = jsonDecode(File(args[0]).readAsStringSync())
-      as Map<String, dynamic>;
+  final d =
+      jsonDecode(File(args[0]).readAsStringSync()) as Map<String, dynamic>;
   final cols = [for (final c in d['cols'] as List) List<int>.from(c as List)];
   final nRows = d['n_rows'] as int;
   final sec = (d['sec'] as num).toDouble();
@@ -36,6 +36,8 @@ void main(List<String> args) {
   stdout.writeln('bit_exact=$exact');
   stdout.writeln('cold_bytes=${cold.length} fnv=${fnv(cold)}');
   stdout.writeln('warm_bytes=${warm.length} fnv=${fnv(warm)}');
-  stdout.writeln('cold_bps=${(cold.length * 8 / sec).toStringAsFixed(1)} '
-      'warm_bps=${(warm.length * 8 / sec).toStringAsFixed(1)}');
+  stdout.writeln(
+    'cold_bps=${(cold.length * 8 / sec).toStringAsFixed(1)} '
+    'warm_bps=${(warm.length * 8 / sec).toStringAsFixed(1)}',
+  );
 }

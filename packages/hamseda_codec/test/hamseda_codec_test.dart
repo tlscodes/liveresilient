@@ -11,13 +11,13 @@ List<List<int>> speechLike(int frames, int nRows, int seed) {
   final rng = Random(seed);
   final alphabet = [
     for (var i = 0; i < 40; i++)
-      [for (var r = 0; r < nRows; r++) rng.nextInt(rawSymbols)]
+      [for (var r = 0; r < nRows; r++) rng.nextInt(rawSymbols)],
   ];
   return [
     for (var i = 0; i < frames; i++)
       rng.nextDouble() < 0.7
           ? List.of(alphabet[rng.nextInt(alphabet.length)])
-          : [for (var r = 0; r < nRows; r++) rng.nextInt(rawSymbols)]
+          : [for (var r = 0; r < nRows; r++) rng.nextInt(rawSymbols)],
   ];
 }
 
@@ -40,14 +40,17 @@ void main() {
       // more than raw plus the 1-byte path flag.
       expect(cold.length * 8, lessThanOrEqualTo(rawBits + 8));
       final warm = encodeColumns(cols, st);
-      expect(warm.length * 8, lessThan(rawBits ~/ 4),
-          reason: 'converged dictionary must crush repeated speech');
+      expect(
+        warm.length * 8,
+        lessThan(rawBits ~/ 4),
+        reason: 'converged dictionary must crush repeated speech',
+      );
     });
 
     test('single frame and empty stream', () {
       expect(encodeColumns([], HamsedaState(2)), isNotEmpty); // header only
       final one = [
-        [7, 900]
+        [7, 900],
       ];
       final data = encodeColumns(one, HamsedaState(2));
       expect(decodeColumns(data, 1, HamsedaState(2)), equals(one));
@@ -64,14 +67,19 @@ void main() {
 
       // serialize both ends between calls (JSON persistence)
       final enc2 = HamsedaState.fromJson(
-          jsonDecode(jsonEncode(enc.toJson())) as Map<String, dynamic>);
+        jsonDecode(jsonEncode(enc.toJson())) as Map<String, dynamic>,
+      );
       final dec2 = HamsedaState.fromJson(
-          jsonDecode(jsonEncode(dec.toJson())) as Map<String, dynamic>);
+        jsonDecode(jsonEncode(dec.toJson())) as Map<String, dynamic>,
+      );
 
       final d2 = encodeColumns(call1, enc2); // same speech, warm dict
       expect(decodeColumns(d2, call1.length, dec2), equals(call1));
-      expect(d2.length, lessThan(d1.length ~/ 2),
-          reason: 'warm dictionary must at least halve repeated speech');
+      expect(
+        d2.length,
+        lessThan(d1.length ~/ 2),
+        reason: 'warm dictionary must at least halve repeated speech',
+      );
     });
   });
 
@@ -94,9 +102,11 @@ void main() {
           sender.commit();
           receiver.commit();
         }
-        expect(jsonEncode(sender.committed.toJson()),
-            equals(jsonEncode(receiver.committed.toJson())),
-            reason: 'state diverged at loss=$lossPct%');
+        expect(
+          jsonEncode(sender.committed.toJson()),
+          equals(jsonEncode(receiver.committed.toJson())),
+          reason: 'state diverged at loss=$lossPct%',
+        );
       }
     });
 
@@ -114,10 +124,12 @@ void main() {
 
   group('boundaries', () {
     test('wrong column arity throws', () {
-      expect(() => encodeColumns([
-            [1, 2, 3]
-          ], HamsedaState(2)),
-          throwsArgumentError);
+      expect(
+        () => encodeColumns([
+          [1, 2, 3],
+        ], HamsedaState(2)),
+        throwsArgumentError,
+      );
     });
 
     test('corrupt input throws or mismatches, never hangs', () {

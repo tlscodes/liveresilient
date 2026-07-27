@@ -6,8 +6,8 @@ import 'dart:io';
 import 'package:hamseda_codec/hamseda_codec.dart';
 
 void main(List<String> args) {
-  final d = jsonDecode(File(args[0]).readAsStringSync())
-      as Map<String, dynamic>;
+  final d =
+      jsonDecode(File(args[0]).readAsStringSync()) as Map<String, dynamic>;
   final cols = [for (final c in d['cols'] as List) List<int>.from(c as List)];
   final warmSrc = HamsedaState(d['n_rows'] as int);
   encodeColumns(cols, warmSrc);
@@ -20,8 +20,10 @@ void main(List<String> args) {
       count++;
     }
     final avg = total / count;
-    stdout.writeln('block=$n frames (${(n / 75 * 1000).round()}ms): '
-        'avg ${avg.toStringAsFixed(1)} B  '
-        '(${(avg * 8 * 75 / n).toStringAsFixed(0)} bps)');
+    stdout.writeln(
+      'block=$n frames (${(n / 75 * 1000).round()}ms): '
+      'avg ${avg.toStringAsFixed(1)} B  '
+      '(${(avg * 8 * 75 / n).toStringAsFixed(0)} bps)',
+    );
   }
 }

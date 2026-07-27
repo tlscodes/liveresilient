@@ -16,8 +16,10 @@ void main() {
     test('Firefox sends no GREASE — adding it would create the anomaly', () {
       final hello = _hello(UtlsClientProfile.firefox120);
       expect(hello.cipherSuites.any(isGreaseCodePoint), isFalse);
-      expect(hello.extensions.map((e) => e.type).any(isGreaseCodePoint),
-          isFalse);
+      expect(
+        hello.extensions.map((e) => e.type).any(isGreaseCodePoint),
+        isFalse,
+      );
       expect(hello.supportedGroups.any(isGreaseCodePoint), isFalse);
     });
 
@@ -27,11 +29,16 @@ void main() {
         UtlsClientProfile.safari17,
       ]) {
         final hello = _hello(profile);
-        expect(hello.cipherSuites.first, predicate<int>(isGreaseCodePoint),
-            reason: profile.id.name);
-        expect(hello.extensions.map((e) => e.type).where(isGreaseCodePoint),
-            hasLength(2),
-            reason: profile.id.name);
+        expect(
+          hello.cipherSuites.first,
+          predicate<int>(isGreaseCodePoint),
+          reason: profile.id.name,
+        );
+        expect(
+          hello.extensions.map((e) => e.type).where(isGreaseCodePoint),
+          hasLength(2),
+          reason: profile.id.name,
+        );
       }
     });
 
@@ -47,13 +54,17 @@ void main() {
       }
     });
 
-    test('Safari 17 does not — claiming Safari with ML-KEM would be a tell',
-        () {
-      final profile = UtlsClientProfile.safari17;
-      expect(profile.offersPostQuantum, isFalse);
-      expect(_hello(profile).supportedGroups.any(TlsNamedGroup.isPostQuantum),
-          isFalse);
-    });
+    test(
+      'Safari 17 does not — claiming Safari with ML-KEM would be a tell',
+      () {
+        final profile = UtlsClientProfile.safari17;
+        expect(profile.offersPostQuantum, isFalse);
+        expect(
+          _hello(profile).supportedGroups.any(TlsNamedGroup.isPostQuantum),
+          isFalse,
+        );
+      },
+    );
 
     test('the hybrid key share is the full X25519 + ML-KEM-768 size', () {
       final builder = UtlsClientHelloBuilder(
@@ -78,10 +89,12 @@ void main() {
         profile: UtlsClientProfile.chrome120,
         random: Random(4),
       );
-      final hello = TlsClientHello.parseHandshake(builder.build(
-        serverName: 'www.example.com',
-        keyShares: {TlsNamedGroup.x25519MlKem768: share},
-      ));
+      final hello = TlsClientHello.parseHandshake(
+        builder.build(
+          serverName: 'www.example.com',
+          keyShares: {TlsNamedGroup.x25519MlKem768: share},
+        ),
+      );
       final data = hello.extension(TlsExtensionType.keyShare)!.data;
       expect(_containsSubsequence(data, share), isTrue);
     });
@@ -89,36 +102,49 @@ void main() {
     test('every profile offers TLS 1.3 and both ALPN protocols', () {
       for (final profile in UtlsClientProfile.all) {
         final hello = _hello(profile);
-        expect(hello.supportedVersions, contains(0x0304),
-            reason: profile.id.name);
-        expect(hello.alpnProtocols, ['h2', 'http/1.1'],
-            reason: profile.id.name);
+        expect(
+          hello.supportedVersions,
+          contains(0x0304),
+          reason: profile.id.name,
+        );
+        expect(hello.alpnProtocols, [
+          'h2',
+          'http/1.1',
+        ], reason: profile.id.name);
       }
     });
 
     test('Firefox advertises record_size_limit and the others do not', () {
       expect(
-        _hello(UtlsClientProfile.firefox120)
-            .extension(TlsExtensionType.recordSizeLimit),
+        _hello(
+          UtlsClientProfile.firefox120,
+        ).extension(TlsExtensionType.recordSizeLimit),
         isNotNull,
       );
       expect(
-        _hello(UtlsClientProfile.chrome120)
-            .extension(TlsExtensionType.recordSizeLimit),
+        _hello(
+          UtlsClientProfile.chrome120,
+        ).extension(TlsExtensionType.recordSizeLimit),
         isNull,
       );
     });
 
     test('ECH is emitted when asked for, and absent otherwise', () {
-      expect(_hello(UtlsClientProfile.chrome120).hasEncryptedClientHello,
-          isFalse);
+      expect(
+        _hello(UtlsClientProfile.chrome120).hasEncryptedClientHello,
+        isFalse,
+      );
       final withEch = _hello(UtlsClientProfile.chrome120, enableEch: true);
       expect(withEch.hasEncryptedClientHello, isTrue);
-      final payload =
-          withEch.extension(TlsExtensionType.encryptedClientHello)!.data;
+      final payload = withEch
+          .extension(TlsExtensionType.encryptedClientHello)!
+          .data;
       expect(payload.first, 0x00, reason: 'outer_client_hello');
-      expect(payload.length, greaterThan(190),
-          reason: 'a GREASE ECH must be the size of a real one');
+      expect(
+        payload.length,
+        greaterThan(190),
+        reason: 'a GREASE ECH must be the size of a real one',
+      );
     });
 
     test('padding brings a hello up to the requested length', () {
@@ -126,16 +152,19 @@ void main() {
         profile: UtlsClientProfile.chrome120,
         random: Random(4),
       );
-      final padded =
-          builder.build(serverName: 'www.example.com', padToLength: 1700);
+      final padded = builder.build(
+        serverName: 'www.example.com',
+        padToLength: 1700,
+      );
       expect(padded.length, 1700);
       expect(
         TlsClientHello.parseHandshake(padded).serverName,
         'www.example.com',
       );
       expect(
-        TlsClientHello.parseHandshake(padded)
-            .extension(TlsExtensionType.padding),
+        TlsClientHello.parseHandshake(
+          padded,
+        ).extension(TlsExtensionType.padding),
         isNotNull,
       );
     });
@@ -156,8 +185,11 @@ void main() {
 
     test('every profile names a TCP stack that exists', () {
       for (final profile in UtlsClientProfile.all) {
-        expect(TcpStackProfile.byName(profile.defaultTcpProfile), isNotNull,
-            reason: profile.id.name);
+        expect(
+          TcpStackProfile.byName(profile.defaultTcpProfile),
+          isNotNull,
+          reason: profile.id.name,
+        );
       }
     });
   });
@@ -171,15 +203,21 @@ void main() {
     });
 
     test('renders a p0f-style signature', () {
-      expect(TcpStackProfile.windows.p0fSignature, '128:64240,8:mss=1460:sok,-');
+      expect(
+        TcpStackProfile.windows.p0fSignature,
+        '128:64240,8:mss=1460:sok,-',
+      );
       expect(TcpStackProfile.iOS.p0fSignature, '64:65535,6:mss=1460:sok,ts');
     });
 
     test('is honest about what a userspace process cannot set', () {
       for (final profile in TcpStackProfile.all) {
         final gaps = profile.unreachableObservables;
-        expect(gaps, isNotEmpty,
-            reason: 'no platform lets a VM set every SYN observable');
+        expect(
+          gaps,
+          isNotEmpty,
+          reason: 'no platform lets a VM set every SYN observable',
+        );
         expect(gaps, contains('window_scale'));
         expect(gaps, contains('option_order'));
       }
@@ -195,9 +233,10 @@ void main() {
   group('ProbeDefenseConfig', () {
     test('defaults the TCP stack to the one its TLS profile implies', () {
       expect(
-        ProbeDefenseConfig(utlsProfile: UtlsProfileId.safari17,
-                enablePostQuantum: false)
-            .tcpProfile,
+        ProbeDefenseConfig(
+          utlsProfile: UtlsProfileId.safari17,
+          enablePostQuantum: false,
+        ).tcpProfile,
         TcpStackProfileId.iOS,
       );
       expect(

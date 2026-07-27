@@ -106,11 +106,11 @@ class TcpStackProfile {
   static const List<TcpStackProfile> all = [iOS, android, windows, linux];
 
   static TcpStackProfile forId(TcpStackProfileId id) => switch (id) {
-        TcpStackProfileId.iOS => iOS,
-        TcpStackProfileId.android => android,
-        TcpStackProfileId.windows => windows,
-        TcpStackProfileId.linux => linux,
-      };
+    TcpStackProfileId.iOS => iOS,
+    TcpStackProfileId.android => android,
+    TcpStackProfileId.windows => windows,
+    TcpStackProfileId.linux => linux,
+  };
 
   /// Look-up by the lower-case name a [UtlsClientProfile] carries.
   static TcpStackProfile? byName(String name) {
@@ -122,7 +122,8 @@ class TcpStackProfile {
 
   /// The p0f-style signature this profile is trying to present, in that
   /// tool's own notation, so a deployment can diff it against a capture.
-  String get p0fSignature => '$initialTtl:$windowSize,$windowScale:'
+  String get p0fSignature =>
+      '$initialTtl:$windowSize,$windowScale:'
       'mss=$maximumSegmentSize:'
       '${sackPermitted ? 'sok' : '-'},'
       '${timestampsEnabled ? 'ts' : '-'}';
@@ -131,13 +132,13 @@ class TcpStackProfile {
   /// set on the current platform. Empty is not achievable today on any
   /// platform; callers should surface this, not swallow it.
   List<String> get unreachableObservables => [
-        if (!Platform.isLinux) 'mss',
-        'window_size',
-        'window_scale',
-        'sack_permitted',
-        'timestamps',
-        'option_order',
-      ];
+    if (!Platform.isLinux) 'mss',
+    'window_size',
+    'window_scale',
+    'sack_permitted',
+    'timestamps',
+    'option_order',
+  ];
 }
 
 /// Applies what is applicable of a [TcpStackProfile] to a socket.

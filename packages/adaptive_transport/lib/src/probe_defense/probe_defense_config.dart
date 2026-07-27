@@ -159,7 +159,9 @@ class ProbeDefenseConfig {
     if (value == null) return null;
     final raw = (value as String).trim();
     if (raw.isEmpty) return null;
-    final uri = raw.contains('://') ? Uri.parse(raw) : Uri.parse('https://$raw');
+    final uri = raw.contains('://')
+        ? Uri.parse(raw)
+        : Uri.parse('https://$raw');
     if (uri.host.isEmpty) {
       throw ProbeDefenseConfigError('fallbackTarget "$value" has no host');
     }
@@ -174,9 +176,7 @@ class ProbeDefenseConfig {
       final low = (range[0] as num).toInt();
       final high = (range[1] as num).toInt();
       if (high < low) {
-        throw ProbeDefenseConfigError(
-          'paddingRange [$low, $high] is inverted',
-        );
+        throw ProbeDefenseConfigError('paddingRange [$low, $high] is inverted');
       }
       maxPadding = high;
       // Center the Gaussian in the requested range rather than keeping the

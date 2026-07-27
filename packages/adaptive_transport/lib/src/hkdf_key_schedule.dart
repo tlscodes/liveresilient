@@ -12,8 +12,9 @@ class Hkdf {
 
   /// HKDF-Extract(salt, IKM) -> PRK (RFC 5869 section 2.2).
   static Uint8List extract(Uint8List salt, Uint8List ikm) {
-    final effectiveSalt =
-        salt.isEmpty ? Uint8List(sha256.blockSize ~/ 2) : salt;
+    final effectiveSalt = salt.isEmpty
+        ? Uint8List(sha256.blockSize ~/ 2)
+        : salt;
     return Uint8List.fromList(Hmac(sha256, effectiveSalt).convert(ikm).bytes);
   }
 
@@ -26,9 +27,10 @@ class Hkdf {
     var previous = Uint8List(0);
     var counter = 1;
     while (okm.length < length) {
-      final block = Hmac(sha256, prk)
-          .convert([...previous, ...info, counter])
-          .bytes;
+      final block = Hmac(
+        sha256,
+        prk,
+      ).convert([...previous, ...info, counter]).bytes;
       previous = Uint8List.fromList(block);
       okm.add(previous);
       counter++;
@@ -42,8 +44,7 @@ class Hkdf {
     required Uint8List salt,
     required Uint8List info,
     required int length,
-  }) =>
-      expand(extract(salt, ikm), info, length);
+  }) => expand(extract(salt, ikm), info, length);
 }
 
 /// Epoch-based traffic-key rotation driven by HKDF-Expand.
@@ -57,9 +58,9 @@ class RotatingKeySchedule {
     required Uint8List initialSecret,
     this.keyLength = 32,
     this.messagesPerEpoch = 1 << 20,
-  })  : _current = Uint8List.fromList(initialSecret),
-        assert(keyLength > 0),
-        assert(messagesPerEpoch > 0) {
+  }) : _current = Uint8List.fromList(initialSecret),
+       assert(keyLength > 0),
+       assert(messagesPerEpoch > 0) {
     _current = Hkdf.derive(
       ikm: _current,
       salt: Uint8List(0),

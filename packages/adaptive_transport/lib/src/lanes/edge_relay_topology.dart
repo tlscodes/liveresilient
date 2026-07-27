@@ -38,15 +38,15 @@ class TopologyViolation implements Exception {
 
 /// One edge relay node a client may connect to.
 class EdgeRelayNode {
-  EdgeRelayNode({
-    required this.endpoint,
-    this.region,
-    this.priority = 0,
-  });
+  EdgeRelayNode({required this.endpoint, this.region, this.priority = 0});
 
   /// Parses `host:port`, `host`, or a full URL. A bare authority is read
   /// as HTTPS on 443, which is the only shape an edge node should have.
-  factory EdgeRelayNode.parse(String value, {String? region, int priority = 0}) {
+  factory EdgeRelayNode.parse(
+    String value, {
+    String? region,
+    int priority = 0,
+  }) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
       throw const TopologyViolation('empty edge node address');
@@ -75,7 +75,8 @@ class EdgeRelayNode {
   String get authority => '${endpoint.host}:${endpoint.port}';
 
   @override
-  String toString() => 'EdgeRelayNode($authority'
+  String toString() =>
+      'EdgeRelayNode($authority'
       '${region == null ? '' : ', $region'})';
 
   @override
@@ -89,7 +90,7 @@ class EdgeRelayNode {
 /// The client-side topology. There is deliberately no origin field.
 class EdgeBridgeTopology {
   EdgeBridgeTopology({required List<EdgeRelayNode> nodes})
-      : nodes = List<EdgeRelayNode>.unmodifiable(nodes) {
+    : nodes = List<EdgeRelayNode>.unmodifiable(nodes) {
     if (nodes.isEmpty) {
       throw const TopologyViolation('a client needs at least one edge node');
     }
@@ -113,14 +114,10 @@ class EdgeBridgeTopology {
     }
     final raw = config['edgeBridgeNodes'];
     if (raw is! List || raw.isEmpty) {
-      throw const TopologyViolation(
-        'edgeBridgeNodes must be a non-empty list',
-      );
+      throw const TopologyViolation('edgeBridgeNodes must be a non-empty list');
     }
     return EdgeBridgeTopology(
-      nodes: [
-        for (final entry in raw) EdgeRelayNode.parse(entry.toString()),
-      ],
+      nodes: [for (final entry in raw) EdgeRelayNode.parse(entry.toString())],
     );
   }
 
@@ -135,10 +132,8 @@ class EdgeBridgeTopology {
 /// is here to make visible — it is exported so a relay can use it, and
 /// named so its presence in a client dependency graph is obvious.
 class EdgeRelayTopology {
-  EdgeRelayTopology({
-    required this.origin,
-    required List<EdgeRelayNode> peers,
-  }) : peers = List<EdgeRelayNode>.unmodifiable(peers);
+  EdgeRelayTopology({required this.origin, required List<EdgeRelayNode> peers})
+    : peers = List<EdgeRelayNode>.unmodifiable(peers);
 
   /// Where authorized sessions are forwarded. Relay-process only.
   final Uri origin;
@@ -169,7 +164,8 @@ class EdgeNodeHealth {
   }
 
   @override
-  String toString() => 'EdgeNodeHealth(${node.authority}, '
+  String toString() =>
+      'EdgeNodeHealth(${node.authority}, '
       'failures: $consecutiveFailures, eligible: $eligible)';
 }
 
@@ -213,9 +209,9 @@ class EdgeNodeDirectory {
 
   /// Nodes currently outside their backoff window.
   List<EdgeRelayNode> get eligibleNodes => [
-        for (final entry in _health.values)
-          if (entry.eligible) entry.node,
-      ];
+    for (final entry in _health.values)
+      if (entry.eligible) entry.node,
+  ];
 
   /// The order to try nodes in, best first. Never empty while any node is
   /// known: if every node is backing off, the least-recently-failed one is
@@ -226,8 +222,7 @@ class EdgeNodeDirectory {
     if (entries.isEmpty) return const [];
     entries.sort((a, b) {
       if (a.eligible != b.eligible) return a.eligible ? -1 : 1;
-      final byFailures =
-          a.consecutiveFailures.compareTo(b.consecutiveFailures);
+      final byFailures = a.consecutiveFailures.compareTo(b.consecutiveFailures);
       if (byFailures != 0) return byFailures;
       return a.node.priority.compareTo(b.node.priority);
     });
@@ -236,9 +231,11 @@ class EdgeNodeDirectory {
     final leadFailures = entries.first.consecutiveFailures;
     final leadEligible = entries.first.eligible;
     final lead = entries
-        .where((e) =>
-            e.eligible == leadEligible &&
-            e.consecutiveFailures == leadFailures)
+        .where(
+          (e) =>
+              e.eligible == leadEligible &&
+              e.consecutiveFailures == leadFailures,
+        )
         .toList();
     final rest = entries.where((e) => !lead.contains(e)).toList();
     final offset = lead.isEmpty ? 0 : _rotation % lead.length;
@@ -249,8 +246,9 @@ class EdgeNodeDirectory {
   }
 
   /// Endpoints in [preferredOrder], ready to hand to a lane.
-  List<Uri> get preferredEndpoints =>
-      [for (final node in preferredOrder) node.endpoint];
+  List<Uri> get preferredEndpoints => [
+    for (final node in preferredOrder) node.endpoint,
+  ];
 
   /// Advances the round-robin cursor. Called once per connect attempt.
   void advanceRotation() => _rotation++;
@@ -277,8 +275,9 @@ class EdgeNodeDirectory {
         break;
       }
     }
-    entry.backoffUntil =
-        clock.now().add(Duration(microseconds: min(micros, maxBackoff.inMicroseconds)));
+    entry.backoffUntil = clock.now().add(
+      Duration(microseconds: min(micros, maxBackoff.inMicroseconds)),
+    );
   }
 
   /// Current backoff for [node], or null when it is not backing off.

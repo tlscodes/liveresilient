@@ -8,16 +8,16 @@ import 'package:clock/clock.dart';
 import 'package:test/test.dart';
 
 const _keyId = 'relay-key-1';
-final Uint8List _secret =
-    Uint8List.fromList(List<int>.generate(32, (i) => i * 7 + 1));
+final Uint8List _secret = Uint8List.fromList(
+  List<int>.generate(32, (i) => i * 7 + 1),
+);
 
 AuthenticatedRelayServer _server({
   Duration lifetime = const Duration(seconds: 30),
-}) =>
-    AuthenticatedRelayServer(
-      sharedKeys: {_keyId: _secret},
-      nonceLifetime: lifetime,
-    );
+}) => AuthenticatedRelayServer(
+  sharedKeys: {_keyId: _secret},
+  nonceLifetime: lifetime,
+);
 
 /// Builds a credential whose MAC is correct for [server].
 SessionCredential _signed(
@@ -84,8 +84,11 @@ void main() {
     test('a forged MAC gets HTTP 401 and is closed', () {
       withClock(Clock.fixed(at), () {
         final server = _server();
-        final good =
-            _signed(server, nonce: 'n-3', issuedAtMs: at.millisecondsSinceEpoch);
+        final good = _signed(
+          server,
+          nonce: 'n-3',
+          issuedAtMs: at.millisecondsSinceEpoch,
+        );
         final tampered = Uint8List.fromList(good.mac)..[0] ^= 0xFF;
         final outcome = server.handleHandshake(
           SessionCredential(
@@ -128,8 +131,11 @@ void main() {
     test('replaying an accepted nonce is refused with 401', () {
       withClock(Clock.fixed(at), () {
         final server = _server();
-        final credential =
-            _signed(server, nonce: 'n-5', issuedAtMs: at.millisecondsSinceEpoch);
+        final credential = _signed(
+          server,
+          nonce: 'n-5',
+          issuedAtMs: at.millisecondsSinceEpoch,
+        );
         expect(server.handleHandshake(credential).accepted, isTrue);
         final replay = server.handleHandshake(credential);
         expect(replay.statusCode, 401);
@@ -240,9 +246,7 @@ void main() {
         hostPort: const HostPort(host: '198.51.100.11', port: 443),
         sniHostName: 'b.relay.example.org',
       ),
-      RelayEndpoint(
-        hostPort: const HostPort(host: '198.51.100.12', port: 443),
-      ),
+      RelayEndpoint(hostPort: const HostPort(host: '198.51.100.12', port: 443)),
     ];
 
     test('defaults the SNI host name to the endpoint host', () {
@@ -286,10 +290,11 @@ void main() {
       expect(connector.currentEndpoint.sniHostName, 'a.relay.example.org');
       connector.reportPathDegraded();
       expect(connector.currentEndpoint.sniHostName, 'b.relay.example.org');
-      expect(
-        connector.rotation.map((e) => e.hostPort.host),
-        ['198.51.100.11', '198.51.100.12', '198.51.100.10'],
-      );
+      expect(connector.rotation.map((e) => e.hostPort.host), [
+        '198.51.100.11',
+        '198.51.100.12',
+        '198.51.100.10',
+      ]);
     });
 
     test('throws once every endpoint has been exhausted', () async {
@@ -323,7 +328,10 @@ void main() {
       expect(connector.backoffCeilingFor(2), const Duration(milliseconds: 400));
       expect(connector.backoffCeilingFor(3), const Duration(milliseconds: 800));
       expect(connector.backoffCeilingFor(9), const Duration(milliseconds: 800));
-      expect(connector.backoffCeilingFor(99), const Duration(milliseconds: 800));
+      expect(
+        connector.backoffCeilingFor(99),
+        const Duration(milliseconds: 800),
+      );
     });
 
     test('every retry waits inside the jittered backoff window', () async {

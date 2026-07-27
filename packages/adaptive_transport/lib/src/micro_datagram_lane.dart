@@ -19,7 +19,7 @@ class MicroDatagramLane {
   /// only permitted for deterministic tests via [allowInsecureRandom] —
   /// padding content is a security surface.
   MicroDatagramLane({Random? random, bool allowInsecureRandom = false})
-      : _random = random ?? Random.secure() {
+    : _random = random ?? Random.secure() {
     if (random != null && !allowInsecureRandom) {
       throw ArgumentError(
         'Injected RNG requires allowInsecureRandom: true (test-only); '
@@ -79,7 +79,8 @@ class MicroDatagramLane {
         '${paddedFrame.length}',
       );
     }
-    final int padLength = (paddedFrame[paddedFrame.length - 2] << 8) |
+    final int padLength =
+        (paddedFrame[paddedFrame.length - 2] << 8) |
         paddedFrame[paddedFrame.length - 1];
     final int originalLength = paddedFrame.length - trailerBytes - padLength;
     if (originalLength < 0) {

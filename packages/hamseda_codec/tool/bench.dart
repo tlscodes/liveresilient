@@ -7,8 +7,8 @@ import 'dart:io';
 import 'package:hamseda_codec/hamseda_codec.dart';
 
 void main(List<String> args) {
-  final d = jsonDecode(File(args[0]).readAsStringSync())
-      as Map<String, dynamic>;
+  final d =
+      jsonDecode(File(args[0]).readAsStringSync()) as Map<String, dynamic>;
   final cols = [for (final c in d['cols'] as List) List<int>.from(c as List)];
   final nRows = d['n_rows'] as int;
   final sec = (d['sec'] as num).toDouble();
@@ -32,11 +32,19 @@ void main(List<String> args) {
   final rtFactorCold = (sec * 1000) / (coldMs == 0 ? 1 : coldMs);
   final rtFactorWarm = (sec * 1000) / (warmMs == 0 ? 1 : warmMs);
   stdout.writeln('frames=${cols.length} audio=${sec.toStringAsFixed(1)}s');
-  stdout.writeln('cold encode: ${coldMs}ms  (${rtFactorCold.toStringAsFixed(1)}x real-time)');
-  stdout.writeln('warm encode: ${warmMs}ms  (${rtFactorWarm.toStringAsFixed(1)}x real-time)');
+  stdout.writeln(
+    'cold encode: ${coldMs}ms  (${rtFactorCold.toStringAsFixed(1)}x real-time)',
+  );
+  stdout.writeln(
+    'warm encode: ${warmMs}ms  (${rtFactorWarm.toStringAsFixed(1)}x real-time)',
+  );
   stdout.writeln('decode both: ${decMs}ms');
-  stdout.writeln('state size (json): $stateBytes bytes '
-      '(${(stateBytes / 1024).toStringAsFixed(1)} KB)');
-  stdout.writeln('dict entries: ${st.dict.cols.length} · '
-      'ctx tables: ${st.ctx.length} · ctx2 tables: ${st.ctx2.length}');
+  stdout.writeln(
+    'state size (json): $stateBytes bytes '
+    '(${(stateBytes / 1024).toStringAsFixed(1)} KB)',
+  );
+  stdout.writeln(
+    'dict entries: ${st.dict.cols.length} · '
+    'ctx tables: ${st.ctx.length} · ctx2 tables: ${st.ctx2.length}',
+  );
 }

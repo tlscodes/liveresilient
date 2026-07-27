@@ -24,8 +24,11 @@ void main() {
         );
         for (final size in [0, 1, 40, 160, 1300]) {
           final payload = _payload(size);
-          expect(TrafficShaper.unshape(shaper.shape(payload)), payload,
-              reason: '$distribution at $size bytes');
+          expect(
+            TrafficShaper.unshape(shaper.shape(payload)),
+            payload,
+            reason: '$distribution at $size bytes',
+          );
         }
       }
     });
@@ -50,8 +53,11 @@ void main() {
         ),
       );
       final draws = {for (var i = 0; i < 500; i++) shaper.paddingFor(100)};
-      expect(draws.length, greaterThan(60),
-          reason: 'a uniform draw must not collapse onto a few values');
+      expect(
+        draws.length,
+        greaterThan(60),
+        reason: 'a uniform draw must not collapse onto a few values',
+      );
       expect(draws.reduce(max), greaterThan(80));
       expect(draws.reduce(min), lessThan(16));
     });
@@ -143,10 +149,10 @@ void main() {
 
   group('AdaptiveJitter', () {
     AdaptiveJitter jitter(TrafficShapingPolicy policy) => AdaptiveJitter(
-          policy: policy,
-          random: Random(7),
-          allowInsecureRandom: true,
-        );
+      policy: policy,
+      random: Random(7),
+      allowInsecureRandom: true,
+    );
 
     test('stays inside the policy ceiling when not bursting', () {
       const policy = TrafficShapingPolicy(

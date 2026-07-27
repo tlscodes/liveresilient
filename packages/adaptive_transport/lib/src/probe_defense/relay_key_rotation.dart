@@ -94,18 +94,16 @@ class RelayKeyRing {
     this.epochDuration = const Duration(days: 7),
     this.gracePeriod = const Duration(days: 1),
     this.origin,
-  })  : _current = current,
-        _previous = previous,
-        _next = next {
+  }) : _current = current,
+       _previous = previous,
+       _next = next {
     if (epochDuration <= Duration.zero) {
       throw const KeyRotationError('epochDuration must be positive');
     }
     if (gracePeriod > epochDuration) {
       // A grace window longer than an epoch would keep a key valid past
       // the rotation that replaced the one after it.
-      throw const KeyRotationError(
-        'gracePeriod must not exceed epochDuration',
-      );
+      throw const KeyRotationError('gracePeriod must not exceed epochDuration');
     }
     if (previous != null && previous.epoch >= current.epoch) {
       throw const KeyRotationError('previous epoch must precede current');
@@ -166,9 +164,11 @@ class RelayKeyRing {
   DateTime? _rotatedAt;
 
   /// The epoch number for [at].
-  int epochAt(DateTime at) =>
-      _epochAt(at, origin ?? DateTime.fromMillisecondsSinceEpoch(0),
-          epochDuration);
+  int epochAt(DateTime at) => _epochAt(
+    at,
+    origin ?? DateTime.fromMillisecondsSinceEpoch(0),
+    epochDuration,
+  );
 
   static int _epochAt(DateTime at, DateTime origin, Duration epochDuration) {
     final elapsed = at.toUtc().difference(origin.toUtc()).inMicroseconds;
@@ -194,9 +194,9 @@ class RelayKeyRing {
   /// `next` is deliberately absent: it is published so clients can
   /// pre-fetch, not accepted before its time.
   List<RelayKeyEpoch> get admissibleKeys => [
-        _current,
-        if (previousInGrace) _previous!,
-      ];
+    _current,
+    if (previousInGrace) _previous!,
+  ];
 
   /// Promotes `next` to `current`, `current` to `previous`, and installs
   /// [freshNext] as the new `next`.
@@ -232,11 +232,11 @@ class RelayKeyRing {
   /// The public key a client should be provisioned with, plus the one it
   /// should pre-fetch for the next epoch.
   RelayKeyAnnouncement get announcement => RelayKeyAnnouncement(
-        currentEpoch: _current.epoch,
-        currentPublicKey: _current.publicKey,
-        nextEpoch: _next?.epoch,
-        nextPublicKey: _next?.publicKey,
-      );
+    currentEpoch: _current.epoch,
+    currentPublicKey: _current.publicKey,
+    nextEpoch: _next?.epoch,
+    nextPublicKey: _next?.publicKey,
+  );
 }
 
 /// What a relay publishes about its keys. Contains public keys only.
@@ -290,8 +290,8 @@ class RotatingRealityAuthenticator {
     required this.ring,
     KeyAgreement? agreement,
     RealityAuthenticator? replayGuard,
-  })  : _agreement = agreement ?? X25519KeyAgreement(),
-        _guard = replayGuard ?? RealityAuthenticator(credentials: const []);
+  }) : _agreement = agreement ?? X25519KeyAgreement(),
+       _guard = replayGuard ?? RealityAuthenticator(credentials: const []);
 
   final RelayKeyRing ring;
   final KeyAgreement _agreement;
@@ -348,8 +348,7 @@ class RotatingRealityAuthenticator {
       return EpochAdmission(
         decision: decision,
         epoch: decision.admitted ? key.epoch : null,
-        keyUpdateRequired:
-            decision.admitted && key.epoch != ring.current.epoch,
+        keyUpdateRequired: decision.admitted && key.epoch != ring.current.epoch,
         keysTried: tried,
       );
     }
@@ -399,9 +398,9 @@ class RelayKeyUpdate {
 
   /// The update a relay should send to a client admitted on an old key.
   factory RelayKeyUpdate.forRing(RelayKeyRing ring) => RelayKeyUpdate(
-        epoch: ring.current.epoch,
-        publicKey: ring.current.publicKey,
-      );
+    epoch: ring.current.epoch,
+    publicKey: ring.current.publicKey,
+  );
 
   Uint8List encode() {
     final frame = Uint8List(frameLength);
@@ -437,11 +436,7 @@ class RelayKeyUpdate {
     }
     return RelayKeyUpdate(
       epoch: view.getUint32(headerLength),
-      publicKey: Uint8List.sublistView(
-        frame,
-        headerLength + 4,
-        frameLength,
-      ),
+      publicKey: Uint8List.sublistView(frame, headerLength + 4, frameLength),
     );
   }
 }
@@ -450,7 +445,7 @@ class RelayKeyUpdate {
 /// relay says the client is behind.
 class RelayKeyStore {
   RelayKeyStore({required Uint8List publicKey, required this.epoch})
-      : _publicKey = Uint8List.fromList(publicKey);
+    : _publicKey = Uint8List.fromList(publicKey);
 
   Uint8List _publicKey;
   int epoch;

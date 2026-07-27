@@ -16,8 +16,8 @@ import 'hkdf_key_schedule.dart';
 /// AEAD instead).
 class PathValidator {
   PathValidator({required Uint8List sessionKey, this.challengeLength = 8})
-      : _sessionKey = Uint8List.fromList(sessionKey),
-        assert(challengeLength >= 8, 'RFC 9000 uses 8-byte challenges');
+    : _sessionKey = Uint8List.fromList(sessionKey),
+      assert(challengeLength >= 8, 'RFC 9000 uses 8-byte challenges');
 
   final Uint8List _sessionKey;
   final int challengeLength;
@@ -37,8 +37,11 @@ class PathValidator {
   /// sends the returned bytes over the NEW path only.
   Uint8List issueChallenge(String pathId, Uint8List randomBytes) {
     if (randomBytes.length != challengeLength) {
-      throw ArgumentError.value(randomBytes.length, 'randomBytes',
-          'must be exactly $challengeLength bytes');
+      throw ArgumentError.value(
+        randomBytes.length,
+        'randomBytes',
+        'must be exactly $challengeLength bytes',
+      );
     }
     final challenge = Uint8List.fromList(randomBytes);
     _outstanding[pathId] = challenge;
@@ -47,9 +50,8 @@ class PathValidator {
   }
 
   /// What the authenticated peer must answer with.
-  Uint8List expectedResponse(Uint8List challenge) => Uint8List.fromList(
-        Hmac(sha256, _sessionKey).convert(challenge).bytes,
-      );
+  Uint8List expectedResponse(Uint8List challenge) =>
+      Uint8List.fromList(Hmac(sha256, _sessionKey).convert(challenge).bytes);
 
   /// Validates the peer's response for [pathId]. A path becomes usable only
   /// after this returns true; each challenge is single-use.
@@ -61,8 +63,9 @@ class PathValidator {
     }
     final expected = expectedResponse(challenge);
     var diff = expected.length ^ response.length;
-    final len =
-        expected.length < response.length ? expected.length : response.length;
+    final len = expected.length < response.length
+        ? expected.length
+        : response.length;
     for (var i = 0; i < len; i++) {
       diff |= expected[i] ^ response[i];
     }
@@ -85,7 +88,7 @@ class PathValidator {
 /// key (epoch bump) invalidates every previously minted token.
 class SessionContinuityToken {
   SessionContinuityToken({required Uint8List sessionKey})
-      : _sessionKey = Uint8List.fromList(sessionKey);
+    : _sessionKey = Uint8List.fromList(sessionKey);
 
   final Uint8List _sessionKey;
 

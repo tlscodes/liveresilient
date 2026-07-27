@@ -52,7 +52,8 @@ class EdgeRelayNodeStats {
   }
 
   @override
-  String toString() => 'EdgeRelayNodeStats(admitted: $admitted, '
+  String toString() =>
+      'EdgeRelayNodeStats(admitted: $admitted, '
       'passedThrough: $passedThrough, '
       'uplinkFailures: $originUplinkFailures)';
 }
@@ -241,9 +242,9 @@ class TimestampedDuplexStream implements DuplexByteStream {
 
   @override
   Stream<Uint8List> get inbound => _inner.inbound.map((chunk) {
-        firstByteAt ??= clock.now();
-        return chunk;
-      });
+    firstByteAt ??= clock.now();
+    return chunk;
+  });
 
   @override
   void add(Uint8List bytes) => _inner.add(bytes);

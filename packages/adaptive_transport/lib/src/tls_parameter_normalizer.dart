@@ -5,15 +5,28 @@ import 'dart:math';
 /// are reserved values a TLS client sends to stop peers from ossifying
 /// on today's fixed set of extension/cipher IDs.
 class TlsParameterNormalizer {
-  TlsParameterNormalizer({Random? random}) : _random = random ?? Random.secure();
+  TlsParameterNormalizer({Random? random})
+    : _random = random ?? Random.secure();
 
   final Random _random;
 
   static const List<int> greaseValues = [
-    0x0A0A, 0x1A1A, 0x2A2A, 0x3A3A,
-    0x4A4A, 0x5A5A, 0x6A6A, 0x7A7A,
-    0x8A8A, 0x9A9A, 0xAAAA, 0xBABA,
-    0xCACA, 0xDADA, 0xEAEA, 0xFAFA,
+    0x0A0A,
+    0x1A1A,
+    0x2A2A,
+    0x3A3A,
+    0x4A4A,
+    0x5A5A,
+    0x6A6A,
+    0x7A7A,
+    0x8A8A,
+    0x9A9A,
+    0xAAAA,
+    0xBABA,
+    0xCACA,
+    0xDADA,
+    0xEAEA,
+    0xFAFA,
   ];
 
   bool isGreaseValue(int value) => greaseValues.contains(value);

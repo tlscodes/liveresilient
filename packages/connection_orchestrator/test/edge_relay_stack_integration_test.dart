@@ -203,7 +203,10 @@ void main() {
         MediaType.photo,
       );
 
-      final first = transport.flushWireTick(nowMs: 1000, voiceIsSpeaking: false);
+      final first = transport.flushWireTick(
+        nowMs: 1000,
+        voiceIsSpeaking: false,
+      );
       // Started without awaiting the first: its frames would interleave.
       expect(
         () => transport.flushWireTick(nowMs: 1000, voiceIsSpeaking: false),

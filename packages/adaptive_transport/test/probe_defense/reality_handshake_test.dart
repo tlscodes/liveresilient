@@ -69,9 +69,9 @@ void main() {
       // The RFC's own worked example: Alice's and Bob's private keys, and
       // the shared secret they must produce.
       Uint8List hex(String s) => Uint8List.fromList([
-            for (var i = 0; i < s.length; i += 2)
-              int.parse(s.substring(i, i + 2), radix: 16),
-          ]);
+        for (var i = 0; i < s.length; i += 2)
+          int.parse(s.substring(i, i + 2), radix: 16),
+      ]);
       final alicePrivate = hex(
         '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a',
       );
@@ -125,58 +125,72 @@ void main() {
       expect(decision.credential!.shortId, handshake.credential.shortId);
     });
 
-    test('no pre-shared secret travels: the hello carries only a public key',
-        () async {
-      final auth = RealityKeyExchangeAuthenticator(identity: relay);
-      final handshake = await client.begin(
-        clientRandom: _random32(),
-        timeSlot: auth.currentTimeSlot,
-      );
-      final bytes = await hello(handshake);
-      expect(_contains(bytes, handshake.ephemeral.publicKey), isTrue,
-          reason: 'the ephemeral public key is in the key_share');
-      expect(_contains(bytes, handshake.ephemeral.privateKey), isFalse);
-      expect(_contains(bytes, handshake.credential.authKey), isFalse,
-          reason: 'the tag key is derived, never transmitted');
-      expect(_contains(bytes, relay.keyPair.privateKey), isFalse);
-    });
+    test(
+      'no pre-shared secret travels: the hello carries only a public key',
+      () async {
+        final auth = RealityKeyExchangeAuthenticator(identity: relay);
+        final handshake = await client.begin(
+          clientRandom: _random32(),
+          timeSlot: auth.currentTimeSlot,
+        );
+        final bytes = await hello(handshake);
+        expect(
+          _contains(bytes, handshake.ephemeral.publicKey),
+          isTrue,
+          reason: 'the ephemeral public key is in the key_share',
+        );
+        expect(_contains(bytes, handshake.ephemeral.privateKey), isFalse);
+        expect(
+          _contains(bytes, handshake.credential.authKey),
+          isFalse,
+          reason: 'the tag key is derived, never transmitted',
+        );
+        expect(_contains(bytes, relay.keyPair.privateKey), isFalse);
+      },
+    );
 
-    test('a client with the wrong relay public key is passed through',
-        () async {
-      final auth = RealityKeyExchangeAuthenticator(identity: relay);
-      final imposter = RealityClientKeyExchange(
-        relayPublicKey: (await RealityRelayIdentity.generate()).publicKey,
-      );
-      final handshake = await imposter.begin(
-        clientRandom: _random32(),
-        timeSlot: auth.currentTimeSlot,
-      );
-      final decision = await auth.inspect(TlsClientHello.parseRecord(
-        UtlsClientHelloBuilder.wrapInRecord(
-          imposter.buildHello(
-            handshake: handshake,
-            builder: UtlsClientHelloBuilder(
-              profile: UtlsClientProfile.safari17,
-              random: Random(3),
+    test(
+      'a client with the wrong relay public key is passed through',
+      () async {
+        final auth = RealityKeyExchangeAuthenticator(identity: relay);
+        final imposter = RealityClientKeyExchange(
+          relayPublicKey: (await RealityRelayIdentity.generate()).publicKey,
+        );
+        final handshake = await imposter.begin(
+          clientRandom: _random32(),
+          timeSlot: auth.currentTimeSlot,
+        );
+        final decision = await auth.inspect(
+          TlsClientHello.parseRecord(
+            UtlsClientHelloBuilder.wrapInRecord(
+              imposter.buildHello(
+                handshake: handshake,
+                builder: UtlsClientHelloBuilder(
+                  profile: UtlsClientProfile.safari17,
+                  random: Random(3),
+                ),
+                serverName: 'edge.example',
+              ),
             ),
-            serverName: 'edge.example',
           ),
-        ),
-      ));
-      expect(decision.admitted, isFalse);
-      expect(decision.reason, RealityRejectReason.unknownShortId);
-    });
+        );
+        expect(decision.admitted, isFalse);
+        expect(decision.reason, RealityRejectReason.unknownShortId);
+      },
+    );
 
     test('an ordinary browser hello is passed through', () async {
       final auth = RealityKeyExchangeAuthenticator(identity: relay);
-      final decision = await auth.inspect(TlsClientHello.parseRecord(
-        UtlsClientHelloBuilder.wrapInRecord(
-          UtlsClientHelloBuilder(
-            profile: UtlsClientProfile.chrome120,
-            random: Random(11),
-          ).build(serverName: 'edge.example'),
+      final decision = await auth.inspect(
+        TlsClientHello.parseRecord(
+          UtlsClientHelloBuilder.wrapInRecord(
+            UtlsClientHelloBuilder(
+              profile: UtlsClientProfile.chrome120,
+              random: Random(11),
+            ).build(serverName: 'edge.example'),
+          ),
         ),
-      ));
+      );
       expect(decision.admitted, isFalse);
     });
 
@@ -188,18 +202,20 @@ void main() {
       );
       // Chrome's builder puts a placeholder hybrid share in, and its plain
       // X25519 entry is a zero placeholder, not our ephemeral key.
-      final decision = await auth.inspect(TlsClientHello.parseRecord(
-        UtlsClientHelloBuilder.wrapInRecord(
-          UtlsClientHelloBuilder(
-            profile: UtlsClientProfile.chrome120,
-            random: Random(2),
-          ).build(
-            serverName: 'edge.example',
-            clientRandom: handshake.clientRandom,
-            sessionId: handshake.sessionId,
+      final decision = await auth.inspect(
+        TlsClientHello.parseRecord(
+          UtlsClientHelloBuilder.wrapInRecord(
+            UtlsClientHelloBuilder(
+              profile: UtlsClientProfile.chrome120,
+              random: Random(2),
+            ).build(
+              serverName: 'edge.example',
+              clientRandom: handshake.clientRandom,
+              sessionId: handshake.sessionId,
+            ),
           ),
         ),
-      ));
+      );
       expect(decision.admitted, isFalse);
     });
 
@@ -210,8 +226,10 @@ void main() {
         timeSlot: auth.currentTimeSlot,
       );
       final record = await hello(handshake);
-      expect((await auth.inspect(TlsClientHello.parseRecord(record))).admitted,
-          isTrue);
+      expect(
+        (await auth.inspect(TlsClientHello.parseRecord(record))).admitted,
+        isTrue,
+      );
       // A fresh authenticator would admit it again, so the replay memory
       // has to live on the long-lived guard — which it does.
       final replay = await auth.inspect(TlsClientHello.parseRecord(record));
@@ -241,8 +259,11 @@ void main() {
         clientRandom: _random32(2),
         timeSlot: auth.currentTimeSlot,
       );
-      expect(a.credential.shortId, isNot(b.credential.shortId),
-          reason: 'ephemeral keys make every connection independent');
+      expect(
+        a.credential.shortId,
+        isNot(b.credential.shortId),
+        reason: 'ephemeral keys make every connection independent',
+      );
     });
   });
 
@@ -259,8 +280,11 @@ void main() {
       final session = deriveSessionKey(shared);
       expect(session, hasLength(32));
       expect(deriveSessionKey(shared), session);
-      expect(session, isNot(RealityCredential.fromSharedSecret(shared).authKey),
-          reason: 'a different HKDF label must give a different key');
+      expect(
+        session,
+        isNot(RealityCredential.fromSharedSecret(shared).authKey),
+        reason: 'a different HKDF label must give a different key',
+      );
     });
 
     test('honors the requested length', () async {
@@ -283,19 +307,24 @@ void main() {
       );
     });
 
-    test('the frame is 100 bytes: a 4-byte header plus key and signature',
-        () async {
-      final proof = await RealityIdentityProof.create(
-        keyPair: identityKey,
-        transcript: transcript,
-      );
-      final frame = proof.encode();
-      expect(frame, hasLength(RealityIdentityProof.frameLength));
-      expect(frame.length, 100);
-      expect(proof.signature, hasLength(64),
-          reason: 'the full 64 bytes, which session_id could never hold');
-      expect(proof.publicKey, hasLength(32));
-    });
+    test(
+      'the frame is 100 bytes: a 4-byte header plus key and signature',
+      () async {
+        final proof = await RealityIdentityProof.create(
+          keyPair: identityKey,
+          transcript: transcript,
+        );
+        final frame = proof.encode();
+        expect(frame, hasLength(RealityIdentityProof.frameLength));
+        expect(frame.length, 100);
+        expect(
+          proof.signature,
+          hasLength(64),
+          reason: 'the full 64 bytes, which session_id could never hold',
+        );
+        expect(proof.publicKey, hasLength(32));
+      },
+    );
 
     test('round-trips through encode and decode', () async {
       final proof = await RealityIdentityProof.create(
@@ -319,12 +348,14 @@ void main() {
         shortId: Uint8List.fromList(List<int>.filled(8, 0x11)),
         timeSlot: 29_000_000,
       );
-      expect(await proof.verify(other), isFalse,
-          reason: 'a proof lifted from another connection must not verify');
+      expect(
+        await proof.verify(other),
+        isFalse,
+        reason: 'a proof lifted from another connection must not verify',
+      );
     });
 
-    test('verification fails for a signature from another identity',
-        () async {
+    test('verification fails for a signature from another identity', () async {
       final proof = await RealityIdentityProof.create(
         keyPair: identityKey,
         transcript: transcript,
@@ -340,8 +371,7 @@ void main() {
       expect(await mixed.verify(transcript), isFalse);
     });
 
-    test('a garbage signature is a false verification, not a crash',
-        () async {
+    test('a garbage signature is a false verification, not a crash', () async {
       final proof = RealityIdentityProof(
         publicKey: Uint8List(32),
         signature: Uint8List(64),
@@ -353,24 +383,31 @@ void main() {
       final good = (await RealityIdentityProof.create(
         keyPair: identityKey,
         transcript: transcript,
-      ))
-          .encode();
+      )).encode();
 
-      expect(() => RealityIdentityProof.decode(Uint8List(20)),
-          throwsFormatException);
+      expect(
+        () => RealityIdentityProof.decode(Uint8List(20)),
+        throwsFormatException,
+      );
 
       final wrongType = Uint8List.fromList(good)..[0] = 0x02;
-      expect(() => RealityIdentityProof.decode(wrongType),
-          throwsFormatException);
+      expect(
+        () => RealityIdentityProof.decode(wrongType),
+        throwsFormatException,
+      );
 
       final wrongVersion = Uint8List.fromList(good)..[1] = 0x09;
-      expect(() => RealityIdentityProof.decode(wrongVersion),
-          throwsFormatException);
+      expect(
+        () => RealityIdentityProof.decode(wrongVersion),
+        throwsFormatException,
+      );
 
       final wrongLength = Uint8List.fromList(good);
       ByteData.sublistView(wrongLength).setUint16(2, 40);
-      expect(() => RealityIdentityProof.decode(wrongLength),
-          throwsFormatException);
+      expect(
+        () => RealityIdentityProof.decode(wrongLength),
+        throwsFormatException,
+      );
     });
 
     test('the transcript binds every handshake value', () {

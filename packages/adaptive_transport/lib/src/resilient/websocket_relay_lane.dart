@@ -16,9 +16,9 @@ class WebSocketRelayLane implements TransportChannel {
   WebSocketRelayLane({
     required Uri relayUri,
     Duration connectTimeout = const Duration(seconds: 3),
-  })  : _relayUri = relayUri,
-        _connectTimeout = connectTimeout,
-        health = ChannelHealth(reliabilityPrior: 0.75, bandwidth: 0.7);
+  }) : _relayUri = relayUri,
+       _connectTimeout = connectTimeout,
+       health = ChannelHealth(reliabilityPrior: 0.75, bandwidth: 0.7);
 
   final Uri _relayUri;
   final Duration _connectTimeout;
@@ -38,8 +38,9 @@ class WebSocketRelayLane implements TransportChannel {
     if (existing != null && !_dropped) return existing;
     await _closeSocket();
 
-    final socket = await WebSocket.connect(_relayUri.toString())
-        .timeout(_connectTimeout);
+    final socket = await WebSocket.connect(
+      _relayUri.toString(),
+    ).timeout(_connectTimeout);
     _dropped = false;
     _sub = socket.listen(
       (_) {},

@@ -47,18 +47,18 @@ class TlsNamedGroup {
   /// Public-key size on the wire, used when a caller asks the builder to
   /// synthesize a placeholder key share of the right shape.
   static int keyShareLength(int group) => switch (group) {
-        x25519 => 32,
-        secp256r1 => 65,
-        secp384r1 => 97,
-        secp521r1 => 133,
-        // 32-byte X25519 share concatenated with the 1184-byte ML-KEM-768
-        // encapsulation key.
-        x25519MlKem768 => 1216,
-        x25519Kyber768Draft00 => 1216,
-        // 65-byte P-256 point concatenated with the same ML-KEM-768 key.
-        secp256r1MlKem768 => 1249,
-        _ => 32,
-      };
+    x25519 => 32,
+    secp256r1 => 65,
+    secp384r1 => 97,
+    secp521r1 => 133,
+    // 32-byte X25519 share concatenated with the 1184-byte ML-KEM-768
+    // encapsulation key.
+    x25519MlKem768 => 1216,
+    x25519Kyber768Draft00 => 1216,
+    // 65-byte P-256 point concatenated with the same ML-KEM-768 key.
+    secp256r1MlKem768 => 1249,
+    _ => 32,
+  };
 }
 
 /// Which browser a hello should look like.
@@ -117,8 +117,7 @@ class UtlsClientProfile {
   final String defaultTcpProfile;
 
   /// Whether the profile offers a hybrid post-quantum key exchange.
-  bool get offersPostQuantum =>
-      keyShareGroups.any(TlsNamedGroup.isPostQuantum);
+  bool get offersPostQuantum => keyShareGroups.any(TlsNamedGroup.isPostQuantum);
 
   static const UtlsClientProfile chrome120 = UtlsClientProfile(
     id: UtlsProfileId.chrome120,
@@ -153,7 +152,14 @@ class UtlsClientProfile {
     ],
     keyShareGroups: [TlsNamedGroup.x25519MlKem768, TlsNamedGroup.x25519],
     signatureAlgorithms: [
-      0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601,
+      0x0403,
+      0x0804,
+      0x0401,
+      0x0503,
+      0x0805,
+      0x0501,
+      0x0806,
+      0x0601,
     ],
     alpnProtocols: ['h2', 'http/1.1'],
     usesGrease: true,
@@ -250,24 +256,18 @@ class UtlsClientProfile {
 
   /// Look-up by [UtlsProfileId].
   static UtlsClientProfile forId(UtlsProfileId id) => switch (id) {
-        UtlsProfileId.chrome120 => chrome120,
-        UtlsProfileId.firefox120 => firefox120,
-        UtlsProfileId.safari17 => safari17,
-      };
+    UtlsProfileId.chrome120 => chrome120,
+    UtlsProfileId.firefox120 => firefox120,
+    UtlsProfileId.safari17 => safari17,
+  };
 
-  static const List<UtlsClientProfile> all = [
-    chrome120,
-    firefox120,
-    safari17,
-  ];
+  static const List<UtlsClientProfile> all = [chrome120, firefox120, safari17];
 }
 
 /// Builds a byte-exact Client Hello for a [UtlsClientProfile].
 class UtlsClientHelloBuilder {
-  UtlsClientHelloBuilder({
-    required this.profile,
-    Random? random,
-  }) : _random = random ?? Random.secure();
+  UtlsClientHelloBuilder({required this.profile, Random? random})
+    : _random = random ?? Random.secure();
 
   final UtlsClientProfile profile;
   final Random _random;
@@ -349,9 +349,9 @@ class UtlsClientHelloBuilder {
   }
 
   List<int> _cipherSuitesWithGrease() => [
-        if (profile.usesGrease) _pickGrease(),
-        ...profile.cipherSuites,
-      ];
+    if (profile.usesGrease) _pickGrease(),
+    ...profile.cipherSuites,
+  ];
 
   List<TlsExtension> _buildExtensions({
     required String? serverName,
@@ -370,10 +370,12 @@ class UtlsClientHelloBuilder {
       out.add(TlsExtension(type, body));
     }
     if (enableEch) {
-      out.add(TlsExtension(
-        TlsExtensionType.encryptedClientHello,
-        echPayload ?? _greaseEchPayload(),
-      ));
+      out.add(
+        TlsExtension(
+          TlsExtensionType.encryptedClientHello,
+          echPayload ?? _greaseEchPayload(),
+        ),
+      );
     }
     if (profile.usesGrease) {
       // Chrome and Safari close with a second GREASE extension.
@@ -425,7 +427,8 @@ class UtlsClientHelloBuilder {
             ..add(_vector16(Uint8List.fromList(const [0x00])));
         }
         for (final group in profile.keyShareGroups) {
-          final key = keyShares[group] ??
+          final key =
+              keyShares[group] ??
               Uint8List(TlsNamedGroup.keyShareLength(group));
           entries
             ..add(_uint16(group))
@@ -524,10 +527,10 @@ class UtlsClientHelloBuilder {
       Uint8List.fromList([(value >> 8) & 0xFF, value & 0xFF]);
 
   static Uint8List _uint24(int value) => Uint8List.fromList([
-        (value >> 16) & 0xFF,
-        (value >> 8) & 0xFF,
-        value & 0xFF,
-      ]);
+    (value >> 16) & 0xFF,
+    (value >> 8) & 0xFF,
+    value & 0xFF,
+  ]);
 
   static Uint8List _uint16List(List<int> values) {
     final bytes = Uint8List(values.length * 2);

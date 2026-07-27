@@ -11,9 +11,13 @@ import 'host_port.dart';
 /// host through a different address.
 class RelayEndpoint {
   RelayEndpoint({required this.hostPort, String? sniHostName})
-      : sniHostName = sniHostName ?? hostPort.host {
+    : sniHostName = sniHostName ?? hostPort.host {
     if (this.sniHostName.trim().isEmpty) {
-      throw ArgumentError.value(sniHostName, 'sniHostName', 'must not be empty');
+      throw ArgumentError.value(
+        sniHostName,
+        'sniHostName',
+        'must not be empty',
+      );
     }
   }
 
@@ -58,10 +62,10 @@ class MultiHomedConnector<T> {
     this.attemptsPerEndpoint = 1,
     Random? random,
     Future<void> Function(Duration)? sleep,
-  })  : _endpoints = List<RelayEndpoint>.unmodifiable(endpoints),
-        _connect = connect,
-        _random = random ?? Random.secure(),
-        _sleep = sleep ?? Future<void>.delayed {
+  }) : _endpoints = List<RelayEndpoint>.unmodifiable(endpoints),
+       _connect = connect,
+       _random = random ?? Random.secure(),
+       _sleep = sleep ?? Future<void>.delayed {
     if (_endpoints.isEmpty) {
       throw ArgumentError.value(endpoints, 'endpoints', 'must not be empty');
     }
@@ -90,9 +94,9 @@ class MultiHomedConnector<T> {
 
   /// Endpoints in the order the next [connect] will try them.
   List<RelayEndpoint> get rotation => [
-        for (int i = 0; i < _endpoints.length; i++)
-          _endpoints[(_cursor + i) % _endpoints.length],
-      ];
+    for (int i = 0; i < _endpoints.length; i++)
+      _endpoints[(_cursor + i) % _endpoints.length],
+  ];
 
   /// The endpoint the next attempt starts from.
   RelayEndpoint get currentEndpoint => _endpoints[_cursor];
@@ -179,16 +183,19 @@ class HappyEyeballsRacer<T> {
     this.connectionAttemptDelay = const Duration(milliseconds: 250),
     void Function(T connection)? discard,
     DateTime Function()? now,
-  })  : _endpoints = List<RelayEndpoint>.unmodifiable(endpoints),
-        _connect = connect,
-        _discard = discard,
-        _now = now ?? DateTime.now {
+  }) : _endpoints = List<RelayEndpoint>.unmodifiable(endpoints),
+       _connect = connect,
+       _discard = discard,
+       _now = now ?? DateTime.now {
     if (_endpoints.isEmpty) {
       throw ArgumentError.value(endpoints, 'endpoints', 'must not be empty');
     }
     if (connectionAttemptDelay <= Duration.zero) {
-      throw ArgumentError.value(connectionAttemptDelay,
-          'connectionAttemptDelay', 'must be positive');
+      throw ArgumentError.value(
+        connectionAttemptDelay,
+        'connectionAttemptDelay',
+        'must be positive',
+      );
     }
   }
 
@@ -213,40 +220,44 @@ class HappyEyeballsRacer<T> {
       if (result.isCompleted || index >= _endpoints.length) return;
       attemptsStarted++;
       final endpoint = _endpoints[index];
-      _connect(endpoint).then((connection) {
-        if (result.isCompleted) {
-          _discard?.call(connection);
-          return;
-        }
-        stagger?.cancel();
-        result.complete(RacedConnection(
-          endpoint: endpoint,
-          connection: connection,
-          attemptsStarted: attemptsStarted,
-          elapsed: _now().difference(started),
-        ));
-      }).catchError((Object error) {
-        lastError = error;
-        failures++;
-        if (result.isCompleted) return;
-        if (failures == _endpoints.length) {
-          stagger?.cancel();
-          result.completeError(
-            NoReachableEndpointException(attemptsStarted, lastError),
-          );
-        } else if (attemptsStarted < _endpoints.length) {
-          // A failure releases the stagger early (RFC 8305 section 5): start
-          // the next candidate now instead of waiting out the delay.
-          stagger?.cancel();
-          launch(attemptsStarted);
-          if (attemptsStarted < _endpoints.length) {
-            stagger = Timer.periodic(
-              connectionAttemptDelay,
-              (_) => launch(attemptsStarted),
+      _connect(endpoint)
+          .then((connection) {
+            if (result.isCompleted) {
+              _discard?.call(connection);
+              return;
+            }
+            stagger?.cancel();
+            result.complete(
+              RacedConnection(
+                endpoint: endpoint,
+                connection: connection,
+                attemptsStarted: attemptsStarted,
+                elapsed: _now().difference(started),
+              ),
             );
-          }
-        }
-      });
+          })
+          .catchError((Object error) {
+            lastError = error;
+            failures++;
+            if (result.isCompleted) return;
+            if (failures == _endpoints.length) {
+              stagger?.cancel();
+              result.completeError(
+                NoReachableEndpointException(attemptsStarted, lastError),
+              );
+            } else if (attemptsStarted < _endpoints.length) {
+              // A failure releases the stagger early (RFC 8305 section 5): start
+              // the next candidate now instead of waiting out the delay.
+              stagger?.cancel();
+              launch(attemptsStarted);
+              if (attemptsStarted < _endpoints.length) {
+                stagger = Timer.periodic(
+                  connectionAttemptDelay,
+                  (_) => launch(attemptsStarted),
+                );
+              }
+            }
+          });
     }
 
     launch(0);
@@ -268,11 +279,11 @@ class ValidatedSwitcher<T> {
   ValidatedSwitcher({
     required Future<T> Function(RelayEndpoint endpoint) connect,
     required Future<bool> Function(RelayEndpoint endpoint, T connection)
-        validatePath,
+    validatePath,
     void Function(T connection)? discard,
-  })  : _connect = connect,
-        _validatePath = validatePath,
-        _discard = discard;
+  }) : _connect = connect,
+       _validatePath = validatePath,
+       _discard = discard;
 
   final Future<T> Function(RelayEndpoint) _connect;
   final Future<bool> Function(RelayEndpoint, T) _validatePath;
