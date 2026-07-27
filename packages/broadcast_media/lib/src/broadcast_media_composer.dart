@@ -21,6 +21,7 @@ import 'package:hamseda_codec/hamseda_codec.dart';
 
 import 'media_sources.dart';
 import 'payload_envelope.dart';
+import 'spoken_text_plan.dart';
 
 /// What each layer of one post may cost.
 ///
@@ -146,6 +147,7 @@ class BroadcastMediaComposer {
     RasterImage? picture,
     VoiceTokenBlock? voiceTokens,
     HamsedaSession? voiceSession,
+    SpokenTextPlan? spokenText,
     VideoClip? clip,
   }) {
     if (voiceTokens != null && voiceSession == null) {
@@ -153,6 +155,21 @@ class BroadcastMediaComposer {
         voiceSession,
         'voiceSession',
         'token voice needs the session that carries its shared state',
+      );
+    }
+    if (voiceTokens != null && spokenText != null) {
+      throw ArgumentError.value(
+        spokenText,
+        'spokenText',
+        'a post has one voice layer: transmitted tokens or a local reading, '
+            'not both',
+      );
+    }
+    if (spokenText != null && (body == null || body.isEmpty)) {
+      throw ArgumentError.value(
+        spokenText,
+        'spokenText',
+        'there is nothing to read aloud without a text layer',
       );
     }
 
@@ -239,6 +256,23 @@ class BroadcastMediaComposer {
       }
       parts.add(
         PartReport(name: 'voice', bytes: encoded.length, included: fits),
+      );
+    }
+
+    if (spokenText != null) {
+      // A handful of bytes, and no budget check worth writing: this plan
+      // is smaller than the check would be, and dropping it would silence
+      // a post to save nothing.
+      voiceLayer = PayloadEnvelope(
+        kind: PayloadKind.spokenText,
+        body: spokenText.encode(),
+      ).encode();
+      parts.add(
+        PartReport(
+          name: 'voice.spoken-text',
+          bytes: voiceLayer.length,
+          included: true,
+        ),
       );
     }
 
