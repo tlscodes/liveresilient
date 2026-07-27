@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show gzip;
 import 'dart:typed_data';
 
 import 'package:adaptive_transport/adaptive_transport.dart';
@@ -72,8 +73,10 @@ void main() {
     });
 
     test('rejects an unsupported compression flag', () {
+      // 0 and 1 are the flag values gRPC defines; anything else is a
+      // malformed frame, not an encoding this lane merely lacks.
       final frame = framer.encode([1]);
-      frame[0] = 0x01;
+      frame[0] = 0x02;
       expect(() => framer.decode(frame), throwsFormatException);
     });
   });
@@ -116,6 +119,25 @@ void main() {
       reader.add(frame.sublist(0, 6));
       reader.reset();
       expect(reader.add(frame.sublist(6)), isEmpty);
+    });
+
+    test('inflates a payload the peer flagged compressed', () {
+      final payload = List<int>.generate(600, (i) => i % 7);
+      final deflated = gzip.encode(payload);
+      final frame = Uint8List(GrpcMessageFramer.headerLength + deflated.length);
+      frame[0] = GrpcMessageFramer.compressedFlag;
+      ByteData.sublistView(frame).setUint32(1, deflated.length);
+      frame.setRange(GrpcMessageFramer.headerLength, frame.length, deflated);
+
+      expect(GrpcFrameReader().add(frame), [payload]);
+      expect(const GrpcMessageFramer().decode(frame), payload);
+    });
+
+    test('rejects a compression flag that is neither 0 nor 1', () {
+      final frame = Uint8List(GrpcMessageFramer.headerLength + 1);
+      frame[0] = 0x02;
+      ByteData.sublistView(frame).setUint32(1, 1);
+      expect(() => GrpcFrameReader().add(frame), throwsFormatException);
     });
 
     test('rejects a length header above the receive limit', () {

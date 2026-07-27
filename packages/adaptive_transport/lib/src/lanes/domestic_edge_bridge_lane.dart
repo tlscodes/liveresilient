@@ -21,6 +21,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io' show gzip;
 import 'dart:typed_data';
 
 import '../probe_defense/traffic_shaper.dart';
@@ -42,6 +43,13 @@ class GrpcMessageFramer {
   /// already coded by the media stage.
   static const int uncompressedFlag = 0x00;
 
+  /// Compression flag for a message whose payload is compressed with the
+  /// stream's negotiated encoding. This lane never *sets* it — payloads
+  /// arrive already coded by the media stage — but a conforming gRPC peer
+  /// may, so the read path handles it rather than mis-parsing the body.
+  /// gzip is the only encoding accepted; any other flag value is rejected.
+  static const int compressedFlag = 0x01;
+
   /// Largest message this lane will accept off the wire, matching gRPC's
   /// own default receive limit. A length header is peer-controlled and can
   /// declare up to 4 GiB, so without a ceiling a peer can make the reader
@@ -59,16 +67,15 @@ class GrpcMessageFramer {
 
   /// Reverses [encode] for one complete frame.
   ///
+  /// A payload flagged compressed is inflated with gzip before it is
+  /// returned, so callers always see plaintext.
+  ///
   /// Throws [FormatException] when the frame is truncated, declares a
-  /// length that does not match the bytes present, or sets a compression
-  /// flag this lane never produces.
+  /// length that does not match the bytes present, carries a compression
+  /// flag other than 0 or 1, or inflates to more than [maxMessageLength].
   Uint8List decode(Uint8List frame) {
     if (frame.length < headerLength) {
       throw const FormatException('gRPC frame shorter than its header');
-    }
-    if (frame[0] != uncompressedFlag) {
-      throw FormatException('unsupported compression flag 0x'
-          '${frame[0].toRadixString(16)}');
     }
     final declared = ByteData.sublistView(frame).getUint32(1);
     if (frame.length - headerLength != declared) {
@@ -77,7 +84,34 @@ class GrpcMessageFramer {
         '${frame.length - headerLength}',
       );
     }
-    return Uint8List.sublistView(frame, headerLength);
+    return decodeBody(
+      frame[0],
+      Uint8List.sublistView(frame, headerLength),
+    );
+  }
+
+  /// Applies [flag] to an already-delimited message [body].
+  ///
+  /// Shared by [decode] and [GrpcFrameReader] so both paths treat the
+  /// compression flag identically.
+  static Uint8List decodeBody(int flag, Uint8List body) {
+    switch (flag) {
+      case uncompressedFlag:
+        return body;
+      case compressedFlag:
+        final inflated = Uint8List.fromList(gzip.decode(body));
+        if (inflated.length > maxMessageLength) {
+          throw FormatException(
+            'gRPC message inflates to ${inflated.length} bytes, over the '
+            '$maxMessageLength-byte receive limit',
+          );
+        }
+        return inflated;
+      default:
+        throw FormatException(
+          'unsupported gRPC compression flag 0x${flag.toRadixString(16)}',
+        );
+    }
   }
 }
 
@@ -105,8 +139,14 @@ class GrpcFrameReader {
       }
       final total = GrpcMessageFramer.headerLength + declared;
       if (bytes.length - offset < total) break;
-      out.add(Uint8List.fromList(
-        bytes.sublist(offset + GrpcMessageFramer.headerLength, offset + total),
+      out.add(GrpcMessageFramer.decodeBody(
+        bytes[offset],
+        Uint8List.fromList(
+          bytes.sublist(
+            offset + GrpcMessageFramer.headerLength,
+            offset + total,
+          ),
+        ),
       ));
       offset += total;
     }
