@@ -263,6 +263,29 @@ class RealityAuthenticator {
         hello: hello,
       );
     }
+    return verifyWith(hello, credential);
+  }
+
+  /// Verifies [hello] against a [credential] the caller supplied rather
+  /// than one from the registry.
+  ///
+  /// This is the seam a key-exchange front end needs: it derives a fresh
+  /// credential per connection, so there is nothing to register, but it
+  /// must still share *this* instance's clock-skew and replay state. A
+  /// caller that built its own [RealityAuthenticator] per connection would
+  /// silently lose replay defense — the memory would be discarded with the
+  /// object every time.
+  RealityDecision verifyWith(
+    TlsClientHello hello,
+    RealityCredential credential,
+  ) {
+    _expireReplayMemory();
+    if (hello.sessionId.length != RealitySessionIdLayout.totalLength) {
+      return RealityDecision.passThrough(
+        RealityRejectReason.sessionIdWrongSize,
+        hello: hello,
+      );
+    }
 
     final timeSlot = ByteData.sublistView(
       hello.sessionId,
