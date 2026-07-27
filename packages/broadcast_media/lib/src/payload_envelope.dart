@@ -25,7 +25,11 @@ enum PayloadKind {
   videoFrame(4),
 
   /// Several payloads packed together, for the optional heavy layer.
-  bundle(5);
+  bundle(5),
+
+  /// An instruction to speak the post's own text layer aloud on the
+  /// reading device, rather than any transmitted audio.
+  spokenText(6);
 
   const PayloadKind(this.tag);
 

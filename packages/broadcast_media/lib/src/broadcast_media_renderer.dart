@@ -13,6 +13,7 @@ import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:hamseda_codec/hamseda_codec.dart';
 
 import 'payload_envelope.dart';
+import 'spoken_text_plan.dart';
 
 /// Everything recovered from one post.
 class RenderedPost {
@@ -20,6 +21,8 @@ class RenderedPost {
     this.body,
     this.thumbnail,
     this.voiceColumns,
+    this.spokenText,
+    this.voiceProvenance,
     this.videoFrames = const [],
     this.unreadableParts = 0,
   });
@@ -33,6 +36,19 @@ class RenderedPost {
   /// Voice token columns, for the caller's own decoder to turn into sound.
   final List<List<int>>? voiceColumns;
 
+  /// A reading to perform locally, when the post asked for one.
+  ///
+  /// Present only alongside a text layer that verified, because there is
+  /// nothing else this may ever be built from.
+  final SpokenTextRequest? spokenText;
+
+  /// Where this post's audio comes from, when it has any.
+  ///
+  /// Never null when there is audio, and both values mean the same thing
+  /// to a user interface: what the listener hears is not a recording of
+  /// the author. Say so.
+  final VoiceProvenance? voiceProvenance;
+
   /// Video frames in order, as far as they decoded.
   final List<Uint8List> videoFrames;
 
@@ -45,7 +61,11 @@ class RenderedPost {
       body == null &&
       thumbnail == null &&
       voiceColumns == null &&
+      spokenText == null &&
       videoFrames.isEmpty;
+
+  /// Whether this post has audio a reader could play.
+  bool get hasAudio => voiceColumns != null || spokenText != null;
 }
 
 /// Decodes composed layers.
@@ -105,26 +125,51 @@ class BroadcastMediaRenderer {
       }
     }
 
+    SpokenTextRequest? spokenText;
+    VoiceProvenance? provenance;
+
     if (voiceLayer != null) {
       final envelope = PayloadEnvelope.decode(voiceLayer);
-      if (envelope == null ||
-          envelope.kind != PayloadKind.voiceTokens ||
-          voiceSession == null ||
-          voiceFrameCount == null) {
-        unreadable += 1;
-      } else {
-        try {
-          voiceColumns = voiceSession.decodeBlock(
-            envelope.body,
-            voiceFrameCount,
-          );
-          voiceSession.commit();
-        } on Object {
-          // A block that will not decode must not advance the shared
-          // state, or every later block decodes to nonsense.
-          voiceSession.rollback();
+      switch (envelope?.kind) {
+        case PayloadKind.spokenText:
+          final plan = SpokenTextPlan.decode(envelope!.body);
+          if (plan == null || body == null) {
+            // A reading with no verified text behind it is refused. The
+            // engine must never be handed anything that did not survive
+            // the signature and hash checks.
+            unreadable += 1;
+          } else {
+            spokenText = SpokenTextRequest(
+              text: body,
+              language: plan.language,
+              wordsPerMinute: plan.wordsPerMinute,
+            );
+            provenance = VoiceProvenance.synthesizedFromText;
+          }
+        case PayloadKind.voiceTokens:
+          if (voiceSession == null || voiceFrameCount == null) {
+            unreadable += 1;
+          } else {
+            try {
+              voiceColumns = voiceSession.decodeBlock(
+                envelope!.body,
+                voiceFrameCount,
+              );
+              voiceSession.commit();
+              provenance = VoiceProvenance.reconstructedFromTokens;
+            } on Object {
+              // A block that will not decode must not advance the shared
+              // state, or every later block decodes to nonsense.
+              voiceSession.rollback();
+              unreadable += 1;
+            }
+          }
+        case null:
+        case PayloadKind.text:
+        case PayloadKind.imageLevel:
+        case PayloadKind.videoFrame:
+        case PayloadKind.bundle:
           unreadable += 1;
-        }
       }
     }
 
@@ -151,6 +196,7 @@ class BroadcastMediaRenderer {
               }
             case PayloadKind.text:
             case PayloadKind.voiceTokens:
+            case PayloadKind.spokenText:
             case PayloadKind.bundle:
               // A kind that does not belong in the heavy bundle. Counted,
               // never guessed at.
@@ -182,6 +228,8 @@ class BroadcastMediaRenderer {
       body: body,
       thumbnail: thumbnail,
       voiceColumns: voiceColumns,
+      spokenText: spokenText,
+      voiceProvenance: provenance,
       videoFrames: decodedFrames,
       unreadableParts: unreadable,
     );

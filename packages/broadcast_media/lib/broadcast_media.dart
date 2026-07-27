@@ -17,3 +17,4 @@ export 'src/broadcast_media_composer.dart';
 export 'src/broadcast_media_renderer.dart';
 export 'src/media_sources.dart';
 export 'src/payload_envelope.dart';
+export 'src/spoken_text_plan.dart';
