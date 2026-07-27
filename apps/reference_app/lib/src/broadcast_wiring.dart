@@ -73,12 +73,40 @@ List<Uri> broadcastRelayOrigins(Map<String, String> environment) {
 List<BroadcastRelay> broadcastRelaysFromEnvironment(
   Map<String, String> environment, {
   BroadcastHttpTransport? transport,
+}) => broadcastRelaysFor(
+  broadcastRelayOrigins(environment),
+  transport: transport,
+);
+
+/// Builds relay clients for [origins], sharing one transport.
+List<BroadcastRelay> broadcastRelaysFor(
+  List<Uri> origins, {
+  BroadcastHttpTransport? transport,
 }) {
   final shared = transport ?? IoBroadcastHttpTransport();
   return [
-    for (final origin in broadcastRelayOrigins(environment))
+    for (final origin in origins)
       HttpBroadcastRelay(origin: origin, transport: shared),
   ];
+}
+
+/// Resolves which relays to use, preferring a verified signed directory.
+///
+/// The precedence is deliberate. A directory the author signed is the most
+/// authoritative statement of where they publish, and it can arrive over
+/// any one-way channel — a photographed code, a printed page — which is the
+/// only thing that reaches a device already cut off. The environment
+/// variable is the operator's override for a deployment or a test, and the
+/// compiled-in default is the last resort so a reader is never stranded
+/// with nowhere to look.
+List<Uri> resolveBroadcastRelayOrigins({
+  required Map<String, String> environment,
+  required DateTime now,
+  RelayDirectoryStore? directory,
+}) {
+  final held = directory?.current;
+  if (held != null && !now.isAfter(held.notAfter)) return held.origins;
+  return broadcastRelayOrigins(environment);
 }
 
 /// A [BroadcastHttpTransport] over `dart:io`.
