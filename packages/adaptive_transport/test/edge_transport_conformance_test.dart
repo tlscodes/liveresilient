@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 void main() {
   group('MicroDatagramLane', () {
     test('restores payload bit-exact across variable length inputs', () {
-      final lane = MicroDatagramLane(random: Random(1));
+      final lane = MicroDatagramLane(allowInsecureRandom: true, random: Random(1));
       for (final len in [0, 1, 15, 16, 17, 63, 64, 200]) {
         final payload = Uint8List.fromList(
           List.generate(len, (i) => i % 256),
@@ -177,7 +177,7 @@ void main() {
 
   group('end-to-end encapsulation of a padded rateless datagram', () {
     test('HTTP/2 carriage recovers the payload bit-exact', () {
-      final lane = MicroDatagramLane(random: Random(7));
+      final lane = MicroDatagramLane(allowInsecureRandom: true, random: Random(7));
       final framer = SctpDataChannelFramer();
       for (final len in [0, 1, 16, 17, 500, 1400]) {
         final payload =
@@ -199,7 +199,7 @@ void main() {
     });
 
     test('padded frames land on the MTU block boundary', () {
-      final lane = MicroDatagramLane(random: Random(11));
+      final lane = MicroDatagramLane(allowInsecureRandom: true, random: Random(11));
       for (final len in [0, 5, 31, 64, 700]) {
         final padded = lane.encodeWithPadding(Uint8List(len), blockSize: 64);
         expect(padded.length % 64, 0, reason: 'length $len');

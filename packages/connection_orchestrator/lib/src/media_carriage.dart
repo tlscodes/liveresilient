@@ -42,7 +42,10 @@ class MediaCarriage {
     MicroDatagramLane? lane,
     SctpDataChannelFramer? framer,
     Random? random,
-  })  : lane = lane ?? MicroDatagramLane(random: random ?? Random.secure()),
+  })  : lane = lane ??
+            (random == null
+                ? MicroDatagramLane()
+                : MicroDatagramLane(random: random, allowInsecureRandom: true)),
         _framer = framer ?? SctpDataChannelFramer() {
     if (mtuBlockSize < 1) {
       throw ArgumentError.value(mtuBlockSize, 'mtuBlockSize', 'must be >= 1');
@@ -100,13 +103,44 @@ class MediaCarriage {
     }
   }
 
+  /// Wire frames that failed carrier-level decode (bad HTTP/2 or
+  /// DataChannel framing). Surfaced so framing faults are never silently
+  /// absorbed as anonymous packet loss.
+  int get frameDecodeFailures => _frameDecodeFailures;
+  int _frameDecodeFailures = 0;
+
+  /// Frames whose carrier framing was valid but whose padding trailer was
+  /// inconsistent (unpadding failure).
+  int get unpadFailures => _unpadFailures;
+  int _unpadFailures = 0;
+
   CarriedDatagram unwrap(Uint8List wire) {
+    try {
+      return _unwrap(wire);
+    } on _UnpadFailure catch (e) {
+      _unpadFailures++;
+      throw e.cause;
+    } on FormatException {
+      _frameDecodeFailures++;
+      rethrow;
+    }
+  }
+
+  Uint8List _strip(Uint8List padded) {
+    try {
+      return lane.decodeAndStripPadding(padded);
+    } on FormatException catch (e) {
+      throw _UnpadFailure(e);
+    }
+  }
+
+  CarriedDatagram _unwrap(Uint8List wire) {
     switch (carrier) {
       case MediaCarrier.http2DataFrame:
         final frame = Http2DataFrame.decode(wire);
         return CarriedDatagram(
           transferIdForStream(frame.streamId),
-          lane.decodeAndStripPadding(frame.payload),
+          _strip(frame.payload),
         );
       case MediaCarrier.sctpDataChannel:
         final body = _framer.decode(
@@ -123,7 +157,7 @@ class MediaCarriage {
         }
         return CarriedDatagram(
           (body[0] << 8) | body[1],
-          lane.decodeAndStripPadding(Uint8List.sublistView(body, 2)),
+          _strip(Uint8List.sublistView(body, 2)),
         );
     }
   }
@@ -133,4 +167,11 @@ class MediaCarriage {
         MediaCarrier.http2DataFrame => Http2DataFrame.headerLength,
         MediaCarrier.sctpDataChannel => 2,
       };
+}
+
+/// Internal wrapper so [MediaCarriage.unwrap] can attribute a failure to
+/// the padding layer instead of the carrier framing when counting.
+class _UnpadFailure implements Exception {
+  _UnpadFailure(this.cause);
+  final FormatException cause;
 }
