@@ -52,6 +52,24 @@ enum LengthDistribution {
   bucketed,
 }
 
+/// How an inter-send gap is drawn.
+enum JitterDistribution {
+  /// Uniform over `[minJitter, ceiling]`. Bounded by construction, which
+  /// is why it is the default for a live call.
+  uniform,
+
+  /// Exponential gaps — a Poisson arrival process. Memoryless, so the gap
+  /// distribution carries no information about when the previous packet
+  /// went out, which is the property a timing classifier keys on.
+  ///
+  /// The cost is a tail: an exponential draw is unbounded, so gaps are
+  /// clamped at the same ceiling [uniform] uses. Clamping bends the tail
+  /// and the process is therefore only approximately Poisson — stated
+  /// plainly rather than claimed otherwise, since an unbounded tail on a
+  /// voice path would drop frames outright.
+  poisson,
+}
+
 /// Tunables for [TrafficShaper].
 class TrafficShapingPolicy {
   const TrafficShapingPolicy({
@@ -66,7 +84,11 @@ class TrafficShapingPolicy {
     this.burstThreshold = 4,
     this.burstWindow = const Duration(milliseconds: 20),
     this.burstJitterMultiplier = 3,
+    this.jitterDistribution = JitterDistribution.uniform,
   });
+
+  /// How an inter-send gap is drawn. See [JitterDistribution].
+  final JitterDistribution jitterDistribution;
 
   final LengthDistribution distribution;
 
@@ -264,6 +286,18 @@ class AdaptiveJitter {
     final floor = policy.minJitter;
     final spread = ceiling.inMicroseconds - floor.inMicroseconds;
     if (spread <= 0) return floor;
+
+    if (policy.jitterDistribution == JitterDistribution.poisson) {
+      // Inverse-transform sampling of an exponential with mean at the
+      // midpoint of the allowed spread, so the long-run average delay
+      // matches what the uniform draw would have cost.
+      final mean = spread / 2;
+      final u = 1.0 - _random.nextDouble(); // in (0, 1], so log is finite
+      final draw = (-mean * log(u)).round();
+      return Duration(
+        microseconds: floor.inMicroseconds + draw.clamp(0, spread),
+      );
+    }
     return Duration(
       microseconds: floor.inMicroseconds + _random.nextInt(spread + 1),
     );

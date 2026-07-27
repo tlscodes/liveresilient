@@ -17,6 +17,7 @@ class ResilientFallbackTransportChain {
 
   static PathSelector build({
     TransportChannel? primaryUdp,
+    TransportChannel? edgeBridge,
     TransportChannel? webSocketRelay,
     TransportChannel? httpLongPoll,
     TransportChannel? localMesh,
@@ -25,6 +26,13 @@ class ResilientFallbackTransportChain {
   }) {
     final channels = <TransportChannel>[
       if (primaryUdp != null) primaryUdp,
+      // The edge bridge sits directly below direct UDP and above every
+      // other relay: it is the lane that survives an origin-address block,
+      // so when direct egress fails it should be tried before falling
+      // further down the stack. Local mesh stays last — it is the only
+      // lane that works with no egress at all, and also the only one that
+      // cannot reach a peer outside radio range.
+      if (edgeBridge != null) edgeBridge,
       if (webSocketRelay != null) webSocketRelay,
       if (httpLongPoll != null) httpLongPoll,
       if (localMesh != null) localMesh,
