@@ -1,0 +1,7 @@
+# Tests tagged `live-network` reach the public internet and are skipped
+# unless PROBE_DEFENSE_LIVE=1 is set (see
+# test/probe_defense/reality_live_passthrough_test.dart). Declared here so
+# the tag is recognized rather than warned about.
+tags:
+  live-network:
+    timeout: 60s
