@@ -9,11 +9,27 @@ import 'dart:async';
 import 'package:call_core/call_core.dart';
 import 'package:flutter/foundation.dart';
 
+import 'call_session.dart' show newSecureCallId;
+
 class CallDemoController extends ChangeNotifier {
+  /// Mints the id for each new call. Injectable so a test can assert what
+  /// the controller asked for; production never overrides it.
+  CallDemoController({this.mintCallId = newSecureCallId});
+
+  final String Function() mintCallId;
+
   CallPhase phase = CallPhase.idle;
   int reconnectAttempt = 0;
   CallEndReason? endReason;
   bool audioOnly = false;
+
+  /// Id of the call in progress, minted when it was placed; null when no
+  /// call has been placed yet.
+  ///
+  /// This is also the border relay's session id, which is why it is drawn
+  /// from the platform CSPRNG rather than counted up or derived from a
+  /// room name — see [newSecureCallId].
+  String? callId;
 
   Timer? _timer;
 
@@ -33,6 +49,9 @@ class CallDemoController extends ChangeNotifier {
     _timer?.cancel();
     endReason = null;
     audioOnly = false;
+    // A fresh id per call, never reused: an id that outlived its call
+    // would let anyone who saw it rejoin the next one on the relay.
+    callId = mintCallId();
     phase = CallPhase.connecting;
     notifyListeners();
     _timer = Timer(const Duration(milliseconds: 250), () {

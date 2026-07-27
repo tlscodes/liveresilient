@@ -5,6 +5,7 @@ library;
 
 import 'package:call_core/call_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import 'theme.dart';
 
@@ -79,6 +80,7 @@ class CallScreen extends StatelessWidget {
     this.degradedMode,
     this.audioOnly = false,
     this.privacyStatus = 'E2E media · no telemetry without opt-in',
+    this.callId,
     this.onCall,
     this.onHangUp,
   });
@@ -101,6 +103,14 @@ class CallScreen extends StatelessWidget {
 
   /// Always-visible privacy status line.
   final String privacyStatus;
+
+  /// The current call's id, shown only while a call is active.
+  ///
+  /// It is also the border relay's session id, so it is what the other
+  /// side needs in order to join — and equally what an eavesdropper needs
+  /// in order to attach. The screen labels it as a secret and never shows
+  /// it once the call has ended.
+  final String? callId;
 
   /// Invoked when the user taps the call button. Null hides/disables it.
   final VoidCallback? onCall;
@@ -164,6 +174,10 @@ class CallScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ],
+            if (_isActive && callId != null) ...[
+              const SizedBox(height: Spacing.s12),
+              _CallIdCard(callId: callId!),
+            ],
             if (audioOnly) ...[
               const SizedBox(height: Spacing.s12),
               Chip(
@@ -182,6 +196,61 @@ class CallScreen extends StatelessWidget {
               privacyStatus,
               style: theme.textTheme.bodySmall,
               textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shows the call id with a copy action, labelled as the secret it is.
+class _CallIdCard extends StatelessWidget {
+  const _CallIdCard({required this.callId});
+
+  final String callId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.s16,
+          vertical: Spacing.s12,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.key, size: 16, color: theme.colorScheme.primary),
+                const SizedBox(width: Spacing.s8),
+                Text('Call key', style: theme.textTheme.labelLarge),
+              ],
+            ),
+            const SizedBox(height: Spacing.s8),
+            SelectableText(
+              callId,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontFamily: 'monospace',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: Spacing.s8),
+            Text(
+              'Share only with the person you are calling — anyone with '
+              'this key can join.',
+              style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: Spacing.s8),
+            TextButton.icon(
+              onPressed: () => Clipboard.setData(ClipboardData(text: callId)),
+              icon: const Icon(Icons.copy, size: 18),
+              label: const Text('Copy'),
             ),
           ],
         ),
