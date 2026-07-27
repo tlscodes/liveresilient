@@ -68,6 +68,39 @@ typedef CallSessionBuilder =
       required CallRole role,
     });
 
+/// The deployed border relay, used when nothing in the environment names
+/// one. Source lives in `tools/cloudflare_relay_worker`.
+const String defaultBorderRelayHost =
+    'voice-call-relay.tlscodes-com.workers.dev';
+
+/// The WAN fallback lanes for [callId], pointed at [defaultBorderRelayHost].
+///
+/// The call id doubles as the relay session id, so both peers of one call
+/// meet on the same relay session without another identifier to exchange.
+/// That makes the call id a shared secret: anyone who holds it can attach
+/// to the relay as the missing side. Call ids must be unguessable.
+///
+/// Roles follow the call: the initiator is `'a'`, the responder `'b'`, so
+/// each side reads what the other wrote.
+///
+/// No UDP lane — the relay speaks HTTP and WebSocket only. Set
+/// `FALLBACK_UDP_ENDPOINT` to add a direct media endpoint of your own.
+ResilientLaneEndpoints defaultBorderRelayEndpoints({
+  required String callId,
+  required CallRole role,
+  String relayHost = defaultBorderRelayHost,
+}) {
+  // The relay accepts [A-Za-z0-9._-]; anything else in a call id is
+  // replaced rather than rejected, so an id with a colon or slash in it
+  // still yields a usable session instead of failing the whole call.
+  final session = callId.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '-');
+  return ResilientLaneEndpoints.cloudflareWorker(
+    workerHost: relayHost,
+    session: session.isEmpty ? 'unnamed' : session,
+    role: role == CallRole.initiator ? 'a' : 'b',
+  );
+}
+
 /// Production wiring (mirrors the integration suite's `CallStack`, with the
 /// real WebRTC media session instead of the handshake fake).
 CallSessionHandle buildWebRtcCallSession({
@@ -201,7 +234,10 @@ CallSessionHandle buildWebRtcCallSession({
   ResilientFallbackLanes.buildAndRegister(
     fabric,
     fallbackLanes ??
-        ResilientLaneEndpoints.fromEnvironment(Platform.environment),
+        ResilientLaneEndpoints.fromEnvironment(
+          Platform.environment,
+          defaults: defaultBorderRelayEndpoints(callId: callId, role: role),
+        ),
   );
   fabric.onUnhealthy(() => controller.requestRecovery());
   final degradedModeDriver = DegradedModeDriver(
