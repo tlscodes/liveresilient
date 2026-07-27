@@ -83,6 +83,58 @@ melos run test
 melos run guard      # architecture guard (also a required CI check)
 ```
 
+`tools/workspace_gate.sh` runs analysis and tests over every package and
+the app in one pass, choosing `flutter test` for Flutter packages, and
+prints a per-package count with a total.
+
+## Fallback lanes and the border relay
+
+When the live WebRTC path dies, `ConnectionFabric` fails over to the
+resilient lanes: direct UDP, a WebSocket relay, an HTTP long-poll, and a
+local peer mesh. Each lane is registered only when it has an endpoint —
+a lane aimed at nowhere would look healthy to the ranker while delivering
+nothing, which is worse than no lane at all.
+
+The two WAN lanes terminate on a border relay. One is deployed:
+
+```
+voice-call-relay.tlscodes-com.workers.dev
+```
+
+Source is `tools/cloudflare_relay_worker/` (see its README for the
+protocol and for the deploy command). The app uses it by default, keying
+the relay session on the call id and the role on the call role. Anything
+in the environment overrides that:
+
+```
+FALLBACK_RELAY_HOST      swap the relay host
+FALLBACK_RELAY_SESSION   relay session id (a shared secret, not a call number)
+FALLBACK_RELAY_ROLE      a | b
+FALLBACK_WS_ENDPOINT     override that one lane with a full URI
+FALLBACK_HTTP_ENDPOINT   override that one lane with a full URI
+FALLBACK_UDP_ENDPOINT    host:port for a direct media endpoint
+```
+
+Because the call id doubles as the relay session id, call ids must be
+unguessable: anyone holding one can attach to the relay as the missing
+side. Payloads are sealed by the call's own session keys before they reach
+the relay, so what leaks is the connection, not the content.
+
+### Running the fallback simulations
+
+Both suites are in-memory or loopback only — neither reaches the deployed
+relay, because a test pointed at it would be measuring Cloudflare's uptime
+rather than this code.
+
+```
+# failover: media keeps its sequence when the live path dies mid-stream
+cd apps/reference_app && flutter test test/fallback_lane_failover_e2e_test.dart
+
+# relay protocol: the real lanes against a loopback server implementing
+# the same routes as the worker
+cd packages/connection_orchestrator && dart test test/cloudflare_relay_protocol_test.dart
+```
+
 ## Design and governance documents
 
 - `docs/ARCHITECTURE.md` — layering, package responsibilities, call flow.
