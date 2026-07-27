@@ -32,6 +32,24 @@ const SESSION_IDLE_MS = 5 * 60_000;
 
 const OTHER = { a: 'b', b: 'a' };
 
+/** Served for every path that is not a relay route. */
+const LANDING_PAGE = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Service Operational</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;display:grid;
+place-items:center;min-height:100vh;color:#333;background:#fafafa}
+main{text-align:center}h1{font-weight:500;font-size:1.25rem;margin:0 0 .5rem}
+p{margin:0;color:#777;font-size:.9rem}
+</style>
+</head>
+<body><main><h1>Service Operational</h1><p>This endpoint is running.</p></main></body>
+</html>
+`;
+
 function badRequest(message) {
   return new Response(`${message}\n`, { status: 400 });
 }
@@ -61,8 +79,22 @@ export default {
     if (url.pathname === '/health') {
       return new Response('ok\n', { status: 200 });
     }
+
+    // Anything that is not a relay route gets an ordinary page rather
+    // than a 404. A scanner that probes a host and gets "not found" on
+    // every path learns the host answers only on secret paths, which is
+    // itself a signal; a plain page is the same answer any unremarkable
+    // site gives. It claims to be nothing in particular and imitates no
+    // real service — the point is to be uninteresting, not to pass as
+    // someone else.
     if (url.pathname !== '/ws' && url.pathname !== '/http') {
-      return new Response('not found\n', { status: 404 });
+      return new Response(LANDING_PAGE, {
+        status: 200,
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'public, max-age=3600',
+        },
+      });
     }
 
     const route = readRoute(url);

@@ -117,8 +117,28 @@ FALLBACK_UDP_ENDPOINT    host:port for a direct media endpoint
 
 Because the call id doubles as the relay session id, call ids must be
 unguessable: anyone holding one can attach to the relay as the missing
-side. Payloads are sealed by the call's own session keys before they reach
-the relay, so what leaks is the connection, not the content.
+side. `newSecureCallId()` mints one from `Random.secure()` — 128 bits in
+the relay's own alphabet, so it needs no sanitising. Payloads are sealed
+by the call's own session keys before they reach the relay, so what leaks
+is the connection, not the content.
+
+### Behaviour at the bottom of the link
+
+The floor these lanes are built for is Hamseda v4's warm rate: **31.8 bps,
+roughly four bytes per second.** At that budget the framing is not a
+rounding error — a 4-byte media frame carries a 5-byte gRPC header, so it
+costs 9 bytes, more than two seconds of link. That header is the
+protocol's and cannot be tuned to zero here; what this code guarantees is
+that it sends the frame **once**, unpadded and unre-framed, and that the
+HTTP lane's liveness probe (`HEAD`) never consumes a queued frame.
+
+What the fabric adds at that floor is survival rather than speed. Under a
+simulated 4 bytes/sec budget with 90% loss, every frame is either sent or
+parked in the delay-tolerant queue — never rejected, never dropped, never
+timed out — and the backlog drains **in order** the moment capacity
+returns. That is asserted, not asserted-by-comment, in
+`packages/connection_orchestrator/test/resilient_fallback_lanes_test.dart`
+under "ultra-low bitrate survival".
 
 ### Running the fallback simulations
 

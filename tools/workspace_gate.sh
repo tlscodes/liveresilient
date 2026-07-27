@@ -54,4 +54,33 @@ run_target apps/reference_app flutter
 
 echo "---------------------------------------------"
 echo "TOTAL PASSED: $total"
+
+# The three repo-wide gates CI also runs, so a local pass means the same
+# thing a CI pass does.
+echo "--- repo-wide gates ---"
+
+if dart format --output=none --set-exit-if-changed . > /tmp/gate-format.log 2>&1
+then
+  echo "OK   format"
+else
+  echo "FAIL format          $(grep -c '^Changed' /tmp/gate-format.log) file(s)"
+  fail=1
+fi
+
+if dart analyze --fatal-infos --fatal-warnings > /tmp/gate-analyze.log 2>&1; then
+  echo "OK   analyze"
+else
+  echo "FAIL analyze"
+  grep -E ' (error|warning|info) ' /tmp/gate-analyze.log | head -20
+  fail=1
+fi
+
+if dart run tool/architecture_guard.dart > /tmp/gate-guard.log 2>&1; then
+  echo "OK   architecture guard"
+else
+  echo "FAIL architecture guard"
+  tail -10 /tmp/gate-guard.log
+  fail=1
+fi
+
 exit "$fail"

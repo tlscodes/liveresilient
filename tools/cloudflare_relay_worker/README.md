@@ -17,6 +17,13 @@ client uses is opaque to it.
 | `/http?session=<id>&role=<a\|b>` | POST | send frame bytes |
 | `/http?session=<id>&role=<a\|b>&wait=<ms>` | GET | long-poll for frames (`204` when none) |
 | `/health` | GET | liveness |
+| anything else | GET | a plain HTML page, `200` |
+
+Every other path answers with an ordinary page rather than `404`. A host
+that returns "not found" on every path it does not secretly serve has told
+a scanner that it only answers on secret paths, which is itself a signal.
+The page claims to be nothing in particular and imitates no real product
+or company — the goal is to be uninteresting, not to pass as someone else.
 
 `session` is 1–128 characters of `[A-Za-z0-9._-]`. `role` is `a` for the
 caller and `b` for the callee; each side reads what the other wrote.
@@ -102,6 +109,23 @@ session id can attach as the missing role. Session ids must therefore be
 unguessable — treat them as secrets, not as call numbers. The payloads
 themselves are already sealed by the client's own session keys before they
 reach this code, so the relay sees ciphertext either way.
+
+## Carrying a 31.8 bps link
+
+The lanes this relay terminates are built for Hamseda v4's warm floor —
+about four bytes per second. The relay adds nothing to a frame: it
+forwards the bytes it received, so the only overhead a tiny frame pays is
+the client's own 5-byte gRPC header and the transport's.
+
+Which transport matters at that budget. A WebSocket frame adds a couple of
+bytes; an HTTP POST adds request headers measured in hundreds. That is why
+the long-poll lane ranks last and is a lane of last resort rather than a
+peer of the relay lane — and why a poll returns **everything queued in one
+body**, so a client that fell behind pays the header cost once instead of
+once per frame.
+
+The relay never drops a frame for being small or slow. It drops only when
+a queue bound is hit, and then the oldest first.
 
 ## Bounds
 
