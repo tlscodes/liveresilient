@@ -83,4 +83,21 @@ else
   fail=1
 fi
 
+# The relay worker is JavaScript, so it sits outside the Dart gates above.
+# Mirrored here from the CI relay job so a local run covers the same
+# ground; skipped rather than failed when node is absent, because the
+# Dart workspace does not need it.
+if command -v node > /dev/null 2>&1; then
+  if (cd tools/cloudflare_relay_worker && node --test) \
+      > /tmp/gate-worker.log 2>&1; then
+    echo "OK   relay worker      $(grep -c '^✔' /tmp/gate-worker.log) passed"
+  else
+    echo "FAIL relay worker"
+    grep -E '^(✖|not ok)' /tmp/gate-worker.log | head -10
+    fail=1
+  fi
+else
+  echo "SKIP relay worker      node not installed"
+fi
+
 exit "$fail"

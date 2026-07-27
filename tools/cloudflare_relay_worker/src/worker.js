@@ -13,10 +13,19 @@
  * gRPC length-prefixed framing is the client's business; the relay would
  * behave identically if the frames were anything else.
  *
+ * A third, unrelated surface also terminates here — the broadcast routes
+ * `/a/<authorId>/<seq>` and `/o/<hash>`, handled in `broadcast.js`. They
+ * share nothing with the call lanes but the hostname: no session, no
+ * pairing, no live path. They are immutable reads with short retention,
+ * which is why they can be cached at the edge while a call frame never
+ * can.
+ *
  * State lives in a Durable Object because pairing two peers requires one
  * place that both requests reach. A stateless Worker cannot do it: two
  * requests for the same session can land on different machines.
  */
+
+import { BroadcastArchive, parseBroadcastPath } from './broadcast.js';
 
 /** Frames buffered for a peer that has not connected yet, per direction. */
 const MAX_QUEUED_FRAMES = 256;
@@ -80,6 +89,15 @@ export default {
       return new Response('ok\n', { status: 200 });
     }
 
+    // Broadcast is checked before the landing page so a malformed
+    // broadcast path falls through to the same ordinary page every other
+    // unknown path gets, rather than announcing that the route exists.
+    const broadcast = parseBroadcastPath(url.pathname);
+    if (broadcast) {
+      const id = env.BROADCAST_ARCHIVE.idFromName(broadcast.shard);
+      return env.BROADCAST_ARCHIVE.get(id).fetch(request);
+    }
+
     // Anything that is not a relay route gets an ordinary page rather
     // than a 404. A scanner that probes a host and gets "not found" on
     // every path learns the host answers only on secret paths, which is
@@ -104,6 +122,58 @@ export default {
     return env.RELAY_SESSION.get(id).fetch(request);
   },
 };
+
+/**
+ * One shard of the broadcast archive: either one author's descriptors or
+ * one hash prefix's objects.
+ *
+ * All the logic is in `BroadcastArchive`, which knows nothing about the
+ * Durable Object runtime and is unit-tested against a plain object. This
+ * class only supplies the real storage, the real clock, and the alarm
+ * that expires what it holds.
+ */
+export class BroadcastArchiveObject {
+  constructor(state) {
+    this.state = state;
+    this.archive = new BroadcastArchive(state.storage);
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const route = parseBroadcastPath(url.pathname);
+    if (!route) return new Response(null, { status: 404 });
+
+    const body =
+      request.method === 'PUT' || request.method === 'POST'
+        ? await request.arrayBuffer()
+        : null;
+    const response = await this.archive.handle(route, request.method, body);
+
+    // Schedule the sweep after a successful write, not on every request:
+    // setAlarm is idempotent for a time already set, so this costs nothing
+    // when one is already pending.
+    if (response.status === 201) {
+      const pending = await this.state.storage.getAlarm();
+      if (pending === null) {
+        await this.state.storage.setAlarm(Date.now() + 60 * 60 * 1000);
+      }
+    }
+    return response;
+  }
+
+  /** Expires what is past retention, and keeps sweeping while anything is left. */
+  async alarm() {
+    await this.archive.sweep();
+    const remaining = await this.state.storage.list();
+    let live = 0;
+    for (const key of remaining.keys()) {
+      if (key !== 'meta') live += 1;
+    }
+    if (live > 0) {
+      await this.state.storage.setAlarm(Date.now() + 60 * 60 * 1000);
+    }
+  }
+}
 
 /**
  * One call session: at most two peers, 'a' and 'b', and a queue in each
