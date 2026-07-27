@@ -25,6 +25,17 @@ class PrimaryUdpLane implements TransportChannel {
   RawDatagramSocket? _socket;
   InternetAddress? _resolvedAddress;
 
+  /// The socket's single listener. [RawDatagramSocket] exposes a
+  /// single-subscription stream, so the subscription is created once with
+  /// the socket and lives as long as it: cancelling it per-probe and
+  /// re-listening leaves every later probe deaf (the second listen never
+  /// delivers), which reads as a permanently unreachable remote.
+  StreamSubscription<RawSocketEvent>? _subscription;
+
+  /// Completed by the listener when a datagram arrives while a probe is in
+  /// flight. Null whenever no probe is waiting.
+  Completer<bool>? _pendingProbe;
+
   @override
   final ChannelHealth health;
 
@@ -39,6 +50,15 @@ class PrimaryUdpLane implements TransportChannel {
       0,
     );
     _socket = socket;
+    _subscription = socket.listen((event) {
+      if (event != RawSocketEvent.read) return;
+      final packet = socket.receive();
+      if (packet == null) return;
+      final pending = _pendingProbe;
+      if (pending != null && !pending.isCompleted) {
+        pending.complete(true);
+      }
+    });
     return socket;
   }
 
@@ -70,15 +90,7 @@ class PrimaryUdpLane implements TransportChannel {
       final started = DateTime.now();
 
       final completer = Completer<bool>();
-      late final StreamSubscription<RawSocketEvent> sub;
-      sub = socket.listen((event) {
-        if (event == RawSocketEvent.read) {
-          final packet = socket.receive();
-          if (packet != null && !completer.isCompleted) {
-            completer.complete(true);
-          }
-        }
-      });
+      _pendingProbe = completer;
 
       socket.send(Uint8List.fromList(const [0x00]), address, _remote.port);
 
@@ -86,7 +98,7 @@ class PrimaryUdpLane implements TransportChannel {
         _probeTimeout,
         onTimeout: () => false,
       );
-      await sub.cancel();
+      _pendingProbe = null;
 
       final rtt = DateTime.now().difference(started).inMilliseconds;
       health.observe(
@@ -128,6 +140,9 @@ class PrimaryUdpLane implements TransportChannel {
 
   @override
   Future<void> dispose() async {
+    await _subscription?.cancel();
+    _subscription = null;
+    _pendingProbe = null;
     _socket?.close();
     _socket = null;
   }
