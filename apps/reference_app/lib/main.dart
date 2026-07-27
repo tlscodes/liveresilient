@@ -108,6 +108,7 @@ class _HomePageState extends State<HomePage> {
         reconnectAttempt: _call.reconnectAttempt,
         endReason: _call.endReason,
         audioOnly: _call.audioOnly,
+        callId: _call.callId,
         onCall: _call.canCall ? _call.placeCall : null,
         onHangUp: _call.canHangUp ? _call.hangUp : null,
       ),
@@ -179,11 +180,15 @@ class _HomePageState extends State<HomePage> {
 /// the default demo flow, not called from anywhere in this file's widget
 /// tree, and safe to call even with no relay running — failures are caught
 /// and returned as `null` instead of throwing.
-CallSessionHandle? devConnectToLocalRelay({required String callId}) {
+///
+/// [callId] defaults to a fresh [newSecureCallId] — 128 bits from the
+/// platform CSPRNG. It doubles as the border relay's session id, so a
+/// guessable one would let anyone attach to the call as the missing side.
+CallSessionHandle? devConnectToLocalRelay({String? callId}) {
   try {
     return buildWebRtcCallSession(
       endpoint: Uri.parse('wss://localhost:4443'),
-      callId: callId,
+      callId: callId ?? newSecureCallId(),
       role: CallRole.initiator,
     );
   } catch (_) {
