@@ -40,3 +40,4 @@ export 'src/probe_defense/tcp_stack_profile.dart';
 export 'src/probe_defense/traffic_shaper.dart';
 export 'src/probe_defense/probe_defense_config.dart';
 export 'src/probe_defense/socket_duplex_stream.dart';
+export 'src/probe_defense/reality_handshake.dart';
