@@ -99,7 +99,13 @@ CallSessionHandle buildWebRtcCallSession({
   /// registered with the session's fabric alongside the live WebRTC path,
   /// so the fabric can fail over when that path dies. Lanes left
   /// unconfigured are simply absent — the call still runs on WebRTC alone.
-  ResilientLaneEndpoints fallbackLanes = const ResilientLaneEndpoints(),
+  ///
+  /// Defaults to whatever `FALLBACK_UDP_ENDPOINT`, `FALLBACK_WS_ENDPOINT`
+  /// and `FALLBACK_HTTP_ENDPOINT` name in the process environment, so a
+  /// deployment configures its border relays without a code change. Pass a
+  /// value explicitly to bypass the environment entirely (what the tests
+  /// do).
+  ResilientLaneEndpoints? fallbackLanes,
 }) {
   final client = SignalingClient(
     endpoint: endpoint,
@@ -192,7 +198,11 @@ CallSessionHandle buildWebRtcCallSession({
   // The fallback stack, ranked behind the live media path by its own cost
   // ranks. Registered here rather than at first failure so the fabric has
   // health history on each lane before it has to choose one.
-  ResilientFallbackLanes.buildAndRegister(fabric, fallbackLanes);
+  ResilientFallbackLanes.buildAndRegister(
+    fabric,
+    fallbackLanes ??
+        ResilientLaneEndpoints.fromEnvironment(Platform.environment),
+  );
   fabric.onUnhealthy(() => controller.requestRecovery());
   final degradedModeDriver = DegradedModeDriver(
     call: DegradableCallHandle.of(controller),

@@ -1,9 +1,10 @@
-/// The no-dropout survival ladder: one authoritative table mapping the
+/// The no-dropout operating ladder: one authoritative table mapping the
 /// link's usable bit budget to an operating rung, and a controller that
 /// walks that ladder so the call NEVER has no active mode — it only gets
-/// thinner. Downward moves are immediate (survival first); upward moves
-/// are hysteresis-gated one step at a time so a flapping link cannot
-/// bounce the call between rungs.
+/// thinner. Downward moves are immediate (drop to a rung the link can
+/// actually carry, without waiting); upward moves are hysteresis-gated
+/// one step at a time so a flapping link cannot bounce the call between
+/// rungs.
 library;
 
 /// Every way the call can carry the conversation, best first. The list
@@ -11,7 +12,7 @@ library;
 /// per second, so some rung is always available while any bits flow at
 /// all; a link with zero capacity parks on [textOnly] with queued
 /// delivery (store-and-forward) rather than a dropped call.
-enum SurvivalRung {
+enum OperatingRung {
   /// Full audio+video.
   fullVideo,
 
@@ -41,23 +42,23 @@ enum SurvivalRung {
 
 /// Minimum sustained bits-per-second a rung needs to operate. The
 /// authoritative budget table of the ladder — change rungs HERE only.
-const Map<SurvivalRung, int> survivalRungMinBps = {
-  SurvivalRung.fullVideo: 500000,
-  SurvivalRung.reducedVideo: 150000,
-  SurvivalRung.audioOnly: 24000,
-  SurvivalRung.lowRateVoice: 6000,
-  SurvivalRung.tokenVoiceFull: 1600,
-  SurvivalRung.tokenVoiceRow0: 850,
-  SurvivalRung.voiceNotes: 300,
-  SurvivalRung.textOnly: 0,
+const Map<OperatingRung, int> operatingRungMinBps = {
+  OperatingRung.fullVideo: 500000,
+  OperatingRung.reducedVideo: 150000,
+  OperatingRung.audioOnly: 24000,
+  OperatingRung.lowRateVoice: 6000,
+  OperatingRung.tokenVoiceFull: 1600,
+  OperatingRung.tokenVoiceRow0: 850,
+  OperatingRung.voiceNotes: 300,
+  OperatingRung.textOnly: 0,
 };
 
 /// Picks the best rung a [capacityBps] budget can sustain.
-SurvivalRung rungForCapacity(int capacityBps) {
-  for (final rung in SurvivalRung.values) {
-    if (capacityBps >= survivalRungMinBps[rung]!) return rung;
+OperatingRung rungForCapacity(int capacityBps) {
+  for (final rung in OperatingRung.values) {
+    if (capacityBps >= operatingRungMinBps[rung]!) return rung;
   }
-  return SurvivalRung.textOnly; // unreachable: textOnly needs 0
+  return OperatingRung.textOnly; // unreachable: textOnly needs 0
 }
 
 /// Walks the ladder from capacity reports.
@@ -72,34 +73,34 @@ SurvivalRung rungForCapacity(int capacityBps) {
 ///   fullVideo on a single lucky probe;
 /// - an upgrade also requires headroom: capacity must exceed the target
 ///   rung's budget by [headroomFactor] to avoid flapping at boundaries.
-class SurvivalLadder {
-  SurvivalLadder({
+class OperatingLadder {
+  OperatingLadder({
     this.climbAfter = 3,
     this.headroomFactor = 1.25,
-    SurvivalRung initial = SurvivalRung.fullVideo,
+    OperatingRung initial = OperatingRung.fullVideo,
   }) : _current = initial;
 
   final int climbAfter;
   final double headroomFactor;
 
-  SurvivalRung _current;
+  OperatingRung _current;
   int _stableReports = 0;
   int _transitions = 0;
 
-  SurvivalRung get current => _current;
+  OperatingRung get current => _current;
 
   /// Total rung changes so far (flap metric for tests and telemetry).
   int get transitions => _transitions;
 
   /// Feed one capacity report; returns the rung after applying it.
-  SurvivalRung report(int capacityBps) {
+  OperatingRung report(int capacityBps) {
     final target = rungForCapacity(capacityBps);
     if (target.index > _current.index) {
       // Link got worse: step down immediately, one rung per report is
       // NOT enough in a collapse — walk down to the sustainable rung,
       // but through each intermediate step so every layer can react.
       while (_current.index < target.index) {
-        _current = SurvivalRung.values[_current.index + 1];
+        _current = OperatingRung.values[_current.index + 1];
         _transitions++;
       }
       _stableReports = 0;
@@ -107,8 +108,8 @@ class SurvivalLadder {
     }
     if (target.index < _current.index) {
       // Link looks better: climb only after sustained proof + headroom.
-      final oneUp = SurvivalRung.values[_current.index - 1];
-      final needed = (survivalRungMinBps[oneUp]! * headroomFactor).ceil();
+      final oneUp = OperatingRung.values[_current.index - 1];
+      final needed = (operatingRungMinBps[oneUp]! * headroomFactor).ceil();
       if (capacityBps >= needed) {
         _stableReports++;
         if (_stableReports >= climbAfter) {

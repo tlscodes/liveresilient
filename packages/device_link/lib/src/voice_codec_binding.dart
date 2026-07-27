@@ -2,7 +2,7 @@
 /// column"): the model that turns waveform frames into discrete token
 /// columns and back. Like the on-device language model, the codec model
 /// is fetched per device; until it is present, [available] is false and
-/// the survival ladder must skip the token-voice rung.
+/// the operating ladder must skip the token-voice rung.
 ///
 /// This package defines only the binding contract — the real
 /// platform implementation (mobile NPU / desktop) plugs in behind it,
@@ -32,7 +32,7 @@ class VoiceCodecModelInfo {
 }
 
 /// Device binding for the neural voice codec used by the token-voice
-/// survival rung. All methods are async: real implementations cross a
+/// operating rung. All methods are async: real implementations cross a
 /// platform channel and may lazily load the model.
 abstract interface class VoiceCodecBinding {
   /// Whether the codec model is downloaded and loadable on this device.
@@ -52,8 +52,7 @@ abstract interface class VoiceCodecBinding {
 /// model flag and round-trips a deterministic toy tokenization so the
 /// ladder and wire layers can be exercised without a real neural codec.
 class SimulatedVoiceCodecBinding implements VoiceCodecBinding {
-  SimulatedVoiceCodecBinding({bool installed = false})
-      : _installed = installed;
+  SimulatedVoiceCodecBinding({bool installed = false}) : _installed = installed;
 
   bool _installed;
 
@@ -103,7 +102,7 @@ class SimulatedVoiceCodecBinding implements VoiceCodecBinding {
     // Toy reconstruction with the right shape (160 samples per column).
     return [
       for (final col in columns)
-        for (var j = 0; j < 160; j++) (col[0] / 1024.0) * (j.isEven ? 1 : -1)
+        for (var j = 0; j < 160; j++) (col[0] / 1024.0) * (j.isEven ? 1 : -1),
     ];
   }
 }
