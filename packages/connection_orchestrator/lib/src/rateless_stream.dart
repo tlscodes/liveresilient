@@ -11,7 +11,9 @@
 ///
 /// The source data is framed internally as [u32 length][data][zero pad]
 /// so the decoder recovers the exact byte length without extra wire
-/// fields. CRC-8 uses the same polynomial (0x07) as micro_datagram_lane.
+/// fields. CRC-8 uses polynomial 0x07 (CRC-8/ATM); this is the only CRC
+/// in the stack — the padding lane (micro_datagram_lane) carries no CRC,
+/// so its decode failures must be surfaced upstream, not inferred here.
 library;
 
 import 'dart:math' as math;
@@ -170,12 +172,28 @@ class RatelessDecoder {
 
   int get decodedBlockCount => _decodedCount;
 
+  /// Datagrams rejected because the trailing CRC-8 did not match.
+  int get crcRejectCount => _crcRejectCount;
+  int _crcRejectCount = 0;
+
+  /// Datagrams rejected for structural reasons (too short, zero
+  /// blockCount, or blockCount/blockSize disagreeing with the stream).
+  int get structuralRejectCount => _structuralRejectCount;
+  int _structuralRejectCount = 0;
+
   /// Feed one datagram. Returns true if it was accepted (CRC valid and
-  /// structurally sound); corrupted datagrams are rejected untouched.
+  /// structurally sound). Rejections are counted in [crcRejectCount] /
+  /// [structuralRejectCount] so upstream telemetry can distinguish real
+  /// channel loss from framing corruption instead of absorbing both
+  /// silently.
   bool addDatagram(Uint8List datagram) {
-    if (datagram.length < _headerBytes + 1 + _crcBytes) return false;
+    if (datagram.length < _headerBytes + 1 + _crcBytes) {
+      _structuralRejectCount++;
+      return false;
+    }
     if (datagram[datagram.length - 1] !=
         _crc8(datagram, datagram.length - 1)) {
+      _crcRejectCount++;
       return false;
     }
     final bd = datagram.buffer
@@ -183,13 +201,17 @@ class RatelessDecoder {
     final esi = bd.getUint16(0);
     final blockCount = bd.getUint16(2);
     final blockSize = datagram.length - _headerBytes - _crcBytes;
-    if (blockCount == 0) return false;
+    if (blockCount == 0) {
+      _structuralRejectCount++;
+      return false;
+    }
     if (_blockCount == null) {
       _blockCount = blockCount;
       _blockSize = blockSize;
       _decoded = List<Uint8List?>.filled(blockCount, null);
       _cdf = _robustSolitonCdf(blockCount);
     } else if (blockCount != _blockCount || blockSize != _blockSize) {
+      _structuralRejectCount++;
       return false;
     }
     if (isComplete) return true;

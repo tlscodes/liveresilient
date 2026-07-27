@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:connection_orchestrator/connection_orchestrator.dart';
-import 'package:connection_orchestrator/src/media_carriage.dart';
 import 'package:connection_orchestrator/src/media_queue.dart';
 import 'package:test/test.dart';
 
