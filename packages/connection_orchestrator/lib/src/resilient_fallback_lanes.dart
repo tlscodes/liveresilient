@@ -94,10 +94,73 @@ class ResilientLaneEndpoints {
     longPollUri: Uri.parse('https://echo.free.beeceptor.com'),
   );
 
+  /// Builds the WSS and HTTP lanes for a border relay deployed from
+  /// `tools/cloudflare_relay_worker`.
+  ///
+  /// [workerHost] is the deployed hostname (`voice-call-relay.<sub>
+  /// .workers.dev`), [session] the call's session id and [role] `'a'` for
+  /// the caller or `'b'` for the callee — each side reads what the other
+  /// wrote, so the two peers of one call must pass different roles.
+  ///
+  /// The session id is a shared secret, not a call number: anyone who
+  /// guesses it can attach as the missing role. Pass something
+  /// unguessable.
+  ///
+  /// No UDP lane: the worker speaks HTTP and WebSocket only. Direct UDP
+  /// needs a media endpoint of your own.
+  factory ResilientLaneEndpoints.cloudflareWorker({
+    required String workerHost,
+    required String session,
+    required String role,
+    HostPort? udpRemote,
+    DeviceLinkConsent? meshConsent,
+  }) {
+    if (role != 'a' && role != 'b') {
+      throw ArgumentError.value(role, 'role', "must be 'a' or 'b'");
+    }
+    if (session.isEmpty ||
+        session.length > 128 ||
+        !RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(session)) {
+      throw ArgumentError.value(
+        session,
+        'session',
+        'must be 1-128 chars of [A-Za-z0-9._-]',
+      );
+    }
+    final query = {'session': session, 'role': role};
+    return ResilientLaneEndpoints(
+      udpRemote: udpRemote,
+      relayUri: Uri(
+        scheme: 'wss',
+        host: workerHost,
+        path: '/ws',
+        queryParameters: query,
+      ),
+      longPollUri: Uri(
+        scheme: 'https',
+        host: workerHost,
+        path: '/http',
+        queryParameters: query,
+      ),
+      meshConsent: meshConsent,
+    );
+  }
+
   /// Environment variable names, read by [fromEnvironment].
   static const String udpEnvVar = 'FALLBACK_UDP_ENDPOINT';
   static const String wsEnvVar = 'FALLBACK_WS_ENDPOINT';
   static const String httpEnvVar = 'FALLBACK_HTTP_ENDPOINT';
+
+  /// Hostname of a border relay deployed from
+  /// `tools/cloudflare_relay_worker`. Naming it derives both WAN lane URIs
+  /// from the worker's route schema, so a deployment sets one variable
+  /// instead of two full URIs.
+  static const String relayHostEnvVar = 'FALLBACK_RELAY_HOST';
+
+  /// Session id and role for [relayHostEnvVar]. The session id is a shared
+  /// secret — anyone holding it can attach as the other role.
+  static const String relaySessionEnvVar = 'FALLBACK_RELAY_SESSION';
+  static const String relayRoleEnvVar = 'FALLBACK_RELAY_ROLE';
 
   /// Reads the three WAN lanes from [environment], falling back to
   /// [defaults] for any variable that is absent or blank.
@@ -106,6 +169,11 @@ class ResilientLaneEndpoints {
   /// value that will not parse is a configuration error and throws rather
   /// than being dropped — a silently ignored endpoint is how a build ends
   /// up shipping with no fallback path at all.
+  ///
+  /// Naming [relayHostEnvVar] (with [relaySessionEnvVar] and
+  /// [relayRoleEnvVar]) derives both WAN lanes from the border relay's
+  /// route schema. An explicit [wsEnvVar] or [httpEnvVar] still wins over
+  /// the derived value, so one lane can be pointed elsewhere.
   ///
   /// Mesh fields are not environment-driven: they are callbacks into the
   /// platform's link radio, so they come from [defaults] or not at all.
@@ -118,18 +186,38 @@ class ResilientLaneEndpoints {
       return (value == null || value.isEmpty) ? null : value;
     }
 
+    var resolvedDefaults = defaults;
+    final relayHost = read(relayHostEnvVar);
+    if (relayHost != null) {
+      final derived = ResilientLaneEndpoints.cloudflareWorker(
+        workerHost: relayHost,
+        session: read(relaySessionEnvVar) ?? 'default',
+        role: read(relayRoleEnvVar) ?? 'a',
+      );
+      resolvedDefaults = ResilientLaneEndpoints(
+        udpRemote: defaults.udpRemote,
+        relayUri: derived.relayUri,
+        longPollUri: derived.longPollUri,
+        meshSender: defaults.meshSender,
+        meshProbe: defaults.meshProbe,
+        meshConsent: defaults.meshConsent,
+      );
+    }
+    final defaultsToUse = resolvedDefaults;
+
     final udp = read(udpEnvVar);
     final ws = read(wsEnvVar);
     final http = read(httpEnvVar);
 
     return ResilientLaneEndpoints(
-      udpRemote: udp == null ? defaults.udpRemote : _parseHostPort(udp),
-      relayUri: ws == null ? defaults.relayUri : _parseUri(wsEnvVar, ws),
-      longPollUri:
-          http == null ? defaults.longPollUri : _parseUri(httpEnvVar, http),
-      meshSender: defaults.meshSender,
-      meshProbe: defaults.meshProbe,
-      meshConsent: defaults.meshConsent,
+      udpRemote: udp == null ? defaultsToUse.udpRemote : _parseHostPort(udp),
+      relayUri: ws == null ? defaultsToUse.relayUri : _parseUri(wsEnvVar, ws),
+      longPollUri: http == null
+          ? defaultsToUse.longPollUri
+          : _parseUri(httpEnvVar, http),
+      meshSender: defaultsToUse.meshSender,
+      meshProbe: defaultsToUse.meshProbe,
+      meshConsent: defaultsToUse.meshConsent,
     );
   }
 
