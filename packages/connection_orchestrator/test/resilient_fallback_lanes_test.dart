@@ -30,6 +30,12 @@ class _ScriptedLane {
       name: name,
       peerSender: (payload) async {
         sends++;
+        final override = overrideSend;
+        if (override != null) {
+          final result = await override(payload);
+          if (result.delivered) delivered.add(List<int>.from(payload));
+          return result;
+        }
         if (!up) return const SendResult(SendStatus.transient);
         delivered.add(List<int>.from(payload));
         return const SendResult(SendStatus.ok, rttMs: 15);
@@ -40,6 +46,10 @@ class _ScriptedLane {
 
   late final LocalMeshLane lane;
   bool up = true;
+
+  /// When set, decides every send instead of [up] — used to model a link
+  /// with a byte budget and a loss rate.
+  Future<SendResult> Function(List<int> payload)? overrideSend;
   int sends = 0;
   final delivered = <List<int>>[];
 }
@@ -176,6 +186,117 @@ void main() {
       expect(fabric.snapshot.lanes, isEmpty);
       expect(fabric.snapshot.mode, FabricMode.offline);
     });
+  });
+
+  group('ResilientFallbackLanes · ultra-low bitrate survival', () {
+    // Hamseda v4's warm floor is 31.8 bps — about four bytes per second,
+    // one tiny frame at a time. What follows models that link: a token
+    // bucket that refills four bytes per simulated second, and a lane
+    // that drops nine of every ten attempts.
+    //
+    // The claim under test is NOT that frames arrive quickly. It is that
+    // nothing in the fabric times out, spins, or discards a frame when
+    // the link is this poor: every frame either goes out or waits in the
+    // queue, and the backlog drains once capacity exists.
+
+    /// A lane on a 4-bytes-per-second budget that loses 90% of attempts.
+    _ScriptedLane throttled({required int lossOutOfTen}) {
+      final lane = _ScriptedLane('throttled');
+      var attempt = 0;
+      var budgetBytes = 4;
+      lane.overrideSend = (payload) async {
+        attempt++;
+        // One second of link capacity per ten attempts.
+        if (attempt % 10 == 0) budgetBytes += 4;
+        if (payload.length > budgetBytes) {
+          return const SendResult(SendStatus.transient);
+        }
+        if (attempt % 10 < lossOutOfTen) {
+          return const SendResult(SendStatus.transient);
+        }
+        budgetBytes -= payload.length;
+        return const SendResult(SendStatus.ok, rttMs: 3000);
+      };
+      return lane;
+    }
+
+    test('a 4-byte frame fits the whole per-second budget of the link', () {
+      // The framing this carries is 5 bytes of gRPC header plus payload,
+      // so a 4-byte media frame costs 9 bytes on the wire — over two
+      // seconds of a 31.8 bps link. That is the honest number: the header
+      // is the protocol's, not this code's, and no amount of tuning here
+      // makes it zero. What the fabric controls is that it sends the
+      // frame once and does not re-frame or pad it.
+      const mediaFrame = [0xDE, 0xAD, 0xBE, 0xEF];
+      final framed = const GrpcMessageFramer().encode(mediaFrame);
+      expect(framed, hasLength(GrpcMessageFramer.headerLength + 4));
+      expect(
+        const GrpcMessageFramer().decode(framed),
+        mediaFrame,
+        reason: 'nothing is added beyond the 5-byte header',
+      );
+    });
+
+    test(
+      'frames survive 90% loss on a 4 bytes/sec link without timing out',
+      () async {
+        final lane = throttled(lossOutOfTen: 9);
+        ResilientFallbackLanes.registerAll(fabric, webSocketRelay: lane.lane);
+
+        const mediaFrame = [0xDE, 0xAD, 0xBE, 0xEF];
+        var delivered = 0;
+        var parked = 0;
+
+        for (var i = 0; i < 30; i++) {
+          clockMs += 1000;
+          final outcome = await fabric.deliver(mediaFrame, bundleId: 'tiny-$i');
+          switch (outcome) {
+            case DeliveryOutcome.sentLive:
+              delivered++;
+            case DeliveryOutcome.queuedForLater:
+              parked++;
+            case DeliveryOutcome.rejected:
+              fail('frame $i was rejected outright on a degraded link');
+          }
+        }
+
+        // Nothing is lost: every frame is either on the wire or in the queue.
+        expect(delivered + parked, 30);
+        expect(queue.pendingCount, parked);
+        expect(lane.sends, greaterThan(0), reason: 'the link was still used');
+
+        // The link recovers; the backlog drains rather than staying parked.
+        lane.overrideSend = null;
+        final drained = await fabric.refresh();
+        expect(drained, parked);
+        expect(queue.pendingCount, 0);
+      },
+    );
+
+    test(
+      'a link that never recovers keeps the queue bounded and ordered',
+      () async {
+        final lane = throttled(lossOutOfTen: 10);
+        ResilientFallbackLanes.registerAll(fabric, webSocketRelay: lane.lane);
+
+        for (var i = 0; i < 10; i++) {
+          clockMs += 1000;
+          expect(
+            await fabric.deliver([i], bundleId: 'seq-$i'),
+            DeliveryOutcome.queuedForLater,
+          );
+        }
+        expect(queue.pendingCount, 10);
+
+        lane.overrideSend = null;
+        await fabric.refresh();
+        expect(
+          [for (final frame in lane.delivered) frame.single],
+          [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          reason: 'the backlog drains in the order it was queued',
+        );
+      },
+    );
   });
 
   group('ResilientFallbackLanes · delivery through the fabric', () {

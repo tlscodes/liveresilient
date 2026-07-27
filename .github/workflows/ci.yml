@@ -65,12 +65,20 @@ jobs:
             [ -d "${d}test" ] || continue
             # Flutter-SDK packages must use `flutter test`; `dart test` cannot
             # resolve flutter_test and fails with "Could not find package test".
+            # Machine-readable results alongside the human output: an
+            # auditor needs a file to check, not a scrollback. --file-reporter
+            # writes JSON while the console reporter still streams.
+            name="$(echo "$d" | tr -d '/' | tr '.' '_')"
+            report="$PWD/test-reports/${name}.json"
+            mkdir -p "$PWD/test-reports"
             if grep -q 'sdk: flutter' "${d}pubspec.yaml" 2>/dev/null; then
               echo "== testing ${d} (flutter)"
-              (cd "$d" && flutter test --coverage)
+              (cd "$d" && flutter test --coverage \
+                 --file-reporter="json:${report}")
             else
               echo "== testing ${d} (dart)"
-              (cd "$d" && dart test --coverage=coverage)
+              (cd "$d" && dart test --coverage=coverage \
+                 --file-reporter="json:${report}")
             fi
             found=1
           done
@@ -79,17 +87,41 @@ jobs:
             exit 1
           fi
 
-      - name: Upload coverage artifacts
+      # Coverage arrives as per-package LCOV; auditors want one file, so
+      # the pieces are concatenated with each package's paths prefixed
+      # back to repo-root, which is what LCOV consumers expect.
+      - name: Merge coverage into one LCOV report
+        if: always()
+        run: |
+          set -e
+          mkdir -p test-reports
+          out="test-reports/lcov.info"
+          : > "$out"
+          for f in packages/*/coverage/lcov.info apps/*/coverage/lcov.info \
+                   server/*/coverage/lcov.info; do
+            [ -f "$f" ] || continue
+            pkg="$(dirname "$(dirname "$f")")"
+            # SF: lines are package-relative; rewrite to repo-relative.
+            sed "s|^SF:|SF:${pkg}/|" "$f" >> "$out"
+          done
+          lines="$(grep -c '^SF:' "$out" || true)"
+          echo "merged coverage for ${lines} source file(s)"
+          if [ "$lines" = "0" ]; then
+            echo "::error::coverage report is empty"; exit 1
+          fi
+
+      - name: Upload test results and coverage (audit artifacts)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: test-results-and-coverage
           path: |
+            test-reports/
             packages/*/coverage/
             apps/*/coverage/
             server/*/coverage/
-          if-no-files-found: ignore
-          retention-days: 14
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Architecture guard
         run: dart run tool/architecture_guard.dart
@@ -101,6 +133,7 @@ jobs:
             echo "## CI gate — ${{ job.status }}"
             echo "- Flutter ${{ env.FLUTTER_VERSION }} (pinned)"
             echo "- format · analyze(--fatal-infos) · test · architecture_guard"
+            echo "- artifacts: per-package JSON test results + merged lcov.info (90d)"
           } >> "$GITHUB_STEP_SUMMARY"
 
   hygiene:

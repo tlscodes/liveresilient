@@ -7,6 +7,8 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:call_core/call_core.dart';
 import 'package:call_media_adapter/call_media_adapter.dart';
@@ -67,6 +69,27 @@ typedef CallSessionBuilder =
       required String callId,
       required CallRole role,
     });
+
+/// Mints a call id with enough entropy to double as a relay session id.
+///
+/// The call id is what pairs two peers on the border relay, so it is a
+/// shared secret: anyone holding it can attach as the missing side. A
+/// sequential or human-chosen id is therefore a hijacking risk, not a
+/// cosmetic choice. [bytes] defaults to 16 — 128 bits, drawn from
+/// [Random.secure], which is the platform CSPRNG.
+///
+/// The alphabet is base64url without padding, which is exactly the
+/// character set the relay accepts, so the id needs no sanitising later.
+String newSecureCallId({int bytes = 16}) {
+  if (bytes < 16) {
+    throw ArgumentError.value(bytes, 'bytes', 'needs at least 16 (128 bits)');
+  }
+  final random = Random.secure();
+  final entropy = Uint8List.fromList(
+    List<int>.generate(bytes, (_) => random.nextInt(256)),
+  );
+  return base64UrlEncode(entropy).replaceAll('=', '');
+}
 
 /// The deployed border relay, used when nothing in the environment names
 /// one. Source lives in `tools/cloudflare_relay_worker`.

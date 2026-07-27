@@ -74,6 +74,33 @@ void main() {
     expect(ids, isNot(contains(ResilientLaneIds.localMesh)));
   });
 
+  group('newSecureCallId', () {
+    test('is 128 bits of CSPRNG output in the relay alphabet', () {
+      final id = newSecureCallId();
+      // 16 bytes base64url without padding.
+      expect(id, matches(RegExp(r'^[A-Za-z0-9_-]{22}$')));
+      // Needs no sanitising to be a valid relay session id.
+      expect(
+        defaultBorderRelayEndpoints(
+          callId: id,
+          role: CallRole.initiator,
+        ).relayUri!.queryParameters['session'],
+        id,
+      );
+    });
+
+    test('does not repeat across many draws', () {
+      final ids = {for (var i = 0; i < 500; i++) newSecureCallId()};
+      expect(ids, hasLength(500));
+    });
+
+    test('refuses an entropy budget below 128 bits', () {
+      // A short id is the whole hijacking risk, so this is an error
+      // rather than a caller preference.
+      expect(() => newSecureCallId(bytes: 8), throwsArgumentError);
+    });
+  });
+
   group('defaultBorderRelayEndpoints', () {
     test('points both WAN lanes at the deployed relay, keyed on the call', () {
       final caller = defaultBorderRelayEndpoints(
