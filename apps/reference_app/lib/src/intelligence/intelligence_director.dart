@@ -239,7 +239,9 @@ class IntelligenceDirector extends ChangeNotifier {
     if (pending.isEmpty) return;
     final improved = nowLevel == AdvisoryLevel.calm;
     for (final d in pending) {
-      d.outcome = improved ? DecisionOutcome.improved : DecisionOutcome.noEffect;
+      d.outcome = improved
+          ? DecisionOutcome.improved
+          : DecisionOutcome.noEffect;
     }
     if (improved) {
       _ineffectiveStreak = 0;

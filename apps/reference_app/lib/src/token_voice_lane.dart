@@ -14,7 +14,7 @@ import 'package:call_core/call_core.dart';
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:device_link/device_link.dart';
 
-import 'survival_mode_driver.dart' show DegradableCallHandle;
+import 'degraded_mode_driver.dart' show DegradableCallHandle;
 
 class TokenVoiceLane {
   TokenVoiceLane({
@@ -88,8 +88,7 @@ class TokenVoiceLane {
     while (_pendingColumns.length >= framesPerBlock) {
       final block = _pendingColumns.sublist(0, framesPerBlock);
       _pendingColumns.removeRange(0, framesPerBlock);
-      sender.sendBlock(block,
-          nowMs: DateTime.now().millisecondsSinceEpoch);
+      sender.sendBlock(block, nowMs: DateTime.now().millisecondsSinceEpoch);
       blocksSent++;
     }
   }
@@ -104,8 +103,10 @@ class TokenVoiceLane {
     final forward = onForward;
     if (forward == null || _disposed) return;
     try {
-      await queue.flush((bundle) => forward(bundle),
-          nowMs: DateTime.now().millisecondsSinceEpoch);
+      await queue.flush(
+        (bundle) => forward(bundle),
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
     } catch (_) {
       // transport died mid-pulse: bundles stay queued (by contract)
     }

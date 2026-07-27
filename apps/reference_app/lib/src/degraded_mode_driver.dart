@@ -1,7 +1,7 @@
 /// Closes the "call that never fails" loop: watches the live session's two
 /// existing signals — the media-adaptation ladder position and the
 /// controller's reconnect episodes — and drives the controller's
-/// first-class survival phase ([CallPhase.degraded]) from them:
+/// first-class degraded phase ([CallPhase.degraded]) from them:
 ///
 /// - ladder lands on [MediaProfile.lowRateVoice] → the call is marked
 ///   degraded in [DegradedMode.lowRateVoice]; climbing back off the floor
@@ -56,8 +56,8 @@ class DegradableCallHandle {
   final Future<void> Function() exitDegradedMode;
 }
 
-class SurvivalModeDriver {
-  SurvivalModeDriver({
+class DegradedModeDriver {
+  DegradedModeDriver({
     required DegradableCallHandle call,
     required Stream<MediaPolicyDecision> adaptationDecisions,
     Stream<bool>? pathFailingSoon,
@@ -76,9 +76,13 @@ class SurvivalModeDriver {
     // model either is or is not downloaded on this device); a late
     // install upgrades the NEXT degradation, never a running one.
     if (tokenCodec != null) {
-      unawaited(tokenCodec.available.then((ok) {
-        if (!_disposed) _tokenVoiceAvailable = ok;
-      }).catchError((_) {}));
+      unawaited(
+        tokenCodec.available
+            .then((ok) {
+              if (!_disposed) _tokenVoiceAvailable = ok;
+            })
+            .catchError((_) {}),
+      );
     }
     _stateSub = call.states.listen(_onState);
     _decisionSub = adaptationDecisions.listen(_onDecision);
@@ -122,9 +126,8 @@ class SurvivalModeDriver {
 
   /// The rung below live low-rate voice: a token-voice call when the
   /// device has the neural codec model, otherwise voice notes.
-  DegradedMode get _floorMode => _tokenVoiceAvailable
-      ? DegradedMode.tokenVoice
-      : DegradedMode.voiceNotes;
+  DegradedMode get _floorMode =>
+      _tokenVoiceAvailable ? DegradedMode.tokenVoice : DegradedMode.voiceNotes;
 
   void _onFailingSoon(bool failingSoon) {
     if (_disposed || !failingSoon) return;
@@ -205,8 +208,7 @@ class SurvivalModeDriver {
       if (_disposed) return;
       _reconnectEpisodes.clear();
       final mode = _call.stateOf().degradedMode;
-      if (mode == DegradedMode.voiceNotes ||
-          mode == DegradedMode.tokenVoice) {
+      if (mode == DegradedMode.voiceNotes || mode == DegradedMode.tokenVoice) {
         unawaited(_call.exitDegradedMode());
       }
     });

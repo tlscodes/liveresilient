@@ -13,7 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:media_webrtc/media_webrtc.dart' show MediaProfile;
 import 'package:media_webrtc/media_webrtc.dart' as mw;
 import 'package:messaging/messaging.dart';
-import 'package:reference_app/src/survival_mode_driver.dart';
+import 'package:reference_app/src/degraded_mode_driver.dart';
 
 /// In-memory loopback data-channel port pair (mirrors loopback_port.dart's
 /// pattern) so a REAL ReliableMessenger carries the clips.
@@ -98,7 +98,7 @@ void main() {
     fakeAsync((async) {
       final controller = _FakeCall();
       final decisions = StreamController<mw.MediaPolicyDecision>(sync: true);
-      final driver = SurvivalModeDriver(
+      final driver = DegradedModeDriver(
         call: controller.handle,
         adaptationDecisions: decisions.stream,
       );
@@ -138,7 +138,7 @@ void main() {
       final controller = _FakeCall();
       final decisions = StreamController<mw.MediaPolicyDecision>(sync: true);
       final foresight = StreamController<bool>(sync: true);
-      final driver = SurvivalModeDriver(
+      final driver = DegradedModeDriver(
         call: controller.handle,
         adaptationDecisions: decisions.stream,
         pathFailingSoon: foresight.stream,
@@ -166,13 +166,12 @@ void main() {
   });
 
   test('token-voice rung: with the neural codec model installed, the floor '
-      'degradation is tokenVoice (not voiceNotes) and stability exits it',
-      () {
+      'degradation is tokenVoice (not voiceNotes) and stability exits it', () {
     fakeAsync((async) {
       final controller = _FakeCall();
       final decisions = StreamController<mw.MediaPolicyDecision>(sync: true);
       final foresight = StreamController<bool>(sync: true);
-      final driver = SurvivalModeDriver(
+      final driver = DegradedModeDriver(
         call: controller.handle,
         adaptationDecisions: decisions.stream,
         pathFailingSoon: foresight.stream,
@@ -195,13 +194,12 @@ void main() {
     });
   });
 
-  test('token-voice rung: codec NOT installed keeps the voiceNotes floor',
-      () {
+  test('token-voice rung: codec NOT installed keeps the voiceNotes floor', () {
     fakeAsync((async) {
       final controller = _FakeCall();
       final decisions = StreamController<mw.MediaPolicyDecision>(sync: true);
       final foresight = StreamController<bool>(sync: true);
-      final driver = SurvivalModeDriver(
+      final driver = DegradedModeDriver(
         call: controller.handle,
         adaptationDecisions: decisions.stream,
         pathFailingSoon: foresight.stream,
@@ -240,7 +238,7 @@ void main() {
       remoteMessenger.incoming.listen((m) => receiver.offer(m.text));
 
       var clipCounter = 0;
-      final driver = SurvivalModeDriver(
+      final driver = DegradedModeDriver(
         call: controller.handle,
         adaptationDecisions: decisions.stream,
         recordClip: (length) async => List<int>.filled(64, ++clipCounter),
@@ -321,7 +319,7 @@ void main() {
       // return null (mic unavailable) so the flush window below can tick
       // freely without a second capture racing the assertion.
       var clipCounter = 0;
-      final driver = SurvivalModeDriver(
+      final driver = DegradedModeDriver(
         call: controller.handle,
         adaptationDecisions: decisions.stream,
         recordClip: (length) async {
