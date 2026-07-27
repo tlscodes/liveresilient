@@ -15,9 +15,9 @@ class PrimaryUdpLane implements TransportChannel {
   PrimaryUdpLane({
     required HostPort remote,
     Duration probeTimeout = const Duration(milliseconds: 400),
-  })  : _remote = remote,
-        _probeTimeout = probeTimeout,
-        health = ChannelHealth(reliabilityPrior: 0.9, bandwidth: 1.0);
+  }) : _remote = remote,
+       _probeTimeout = probeTimeout,
+       health = ChannelHealth(reliabilityPrior: 0.9, bandwidth: 1.0);
 
   final HostPort _remote;
   final Duration _probeTimeout;
@@ -45,10 +45,7 @@ class PrimaryUdpLane implements TransportChannel {
   Future<RawDatagramSocket> _ensureSocket() async {
     final existing = _socket;
     if (existing != null) return existing;
-    final socket = await RawDatagramSocket.bind(
-      InternetAddress.anyIPv4,
-      0,
-    );
+    final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
     _socket = socket;
     _subscription = socket.listen((event) {
       if (event != RawSocketEvent.read) return;

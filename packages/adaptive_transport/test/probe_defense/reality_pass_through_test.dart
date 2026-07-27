@@ -103,8 +103,7 @@ void main() {
       expect(a.shortId, isNot(b.shortId));
     });
 
-    test('builds a 32-byte session id, which is what a real hello carries',
-        () {
+    test('builds a 32-byte session id, which is what a real hello carries', () {
       final sessionId = _credential().buildSessionId(
         clientRandom: _clientRandom(),
         timeSlot: 100,
@@ -114,10 +113,7 @@ void main() {
 
     test('rejects a short id of the wrong size', () {
       expect(
-        () => RealityCredential(
-          shortId: Uint8List(4),
-          authKey: Uint8List(32),
-        ),
+        () => RealityCredential(shortId: Uint8List(4), authKey: Uint8List(32)),
         throwsA(isA<ArgumentError>()),
       );
     });
@@ -150,13 +146,15 @@ void main() {
     test('passes through a hello with an unregistered short id', () {
       final other = _credential(seed: 99);
       final random = _clientRandom();
-      final decision = auth.inspectRecord(_helloRecord(
-        clientRandom: random,
-        sessionId: other.buildSessionId(
+      final decision = auth.inspectRecord(
+        _helloRecord(
           clientRandom: random,
-          timeSlot: auth.currentTimeSlot,
+          sessionId: other.buildSessionId(
+            clientRandom: random,
+            timeSlot: auth.currentTimeSlot,
+          ),
         ),
-      ));
+      );
       expect(decision.admitted, isFalse);
       expect(decision.reason, RealityRejectReason.unknownShortId);
     });
@@ -168,10 +166,9 @@ void main() {
         timeSlot: auth.currentTimeSlot,
       );
       // Same session id, different client random: the tag no longer binds.
-      final decision = auth.inspectRecord(_helloRecord(
-        clientRandom: _clientRandom(12),
-        sessionId: captured,
-      ));
+      final decision = auth.inspectRecord(
+        _helloRecord(clientRandom: _clientRandom(12), sessionId: captured),
+      );
       expect(decision.admitted, isFalse);
       expect(decision.reason, RealityRejectReason.badAuthTag);
     });
@@ -233,21 +230,23 @@ void main() {
         expect(scoped.inspectRecord(record).admitted, isTrue);
         expect(scoped.replayMemorySize, 1);
 
-        pkg_clock.withClock(pkg_clock.Clock.fixed(start.add(const Duration(minutes: 10))), () {
-          // The entry is gone, but the hello is now stale anyway — the two
-          // windows overlap on purpose, so expiry never opens a replay gap.
-          final late = scoped.inspectRecord(record);
-          expect(scoped.replayMemorySize, 0);
-          expect(late.reason, RealityRejectReason.staleTimeSlot);
-        });
+        pkg_clock.withClock(
+          pkg_clock.Clock.fixed(start.add(const Duration(minutes: 10))),
+          () {
+            // The entry is gone, but the hello is now stale anyway — the two
+            // windows overlap on purpose, so expiry never opens a replay gap.
+            final late = scoped.inspectRecord(record);
+            expect(scoped.replayMemorySize, 0);
+            expect(late.reason, RealityRejectReason.staleTimeSlot);
+          },
+        );
       });
     });
 
     test('passes through a hello with a session id of the wrong size', () {
-      final decision = auth.inspectRecord(_helloRecord(
-        clientRandom: _clientRandom(),
-        sessionId: Uint8List(16),
-      ));
+      final decision = auth.inspectRecord(
+        _helloRecord(clientRandom: _clientRandom(), sessionId: Uint8List(16)),
+      );
       expect(decision.reason, RealityRejectReason.sessionIdWrongSize);
     });
 
@@ -268,9 +267,7 @@ void main() {
           timeSlot: auth.currentTimeSlot,
         ),
       );
-      final decision = auth.inspectRecord(
-        Uint8List.sublistView(record, 0, 40),
-      );
+      final decision = auth.inspectRecord(Uint8List.sublistView(record, 0, 40));
       expect(decision.reason, RealityRejectReason.malformedClientHello);
     });
 
@@ -278,14 +275,16 @@ void main() {
       for (final profile in UtlsClientProfile.all) {
         final random = _clientRandom();
         final scoped = RealityAuthenticator(credentials: [credential]);
-        final decision = scoped.inspectRecord(_helloRecord(
-          profile: profile,
-          clientRandom: random,
-          sessionId: credential.buildSessionId(
+        final decision = scoped.inspectRecord(
+          _helloRecord(
+            profile: profile,
             clientRandom: random,
-            timeSlot: scoped.currentTimeSlot,
+            sessionId: credential.buildSessionId(
+              clientRandom: random,
+              timeSlot: scoped.currentTimeSlot,
+            ),
           ),
-        ));
+        );
         expect(decision.admitted, isTrue, reason: profile.id.name);
       }
     });
@@ -305,34 +304,47 @@ void main() {
       );
     });
 
-    test('replays the consumed preface upstream unchanged and in position',
-        () async {
-      final preface = Uint8List.fromList([0x16, 0x03, 0x01, 0x00, 0x02, 1, 2]);
-      final done = relay.splice(client, preface: preface);
-      await Future<void>.delayed(Duration.zero); // let the splice subscribe
-      client.deliver([3, 4, 5]);
-      await Future<void>.delayed(Duration.zero);
-      client.endOfPeerStream();
-      final stats = await done;
+    test(
+      'replays the consumed preface upstream unchanged and in position',
+      () async {
+        final preface = Uint8List.fromList([
+          0x16,
+          0x03,
+          0x01,
+          0x00,
+          0x02,
+          1,
+          2,
+        ]);
+        final done = relay.splice(client, preface: preface);
+        await Future<void>.delayed(Duration.zero); // let the splice subscribe
+        client.deliver([3, 4, 5]);
+        await Future<void>.delayed(Duration.zero);
+        client.endOfPeerStream();
+        final stats = await done;
 
-      expect(upstream.writtenBytes, [...preface, 3, 4, 5]);
-      expect(stats.bytesToUpstream, preface.length + 3);
-    });
+        expect(upstream.writtenBytes, [...preface, 3, 4, 5]);
+        expect(stats.bytesToUpstream, preface.length + 3);
+      },
+    );
 
-    test('relays upstream bytes back verbatim, including an error page', () async {
-      final body = Uint8List.fromList(
-        'HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n'.codeUnits,
-      );
-      final done = relay.splice(client, preface: Uint8List(0));
-      await Future<void>.delayed(Duration.zero); // let the splice subscribe
-      upstream.deliver(body);
-      await Future<void>.delayed(Duration.zero);
-      upstream.endOfPeerStream();
-      final stats = await done;
+    test(
+      'relays upstream bytes back verbatim, including an error page',
+      () async {
+        final body = Uint8List.fromList(
+          'HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n'.codeUnits,
+        );
+        final done = relay.splice(client, preface: Uint8List(0));
+        await Future<void>.delayed(Duration.zero); // let the splice subscribe
+        upstream.deliver(body);
+        await Future<void>.delayed(Duration.zero);
+        upstream.endOfPeerStream();
+        final stats = await done;
 
-      expect(client.writtenBytes, body);
-      expect(stats.bytesToClient, body.length);
-    });
+        expect(client.writtenBytes, body);
+        expect(stats.bytesToClient, body.length);
+      },
+    );
 
     test('writes nothing of its own to the client when upstream is '
         'unreachable', () async {
@@ -356,9 +368,13 @@ void main() {
         connectTimeout: const Duration(milliseconds: 30),
       );
       final stats = await hanging.splice(client, preface: Uint8List(0));
-      expect(client.written, isEmpty,
-          reason: 'a timed-out fallback connect must stay silent, same as '
-              'an immediately-refused one');
+      expect(
+        client.written,
+        isEmpty,
+        reason:
+            'a timed-out fallback connect must stay silent, same as '
+            'an immediately-refused one',
+      );
       expect(client.closed, isTrue);
       expect(stats.bytesToClient, 0);
       expect(stats.bytesToUpstream, 0);
@@ -420,10 +436,16 @@ void main() {
       expect(result.admitted, isTrue);
       expect(admitted, same(client));
       expect(consumed, isNotNull);
-      expect(upstream.written, isEmpty,
-          reason: 'an admitted client must never touch the fallback host');
-      expect(client.written, isEmpty,
-          reason: 'the gate itself originates no bytes');
+      expect(
+        upstream.written,
+        isEmpty,
+        reason: 'an admitted client must never touch the fallback host',
+      );
+      expect(
+        client.written,
+        isEmpty,
+        reason: 'the gate itself originates no bytes',
+      );
     });
 
     test('splices an unauthenticated probe without emitting a single byte '
@@ -444,10 +466,16 @@ void main() {
 
       expect(admittedCalled, isFalse);
       expect(result.decision.reason, RealityRejectReason.unknownShortId);
-      expect(upstream.writtenBytes, probe,
-          reason: 'the prober\'s own hello must reach the real host verbatim');
-      expect(client.written, isEmpty,
-          reason: 'no alert, no synthetic response — the relay stays silent');
+      expect(
+        upstream.writtenBytes,
+        probe,
+        reason: 'the prober\'s own hello must reach the real host verbatim',
+      );
+      expect(
+        client.written,
+        isEmpty,
+        reason: 'no alert, no synthetic response — the relay stays silent',
+      );
     });
 
     test('splices a probe that sends plain HTTP', () async {
@@ -467,28 +495,32 @@ void main() {
         'timeout expires', () async {
       final outcome = gate.handle(client, onAdmitted: (_, __, ___) {});
       // The silent peer eventually goes away; the splice ends with it.
-      unawaited(Future<void>.delayed(const Duration(milliseconds: 300), () {
-        client.endOfPeerStream();
-        upstream.endOfPeerStream();
-      }));
+      unawaited(
+        Future<void>.delayed(const Duration(milliseconds: 300), () {
+          client.endOfPeerStream();
+          upstream.endOfPeerStream();
+        }),
+      );
       final result = await outcome;
       expect(result.admitted, isFalse);
       expect(result.decision.reason, RealityRejectReason.notATlsHandshake);
       expect(client.written, isEmpty);
     });
 
-    test('buffers a hello split across several chunks before deciding',
-        () async {
-      final record = validRecord(gate.authenticator);
-      final outcome = gate.handle(client, onAdmitted: (_, __, ___) {});
-      client.deliver(Uint8List.sublistView(record, 0, 3));
-      await Future<void>.delayed(Duration.zero);
-      client.deliver(Uint8List.sublistView(record, 3, 60));
-      await Future<void>.delayed(Duration.zero);
-      client.deliver(Uint8List.sublistView(record, 60));
-      final result = await outcome;
-      expect(result.admitted, isTrue);
-    });
+    test(
+      'buffers a hello split across several chunks before deciding',
+      () async {
+        final record = validRecord(gate.authenticator);
+        final outcome = gate.handle(client, onAdmitted: (_, __, ___) {});
+        client.deliver(Uint8List.sublistView(record, 0, 3));
+        await Future<void>.delayed(Duration.zero);
+        client.deliver(Uint8List.sublistView(record, 3, 60));
+        await Future<void>.delayed(Duration.zero);
+        client.deliver(Uint8List.sublistView(record, 60));
+        final result = await outcome;
+        expect(result.admitted, isTrue);
+      },
+    );
 
     test('reaches its routing decision well inside the 2 ms budget', () async {
       final auth = RealityAuthenticator(credentials: [credential]);
@@ -503,9 +535,13 @@ void main() {
       }
       stopwatch.stop();
       final perDecision = stopwatch.elapsedMicroseconds / iterations;
-      expect(perDecision, lessThan(2000),
-          reason: 'parse + one HMAC must stay under 2 ms; measured '
-              '${perDecision.toStringAsFixed(1)} us');
+      expect(
+        perDecision,
+        lessThan(2000),
+        reason:
+            'parse + one HMAC must stay under 2 ms; measured '
+            '${perDecision.toStringAsFixed(1)} us',
+      );
     });
   });
 }

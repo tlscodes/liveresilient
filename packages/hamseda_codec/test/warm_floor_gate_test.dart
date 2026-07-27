@@ -12,19 +12,18 @@ List<List<int>> speechLike(int frames, int nRows, int seed) {
   final rng = Random(seed);
   final alphabet = [
     for (var i = 0; i < 40; i++)
-      [for (var r = 0; r < nRows; r++) rng.nextInt(rawSymbols)]
+      [for (var r = 0; r < nRows; r++) rng.nextInt(rawSymbols)],
   ];
   return [
     for (var i = 0; i < frames; i++)
       rng.nextDouble() < 0.7
           ? List.of(alphabet[rng.nextInt(alphabet.length)])
-          : [for (var r = 0; r < nRows; r++) rng.nextInt(rawSymbols)]
+          : [for (var r = 0; r < nRows; r++) rng.nextInt(rawSymbols)],
   ];
 }
 
 void main() {
-  test(
-      'warm-state re-encode of previously-seen speech stays under the '
+  test('warm-state re-encode of previously-seen speech stays under the '
       'ultra-low-bandwidth ceiling (CI gate for the warm floor)', () {
     // 40 seconds of deterministic speech-like columns.
     final cols = speechLike(40 * framesPerSecond, 2, 5);
@@ -41,8 +40,10 @@ void main() {
     final coldBps = cold.length * 8 / seconds;
     final warmBps = warm.length * 8 / seconds;
     // ignore: avoid_print
-    print('warm-floor gate: cold=${coldBps.toStringAsFixed(1)} bps '
-        'warm=${warmBps.toStringAsFixed(1)} bps over ${seconds}s');
+    print(
+      'warm-floor gate: cold=${coldBps.toStringAsFixed(1)} bps '
+      'warm=${warmBps.toStringAsFixed(1)} bps over ${seconds}s',
+    );
 
     // Bit-exactness is non-negotiable at any rate.
     final dec = HamsedaState(2);
@@ -55,13 +56,20 @@ void main() {
     // real call, so the CI ceiling is set from the measured value of this
     // fixture, not the record. It exists to catch regressions that destroy
     // the warm path (e.g. dictionary reset between calls).
-    expect(warmBps, lessThan(coldBps / 4),
-        reason: 'warm re-encode must compress ≥4x below the cold pass');
+    expect(
+      warmBps,
+      lessThan(coldBps / 4),
+      reason: 'warm re-encode must compress ≥4x below the cold pass',
+    );
     // Measured on this exact fixture: 42.8 bps (2026-07-27). 60 bps gives
     // regression headroom while staying in the ~4-8 B/s regime the 31.8 bps
     // real-recording record lives in.
-    expect(warmBps, lessThan(60),
-        reason: 'warm re-encode left the ultra-low-bandwidth regime '
-            '(measured baseline 42.8 bps on this fixture)');
+    expect(
+      warmBps,
+      lessThan(60),
+      reason:
+          'warm re-encode left the ultra-low-bandwidth regime '
+          '(measured baseline 42.8 bps on this fixture)',
+    );
   });
 }

@@ -32,7 +32,9 @@ Future<void> main() async {
     await agreement.generateEphemeral();
   }
   swGen.stop();
-  print('X25519 keygen:       ${(swGen.elapsedMicroseconds / 50).toStringAsFixed(1)} us/op');
+  print(
+    'X25519 keygen:       ${(swGen.elapsedMicroseconds / 50).toStringAsFixed(1)} us/op',
+  );
 
   // Credential derivation (HKDF) for comparison.
   final shared = Uint8List(32);
@@ -41,5 +43,7 @@ Future<void> main() async {
     RealityCredential.fromSharedSecret(shared);
   }
   swHkdf.stop();
-  print('HKDF credential:     ${(swHkdf.elapsedMicroseconds / 1000).toStringAsFixed(1)} us/op');
+  print(
+    'HKDF credential:     ${(swHkdf.elapsedMicroseconds / 1000).toStringAsFixed(1)} us/op',
+  );
 }

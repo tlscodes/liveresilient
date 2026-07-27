@@ -15,8 +15,10 @@ class _LoopbackUdpEcho {
   StreamSubscription<RawSocketEvent>? _sub;
 
   static Future<_LoopbackUdpEcho> start() async {
-    final socket =
-        await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final socket = await RawDatagramSocket.bind(
+      InternetAddress.loopbackIPv4,
+      0,
+    );
     final echo = _LoopbackUdpEcho._(socket);
     echo._sub = socket.listen((event) {
       if (event == RawSocketEvent.read) {
@@ -153,8 +155,7 @@ void main() {
       expect(server.receivedFrames.single, equals(const [9, 9, 9, 9]));
     });
 
-    test('reconnects lazily after the server drops the connection',
-        () async {
+    test('reconnects lazily after the server drops the connection', () async {
       await lane.send(const [1, 2, 3, 4]);
       await server.stop();
       // A binary `add()` on an already-open socket is fire-and-forget (like
@@ -289,64 +290,61 @@ void main() {
       await httpServer.stop();
     });
 
-    test(
-      'falls over UDP -> WS -> HTTP -> mesh with 100% delivery as each '
-      'preceding lane is killed',
-      () async {
-        final selector = ResilientFallbackTransportChain.build(
-          primaryUdp: udpLane,
-          webSocketRelay: wsLane,
-          httpLongPoll: httpLane,
-          localMesh: meshLane,
-        );
+    test('falls over UDP -> WS -> HTTP -> mesh with 100% delivery as each '
+        'preceding lane is killed', () async {
+      final selector = ResilientFallbackTransportChain.build(
+        primaryUdp: udpLane,
+        webSocketRelay: wsLane,
+        httpLongPoll: httpLane,
+        localMesh: meshLane,
+      );
 
-        const framesPerStage = 5;
-        var delivered = 0;
+      const framesPerStage = 5;
+      var delivered = 0;
 
-        // Stage 1: UDP alive, everything should go via UDP.
-        for (var i = 0; i < framesPerStage; i++) {
-          final ok = await selector.sendChunk(const [1, 2, 3, 4]);
-          if (ok) delivered++;
-        }
-        expect(httpServer.receivedFrames, isEmpty);
-        expect(wsServer.receivedFrames, isEmpty);
+      // Stage 1: UDP alive, everything should go via UDP.
+      for (var i = 0; i < framesPerStage; i++) {
+        final ok = await selector.sendChunk(const [1, 2, 3, 4]);
+        if (ok) delivered++;
+      }
+      expect(httpServer.receivedFrames, isEmpty);
+      expect(wsServer.receivedFrames, isEmpty);
 
-        // Kill UDP: subsequent sends should fail over to WS. A real UDP
-        // `send()` to a dead loopback echo does not itself error (there is
-        // no connection to break), so the router only learns the lane is
-        // down via an explicit health refresh (which probes and times out).
-        await echo.stop();
-        await selector.refresh();
-        for (var i = 0; i < framesPerStage; i++) {
-          final ok = await selector.sendChunk(const [1, 2, 3, 4]);
-          if (ok) delivered++;
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        expect(wsServer.receivedFrames, isNotEmpty);
+      // Kill UDP: subsequent sends should fail over to WS. A real UDP
+      // `send()` to a dead loopback echo does not itself error (there is
+      // no connection to break), so the router only learns the lane is
+      // down via an explicit health refresh (which probes and times out).
+      await echo.stop();
+      await selector.refresh();
+      for (var i = 0; i < framesPerStage; i++) {
+        final ok = await selector.sendChunk(const [1, 2, 3, 4]);
+        if (ok) delivered++;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(wsServer.receivedFrames, isNotEmpty);
 
-        // Kill WS: subsequent sends should fail over to HTTP.
-        await wsServer.stop();
-        await selector.refresh();
-        for (var i = 0; i < framesPerStage; i++) {
-          final ok = await selector.sendChunk(const [1, 2, 3, 4]);
-          if (ok) delivered++;
-        }
-        expect(httpServer.receivedFrames, isNotEmpty);
+      // Kill WS: subsequent sends should fail over to HTTP.
+      await wsServer.stop();
+      await selector.refresh();
+      for (var i = 0; i < framesPerStage; i++) {
+        final ok = await selector.sendChunk(const [1, 2, 3, 4]);
+        if (ok) delivered++;
+      }
+      expect(httpServer.receivedFrames, isNotEmpty);
 
-        // Kill HTTP: subsequent sends should fail over to the mesh.
-        await httpServer.stop();
-        await selector.refresh();
-        for (var i = 0; i < framesPerStage; i++) {
-          final ok = await selector.sendChunk(const [1, 2, 3, 4]);
-          if (ok) delivered++;
-        }
-        expect(meshFrames, isNotEmpty);
+      // Kill HTTP: subsequent sends should fail over to the mesh.
+      await httpServer.stop();
+      await selector.refresh();
+      for (var i = 0; i < framesPerStage; i++) {
+        final ok = await selector.sendChunk(const [1, 2, 3, 4]);
+        if (ok) delivered++;
+      }
+      expect(meshFrames, isNotEmpty);
 
-        expect(delivered, framesPerStage * 4);
+      expect(delivered, framesPerStage * 4);
 
-        await selector.dispose();
-      },
-    );
+      await selector.dispose();
+    });
   });
 
   group('PoissonPacer', () {

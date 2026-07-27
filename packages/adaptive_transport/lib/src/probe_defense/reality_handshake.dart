@@ -111,8 +111,7 @@ class X25519KeyAgreement implements KeyAgreement {
     final pair = await _algorithm.newKeyPairFromSeed(privateKey);
     final secret = await _algorithm.sharedSecretKey(
       keyPair: pair,
-      remotePublicKey:
-          SimplePublicKey(peerPublicKey, type: KeyPairType.x25519),
+      remotePublicKey: SimplePublicKey(peerPublicKey, type: KeyPairType.x25519),
     );
     return Uint8List.fromList(await secret.extractBytes());
   }
@@ -166,11 +165,11 @@ class RealityClientHandshake {
 
   /// The bytes the transcript covers, which an identity proof signs.
   Uint8List get transcript => _handshakeTranscript(
-        clientRandom: clientRandom,
-        ephemeralPublicKey: ephemeral.publicKey,
-        shortId: credential.shortId,
-        timeSlot: timeSlot,
-      );
+    clientRandom: clientRandom,
+    ephemeralPublicKey: ephemeral.publicKey,
+    shortId: credential.shortId,
+    timeSlot: timeSlot,
+  );
 }
 
 /// Builds the client half of the admission handshake.
@@ -239,8 +238,8 @@ class RealityKeyExchangeAuthenticator {
     required this.identity,
     KeyAgreement? agreement,
     RealityAuthenticator? replayGuard,
-  })  : _agreement = agreement ?? X25519KeyAgreement(),
-        _guard = replayGuard ?? RealityAuthenticator(credentials: const []);
+  }) : _agreement = agreement ?? X25519KeyAgreement(),
+       _guard = replayGuard ?? RealityAuthenticator(credentials: const []);
 
   final RealityRelayIdentity identity;
   final KeyAgreement _agreement;
@@ -422,8 +421,10 @@ class RealityIdentityProof {
       );
     }
     if (frame[0] != frameType) {
-      throw FormatException('frame type 0x${frame[0].toRadixString(16)} '
-          'is not an identity proof');
+      throw FormatException(
+        'frame type 0x${frame[0].toRadixString(16)} '
+        'is not an identity proof',
+      );
     }
     if (frame[1] != frameVersion) {
       throw FormatException('unsupported identity-proof version ${frame[1]}');
@@ -478,13 +479,12 @@ Uint8List realityHandshakeTranscript({
   required Uint8List ephemeralPublicKey,
   required Uint8List shortId,
   required int timeSlot,
-}) =>
-    _handshakeTranscript(
-      clientRandom: clientRandom,
-      ephemeralPublicKey: ephemeralPublicKey,
-      shortId: shortId,
-      timeSlot: timeSlot,
-    );
+}) => _handshakeTranscript(
+  clientRandom: clientRandom,
+  ephemeralPublicKey: ephemeralPublicKey,
+  shortId: shortId,
+  timeSlot: timeSlot,
+);
 
 /// Derives an application session key from the handshake's shared secret.
 ///
@@ -495,10 +495,9 @@ Uint8List deriveSessionKey(
   Uint8List sharedSecret, {
   String label = 'reality-session-v1',
   int length = 32,
-}) =>
-    Hkdf.derive(
-      ikm: sharedSecret,
-      salt: Uint8List(0),
-      info: Uint8List.fromList(label.codeUnits),
-      length: length,
-    );
+}) => Hkdf.derive(
+  ikm: sharedSecret,
+  salt: Uint8List(0),
+  info: Uint8List.fromList(label.codeUnits),
+  length: length,
+);

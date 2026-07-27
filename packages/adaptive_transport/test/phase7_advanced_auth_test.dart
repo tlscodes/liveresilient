@@ -15,24 +15,32 @@ Uint8List hex(String s) {
 Uint8List bytes(int value, int count) =>
     Uint8List.fromList(List.filled(count, value));
 
-Uint8List exporter([int seed = 7]) =>
-    Uint8List.fromList(List.generate(tlsExporterLength, (i) => (i * seed) & 0xff));
+Uint8List exporter([int seed = 7]) => Uint8List.fromList(
+  List.generate(tlsExporterLength, (i) => (i * seed) & 0xff),
+);
 
 void main() {
   group('HKDF RFC 5869 official test vectors', () {
     test('A.1 basic (SHA-256)', () {
-      final prk = Hkdf.extract(hex('000102030405060708090a0b0c'), bytes(0x0b, 22));
+      final prk = Hkdf.extract(
+        hex('000102030405060708090a0b0c'),
+        bytes(0x0b, 22),
+      );
       expect(
         prk,
-        hex('077709362c2e32df0ddc3f0dc47bba63'
-            '90b6c73bb50f9c3122ec844ad7c2b3e5'),
+        hex(
+          '077709362c2e32df0ddc3f0dc47bba63'
+          '90b6c73bb50f9c3122ec844ad7c2b3e5',
+        ),
       );
       final okm = Hkdf.expand(prk, hex('f0f1f2f3f4f5f6f7f8f9'), 42);
       expect(
         okm,
-        hex('3cb25f25faacd57a90434f64d0362f2a'
-            '2d2d0a90cf1a5a4c5db02d56ecc4c5bf'
-            '34007208d5b887185865'),
+        hex(
+          '3cb25f25faacd57a90434f64d0362f2a'
+          '2d2d0a90cf1a5a4c5db02d56ecc4c5bf'
+          '34007208d5b887185865',
+        ),
       );
     });
 
@@ -45,9 +53,11 @@ void main() {
       );
       expect(
         okm,
-        hex('8da4e775a563c18f715f802a063c5a31'
-            'b8a11f5c5ee1879ec3454e5f3c738d2d'
-            '9d201395faa4b61a96c8'),
+        hex(
+          '8da4e775a563c18f715f802a063c5a31'
+          'b8a11f5c5ee1879ec3454e5f3c738d2d'
+          '9d201395faa4b61a96c8',
+        ),
       );
     });
   });
@@ -86,8 +96,11 @@ void main() {
         clientProof: c.proof,
       );
       expect(serverSignature, isNotNull);
-      expect(c.client.verifyServerSignature(serverSignature!), isTrue,
-          reason: 'mutual step: client must accept the server signature');
+      expect(
+        c.client.verifyServerSignature(serverSignature!),
+        isTrue,
+        reason: 'mutual step: client must accept the server signature',
+      );
     });
 
     test('wrong password is rejected', () {
@@ -104,21 +117,23 @@ void main() {
       );
     });
 
-    test('proof does not transfer across TLS connections (exporter differs)',
-        () {
-      final c = clientProof(binding: exporter(7));
-      final server = ScramServer(verifier: verifier);
-      expect(
-        server.verifyClientProof(
-          clientNonce: 'cn-1',
-          serverNonce: 'sn-1',
-          channelBinding: exporter(11),
-          clientProof: c.proof,
-        ),
-        isNull,
-        reason: 'a captured proof must be useless on another connection',
-      );
-    });
+    test(
+      'proof does not transfer across TLS connections (exporter differs)',
+      () {
+        final c = clientProof(binding: exporter(7));
+        final server = ScramServer(verifier: verifier);
+        expect(
+          server.verifyClientProof(
+            clientNonce: 'cn-1',
+            serverNonce: 'sn-1',
+            channelBinding: exporter(11),
+            clientProof: c.proof,
+          ),
+          isNull,
+          reason: 'a captured proof must be useless on another connection',
+        );
+      },
+    );
 
     test('server without the verifier cannot forge a signature', () {
       final c = clientProof();
@@ -143,10 +158,15 @@ void main() {
       sw.stop();
       final perHandshakeMs = sw.elapsedMilliseconds / rounds;
       // ignore: avoid_print
-      print('MEASURED scram handshake (client+server, i=4096): '
-          '${perHandshakeMs.toStringAsFixed(1)} ms');
-      expect(perHandshakeMs, lessThan(250),
-          reason: 'handshake must stay interactive');
+      print(
+        'MEASURED scram handshake (client+server, i=4096): '
+        '${perHandshakeMs.toStringAsFixed(1)} ms',
+      );
+      expect(
+        perHandshakeMs,
+        lessThan(250),
+        reason: 'handshake must stay interactive',
+      );
     });
   });
 
@@ -185,9 +205,11 @@ void main() {
       sw.stop();
       final opsPerSec = n / (sw.elapsedMicroseconds / 1e6);
       // ignore: avoid_print
-      print('MEASURED replay-window accept: '
-          '${(opsPerSec / 1e6).toStringAsFixed(1)} M ops/s, '
-          'memory = ${1024 ~/ 64} ints (constant)');
+      print(
+        'MEASURED replay-window accept: '
+        '${(opsPerSec / 1e6).toStringAsFixed(1)} M ops/s, '
+        'memory = ${1024 ~/ 64} ints (constant)',
+      );
       expect(w.acceptedCount, n);
       expect(opsPerSec, greaterThan(1e6));
     });
@@ -225,8 +247,10 @@ void main() {
       sw.stop();
       final usPerRotation = sw.elapsedMicroseconds / n;
       // ignore: avoid_print
-      print('MEASURED key rotation: ${usPerRotation.toStringAsFixed(1)} us '
-          'per epoch advance');
+      print(
+        'MEASURED key rotation: ${usPerRotation.toStringAsFixed(1)} us '
+        'per epoch advance',
+      );
       expect(s.epoch, n);
       expect(usPerRotation, lessThan(1000));
     });
@@ -297,13 +321,15 @@ void main() {
 
     test('validated path passes exactly once; forged response fails', () {
       final v = PathValidator(sessionKey: key);
-      final challenge =
-          v.issueChallenge('relay-b:443', bytes(0x11, 8));
+      final challenge = v.issueChallenge('relay-b:443', bytes(0x11, 8));
       final good = v.expectedResponse(challenge);
       expect(v.validateResponse('relay-b:443', Uint8List(32)), isFalse);
       expect(v.validateResponse('relay-b:443', good), isTrue);
-      expect(v.validateResponse('relay-b:443', good), isFalse,
-          reason: 'challenge is single-use');
+      expect(
+        v.validateResponse('relay-b:443', good),
+        isFalse,
+        reason: 'challenge is single-use',
+      );
       expect(v.validatedCount, 1);
       expect(v.rejectedCount, 2);
     });
@@ -325,8 +351,11 @@ void main() {
       final t = minter.mint(sessionId: 'sess-1', epoch: 0);
       expect(minter.verify(sessionId: 'sess-1', epoch: 0, token: t), isTrue);
       expect(minter.verify(sessionId: 'sess-2', epoch: 0, token: t), isFalse);
-      expect(minter.verify(sessionId: 'sess-1', epoch: 1, token: t), isFalse,
-          reason: 'key rotation must invalidate old tokens');
+      expect(
+        minter.verify(sessionId: 'sess-1', epoch: 1, token: t),
+        isFalse,
+        reason: 'key rotation must invalidate old tokens',
+      );
     });
   });
 
@@ -340,7 +369,9 @@ void main() {
         final racer = HappyEyeballsRacer<String>(
           endpoints: [ep('slow.example'), ep('fast.example')],
           connect: (e) => Future.delayed(
-            Duration(milliseconds: e.hostPort.host.startsWith('slow') ? 900 : 40),
+            Duration(
+              milliseconds: e.hostPort.host.startsWith('slow') ? 900 : 40,
+            ),
             () => 'conn-${e.hostPort.host}',
           ),
         );
@@ -352,8 +383,10 @@ void main() {
         // 250 ms stagger + 40 ms connect = 290 ms, far under the 940 ms a
         // sequential fallback would have paid.
         // ignore: avoid_print
-        print('MEASURED happy-eyeballs win (simulated clocks): 290 ms raced '
-            'vs 940 ms sequential');
+        print(
+          'MEASURED happy-eyeballs win (simulated clocks): 290 ms raced '
+          'vs 940 ms sequential',
+        );
       });
     });
 
@@ -363,10 +396,14 @@ void main() {
         final racer = HappyEyeballsRacer<String>(
           endpoints: [ep('dead.example'), ep('ok.example')],
           connect: (e) => e.hostPort.host.startsWith('dead')
-              ? Future.delayed(const Duration(milliseconds: 30),
-                  () => throw StateError('refused'))
+              ? Future.delayed(
+                  const Duration(milliseconds: 30),
+                  () => throw StateError('refused'),
+                )
               : Future.delayed(
-                  const Duration(milliseconds: 50), () => 'conn-ok'),
+                  const Duration(milliseconds: 50),
+                  () => 'conn-ok',
+                ),
         );
         racer.race().then((r) => won = r);
         // Fast failure at 30 ms starts endpoint 2 immediately; it connects in
@@ -382,8 +419,10 @@ void main() {
         Object? error;
         final racer = HappyEyeballsRacer<String>(
           endpoints: [ep('a.example'), ep('b.example')],
-          connect: (e) => Future.delayed(const Duration(milliseconds: 10),
-              () => throw StateError('down')),
+          connect: (e) => Future.delayed(
+            const Duration(milliseconds: 10),
+            () => throw StateError('down'),
+          ),
         );
         racer.race().catchError((Object e) {
           error = e;
@@ -405,7 +444,9 @@ void main() {
         final racer = HappyEyeballsRacer<String>(
           endpoints: [ep('slow.example'), ep('fast.example')],
           connect: (e) => Future.delayed(
-            Duration(milliseconds: e.hostPort.host.startsWith('slow') ? 600 : 20),
+            Duration(
+              milliseconds: e.hostPort.host.startsWith('slow') ? 600 : 20,
+            ),
             () => 'conn-${e.hostPort.host}',
           ),
           discard: discarded.add,
@@ -442,10 +483,7 @@ void main() {
         },
         discard: discarded.add,
       );
-      await expectLater(
-        switcher.switchTo(ep('bad.example')),
-        throwsStateError,
-      );
+      await expectLater(switcher.switchTo(ep('bad.example')), throwsStateError);
       final conn = await switcher.switchTo(ep('good.example'));
       expect(conn, 'conn-good.example-1');
       expect(switcher.switchCount, 1);
@@ -457,20 +495,28 @@ void main() {
   group('continuity: SCRAM session + rotation + resumption chain', () {
     test('resumption token survives reconnect but not a key epoch bump', () {
       final schedule = RotatingKeySchedule(initialSecret: bytes(0x77, 32));
-      final minterAtEpoch0 =
-          SessionContinuityToken(sessionKey: schedule.currentKey);
-      final token = minterAtEpoch0.mint(sessionId: 'live-1', epoch: schedule.epoch);
+      final minterAtEpoch0 = SessionContinuityToken(
+        sessionKey: schedule.currentKey,
+      );
+      final token = minterAtEpoch0.mint(
+        sessionId: 'live-1',
+        epoch: schedule.epoch,
+      );
       // Reconnect on a new endpoint, same epoch: token verifies.
       expect(
         minterAtEpoch0.verify(
-            sessionId: 'live-1', epoch: schedule.epoch, token: token),
+          sessionId: 'live-1',
+          epoch: schedule.epoch,
+          token: token,
+        ),
         isTrue,
       );
       // Rotate: the old token must die with the old epoch.
       schedule.advance();
       expect(
-        SessionContinuityToken(sessionKey: schedule.currentKey)
-            .verify(sessionId: 'live-1', epoch: schedule.epoch, token: token),
+        SessionContinuityToken(
+          sessionKey: schedule.currentKey,
+        ).verify(sessionId: 'live-1', epoch: schedule.epoch, token: token),
         isFalse,
       );
     });

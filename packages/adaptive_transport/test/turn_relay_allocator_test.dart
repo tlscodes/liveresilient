@@ -8,7 +8,18 @@ import 'package:security/security.dart';
 import 'package:test/test.dart';
 
 final _txId = Uint8List.fromList([
-  0xB7, 0xE7, 0xA7, 0x01, 0xBC, 0x34, 0xD6, 0x86, 0xFA, 0x87, 0xDF, 0xAE,
+  0xB7,
+  0xE7,
+  0xA7,
+  0x01,
+  0xBC,
+  0x34,
+  0xD6,
+  0x86,
+  0xFA,
+  0x87,
+  0xDF,
+  0xAE,
 ]);
 
 /// 192.0.2.1 — RFC 5737 documentation address.
@@ -57,7 +68,22 @@ void main() {
 
     test('IPv6 round-trips over all 16 address bytes', () {
       final v6 = Uint8List.fromList([
-        0x20, 0x01, 0x0D, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x00, 0x10,
+        0x20,
+        0x01,
+        0x0D,
+        0xB8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0x00,
+        0x10,
       ]);
       final decoded = StunXorMappedAddress.decode(
         StunXorMappedAddress(
@@ -86,7 +112,22 @@ void main() {
 
       // IPv6 consumes cookie + transaction id, so a wrong id corrupts it.
       final v6 = Uint8List.fromList([
-        0x20, 0x01, 0x0D, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        0x20,
+        0x01,
+        0x0D,
+        0xB8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
       ]);
       final v6Encoded = StunXorMappedAddress(
         family: stunFamilyIpv6,
@@ -150,7 +191,8 @@ void main() {
       TurnRelayAllocator allocator,
       List<AllocateRequest> allocates,
       List<Duration> refreshLifetimes,
-    }) build({
+    })
+    build({
       bool failFirstServer = false,
       bool mismatchOnRefresh = false,
       Duration lifetime = const Duration(seconds: 600),
@@ -200,8 +242,7 @@ void main() {
       );
     }
 
-    test('allocates once and reuses the allocation while it is fresh',
-        () async {
+    test('allocates once and reuses the allocation while it is fresh', () async {
       final h = build();
       await withClock(Clock.fixed(at), () async {
         final first = await h.allocator.ensure(localAddress: _cellular);
@@ -213,10 +254,9 @@ void main() {
         expect(first.serverReflexiveAddress.host, '203.0.113.7');
         expect(first.tuple.transport, 'udp');
         // The credential carries the TURN URI for the server it was minted for.
-        expect(
-          first.credentials.uris,
-          ['turn:198.51.100.1:3478?transport=udp'],
-        );
+        expect(first.credentials.uris, [
+          'turn:198.51.100.1:3478?transport=udp',
+        ]);
       });
     });
 
@@ -227,18 +267,20 @@ void main() {
         () => h.allocator.ensure(localAddress: _cellular),
       );
       // 550s in: 50s left, inside the 60s margin.
-      await withClock(Clock.fixed(at.add(const Duration(seconds: 550))),
-          () async {
-        final refreshed = await h.allocator.ensure(localAddress: _cellular);
-        expect(h.allocator.refreshCount, 1);
-        expect(h.allocator.allocateCount, 1);
-        expect(h.refreshLifetimes, [const Duration(seconds: 600)]);
-        expect(refreshed.relayedAddress, first.relayedAddress);
-        expect(
-          refreshed.expiresAt,
-          at.add(const Duration(seconds: 550 + 600)),
-        );
-      });
+      await withClock(
+        Clock.fixed(at.add(const Duration(seconds: 550))),
+        () async {
+          final refreshed = await h.allocator.ensure(localAddress: _cellular);
+          expect(h.allocator.refreshCount, 1);
+          expect(h.allocator.allocateCount, 1);
+          expect(h.refreshLifetimes, [const Duration(seconds: 600)]);
+          expect(refreshed.relayedAddress, first.relayedAddress);
+          expect(
+            refreshed.expiresAt,
+            at.add(const Duration(seconds: 550 + 600)),
+          );
+        },
+      );
     });
 
     test('a 437 mismatch on refresh triggers a fresh allocation', () async {
@@ -247,13 +289,19 @@ void main() {
         Clock.fixed(at),
         () => h.allocator.ensure(localAddress: _cellular),
       );
-      await withClock(Clock.fixed(at.add(const Duration(seconds: 550))),
-          () async {
-        final replaced = await h.allocator.ensure(localAddress: _cellular);
-        expect(h.allocator.refreshCount, 0, reason: 'the refresh was refused');
-        expect(h.allocator.allocateCount, 2);
-        expect(replaced.relayedAddress, isNot(first.relayedAddress));
-      });
+      await withClock(
+        Clock.fixed(at.add(const Duration(seconds: 550))),
+        () async {
+          final replaced = await h.allocator.ensure(localAddress: _cellular);
+          expect(
+            h.allocator.refreshCount,
+            0,
+            reason: 'the refresh was refused',
+          );
+          expect(h.allocator.allocateCount, 2);
+          expect(replaced.relayedAddress, isNot(first.relayedAddress));
+        },
+      );
     });
 
     test('an expired allocation is replaced, never refreshed', () async {
@@ -262,12 +310,14 @@ void main() {
         Clock.fixed(at),
         () => h.allocator.ensure(localAddress: _cellular),
       );
-      await withClock(Clock.fixed(at.add(const Duration(seconds: 601))),
-          () async {
-        await h.allocator.ensure(localAddress: _cellular);
-        expect(h.allocator.allocateCount, 2);
-        expect(h.allocator.refreshCount, 0);
-      });
+      await withClock(
+        Clock.fixed(at.add(const Duration(seconds: 601))),
+        () async {
+          await h.allocator.ensure(localAddress: _cellular);
+          expect(h.allocator.allocateCount, 2);
+          expect(h.allocator.refreshCount, 0);
+        },
+      );
     });
 
     test('roaming to a new local address forces a new allocation on the same '
@@ -279,8 +329,11 @@ void main() {
 
         expect(h.allocator.roamCount, 1);
         expect(h.allocator.allocateCount, 2);
-        expect(h.allocator.refreshCount, 0,
-            reason: 'a moved 5-tuple can never be refreshed back into use');
+        expect(
+          h.allocator.refreshCount,
+          0,
+          reason: 'a moved 5-tuple can never be refreshed back into use',
+        );
         expect(onWifi.relayedAddress, isNot(onCellular.relayedAddress));
         expect(onWifi.tuple.localAddress, _wifi);
         expect(h.allocates.last.tuple.localAddress, _wifi);

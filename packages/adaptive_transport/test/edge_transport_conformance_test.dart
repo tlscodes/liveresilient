@@ -7,11 +7,12 @@ import 'package:test/test.dart';
 void main() {
   group('MicroDatagramLane', () {
     test('restores payload bit-exact across variable length inputs', () {
-      final lane = MicroDatagramLane(allowInsecureRandom: true, random: Random(1));
+      final lane = MicroDatagramLane(
+        allowInsecureRandom: true,
+        random: Random(1),
+      );
       for (final len in [0, 1, 15, 16, 17, 63, 64, 200]) {
-        final payload = Uint8List.fromList(
-          List.generate(len, (i) => i % 256),
-        );
+        final payload = Uint8List.fromList(List.generate(len, (i) => i % 256));
         final padded = lane.encodeWithPadding(payload);
         expect(padded.length % 16, 0);
         final restored = lane.decodeAndStripPadding(padded);
@@ -44,17 +45,18 @@ void main() {
       }
     });
 
-    test('cipher suite list leads with a GREASE value then standard suites',
-        () {
-      final normalizer = TlsParameterNormalizer();
-      final suites = normalizer.buildCipherSuites();
-      expect(normalizer.isGreaseValue(suites.first), isTrue);
-      expect(suites.skip(1), contains(0x1301));
-      expect(suites.toSet().length, suites.length);
-    });
+    test(
+      'cipher suite list leads with a GREASE value then standard suites',
+      () {
+        final normalizer = TlsParameterNormalizer();
+        final suites = normalizer.buildCipherSuites();
+        expect(normalizer.isGreaseValue(suites.first), isTrue);
+        expect(suites.skip(1), contains(0x1301));
+        expect(suites.toSet().length, suites.length);
+      },
+    );
 
-    test('standard ALPN protocol list matches RFC-registered identifiers',
-        () {
+    test('standard ALPN protocol list matches RFC-registered identifiers', () {
       expect(
         TlsParameterNormalizer.standardAlpnProtocols,
         equals(['h2', 'http/1.1']),
@@ -65,9 +67,11 @@ void main() {
   group('Http2DataFrame (RFC 9113)', () {
     test('header matches the RFC 9113 section 4.1 layout', () {
       final payload = Uint8List.fromList([1, 2, 3, 4, 5]);
-      final frame =
-          Http2DataFrame(streamId: 0x01020304, payload: payload, endStream: true)
-              .encode();
+      final frame = Http2DataFrame(
+        streamId: 0x01020304,
+        payload: payload,
+        endStream: true,
+      ).encode();
       expect(frame.length, Http2DataFrame.headerLength + payload.length);
       expect(frame.sublist(0, 3), [0x00, 0x00, 0x05]); // Length (24)
       expect(frame[3], Http2DataFrame.frameTypeData);
@@ -79,8 +83,9 @@ void main() {
 
     test('round-trips payloads bit-exact including the max frame size', () {
       for (final len in [1, 15, 16, 1500, Http2DataFrame.defaultMaxFrameSize]) {
-        final payload =
-            Uint8List.fromList(List<int>.generate(len, (i) => (i * 37) & 0xFF));
+        final payload = Uint8List.fromList(
+          List<int>.generate(len, (i) => (i * 37) & 0xFF),
+        );
         final decoded = Http2DataFrame.decode(
           Http2DataFrame(streamId: 3, payload: payload).encode(),
         );
@@ -177,29 +182,42 @@ void main() {
 
   group('end-to-end encapsulation of a padded rateless datagram', () {
     test('HTTP/2 carriage recovers the payload bit-exact', () {
-      final lane = MicroDatagramLane(allowInsecureRandom: true, random: Random(7));
+      final lane = MicroDatagramLane(
+        allowInsecureRandom: true,
+        random: Random(7),
+      );
       final framer = SctpDataChannelFramer();
       for (final len in [0, 1, 16, 17, 500, 1400]) {
-        final payload =
-            Uint8List.fromList(List<int>.generate(len, (i) => (i * 91) & 0xFF));
+        final payload = Uint8List.fromList(
+          List<int>.generate(len, (i) => (i * 91) & 0xFF),
+        );
         final padded = lane.encodeWithPadding(payload);
 
         // Carrier A: HTTP/2 DATA frame.
         final viaHttp2 = Http2DataFrame.decode(
           Http2DataFrame(streamId: 5, payload: padded).encode(),
         );
-        expect(lane.decodeAndStripPadding(viaHttp2.payload), payload,
-            reason: 'http2 length $len');
+        expect(
+          lane.decodeAndStripPadding(viaHttp2.payload),
+          payload,
+          reason: 'http2 length $len',
+        );
 
         // Carrier B: WebRTC SCTP DataChannel.
         final viaDataChannel = framer.decode(framer.encodeBinary(padded));
-        expect(lane.decodeAndStripPadding(viaDataChannel), payload,
-            reason: 'datachannel length $len');
+        expect(
+          lane.decodeAndStripPadding(viaDataChannel),
+          payload,
+          reason: 'datachannel length $len',
+        );
       }
     });
 
     test('padded frames land on the MTU block boundary', () {
-      final lane = MicroDatagramLane(allowInsecureRandom: true, random: Random(11));
+      final lane = MicroDatagramLane(
+        allowInsecureRandom: true,
+        random: Random(11),
+      );
       for (final len in [0, 5, 31, 64, 700]) {
         final padded = lane.encodeWithPadding(Uint8List(len), blockSize: 64);
         expect(padded.length % 64, 0, reason: 'length $len');

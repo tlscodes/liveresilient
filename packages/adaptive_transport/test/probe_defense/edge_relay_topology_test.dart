@@ -7,8 +7,8 @@ import 'package:clock/clock.dart' as pkg_clock;
 import 'package:test/test.dart';
 
 EdgeBridgeTopology _topology(List<String> authorities) => EdgeBridgeTopology(
-      nodes: [for (final a in authorities) EdgeRelayNode.parse(a)],
-    );
+  nodes: [for (final a in authorities) EdgeRelayNode.parse(a)],
+);
 
 class _FakeConnection implements EdgeBridgeConnection {
   final List<Uint8List> sent = [];
@@ -54,8 +54,8 @@ class _FakeDuplex implements DuplexByteStream {
 }
 
 RealityCredential _credential() => RealityCredential.fromSharedSecret(
-      Uint8List.fromList(List<int>.filled(32, 0x5A)),
-    );
+  Uint8List.fromList(List<int>.filled(32, 0x5A)),
+);
 
 Uint8List _authenticatedHello(RealityAuthenticator auth) {
   final credential = _credential();
@@ -80,19 +80,23 @@ Uint8List _authenticatedHello(RealityAuthenticator auth) {
 void main() {
   group('EdgeRelayNode parsing', () {
     test('reads host:port, bare host, and full URLs', () {
-      expect(EdgeRelayNode.parse('203.0.113.10:443').authority,
-          '203.0.113.10:443');
-      expect(EdgeRelayNode.parse('edge.example').authority,
-          'edge.example:443');
-      expect(EdgeRelayNode.parse('https://edge.example:8443').authority,
-          'edge.example:8443');
+      expect(
+        EdgeRelayNode.parse('203.0.113.10:443').authority,
+        '203.0.113.10:443',
+      );
+      expect(EdgeRelayNode.parse('edge.example').authority, 'edge.example:443');
+      expect(
+        EdgeRelayNode.parse('https://edge.example:8443').authority,
+        'edge.example:8443',
+      );
     });
 
     test('rejects an address with no host', () {
-      expect(() => EdgeRelayNode.parse(''),
-          throwsA(isA<TopologyViolation>()));
-      expect(() => EdgeRelayNode.parse('https://'),
-          throwsA(isA<TopologyViolation>()));
+      expect(() => EdgeRelayNode.parse(''), throwsA(isA<TopologyViolation>()));
+      expect(
+        () => EdgeRelayNode.parse('https://'),
+        throwsA(isA<TopologyViolation>()),
+      );
     });
   });
 
@@ -124,14 +128,17 @@ void main() {
     });
 
     test('refuses a config with no edge nodes', () {
-      expect(() => EdgeBridgeTopology.fromConfig({'edgeBridgeNodes': []}),
-          throwsA(isA<TopologyViolation>()));
-      expect(() => EdgeBridgeTopology.fromConfig(const {}),
-          throwsA(isA<TopologyViolation>()));
+      expect(
+        () => EdgeBridgeTopology.fromConfig({'edgeBridgeNodes': []}),
+        throwsA(isA<TopologyViolation>()),
+      );
+      expect(
+        () => EdgeBridgeTopology.fromConfig(const {}),
+        throwsA(isA<TopologyViolation>()),
+      );
     });
 
-    test('a relay topology yields a client view with the origin stripped',
-        () {
+    test('a relay topology yields a client view with the origin stripped', () {
       final relay = EdgeRelayTopology(
         origin: Uri.parse('https://198.51.100.5:8443'),
         peers: [EdgeRelayNode.parse('203.0.113.10:443')],
@@ -147,8 +154,9 @@ void main() {
 
   group('EdgeNodeDirectory', () {
     test('offers every node before repeating any', () {
-      final directory =
-          EdgeNodeDirectory(topology: _topology(['a:443', 'b:443', 'c:443']));
+      final directory = EdgeNodeDirectory(
+        topology: _topology(['a:443', 'b:443', 'c:443']),
+      );
       final seen = <String>{};
       for (var i = 0; i < 3; i++) {
         seen.add(directory.preferredOrder.first.authority);
@@ -250,36 +258,45 @@ void main() {
       );
 
       expect(await directory.refreshDiscovery(), 1);
-      expect(
-        directory.health.map((h) => h.node.authority).toSet(),
-        {'a:443', 'c:443'},
-      );
+      expect(directory.health.map((h) => h.node.authority).toSet(), {
+        'a:443',
+        'c:443',
+      });
 
       discovered = [];
-      expect(await directory.refreshDiscovery(), 0,
-          reason: 'an empty discovery result means "no change", not "wipe"');
+      expect(
+        await directory.refreshDiscovery(),
+        0,
+        reason: 'an empty discovery result means "no change", not "wipe"',
+      );
       expect(directory.health, hasLength(2));
     });
 
     test('a rediscovered failing node keeps its penalty', () async {
-      pkg_clock.withClock(pkg_clock.Clock.fixed(DateTime.utc(2026, 7, 27)),
-          () async {
-        final directory = EdgeNodeDirectory(
-          topology: _topology(['a:443']),
-          discovery: () async => [EdgeRelayNode.parse('a:443')],
-        );
-        directory.recordFailure(directory.health.first.node);
-        await directory.refreshDiscovery();
-        expect(directory.health.first.consecutiveFailures, 1,
-            reason: 'rediscovery is not evidence the node was fixed');
-      });
+      pkg_clock.withClock(
+        pkg_clock.Clock.fixed(DateTime.utc(2026, 7, 27)),
+        () async {
+          final directory = EdgeNodeDirectory(
+            topology: _topology(['a:443']),
+            discovery: () async => [EdgeRelayNode.parse('a:443')],
+          );
+          directory.recordFailure(directory.health.first.node);
+          await directory.refreshDiscovery();
+          expect(
+            directory.health.first.consecutiveFailures,
+            1,
+            reason: 'rediscovery is not evidence the node was fixed',
+          );
+        },
+      );
     });
   });
 
   group('EdgeBridgeClient', () {
     test('builds a lane over the directory order', () {
-      final directory =
-          EdgeNodeDirectory(topology: _topology(['a:443', 'b:443']));
+      final directory = EdgeNodeDirectory(
+        topology: _topology(['a:443', 'b:443']),
+      );
       final client = EdgeBridgeClient(
         directory: directory,
         connector: (_) async => _FakeConnection(),
@@ -290,30 +307,38 @@ void main() {
     });
 
     test('records a failing endpoint against its node', () async {
-      pkg_clock.withClock(pkg_clock.Clock.fixed(DateTime.utc(2026, 7, 27)),
-          () async {
-        final directory =
-            EdgeNodeDirectory(topology: _topology(['a:443', 'b:443']));
-        final client = EdgeBridgeClient(
-          directory: directory,
-          connector: (uri) async {
-            if (uri.host == 'a') throw StateError('refused');
-            return _FakeConnection();
-          },
-        );
-        addTearDown(client.dispose);
+      pkg_clock.withClock(
+        pkg_clock.Clock.fixed(DateTime.utc(2026, 7, 27)),
+        () async {
+          final directory = EdgeNodeDirectory(
+            topology: _topology(['a:443', 'b:443']),
+          );
+          final client = EdgeBridgeClient(
+            directory: directory,
+            connector: (uri) async {
+              if (uri.host == 'a') throw StateError('refused');
+              return _FakeConnection();
+            },
+          );
+          addTearDown(client.dispose);
 
-        final result = await client.lane.send([1, 2, 3]);
-        expect(result.status, SendStatus.ok,
-            reason: 'the healthy node carried it');
-        final a = directory.health
-            .firstWhere((h) => h.node.authority == 'a:443');
-        final b = directory.health
-            .firstWhere((h) => h.node.authority == 'b:443');
-        expect(a.consecutiveFailures, greaterThan(0));
-        expect(b.consecutiveFailures, 0);
-        expect(b.lastSuccess, isNotNull);
-      });
+          final result = await client.lane.send([1, 2, 3]);
+          expect(
+            result.status,
+            SendStatus.ok,
+            reason: 'the healthy node carried it',
+          );
+          final a = directory.health.firstWhere(
+            (h) => h.node.authority == 'a:443',
+          );
+          final b = directory.health.firstWhere(
+            (h) => h.node.authority == 'b:443',
+          );
+          expect(a.consecutiveFailures, greaterThan(0));
+          expect(b.consecutiveFailures, 0);
+          expect(b.lastSuccess, isNotNull);
+        },
+      );
     });
 
     test('rebuilds the lane only when the pool actually changes', () async {
@@ -332,10 +357,7 @@ void main() {
       expect(await client.refresh(), isFalse);
       expect(client.lane, same(first));
 
-      discovered = [
-        EdgeRelayNode.parse('a:443'),
-        EdgeRelayNode.parse('d:443'),
-      ];
+      discovered = [EdgeRelayNode.parse('a:443'), EdgeRelayNode.parse('d:443')];
       expect(await client.refresh(), isTrue);
       expect(client.lane, isNot(same(first)));
       expect(client.lane.endpoints, hasLength(2));
@@ -346,10 +368,7 @@ void main() {
       final client = EdgeBridgeClient(
         directory: EdgeNodeDirectory(topology: _topology(['a:443'])),
         connector: (_) async => connection,
-        shaper: TrafficShaper(
-          random: Random(3),
-          allowInsecureRandom: true,
-        ),
+        shaper: TrafficShaper(random: Random(3), allowInsecureRandom: true),
       );
       addTearDown(client.dispose);
 
@@ -400,11 +419,17 @@ void main() {
       final result = await outcome;
 
       expect(result.admitted, isTrue);
-      expect(origin.writtenBytes, [...hello, 9, 9, 9],
-          reason: 'the handshake bytes must reach the origin in position');
+      expect(
+        origin.writtenBytes,
+        [...hello, 9, 9, 9],
+        reason: 'the handshake bytes must reach the origin in position',
+      );
       expect(client.writtenBytes, [7, 7]);
-      expect(fallback.written, isEmpty,
-          reason: 'an authenticated client never touches the fallback host');
+      expect(
+        fallback.written,
+        isEmpty,
+        reason: 'an authenticated client never touches the fallback host',
+      );
       expect(node.stats.admitted, 1);
     });
 
@@ -426,10 +451,16 @@ void main() {
       expect(result.admitted, isFalse);
       expect(result.reason, RealityRejectReason.unknownShortId);
       expect(fallback.writtenBytes, probe);
-      expect(origin.written, isEmpty,
-          reason: 'the origin must never see an unauthenticated byte');
-      expect(client.written, isEmpty,
-          reason: 'the node originates nothing of its own');
+      expect(
+        origin.written,
+        isEmpty,
+        reason: 'the origin must never see an unauthenticated byte',
+      );
+      expect(
+        client.written,
+        isEmpty,
+        reason: 'the node originates nothing of its own',
+      );
       expect(node.stats.passedThrough, 1);
       expect(node.stats.passThroughRatio, 1.0);
     });
@@ -452,19 +483,24 @@ void main() {
 
       expect(result.admitted, isTrue);
       expect(result.uplinkFailed, isTrue);
-      expect(client.written, isEmpty,
-          reason: 'an error response would be a distinguishing reply');
+      expect(
+        client.written,
+        isEmpty,
+        reason: 'an error response would be a distinguishing reply',
+      );
       expect(client.closed, isTrue);
       expect(failing.stats.originUplinkFailures, 1);
     });
 
-    test('the origin connector takes no address, so a peer cannot steer it',
-        () {
-      // A compile-time property, asserted here so it is not silently
-      // relaxed later: OriginUplinkConnector has zero parameters.
-      const OriginUplinkConnector connector = _noArgUplink;
-      expect(connector, isNotNull);
-    });
+    test(
+      'the origin connector takes no address, so a peer cannot steer it',
+      () {
+        // A compile-time property, asserted here so it is not silently
+        // relaxed later: OriginUplinkConnector has zero parameters.
+        const OriginUplinkConnector connector = _noArgUplink;
+        expect(connector, isNotNull);
+      },
+    );
   });
 
   group('ProbeDefenseConfig.fromJson', () {

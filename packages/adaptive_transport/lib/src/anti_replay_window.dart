@@ -6,9 +6,11 @@
 /// word list) and O(1) per check, regardless of traffic rate.
 class AntiReplayWindow {
   AntiReplayWindow({this.windowSize = 1024})
-      : assert(windowSize >= 64 && windowSize % 64 == 0,
-            'windowSize must be a positive multiple of 64'),
-        _bitmap = List<int>.filled(windowSize ~/ 64, 0);
+    : assert(
+        windowSize >= 64 && windowSize % 64 == 0,
+        'windowSize must be a positive multiple of 64',
+      ),
+      _bitmap = List<int>.filled(windowSize ~/ 64, 0);
 
   /// Width of the acceptance window in sequence numbers.
   final int windowSize;

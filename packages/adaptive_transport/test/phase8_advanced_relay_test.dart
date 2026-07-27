@@ -30,8 +30,10 @@ void main() {
     test('sample request: parse, MESSAGE-INTEGRITY and FINGERPRINT verify', () {
       final msg = StunMessage.parse(rfc5769Request);
       expect(msg.type, 0x0001);
-      expect(String.fromCharCodes(msg.attribute(stunAttrUsername)!.value),
-          'evtj:h6vY');
+      expect(
+        String.fromCharCodes(msg.attribute(stunAttrUsername)!.value),
+        'evtj:h6vY',
+      );
       expect(
         msg.verifyMessageIntegrity(StunMessage.shortTermKey(rfc5769Password)),
         isTrue,
@@ -68,8 +70,11 @@ void main() {
       final key = StunMessage.longTermKey('caller', 'relay', 'secret');
       final builder = StunMessageBuilder(type: 0x0001, transactionId: txn)
         ..addUsername('caller');
-      final wire =
-          builder.build(integrityKey: key, sha256Integrity: true, fingerprint: true);
+      final wire = builder.build(
+        integrityKey: key,
+        sha256Integrity: true,
+        fingerprint: true,
+      );
       final parsed = StunMessage.parse(wire);
       expect(parsed.verifyMessageIntegritySha256(key), isTrue);
       expect(parsed.verifyFingerprint(), isTrue);
@@ -89,8 +94,10 @@ void main() {
       sw.stop();
       final usPer = sw.elapsedMicroseconds / n;
       // ignore: avoid_print
-      print('MEASURED stun parse+verify: ${usPer.toStringAsFixed(1)} us '
-          'per message (${(1e6 / usPer / 1000).toStringAsFixed(0)}k msg/s)');
+      print(
+        'MEASURED stun parse+verify: ${usPer.toStringAsFixed(1)} us '
+        'per message (${(1e6 / usPer / 1000).toStringAsFixed(0)}k msg/s)',
+      );
       expect(usPer, lessThan(1000));
     });
   });
@@ -114,11 +121,13 @@ void main() {
       final voice = Uint8List(160); // one 20 ms voice datagram
       final overhead = link.wrap(voice).length - voice.length;
       // ignore: avoid_print
-      print('MEASURED ChannelData overhead: $overhead B vs '
-          '${ChannelRelayLink.sendIndicationOverheadBytes} B indication '
-          '(${(ChannelRelayLink.sendIndicationOverheadBytes - overhead)} B '
-          'saved per datagram, 50/s => '
-          '${(ChannelRelayLink.sendIndicationOverheadBytes - overhead) * 50} B/s)');
+      print(
+        'MEASURED ChannelData overhead: $overhead B vs '
+        '${ChannelRelayLink.sendIndicationOverheadBytes} B indication '
+        '(${(ChannelRelayLink.sendIndicationOverheadBytes - overhead)} B '
+        'saved per datagram, 50/s => '
+        '${(ChannelRelayLink.sendIndicationOverheadBytes - overhead) * 50} B/s)',
+      );
       expect(overhead, ChannelRelayLink.headerBytes);
     });
 
@@ -126,25 +135,29 @@ void main() {
       final binder = ChannelRelayBinder();
       final link = binder.bind(peer);
       withClock(Clock.fixed(clock.now().add(const Duration(seconds: 301))), () {
-        expect(() => link.wrap(Uint8List(4)),
-            throwsA(isA<PermissionNotInstalledException>()));
+        expect(
+          () => link.wrap(Uint8List(4)),
+          throwsA(isA<PermissionNotInstalledException>()),
+        );
       });
     });
 
-    test('binding expires at 600 s; refresh re-arms; dueForRefresh reports',
-        () {
-      final t0 = DateTime.utc(2026, 7, 26, 12);
-      withClock(Clock.fixed(t0), () {
-        final binder = ChannelRelayBinder();
-        final link = binder.bind(peer);
-        withClock(Clock.fixed(t0.add(const Duration(seconds: 550))), () {
-          expect(binder.dueForRefresh(const Duration(seconds: 60)), [link]);
-          binder.refresh(link);
-          expect(binder.dueForRefresh(const Duration(seconds: 60)), isEmpty);
-          expect(link.unwrap(link.wrap(Uint8List(8))), Uint8List(8));
+    test(
+      'binding expires at 600 s; refresh re-arms; dueForRefresh reports',
+      () {
+        final t0 = DateTime.utc(2026, 7, 26, 12);
+        withClock(Clock.fixed(t0), () {
+          final binder = ChannelRelayBinder();
+          final link = binder.bind(peer);
+          withClock(Clock.fixed(t0.add(const Duration(seconds: 550))), () {
+            expect(binder.dueForRefresh(const Duration(seconds: 60)), [link]);
+            binder.refresh(link);
+            expect(binder.dueForRefresh(const Duration(seconds: 60)), isEmpty);
+            expect(link.unwrap(link.wrap(Uint8List(8))), Uint8List(8));
+          });
         });
-      });
-    });
+      },
+    );
 
     test('distinct peers get distinct channels; wrong channel rejects', () {
       final binder = ChannelRelayBinder();
@@ -166,78 +179,90 @@ void main() {
       Uint8List? ticket,
       bool refuseTicket = false,
       List<HostPort>? log,
-    }) =>
-        MobilityRelayAllocator(
-          servers: [server],
-          issuer: TurnCredentialsIssuer(sharedSecret: 's'),
-          userId: 'u1',
-          allocateWithTicket: (request) async {
-            log?.add(request.tuple.localAddress);
-            return (
-              TurnAllocation(
-                tuple: request.tuple,
-                relayedAddress: relayed,
-                serverReflexiveAddress: request.tuple.localAddress,
-                expiresAt: clock.now().add(request.lifetime),
-                credentials: request.credentials,
-              ),
-              ticket,
-            );
-          },
-          refresh: (allocation, lifetime) async =>
-              clock.now().add(lifetime),
-          mobilityRefresh: (allocation, presented, newLocal) async {
-            if (refuseTicket) throw const AllocationMismatchException();
-            return (
-              TurnAllocation(
-                tuple: RelayFiveTuple(
-                  localAddress: newLocal,
-                  serverAddress: allocation.tuple.serverAddress,
-                ),
-                relayedAddress: allocation.relayedAddress,
-                serverReflexiveAddress: newLocal,
-                expiresAt: clock.now().add(const Duration(seconds: 600)),
-                credentials: allocation.credentials,
-              ),
-              null,
-            );
-          },
+    }) => MobilityRelayAllocator(
+      servers: [server],
+      issuer: TurnCredentialsIssuer(sharedSecret: 's'),
+      userId: 'u1',
+      allocateWithTicket: (request) async {
+        log?.add(request.tuple.localAddress);
+        return (
+          TurnAllocation(
+            tuple: request.tuple,
+            relayedAddress: relayed,
+            serverReflexiveAddress: request.tuple.localAddress,
+            expiresAt: clock.now().add(request.lifetime),
+            credentials: request.credentials,
+          ),
+          ticket,
         );
+      },
+      refresh: (allocation, lifetime) async => clock.now().add(lifetime),
+      mobilityRefresh: (allocation, presented, newLocal) async {
+        if (refuseTicket) throw const AllocationMismatchException();
+        return (
+          TurnAllocation(
+            tuple: RelayFiveTuple(
+              localAddress: newLocal,
+              serverAddress: allocation.tuple.serverAddress,
+            ),
+            relayedAddress: allocation.relayedAddress,
+            serverReflexiveAddress: newLocal,
+            expiresAt: clock.now().add(const Duration(seconds: 600)),
+            credentials: allocation.credentials,
+          ),
+          null,
+        );
+      },
+    );
 
-    test('roam with ticket keeps the relayed address, zero re-allocates',
-        () async {
-      await withClock(Clock.fixed(DateTime.utc(2026, 7, 26)), () async {
-        final allocator = build(ticket: Uint8List.fromList([1, 2, 3]));
-        final first = await allocator.ensure(localAddress: wifi);
-        expect(allocator.hasMobilityTicket, isTrue);
-        final moved = await allocator.ensure(localAddress: cell);
-        expect(moved.relayedAddress, first.relayedAddress,
-            reason: 'peers keep sending to the same relayed address');
-        expect(moved.tuple.localAddress, cell);
-        expect(allocator.mobilityRoamCount, 1);
-        expect(allocator.allocateCount, 1, reason: 'no second Allocate');
-        expect(allocator.roamCount, 0);
-        expect(allocator.currentAllocation, same(moved));
-      });
-    });
+    test(
+      'roam with ticket keeps the relayed address, zero re-allocates',
+      () async {
+        await withClock(Clock.fixed(DateTime.utc(2026, 7, 26)), () async {
+          final allocator = build(ticket: Uint8List.fromList([1, 2, 3]));
+          final first = await allocator.ensure(localAddress: wifi);
+          expect(allocator.hasMobilityTicket, isTrue);
+          final moved = await allocator.ensure(localAddress: cell);
+          expect(
+            moved.relayedAddress,
+            first.relayedAddress,
+            reason: 'peers keep sending to the same relayed address',
+          );
+          expect(moved.tuple.localAddress, cell);
+          expect(allocator.mobilityRoamCount, 1);
+          expect(allocator.allocateCount, 1, reason: 'no second Allocate');
+          expect(allocator.roamCount, 0);
+          expect(allocator.currentAllocation, same(moved));
+        });
+      },
+    );
 
-    test('server refusing the ticket (437) falls back to full re-allocate',
-        () async {
-      await withClock(Clock.fixed(DateTime.utc(2026, 7, 26)), () async {
-        final log = <HostPort>[];
-        final allocator = build(
-            ticket: Uint8List.fromList([9]), refuseTicket: true, log: log);
-        await allocator.ensure(localAddress: wifi);
-        final moved = await allocator.ensure(localAddress: cell);
-        expect(moved.tuple.localAddress, cell);
-        expect(allocator.mobilityRoamCount, 0);
-        expect(allocator.allocateCount, 2);
-        expect(log, [wifi, cell]);
-        expect(allocator.hasMobilityTicket, isTrue,
-            reason: 'the fallback Allocate issued a fresh ticket; the refused '
-                'one was discarded before the re-allocate');
-      });
-    });
+    test(
+      'server refusing the ticket (437) falls back to full re-allocate',
+      () async {
+        await withClock(Clock.fixed(DateTime.utc(2026, 7, 26)), () async {
+          final log = <HostPort>[];
+          final allocator = build(
+            ticket: Uint8List.fromList([9]),
+            refuseTicket: true,
+            log: log,
+          );
+          await allocator.ensure(localAddress: wifi);
+          final moved = await allocator.ensure(localAddress: cell);
+          expect(moved.tuple.localAddress, cell);
+          expect(allocator.mobilityRoamCount, 0);
+          expect(allocator.allocateCount, 2);
+          expect(log, [wifi, cell]);
+          expect(
+            allocator.hasMobilityTicket,
+            isTrue,
+            reason:
+                'the fallback Allocate issued a fresh ticket; the refused '
+                'one was discarded before the re-allocate',
+          );
+        });
+      },
+    );
 
     test('no ticket at all behaves exactly like the base allocator', () async {
       await withClock(Clock.fixed(DateTime.utc(2026, 7, 26)), () async {
@@ -249,23 +274,24 @@ void main() {
       });
     });
 
-    test('moved allocation refreshes at margin and releases cleanly',
-        () async {
+    test('moved allocation refreshes at margin and releases cleanly', () async {
       final t0 = DateTime.utc(2026, 7, 26);
       final allocator = build(ticket: Uint8List.fromList([7]));
       await withClock(Clock.fixed(t0), () async {
         await allocator.ensure(localAddress: wifi);
         await allocator.ensure(localAddress: cell);
       });
-      await withClock(Clock.fixed(t0.add(const Duration(seconds: 550))),
-          () async {
-        final refreshed = await allocator.ensure(localAddress: cell);
-        expect(allocator.refreshCount, 1);
-        expect(refreshed.tuple.localAddress, cell);
-        await allocator.release();
-        expect(allocator.currentAllocation, isNull);
-        expect(allocator.hasMobilityTicket, isFalse);
-      });
+      await withClock(
+        Clock.fixed(t0.add(const Duration(seconds: 550))),
+        () async {
+          final refreshed = await allocator.ensure(localAddress: cell);
+          expect(allocator.refreshCount, 1);
+          expect(refreshed.tuple.localAddress, cell);
+          await allocator.release();
+          expect(allocator.currentAllocation, isNull);
+          expect(allocator.hasMobilityTicket, isFalse);
+        },
+      );
     });
   });
 }

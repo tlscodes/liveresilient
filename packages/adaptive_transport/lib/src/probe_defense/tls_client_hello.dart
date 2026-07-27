@@ -67,7 +67,8 @@ class TlsExtension {
   final Uint8List data;
 
   @override
-  String toString() => 'TlsExtension(0x${type.toRadixString(16)}, '
+  String toString() =>
+      'TlsExtension(0x${type.toRadixString(16)}, '
       '${data.length}B)';
 }
 
@@ -310,8 +311,9 @@ class TlsClientHello {
   /// which changes only the leading protocol character.
   String ja4({bool overQuic = false}) {
     final ciphers = cipherSuites.where((c) => !isGreaseCodePoint(c)).toList();
-    final extensionTypes =
-        extensions.map((e) => e.type).where((t) => !isGreaseCodePoint(t));
+    final extensionTypes = extensions
+        .map((e) => e.type)
+        .where((t) => !isGreaseCodePoint(t));
 
     final version = switch (effectiveVersion) {
       0x0304 => '13',
@@ -321,24 +323,29 @@ class TlsClientHello {
       _ => '00',
     };
     final sni = serverName == null ? 'i' : 'd';
-    final alpn = alpnProtocols.isEmpty ? '00' : _alpnMarker(alpnProtocols.first);
-    final a = '${overQuic ? 'q' : 't'}$version$sni'
+    final alpn = alpnProtocols.isEmpty
+        ? '00'
+        : _alpnMarker(alpnProtocols.first);
+    final a =
+        '${overQuic ? 'q' : 't'}$version$sni'
         '${_twoDigits(ciphers.length)}'
         '${_twoDigits(extensionTypes.length)}$alpn';
 
     // JA4_b and JA4_c hash *sorted* lists, which is exactly what makes JA4
     // stable against a peer that shuffles its extension order per
     // connection — unlike JA3, which such a peer defeats outright.
-    final b = _truncatedSha256(
-      (ciphers.map(_hex4).toList()..sort()).join(','),
-    );
-    final sortedExtensions = (extensionTypes
-            .where((t) =>
-                t != TlsExtensionType.serverName && t != TlsExtensionType.alpn)
-            .map(_hex4)
-            .toList()
-          ..sort())
-        .join(',');
+    final b = _truncatedSha256((ciphers.map(_hex4).toList()..sort()).join(','));
+    final sortedExtensions =
+        (extensionTypes
+                .where(
+                  (t) =>
+                      t != TlsExtensionType.serverName &&
+                      t != TlsExtensionType.alpn,
+                )
+                .map(_hex4)
+                .toList()
+              ..sort())
+            .join(',');
     // Signature algorithms stay in wire ORDER — the JA4 spec keeps them
     // unsorted on purpose.
     final signatures = signatureAlgorithms
@@ -359,8 +366,7 @@ class TlsClientHello {
   static String _twoDigits(int value) =>
       (value > 99 ? 99 : value).toString().padLeft(2, '0');
 
-  static String _hex4(int value) =>
-      value.toRadixString(16).padLeft(4, '0');
+  static String _hex4(int value) => value.toRadixString(16).padLeft(4, '0');
 
   /// First 12 hex characters of the SHA-256, or twelve zeroes for an empty
   /// list (the JA4 spec's sentinel for "nothing to hash").
@@ -409,9 +415,8 @@ class _ByteReader {
 
   int readUint24() {
     _need(3);
-    final value = (_bytes[offset] << 16) |
-        (_bytes[offset + 1] << 8) |
-        _bytes[offset + 2];
+    final value =
+        (_bytes[offset] << 16) | (_bytes[offset + 1] << 8) | _bytes[offset + 2];
     offset += 3;
     return value;
   }

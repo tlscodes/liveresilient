@@ -15,10 +15,10 @@ class LocalMeshLane implements TransportChannel {
     required Future<SendResult> Function(List<int> payload) peerSender,
     Future<bool> Function()? peerProbe,
     String name = 'local-mesh',
-  })  : _peerSender = peerSender,
-        _peerProbe = peerProbe,
-        _name = name,
-        health = ChannelHealth(reliabilityPrior: 0.35, bandwidth: 0.1);
+  }) : _peerSender = peerSender,
+       _peerProbe = peerProbe,
+       _name = name,
+       health = ChannelHealth(reliabilityPrior: 0.35, bandwidth: 0.1);
 
   final Future<SendResult> Function(List<int> payload) _peerSender;
   final Future<bool> Function()? _peerProbe;

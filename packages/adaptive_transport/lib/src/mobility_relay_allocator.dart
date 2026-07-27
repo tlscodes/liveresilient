@@ -27,16 +27,19 @@ class MobilityRelayAllocator extends TurnRelayAllocator {
     required TurnCredentialsIssuer issuer,
     required Future<(TurnAllocation, Uint8List?)> Function(
       AllocateRequest request,
-    ) allocateWithTicket,
+    )
+    allocateWithTicket,
     required Future<DateTime> Function(
       TurnAllocation allocation,
       Duration lifetime,
-    ) refresh,
+    )
+    refresh,
     required Future<(TurnAllocation, Uint8List?)> Function(
       TurnAllocation allocation,
       Uint8List ticket,
       HostPort newLocalAddress,
-    ) mobilityRefresh,
+    )
+    mobilityRefresh,
     required String userId,
     Duration lifetime = const Duration(seconds: 600),
     Duration refreshMargin = const Duration(seconds: 60),
@@ -70,23 +73,25 @@ class MobilityRelayAllocator extends TurnRelayAllocator {
       TurnAllocation,
       Uint8List,
       HostPort,
-    ) mobilityRefresh,
+    )
+    mobilityRefresh,
     required _TicketBox box,
     required super.userId,
     required Duration super.lifetime,
     required Duration super.refreshMargin,
     required String super.transport,
-  })  : _refreshFn = refresh,
-        _mobility = mobilityRefresh,
-        _box = box,
-        super(refresh: refresh);
+  }) : _refreshFn = refresh,
+       _mobility = mobilityRefresh,
+       _box = box,
+       super(refresh: refresh);
 
   final Future<DateTime> Function(TurnAllocation, Duration) _refreshFn;
   final Future<(TurnAllocation, Uint8List?)> Function(
     TurnAllocation,
     Uint8List,
     HostPort,
-  ) _mobility;
+  )
+  _mobility;
   final _TicketBox _box;
 
   /// The allocation as moved by mobility refreshes. While set, it supersedes

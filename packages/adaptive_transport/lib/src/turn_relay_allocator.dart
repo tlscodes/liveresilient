@@ -34,7 +34,11 @@ const int stunFamilyIpv6 = 0x02;
 /// middleboxes that rewrite addresses inside packet payloads do not silently
 /// corrupt the very address the client is trying to discover.
 class StunXorMappedAddress {
-  const StunXorMappedAddress({required this.family, required this.address, required this.port});
+  const StunXorMappedAddress({
+    required this.family,
+    required this.address,
+    required this.port,
+  });
 
   final int family;
 
@@ -75,16 +79,15 @@ class StunXorMappedAddress {
     final expectedLength = family == stunFamilyIpv4
         ? 4
         : family == stunFamilyIpv6
-            ? 16
-            : throw FormatException('Unknown STUN address family: $family');
+        ? 16
+        : throw FormatException('Unknown STUN address family: $family');
     if (attributeValue.length != 4 + expectedLength) {
       throw FormatException(
         'Family $family needs ${4 + expectedLength} bytes, '
         'got ${attributeValue.length}',
       );
     }
-    final port =
-        ((attributeValue[2] << 8) | attributeValue[3]) ^ _cookieHigh;
+    final port = ((attributeValue[2] << 8) | attributeValue[3]) ^ _cookieHigh;
     final mask = _mask(transactionId, expectedLength);
     final address = Uint8List(expectedLength);
     for (int i = 0; i < expectedLength; i++) {
@@ -98,9 +101,7 @@ class StunXorMappedAddress {
     if (family == stunFamilyIpv4) return address.join('.');
     final groups = <String>[];
     for (int i = 0; i < address.length; i += 2) {
-      groups.add(
-        ((address[i] << 8) | address[i + 1]).toRadixString(16),
-      );
+      groups.add(((address[i] << 8) | address[i + 1]).toRadixString(16));
     }
     return groups.join(':');
   }
@@ -118,8 +119,8 @@ class StunXorMappedAddress {
     final int expected = family == stunFamilyIpv4
         ? 4
         : family == stunFamilyIpv6
-            ? 16
-            : throw ArgumentError.value(family, 'family', 'unknown family');
+        ? 16
+        : throw ArgumentError.value(family, 'family', 'unknown family');
     if (address.length != expected) {
       throw ArgumentError.value(
         address.length,
@@ -200,12 +201,12 @@ class TurnAllocation {
   bool isExpiredAt(DateTime now) => !now.isBefore(expiresAt);
 
   TurnAllocation withExpiry(DateTime expiresAt) => TurnAllocation(
-        tuple: tuple,
-        relayedAddress: relayedAddress,
-        serverReflexiveAddress: serverReflexiveAddress,
-        expiresAt: expiresAt,
-        credentials: credentials,
-      );
+    tuple: tuple,
+    relayedAddress: relayedAddress,
+    serverReflexiveAddress: serverReflexiveAddress,
+    expiresAt: expiresAt,
+    credentials: credentials,
+  );
 }
 
 /// What the allocator asks the injected transport to do.
@@ -245,7 +246,8 @@ class NoRelayAllocationException implements Exception {
   final Object? lastError;
 
   @override
-  String toString() => 'NoRelayAllocationException: tried $serversTried '
+  String toString() =>
+      'NoRelayAllocationException: tried $serversTried '
       'server(s), last error: $lastError';
 }
 
@@ -266,15 +268,16 @@ class TurnRelayAllocator {
     required Future<DateTime> Function(
       TurnAllocation allocation,
       Duration lifetime,
-    ) refresh,
+    )
+    refresh,
     required this.userId,
     this.lifetime = const Duration(seconds: 600),
     this.refreshMargin = const Duration(seconds: 60),
     this.transport = 'udp',
-  })  : _servers = List<HostPort>.unmodifiable(servers),
-        _issuer = issuer,
-        _allocate = allocate,
-        _refresh = refresh {
+  }) : _servers = List<HostPort>.unmodifiable(servers),
+       _issuer = issuer,
+       _allocate = allocate,
+       _refresh = refresh {
     if (_servers.isEmpty) {
       throw ArgumentError.value(servers, 'servers', 'must not be empty');
     }

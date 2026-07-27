@@ -14,8 +14,10 @@ Uint8List _build(
   int seed = 7,
   int? padToLength,
 }) {
-  final builder =
-      UtlsClientHelloBuilder(profile: profile, random: _seeded(seed));
+  final builder = UtlsClientHelloBuilder(
+    profile: profile,
+    random: _seeded(seed),
+  );
   return builder.build(
     serverName: serverName,
     enableEch: enableEch,
@@ -39,16 +41,17 @@ void main() {
     });
 
     test('parses a hello wrapped in a record header', () {
-      final record =
-          UtlsClientHelloBuilder.wrapInRecord(_build(UtlsClientProfile.chrome120));
+      final record = UtlsClientHelloBuilder.wrapInRecord(
+        _build(UtlsClientProfile.chrome120),
+      );
       final hello = TlsClientHello.parseRecord(record);
       expect(hello.serverName, 'www.example.com');
     });
 
-    test('rejects a truncated record rather than deciding on half a hello',
-        () {
-      final record =
-          UtlsClientHelloBuilder.wrapInRecord(_build(UtlsClientProfile.chrome120));
+    test('rejects a truncated record rather than deciding on half a hello', () {
+      final record = UtlsClientHelloBuilder.wrapInRecord(
+        _build(UtlsClientProfile.chrome120),
+      );
       final half = Uint8List.sublistView(record, 0, record.length ~/ 2);
       expect(
         () => TlsClientHello.parseRecord(half),
@@ -100,8 +103,11 @@ void main() {
           .where((t) => !isGreaseCodePoint(t))
           .toList();
       final expected = profile.extensionOrder
-          .where((t) => t != TlsExtensionType.recordSizeLimit ||
-              profile.recordSizeLimit != null)
+          .where(
+            (t) =>
+                t != TlsExtensionType.recordSizeLimit ||
+                profile.recordSizeLimit != null,
+          )
           .toList();
       expect(seen, expected);
     });
@@ -109,18 +115,25 @@ void main() {
 
   group('JA3', () {
     test('excludes GREASE from every field', () {
-      final hello = TlsClientHello.parseHandshake(_build(UtlsClientProfile.chrome120));
+      final hello = TlsClientHello.parseHandshake(
+        _build(UtlsClientProfile.chrome120),
+      );
       final fields = hello.ja3String.split(',');
       expect(fields, hasLength(5));
       for (final value in fields.skip(1).expand((f) => f.split('-'))) {
         if (value.isEmpty) continue;
-        expect(isGreaseCodePoint(int.parse(value)), isFalse,
-            reason: 'GREASE value $value leaked into JA3');
+        expect(
+          isGreaseCodePoint(int.parse(value)),
+          isFalse,
+          reason: 'GREASE value $value leaked into JA3',
+        );
       }
     });
 
     test('is a 32-character MD5 hex digest', () {
-      final hello = TlsClientHello.parseHandshake(_build(UtlsClientProfile.safari17));
+      final hello = TlsClientHello.parseHandshake(
+        _build(UtlsClientProfile.safari17),
+      );
       expect(hello.ja3, matches(RegExp(r'^[0-9a-f]{32}$')));
     });
 
@@ -146,7 +159,9 @@ void main() {
 
   group('JA4', () {
     test('has the documented three-part shape', () {
-      final hello = TlsClientHello.parseHandshake(_build(UtlsClientProfile.chrome120));
+      final hello = TlsClientHello.parseHandshake(
+        _build(UtlsClientProfile.chrome120),
+      );
       expect(
         hello.ja4(),
         matches(RegExp(r'^t13d\d{4}h2_[0-9a-f]{12}_[0-9a-f]{12}$')),
@@ -161,7 +176,9 @@ void main() {
     });
 
     test('uses "q" for a QUIC-carried hello', () {
-      final hello = TlsClientHello.parseHandshake(_build(UtlsClientProfile.chrome120));
+      final hello = TlsClientHello.parseHandshake(
+        _build(UtlsClientProfile.chrome120),
+      );
       expect(hello.ja4(overQuic: true).startsWith('q13'), isTrue);
     });
 
@@ -174,12 +191,17 @@ void main() {
           ).ja4(),
         );
       }
-      expect(digests, hasLength(1),
-          reason: 'JA4 sorts its lists, so order permutation must not move it');
+      expect(
+        digests,
+        hasLength(1),
+        reason: 'JA4 sorts its lists, so order permutation must not move it',
+      );
     });
 
     test('counts exclude GREASE', () {
-      final hello = TlsClientHello.parseHandshake(_build(UtlsClientProfile.chrome120));
+      final hello = TlsClientHello.parseHandshake(
+        _build(UtlsClientProfile.chrome120),
+      );
       final a = hello.ja4().split('_').first;
       final cipherCount = int.parse(a.substring(4, 6));
       expect(cipherCount, UtlsClientProfile.chrome120.cipherSuites.length);

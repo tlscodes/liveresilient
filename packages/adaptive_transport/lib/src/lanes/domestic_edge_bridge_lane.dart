@@ -84,10 +84,7 @@ class GrpcMessageFramer {
         '${frame.length - headerLength}',
       );
     }
-    return decodeBody(
-      frame[0],
-      Uint8List.sublistView(frame, headerLength),
-    );
+    return decodeBody(frame[0], Uint8List.sublistView(frame, headerLength));
   }
 
   /// Applies [flag] to an already-delimited message [body].
@@ -139,15 +136,17 @@ class GrpcFrameReader {
       }
       final total = GrpcMessageFramer.headerLength + declared;
       if (bytes.length - offset < total) break;
-      out.add(GrpcMessageFramer.decodeBody(
-        bytes[offset],
-        Uint8List.fromList(
-          bytes.sublist(
-            offset + GrpcMessageFramer.headerLength,
-            offset + total,
+      out.add(
+        GrpcMessageFramer.decodeBody(
+          bytes[offset],
+          Uint8List.fromList(
+            bytes.sublist(
+              offset + GrpcMessageFramer.headerLength,
+              offset + total,
+            ),
           ),
         ),
-      ));
+      );
       offset += total;
     }
     _buffer.clear();
@@ -178,9 +177,8 @@ abstract class EdgeBridgeConnection {
 
 /// Opens a stream to [endpoint]. Throwing (or timing out) marks the
 /// endpoint unhealthy for this attempt.
-typedef EdgeBridgeConnector = Future<EdgeBridgeConnection> Function(
-  Uri endpoint,
-);
+typedef EdgeBridgeConnector =
+    Future<EdgeBridgeConnection> Function(Uri endpoint);
 
 /// A transport lane over a rotating pool of edge endpoints.
 class DomesticEdgeBridgeLane implements TransportChannel {
@@ -193,10 +191,10 @@ class DomesticEdgeBridgeLane implements TransportChannel {
     GrpcMessageFramer framer = const GrpcMessageFramer(),
     this.shaper,
     this.jitter,
-  })  : _endpoints = List<Uri>.unmodifiable(endpoints),
-        _connector = connector,
-        _framer = framer,
-        health = ChannelHealth(reliabilityPrior: 0.85, bandwidth: 0.8) {
+  }) : _endpoints = List<Uri>.unmodifiable(endpoints),
+       _connector = connector,
+       _framer = framer,
+       health = ChannelHealth(reliabilityPrior: 0.85, bandwidth: 0.8) {
     if (endpoints.isEmpty) {
       throw ArgumentError.value(endpoints, 'endpoints', 'at least one needed');
     }
@@ -290,8 +288,9 @@ class DomesticEdgeBridgeLane implements TransportChannel {
     for (var attempt = 0; attempt < _endpoints.length; attempt++) {
       final index = (_rotation + attempt) % _endpoints.length;
       try {
-        final connection =
-            await _connector(_endpoints[index]).timeout(connectTimeout);
+        final connection = await _connector(
+          _endpoints[index],
+        ).timeout(connectTimeout);
         // A fresh stream cannot complete a message buffered from the dead
         // one; the session sequence, by contrast, deliberately continues.
         _reader.reset();

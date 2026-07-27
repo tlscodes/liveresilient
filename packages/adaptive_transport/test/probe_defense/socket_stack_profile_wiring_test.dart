@@ -28,30 +28,35 @@ void main() {
   });
 
   test('a profile-less connect still uses the plain socket path', () async {
-    final stream = await connectFallbackSocket(server.address.host, server.port);
+    final stream = await connectFallbackSocket(
+      server.address.host,
+      server.port,
+    );
     addTearDown(stream.close);
     expect(stream, isA<SocketDuplexStream>());
   });
 
-  test('a profile reaches the tuner and the applied list reaches the caller',
-      () async {
-    final tuner = RecordingTcpSocketTuner();
-    List<String>? applied;
+  test(
+    'a profile reaches the tuner and the applied list reaches the caller',
+    () async {
+      final tuner = RecordingTcpSocketTuner();
+      List<String>? applied;
 
-    final stream = await connectFallbackSocket(
-      server.address.host,
-      server.port,
-      profile: TcpStackProfile.forId(TcpStackProfileId.linux),
-      tuner: tuner,
-      onProfileApplied: (a) => applied = a,
-    );
-    addTearDown(stream.close);
+      final stream = await connectFallbackSocket(
+        server.address.host,
+        server.port,
+        profile: TcpStackProfile.forId(TcpStackProfileId.linux),
+        tuner: tuner,
+        onProfileApplied: (a) => applied = a,
+      );
+      addTearDown(stream.close);
 
-    expect(stream, isA<RawSocketDuplexStream>());
-    expect(tuner.appliedProfiles, hasLength(1));
-    expect(tuner.appliedProfiles.single.id, TcpStackProfileId.linux);
-    expect(applied, isNotNull);
-  });
+      expect(stream, isA<RawSocketDuplexStream>());
+      expect(tuner.appliedProfiles, hasLength(1));
+      expect(tuner.appliedProfiles.single.id, TcpStackProfileId.linux);
+      expect(applied, isNotNull);
+    },
+  );
 
   test('the raw-socket stream carries bytes to the peer', () async {
     final stream = await connectFallbackSocket(

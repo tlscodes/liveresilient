@@ -9,11 +9,9 @@ import 'dart:math';
 /// Not tied to any transport lane or timer — callers drive their own
 /// `Timer`/`Future.delayed` loop using [nextIntervalMs].
 class PoissonPacer {
-  PoissonPacer({
-    this.meanIntervalMs = 125,
-    Random? random,
-  })  : assert(meanIntervalMs > 0, 'meanIntervalMs must be positive'),
-        _random = random ?? Random();
+  PoissonPacer({this.meanIntervalMs = 125, Random? random})
+    : assert(meanIntervalMs > 0, 'meanIntervalMs must be positive'),
+      _random = random ?? Random();
 
   /// Mean inter-send interval, in milliseconds.
   final double meanIntervalMs;

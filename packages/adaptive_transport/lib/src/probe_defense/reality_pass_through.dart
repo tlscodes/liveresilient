@@ -57,8 +57,8 @@ class RealitySessionIdLayout {
 /// computed under.
 class RealityCredential {
   RealityCredential({required Uint8List shortId, required Uint8List authKey})
-      : shortId = Uint8List.fromList(shortId),
-        authKey = Uint8List.fromList(authKey) {
+    : shortId = Uint8List.fromList(shortId),
+      authKey = Uint8List.fromList(authKey) {
     if (shortId.length != RealitySessionIdLayout.shortIdLength) {
       throw ArgumentError.value(
         shortId.length,
@@ -114,9 +114,7 @@ class RealityCredential {
       ..add(shortId)
       ..add(_timeSlotBytes(timeSlot));
     final mac = Hmac(sha256, authKey).convert(message.toBytes()).bytes;
-    return Uint8List.fromList(
-      mac.sublist(0, RealitySessionIdLayout.tagLength),
-    );
+    return Uint8List.fromList(mac.sublist(0, RealitySessionIdLayout.tagLength));
   }
 
   /// Builds the 32-byte `legacy_session_id` a client should send.
@@ -172,8 +170,10 @@ class RealityDecision {
     this.hello,
   });
 
-  const RealityDecision.admit(RealityCredential credential, TlsClientHello hello)
-      : this._(admitted: true, credential: credential, hello: hello);
+  const RealityDecision.admit(
+    RealityCredential credential,
+    TlsClientHello hello,
+  ) : this._(admitted: true, credential: credential, hello: hello);
 
   const RealityDecision.passThrough(
     RealityRejectReason reason, {
@@ -200,9 +200,9 @@ class RealityAuthenticator {
     this.clockSkew = const Duration(minutes: 2),
     this.replayMemory = const Duration(minutes: 5),
   }) : _credentials = {
-          for (final credential in credentials)
-            credential.shortIdHex: credential,
-        };
+         for (final credential in credentials)
+           credential.shortIdHex: credential,
+       };
 
   final Map<String, RealityCredential> _credentials;
 
@@ -362,10 +362,8 @@ abstract class DuplexByteStream {
 }
 
 /// Opens a connection to the fallback host.
-typedef FallbackConnector = Future<DuplexByteStream> Function(
-  String host,
-  int port,
-);
+typedef FallbackConnector =
+    Future<DuplexByteStream> Function(String host, int port);
 
 /// Where unauthenticated connections go.
 class FallbackTarget {
@@ -399,7 +397,9 @@ class FallbackTarget {
     final raw = env[hostEnvironmentVariable]?.trim();
     if (raw == null || raw.isEmpty) return staticDefault;
 
-    final uri = raw.contains('://') ? Uri.parse(raw) : Uri.parse('https://$raw');
+    final uri = raw.contains('://')
+        ? Uri.parse(raw)
+        : Uri.parse('https://$raw');
     if (uri.host.isEmpty) return staticDefault;
     return FallbackTarget(host: uri.host, port: uri.hasPort ? uri.port : 443);
   }
@@ -454,8 +454,10 @@ class PassThroughRelay {
     final stats = PassThroughStats();
     DuplexByteStream upstream;
     try {
-      upstream =
-          await connector(target.host, target.port).timeout(connectTimeout);
+      upstream = await connector(
+        target.host,
+        target.port,
+      ).timeout(connectTimeout);
     } catch (_) {
       await _closeQuietly(client);
       return stats;
@@ -559,7 +561,8 @@ class RealityGate {
       DuplexByteStream client,
       Uint8List consumed,
       RealityCredential credential,
-    ) onAdmitted,
+    )
+    onAdmitted,
   }) async {
     final started = clock.now();
     final buffer = BytesBuilder(copy: true);

@@ -60,7 +60,8 @@ class StunMessage {
     }
     if (20 + length != bytes.length) {
       throw FormatException(
-          'length field says ${20 + length}, buffer is ${bytes.length}');
+        'length field says ${20 + length}, buffer is ${bytes.length}',
+      );
     }
     final transactionId = Uint8List.sublistView(bytes, 8, 20);
     final attributes = <StunAttribute>[];
@@ -75,11 +76,13 @@ class StunMessage {
       if (valueEnd > bytes.length) {
         throw const FormatException('attribute value overruns the message');
       }
-      attributes.add(StunAttribute(
-        attrType,
-        Uint8List.sublistView(bytes, offset + 4, valueEnd),
-        offset,
-      ));
+      attributes.add(
+        StunAttribute(
+          attrType,
+          Uint8List.sublistView(bytes, offset + 4, valueEnd),
+          offset,
+        ),
+      );
       offset = valueEnd + ((4 - attrLen % 4) % 4); // values pad to 32 bits
     }
     return StunMessage._(type, transactionId, attributes, bytes);
@@ -91,24 +94,36 @@ class StunMessage {
 
   /// Long-term credential key = MD5(user ":" realm ":" password)
   /// (RFC 8489 section 9.2.2).
-  static Uint8List longTermKey(String username, String realm, String password) =>
-      Uint8List.fromList(md5.convert(utf8.encode('$username:$realm:$password')).bytes);
+  static Uint8List longTermKey(
+    String username,
+    String realm,
+    String password,
+  ) => Uint8List.fromList(
+    md5.convert(utf8.encode('$username:$realm:$password')).bytes,
+  );
 
   /// Verifies MESSAGE-INTEGRITY (HMAC-SHA1, RFC 8489 section 14.5). The HMAC
   /// covers the message up to the attribute, with the header length rewritten
   /// as if MESSAGE-INTEGRITY were the final attribute.
-  bool verifyMessageIntegrity(Uint8List key) =>
-      _verifyMac(stunAttrMessageIntegrity, 20, (input) => Hmac(sha1, key).convert(input).bytes);
+  bool verifyMessageIntegrity(Uint8List key) => _verifyMac(
+    stunAttrMessageIntegrity,
+    20,
+    (input) => Hmac(sha1, key).convert(input).bytes,
+  );
 
   /// Verifies MESSAGE-INTEGRITY-SHA256 (RFC 8489 section 14.6).
-  bool verifyMessageIntegritySha256(Uint8List key) =>
-      _verifyMac(stunAttrMessageIntegritySha256, 32, (input) => Hmac(sha256, key).convert(input).bytes);
+  bool verifyMessageIntegritySha256(Uint8List key) => _verifyMac(
+    stunAttrMessageIntegritySha256,
+    32,
+    (input) => Hmac(sha256, key).convert(input).bytes,
+  );
 
   bool _verifyMac(int attrType, int macLen, List<int> Function(Uint8List) mac) {
     final attr = attribute(attrType);
     if (attr == null || attr.value.length != macLen) return false;
     final adjusted = Uint8List.fromList(
-        Uint8List.sublistView(raw, 0, attr.valueOffset));
+      Uint8List.sublistView(raw, 0, attr.valueOffset),
+    );
     final asIfLast = attr.valueOffset + 4 + macLen - 20;
     adjusted[2] = (asIfLast >> 8) & 0xff;
     adjusted[3] = asIfLast & 0xff;
@@ -128,7 +143,7 @@ class StunMessage {
     if (attr == null || attr.value.length != 4) return false;
     final crc =
         crc32(Uint8List.sublistView(raw, 0, attr.valueOffset)) ^
-            stunFingerprintXor;
+        stunFingerprintXor;
     return ByteData.sublistView(attr.value).getUint32(0) == crc;
   }
 }
@@ -137,10 +152,13 @@ class StunMessage {
 /// FINGERPRINT, appended in that RFC-mandated order.
 class StunMessageBuilder {
   StunMessageBuilder({required this.type, required Uint8List transactionId})
-      : transactionId = Uint8List.fromList(transactionId) {
+    : transactionId = Uint8List.fromList(transactionId) {
     if (transactionId.length != 12) {
       throw ArgumentError.value(
-          transactionId.length, 'transactionId', 'must be 12 bytes');
+        transactionId.length,
+        'transactionId',
+        'must be 12 bytes',
+      );
     }
   }
 
@@ -154,7 +172,11 @@ class StunMessageBuilder {
   void addUsername(String username) =>
       addAttribute(stunAttrUsername, Uint8List.fromList(utf8.encode(username)));
 
-  Uint8List build({Uint8List? integrityKey, bool sha256Integrity = false, bool fingerprint = false}) {
+  Uint8List build({
+    Uint8List? integrityKey,
+    bool sha256Integrity = false,
+    bool fingerprint = false,
+  }) {
     var body = BytesBuilder(copy: false);
     for (final (t, v) in _attrs) {
       body.add(_tlv(t, v));
@@ -162,25 +184,30 @@ class StunMessageBuilder {
     var bytes = _withHeader(body.toBytes());
     if (integrityKey != null) {
       final macLen = sha256Integrity ? 32 : 20;
-      final attrType =
-          sha256Integrity ? stunAttrMessageIntegritySha256 : stunAttrMessageIntegrity;
+      final attrType = sha256Integrity
+          ? stunAttrMessageIntegritySha256
+          : stunAttrMessageIntegrity;
       final grown = _resizeHeader(bytes, bytes.length - 20 + 4 + macLen);
       final digest = sha256Integrity
           ? Hmac(sha256, integrityKey).convert(grown)
           : Hmac(sha1, integrityKey).convert(grown);
-      bytes = _withHeader(Uint8List.fromList([
-        ...Uint8List.sublistView(bytes, 20),
-        ..._tlv(attrType, Uint8List.fromList(digest.bytes)),
-      ]));
+      bytes = _withHeader(
+        Uint8List.fromList([
+          ...Uint8List.sublistView(bytes, 20),
+          ..._tlv(attrType, Uint8List.fromList(digest.bytes)),
+        ]),
+      );
     }
     if (fingerprint) {
       final grown = _resizeHeader(bytes, bytes.length - 20 + 8);
       final crc = crc32(grown) ^ stunFingerprintXor;
       final value = Uint8List(4)..buffer.asByteData().setUint32(0, crc);
-      bytes = _withHeader(Uint8List.fromList([
-        ...Uint8List.sublistView(bytes, 20),
-        ..._tlv(stunAttrFingerprint, value),
-      ]));
+      bytes = _withHeader(
+        Uint8List.fromList([
+          ...Uint8List.sublistView(bytes, 20),
+          ..._tlv(stunAttrFingerprint, value),
+        ]),
+      );
     }
     return bytes;
   }

@@ -89,10 +89,10 @@ class ResilientLaneEndpoints {
   /// relays; see `docs/MODEL_ROUTING.md`'s sibling deployment notes.
   static final ResilientLaneEndpoints developmentEchoEndpoints =
       ResilientLaneEndpoints(
-    udpRemote: const HostPort(host: 'stun.l.google.com', port: 19302),
-    relayUri: Uri.parse('wss://ws.postman-echo.com/raw'),
-    longPollUri: Uri.parse('https://echo.free.beeceptor.com'),
-  );
+        udpRemote: const HostPort(host: 'stun.l.google.com', port: 19302),
+        relayUri: Uri.parse('wss://ws.postman-echo.com/raw'),
+        longPollUri: Uri.parse('https://echo.free.beeceptor.com'),
+      );
 
   /// Builds the WSS and HTTP lanes for a border relay deployed from
   /// `tools/cloudflare_relay_worker`.

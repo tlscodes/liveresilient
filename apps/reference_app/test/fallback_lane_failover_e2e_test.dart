@@ -149,20 +149,23 @@ void main() {
     expect(longPoll.carried, isEmpty);
   });
 
-  test('with every lane down the frames park in the queue, still ordered', () async {
-    webrtc.alive = false;
-    relay.alive = false;
-    longPoll.alive = false;
+  test(
+    'with every lane down the frames park in the queue, still ordered',
+    () async {
+      webrtc.alive = false;
+      relay.alive = false;
+      longPoll.alive = false;
 
-    final live = await streamFrames(0, 3);
-    expect(live, isEmpty, reason: 'no lane carried anything');
-    expect(fabric.snapshot.pendingBundles, 3);
+      final live = await streamFrames(0, 3);
+      expect(live, isEmpty, reason: 'no lane carried anything');
+      expect(fabric.snapshot.pendingBundles, 3);
 
-    // A path comes back; the backlog drains through it in queue order.
-    relay.alive = true;
-    final drained = await fabric.refresh();
-    expect(drained, 3);
-    expect(relay.sequences, [0, 1, 2]);
-    expect(fabric.snapshot.pendingBundles, 0);
-  });
+      // A path comes back; the backlog drains through it in queue order.
+      relay.alive = true;
+      final drained = await fabric.refresh();
+      expect(drained, 3);
+      expect(relay.sequences, [0, 1, 2]);
+      expect(fabric.snapshot.pendingBundles, 0);
+    },
+  );
 }
