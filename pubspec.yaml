@@ -14,6 +14,7 @@ environment:
 workspace:
   - packages/adaptive_transport
   - packages/broadcast
+  - packages/broadcast_media
   - packages/call_core
   - packages/call_media_adapter
   - packages/call_signaling_adapter

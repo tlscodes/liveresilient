@@ -1,0 +1,26 @@
+name: broadcast_media
+description: >-
+  Binds the workspace's existing codecs to the broadcast layers: the
+  context-mixing document compressor for text, the progressive low-rate
+  compressor for a still picture, the token entropy codec for voice, and
+  the flipbook compressor for a short clip — composed under a byte budget
+  that fills the most important byte first and names everything it drops.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  broadcast:
+    path: ../broadcast
+  connection_orchestrator:
+    path: ../connection_orchestrator
+  hamseda_codec:
+    path: ../hamseda_codec
+
+dev_dependencies:
+  test: ^1.25.0
+  clock: ^1.1.1
