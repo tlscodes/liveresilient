@@ -48,6 +48,7 @@ class ResilientMediaTransport {
     this.relayAllocator,
     this.relayLink,
     this.secureSession,
+    this.edgeBridge,
     TlsParameterNormalizer? tlsParameters,
   })  : queue = queue ?? MediaTransferQueue(),
         tlsParameters = tlsParameters ?? TlsParameterNormalizer();
@@ -73,6 +74,13 @@ class ResilientMediaTransport {
   /// 4-byte header instead of a ~36-byte Send indication), applied OUTERMOST
   /// so the relay strips it before the secure-session and carriage layers.
   final ChannelRelayLink? relayLink;
+
+  /// Optional egress lane: when set, [flushWireTick] writes each framed
+  /// datagram to a pool of edge endpoints using standard gRPC message
+  /// framing, continuing the message sequence across endpoint failover.
+  /// Null keeps this transport pure — the caller takes [wireTick]'s frames
+  /// and moves them itself.
+  final DomesticEdgeBridgeLane? edgeBridge;
 
   /// The TLS 1.3 client parameter set this transport negotiates with.
   final TlsParameterNormalizer tlsParameters;
@@ -118,6 +126,34 @@ class ResilientMediaTransport {
       for (final d in queue.tick(nowMs: nowMs, voiceIsSpeaking: voiceIsSpeaking))
         frame(d),
     ];
+  }
+
+  /// Runs one [wireTick] and sends every frame over [edgeBridge], in order.
+  ///
+  /// Returns one [SendResult] per frame. Sending stops at the first frame
+  /// the lane could not deliver, so the caller never sees a gap followed by
+  /// later frames — the undelivered remainder simply is not attempted, and
+  /// the returned list is shorter than the tick's frame count.
+  ///
+  /// Throws [StateError] when no [edgeBridge] was configured.
+  Future<List<SendResult>> flushWireTick({
+    required int nowMs,
+    required bool voiceIsSpeaking,
+  }) async {
+    final lane = edgeBridge;
+    if (lane == null) {
+      throw StateError(
+        'flushWireTick needs a DomesticEdgeBridgeLane; none was configured',
+      );
+    }
+    final results = <SendResult>[];
+    for (final frame
+        in wireTick(nowMs: nowMs, voiceIsSpeaking: voiceIsSpeaking)) {
+      final result = await lane.send(frame);
+      results.add(result);
+      if (!result.delivered) break;
+    }
+    return results;
   }
 
   /// Reverses [wireTick] for one datagram taken off the wire.
