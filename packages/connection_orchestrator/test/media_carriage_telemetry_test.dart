@@ -17,9 +17,9 @@ void main() {
         );
         for (var t = 0; t < 20; t++) {
           final bytes = Uint8List.fromList(
-              List.generate(60 + t, (i) => (i * 31 + t) & 0xFF));
-          final out = carriage.unwrap(
-              carriage.wrap(TaggedDatagram(t, bytes)));
+            List.generate(60 + t, (i) => (i * 31 + t) & 0xFF),
+          );
+          final out = carriage.unwrap(carriage.wrap(TaggedDatagram(t, bytes)));
           expect(out.transferId, t);
           expect(out.bytes, equals(bytes));
         }
@@ -47,7 +47,8 @@ void main() {
   group('RatelessDecoder rejection telemetry', () {
     test('CRC and structural rejects are counted, not silent', () {
       final enc = RatelessEncoder(
-          Uint8List.fromList(List.generate(200, (i) => i & 0xFF)));
+        Uint8List.fromList(List.generate(200, (i) => i & 0xFF)),
+      );
       final dec = RatelessDecoder();
       // Corrupt one datagram's payload: CRC reject.
       final bad = enc.datagramAt(0);

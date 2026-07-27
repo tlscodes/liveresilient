@@ -31,11 +31,11 @@ List<List<int>> speechStream(int frames, int seed) {
   final rng = Random(seed);
   const n = 45;
   final alphabet = [
-    for (var i = 0; i < n; i++) [rng.nextInt(1024), rng.nextInt(1024)]
+    for (var i = 0; i < n; i++) [rng.nextInt(1024), rng.nextInt(1024)],
   ];
   final successors = [
     for (var i = 0; i < n; i++)
-      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)]
+      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)],
   ];
   final silence = [rng.nextInt(1024), rng.nextInt(1024)];
   final out = <List<int>>[];
@@ -64,14 +64,19 @@ void main() {
     expect(sim.burstLengths, isNotEmpty);
     final mean =
         sim.burstLengths.reduce((a, b) => a + b) / sim.burstLengths.length;
-    expect(mean, closeTo(10, 2),
-        reason: 'r=0.1 must give a mean burst near 10 packets');
+    expect(
+      mean,
+      closeTo(10, 2),
+      reason: 'r=0.1 must give a mean burst near 10 packets',
+    );
     // Burst lengths are geometric with mean 1/r: P(5 <= L <= 15) at
     // r=0.1 is 0.9^4 - 0.9^15 ~= 45%, the largest mass of any band of
     // that width.
-    expect(sim.burstLengths.where((l) => l >= 5 && l <= 15).length,
-        greaterThan((sim.burstLengths.length * 0.40).round()),
-        reason: 'the 5-15 packet band must carry its geometric share');
+    expect(
+      sim.burstLengths.where((l) => l >= 5 && l <= 15).length,
+      greaterThan((sim.burstLengths.length * 0.40).round()),
+      reason: 'the 5-15 packet band must carry its geometric share',
+    );
   });
 
   test('voice through mean-10-packet burst loss: no exception, bit-exact, '
@@ -94,7 +99,9 @@ void main() {
     // r=0.1: bursts average 10 packets (~1 s outage at 10 dg/s).
     final sim = GilbertElliottLossSimulator(p: 0.04, r: 0.1, seed: 7);
     final packer = SlidingWindowPacker(
-        maxDatagramBytes: maxDatagramBytes, windowBlocks: window);
+      maxDatagramBytes: maxDatagramBytes,
+      windowBlocks: window,
+    );
     final unpacker = SlidingWindowUnpacker();
 
     var sentBytes = 0, blockSeq = 0, mismatches = 0, playedFrames = 0;
@@ -147,20 +154,32 @@ void main() {
     }
 
     // ignore: avoid_print
-    print('BURST DIAG: bursts=${sim.burstLengths.length} '
-        'meanBurst=${meanBurst.toStringAsFixed(1)} pkts '
-        'blocks=${recoveredSeqs.length}/$blockSeq '
-        'coverage=${(coverage * 100).toStringAsFixed(1)}% '
-        'worstConsecutiveLostBlocks=$worstGap '
-        'bytes/s=${(sentBytes / talkSeconds).toStringAsFixed(0)}');
+    print(
+      'BURST DIAG: bursts=${sim.burstLengths.length} '
+      'meanBurst=${meanBurst.toStringAsFixed(1)} pkts '
+      'blocks=${recoveredSeqs.length}/$blockSeq '
+      'coverage=${(coverage * 100).toStringAsFixed(1)}% '
+      'worstConsecutiveLostBlocks=$worstGap '
+      'bytes/s=${(sentBytes / talkSeconds).toStringAsFixed(0)}',
+    );
 
     expect(mismatches, 0, reason: 'recovered speech must be bit-exact');
-    expect(sim.burstLengths.length, greaterThan(10),
-        reason: 'the run must actually contain many bursts');
-    expect(coverage, greaterThanOrEqualTo(0.90),
-        reason: 'conversation must stay continuous under clustered loss');
-    expect(worstGap, lessThanOrEqualTo(window),
-        reason: 'a burst may cost at most the window depth in blocks — '
-            'delivery must resume after every burst');
+    expect(
+      sim.burstLengths.length,
+      greaterThan(10),
+      reason: 'the run must actually contain many bursts',
+    );
+    expect(
+      coverage,
+      greaterThanOrEqualTo(0.90),
+      reason: 'conversation must stay continuous under clustered loss',
+    );
+    expect(
+      worstGap,
+      lessThanOrEqualTo(window),
+      reason:
+          'a burst may cost at most the window depth in blocks — '
+          'delivery must resume after every burst',
+    );
   });
 }

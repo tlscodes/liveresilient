@@ -54,9 +54,13 @@ void main() {
   }
 
   final saved = (1 - withMotion / plainTotal) * 100;
-  print('pan clip, $frames frames of ${srcW}x$srcH panning ($panX,$panY)/frame');
+  print(
+    'pan clip, $frames frames of ${srcW}x$srcH panning ($panX,$panY)/frame',
+  );
   print('  plain temporal only : $plainTotal B');
-  print('  three-way w/ motion : $withMotion B  '
-      '($motionCount/${coded.length} motion-coded)');
+  print(
+    '  three-way w/ motion : $withMotion B  '
+    '($motionCount/${coded.length} motion-coded)',
+  );
   print('  saving              : ${saved.toStringAsFixed(1)}%');
 }

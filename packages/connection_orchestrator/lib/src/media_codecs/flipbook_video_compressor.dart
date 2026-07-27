@@ -68,8 +68,7 @@ class FlipbookVideoCompressor {
     Uint8List? prev;
     for (var f = 0; f < grayFrames.length; f++) {
       final q = downQuant(grayFrames[f], srcW, srcH);
-      final intra = _cm.compress(
-          SpatialResidual.paeth(q, width, height, 1));
+      final intra = _cm.compress(SpatialResidual.paeth(q, width, height, 1));
       Uint8List coded;
       var predictor = FlipbookPredictor.intra;
       if (prev != null) {
@@ -136,8 +135,7 @@ class FlipbookVideoCompressor {
           }
         }
       } else {
-        q = SpatialResidual.unPaeth(
-            _cm.decompress(f.bytes), width, height, 1);
+        q = SpatialResidual.unPaeth(_cm.decompress(f.bytes), width, height, 1);
       }
       out.add(q);
       prev = q;

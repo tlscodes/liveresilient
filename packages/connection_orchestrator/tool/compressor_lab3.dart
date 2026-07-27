@@ -91,8 +91,7 @@ List<double> _levinson(List<double> r, int order) {
         final a = _levinson(r, order);
         final q = Int16List(order);
         for (var j = 1; j <= order; j++) {
-          q[j - 1] =
-              (-a[j] * (1 << _qBits)).round().clamp(-32768, 32767);
+          q[j - 1] = (-a[j] * (1 << _qBits)).round().clamp(-32768, 32767);
         }
         var cost = order * 2 * 4; // rough header penalty in |res| units
         for (var i = start; i < end; i++) {
@@ -127,8 +126,11 @@ List<double> _levinson(List<double> r, int order) {
   final out = Uint8List(4 + head.length + n * 2 + (d.length.isOdd ? 1 : 0));
   ByteData.sublistView(out).setUint32(0, head.length);
   out.setRange(4, 4 + head.length, head);
-  out.setRange(4 + head.length, 4 + head.length + n * 2,
-      Uint8List.view(res.buffer));
+  out.setRange(
+    4 + head.length,
+    4 + head.length + n * 2,
+    Uint8List.view(res.buffer),
+  );
   if (d.length.isOdd) out[out.length - 1] = d[d.length - 1];
   return (packed: out, headerBytes: head.length);
 }
@@ -138,7 +140,10 @@ Uint8List unLpcQuantized(Uint8List packed, int originalLen) {
   final headLen = ByteData.sublistView(packed).getUint32(0);
   final head = Uint8List.sublistView(packed, 4, 4 + headLen);
   final res = Int16List.view(
-      packed.buffer, packed.offsetInBytes + 4 + headLen, n);
+    packed.buffer,
+    packed.offsetInBytes + 4 + headLen,
+    n,
+  );
   final s = Int16List(n);
   final frames = (n + _frame - 1) ~/ _frame;
   var hp = 0;
@@ -192,34 +197,48 @@ bool _eq(Uint8List a, Uint8List b) {
 void main() {
   // ---- audio ----
   final wav = File(
-          '/Users/behnam/Downloads/voice_call_kit_v3/demo_audio/gift_24k.wav')
-      .readAsBytesSync();
+    '/Users/behnam/Downloads/voice_call_kit_v3/demo_audio/gift_24k.wav',
+  ).readAsBytesSync();
   final pcm = Uint8List.sublistView(Uint8List.fromList(wav), 44, 44 + 131072);
   final q = lpcQuantized(pcm);
-  assert(_eq(unLpcQuantized(q.packed, pcm.length), pcm),
-      'quantized LPC must round-trip bit-exact');
+  assert(
+    _eq(unLpcQuantized(q.packed, pcm.length), pcm),
+    'quantized LPC must round-trip bit-exact',
+  );
   final gzB = gz.encode(pcm).length;
   final ad = c.compress(lpcAdaptive(pcm)).length;
   final lq = c.compress(q.packed).length;
-  print('audio (131072 B): gzip9=$gzB  lpcAdaptive+cm=$ad  '
-      'lpcQ12+cm=$lq (headers ${q.headerBytes} B included)');
-  print('  audio best: ${(100 * (1 - (lq < ad ? lq : ad) / gzB)).toStringAsFixed(1)}% under gzip9');
+  print(
+    'audio (131072 B): gzip9=$gzB  lpcAdaptive+cm=$ad  '
+    'lpcQ12+cm=$lq (headers ${q.headerBytes} B included)',
+  );
+  print(
+    '  audio best: ${(100 * (1 - (lq < ad ? lq : ad) / gzB)).toStringAsFixed(1)}% under gzip9',
+  );
 
   // ---- image ----
-  final png = File('/Users/behnam/Downloads/voorrang_tram_afslaan_topdown.png')
-      .readAsBytesSync();
+  final png = File(
+    '/Users/behnam/Downloads/voorrang_tram_afslaan_topdown.png',
+  ).readAsBytesSync();
   final img = pngDecode(Uint8List.fromList(png))!;
   final rows = img.height < 500 ? img.height : 500;
-  final crop =
-      Uint8List.sublistView(img.pixels, 0, rows * img.width * img.channels);
+  final crop = Uint8List.sublistView(
+    img.pixels,
+    0,
+    rows * img.width * img.channels,
+  );
   final w = img.width, ch = img.channels;
   final y = ycocgR(crop, ch);
   assert(_eq(unYcocgR(y, ch), crop));
   final pngProxy = gz.encode(residual2d(crop, w, rows, ch)).length;
   final base = c.compress(residual2d(y, w, rows, ch)).length; // round-3 best
   final rd = c.compress(rowDelta(y, w, rows, ch)).length;
-  print('image: png-proxy=$pngProxy  ycocg+paeth+cm=$base  '
-      'ycocg+rowdelta+cm=$rd');
+  print(
+    'image: png-proxy=$pngProxy  ycocg+paeth+cm=$base  '
+    'ycocg+rowdelta+cm=$rd',
+  );
   final bestI = rd < base ? rd : base;
-  print('  image best: ${(100 * (1 - bestI / pngProxy)).toStringAsFixed(1)}% under PNG-equivalent');
+  print(
+    '  image best: ${(100 * (1 - bestI / pngProxy)).toStringAsFixed(1)}% under PNG-equivalent',
+  );
 }

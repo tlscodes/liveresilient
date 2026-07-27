@@ -42,6 +42,12 @@ class GrpcMessageFramer {
   /// already coded by the media stage.
   static const int uncompressedFlag = 0x00;
 
+  /// Largest message this lane will accept off the wire, matching gRPC's
+  /// own default receive limit. A length header is peer-controlled and can
+  /// declare up to 4 GiB, so without a ceiling a peer can make the reader
+  /// buffer indefinitely for a frame that never completes.
+  static const int maxMessageLength = 4 * 1024 * 1024;
+
   /// Frames [payload] as a single gRPC message.
   Uint8List encode(List<int> payload) {
     final frame = Uint8List(headerLength + payload.length);
@@ -91,6 +97,12 @@ class GrpcFrameReader {
     while (bytes.length - offset >= GrpcMessageFramer.headerLength) {
       final view = ByteData.sublistView(bytes, offset);
       final declared = view.getUint32(1);
+      if (declared > GrpcMessageFramer.maxMessageLength) {
+        throw FormatException(
+          'gRPC length header says $declared bytes, over the '
+          '${GrpcMessageFramer.maxMessageLength}-byte receive limit',
+        );
+      }
       final total = GrpcMessageFramer.headerLength + declared;
       if (bytes.length - offset < total) break;
       out.add(Uint8List.fromList(

@@ -65,9 +65,9 @@ void main() {
     });
   });
 
-  group('TrendSentinel · forecasting', () {
+  group('TrendMonitor · forecasting', () {
     test('needs 3 samples before judging', () {
-      final t = TrendSentinel();
+      final t = TrendMonitor();
       t.observe('net', 0.8, nowMs: 0);
       t.observe('net', 0.7, nowMs: 1000);
       expect(t.verdict('net'), TrendVerdict.unknown);
@@ -76,7 +76,7 @@ void main() {
     test(
       'flat trajectory is steady, steep slide is flagged before the floor',
       () {
-        final t = TrendSentinel(horizonMs: 10000, floor: 0.2);
+        final t = TrendMonitor(horizonMs: 10000, floor: 0.2);
         for (var i = 0; i < 5; i++) {
           t.observe('flat', 0.8, nowMs: i * 1000);
           // Falling 0.06/s from 0.8: still 0.56 at the last sample, but the
@@ -90,7 +90,7 @@ void main() {
     );
 
     test('gentle decline is slipping, not failingSoon', () {
-      final t = TrendSentinel(horizonMs: 5000, floor: 0.2);
+      final t = TrendMonitor(horizonMs: 5000, floor: 0.2);
       for (var i = 0; i < 6; i++) {
         t.observe('lane', 0.9 - i * 0.02, nowMs: i * 1000);
       }
@@ -107,7 +107,7 @@ void main() {
         final fabric = ConnectionFabric(
           fallbackQueue: DtnBundleQueue(),
           nowMs: () => clockMs,
-          trend: TrendSentinel(horizonMs: 10000, floor: 0.2),
+          trend: TrendMonitor(horizonMs: 10000, floor: 0.2),
         );
         var fired = 0;
         fabric.onUnhealthy(() => fired++);

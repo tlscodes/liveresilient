@@ -21,8 +21,11 @@ void main() {
       while (!dec.isComplete) {
         dec.addDatagram(enc.nextDatagram());
         fed++;
-        expect(fed, lessThanOrEqualTo(enc.blockCount),
-            reason: 'systematic prefix alone must complete ($size B)');
+        expect(
+          fed,
+          lessThanOrEqualTo(enc.blockCount),
+          reason: 'systematic prefix alone must complete ($size B)',
+        );
       }
       expect(dec.data, equals(data));
     }
@@ -61,8 +64,10 @@ void main() {
     }
     final rate = ok / trials;
     // ignore: avoid_print
-    print('RLNC near-MDS success with zero overhead: '
-        '${(rate * 100).toStringAsFixed(1)}% over $trials trials');
+    print(
+      'RLNC near-MDS success with zero overhead: '
+      '${(rate * 100).toStringAsFixed(1)}% over $trials trials',
+    );
     // Singularity probability per trial is ~0.4%; allow one miss.
     expect(rate, greaterThanOrEqualTo(0.96));
   });
@@ -90,8 +95,10 @@ void main() {
     }
     final epsilon = totalUsed / (trials * n);
     // ignore: avoid_print
-    print('RLNC epsilon (measured): ${epsilon.toStringAsFixed(4)} '
-        '(N=$n, $trials trials, 50% loss)');
+    print(
+      'RLNC epsilon (measured): ${epsilon.toStringAsFixed(4)} '
+      '(N=$n, $trials trials, 50% loss)',
+    );
     expect(epsilon, lessThan(1.05));
   });
 

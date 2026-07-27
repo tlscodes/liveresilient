@@ -2,7 +2,7 @@
 ///
 /// Generates seeded random multi-factor crisis timelines (lane slides,
 /// flaps, blackouts, link-only phases, recoveries), runs the REAL
-/// [ConnectionFabric] + [DeliveryPlanner] + [TrendSentinel] through each,
+/// [ConnectionFabric] + [DeliveryPlanner] + [TrendMonitor] through each,
 /// and scores: live delivery reward minus redundancy spend minus queue
 /// latency. A small evolution loop then searches the planner/sentinel
 /// constants for the highest-scoring configuration.
@@ -139,9 +139,8 @@ class Genome {
   }
 
   @override
-  String toString() => g.entries
-      .map((e) => '${e.key}=${e.value.toStringAsFixed(3)}')
-      .join(' ');
+  String toString() =>
+      g.entries.map((e) => '${e.key}=${e.value.toStringAsFixed(3)}').join(' ');
 }
 
 Future<double> scoreGenome(Genome genome, List<Scenario> scenarios) async {
@@ -162,7 +161,7 @@ Future<double> scoreGenome(Genome genome, List<Scenario> scenarios) async {
         healthWeight: genome.g['healthWeight']!,
         learnedWeight: 1 - genome.g['healthWeight']!,
       ),
-      trend: TrendSentinel(
+      trend: TrendMonitor(
         slipSlopePerSec: genome.g['slipSlopePerSec']!,
         floor: genome.g['trendFloor']!,
       ),

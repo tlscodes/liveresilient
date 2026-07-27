@@ -103,9 +103,16 @@ List<int> neighborsForEsi(int esi, int blockCount, List<double> cdf) {
 }
 
 class RatelessEncoder {
-  RatelessEncoder(Uint8List data, {this.blockSize = 48})
-      : assert(blockSize >= 31 && blockSize <= 55,
-            'datagram must stay within 36-60 bytes') {
+  RatelessEncoder(Uint8List data, {this.blockSize = 48}) {
+    // A throw, not an assert: asserts vanish in release builds, where
+    // blockSize == 0 would divide by zero a few lines down.
+    if (blockSize < 31 || blockSize > 55) {
+      throw ArgumentError.value(
+        blockSize,
+        'blockSize',
+        'must be 31..55 so the datagram stays within 36-60 bytes',
+      );
+    }
     final framedLen = 4 + data.length;
     blockCount = (framedLen + blockSize - 1) ~/ blockSize;
     if (blockCount > 0xFFFF) {
@@ -115,9 +122,9 @@ class RatelessEncoder {
     padded.buffer.asByteData().setUint32(0, data.length);
     padded.setRange(4, 4 + data.length, data);
     _blocks = List.generate(
-        blockCount,
-        (i) => Uint8List.sublistView(
-            padded, i * blockSize, (i + 1) * blockSize));
+      blockCount,
+      (i) => Uint8List.sublistView(padded, i * blockSize, (i + 1) * blockSize),
+    );
     _cdf = _robustSolitonCdf(blockCount);
   }
 
@@ -164,8 +171,7 @@ class RatelessDecoder {
   List<double>? _cdf;
   final List<_PendingSymbol> _pending = [];
 
-  bool get isComplete =>
-      _blockCount != null && _decodedCount == _blockCount;
+  bool get isComplete => _blockCount != null && _decodedCount == _blockCount;
 
   /// Number of buffered coded symbols (bounded: never exceeds blockCount).
   int get pendingSymbolCount => _pending.length;
@@ -191,13 +197,14 @@ class RatelessDecoder {
       _structuralRejectCount++;
       return false;
     }
-    if (datagram[datagram.length - 1] !=
-        _crc8(datagram, datagram.length - 1)) {
+    if (datagram[datagram.length - 1] != _crc8(datagram, datagram.length - 1)) {
       _crcRejectCount++;
       return false;
     }
-    final bd = datagram.buffer
-        .asByteData(datagram.offsetInBytes, datagram.length);
+    final bd = datagram.buffer.asByteData(
+      datagram.offsetInBytes,
+      datagram.length,
+    );
     final esi = bd.getUint16(0);
     final blockCount = bd.getUint16(2);
     final blockSize = datagram.length - _headerBytes - _crcBytes;
@@ -216,7 +223,8 @@ class RatelessDecoder {
     }
     if (isComplete) return true;
     final payload = Uint8List.fromList(
-        datagram.sublist(_headerBytes, _headerBytes + blockSize));
+      datagram.sublist(_headerBytes, _headerBytes + blockSize),
+    );
     if (esi < blockCount) {
       _release(esi, payload);
     } else {

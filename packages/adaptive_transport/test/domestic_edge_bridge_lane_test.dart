@@ -117,6 +117,23 @@ void main() {
       reader.reset();
       expect(reader.add(frame.sublist(6)), isEmpty);
     });
+
+    test('rejects a length header above the receive limit', () {
+      final reader = GrpcFrameReader();
+      final header = Uint8List(GrpcMessageFramer.headerLength);
+      ByteData.sublistView(header)
+          .setUint32(1, GrpcMessageFramer.maxMessageLength + 1);
+      expect(() => reader.add(header), throwsFormatException);
+    });
+
+    test('accepts a length header exactly at the receive limit', () {
+      final reader = GrpcFrameReader();
+      final header = Uint8List(GrpcMessageFramer.headerLength);
+      ByteData.sublistView(header)
+          .setUint32(1, GrpcMessageFramer.maxMessageLength);
+      // Body absent, so nothing is emitted — but the header is not rejected.
+      expect(reader.add(header), isEmpty);
+    });
   });
 
   group('DomesticEdgeBridgeLane', () {

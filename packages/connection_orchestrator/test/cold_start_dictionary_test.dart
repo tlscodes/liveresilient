@@ -11,11 +11,11 @@ List<List<int>> speechStream(int frames, int seed) {
   final rng = Random(seed);
   const n = 45;
   final alphabet = [
-    for (var i = 0; i < n; i++) [rng.nextInt(1024), rng.nextInt(1024)]
+    for (var i = 0; i < n; i++) [rng.nextInt(1024), rng.nextInt(1024)],
   ];
   final successors = [
     for (var i = 0; i < n; i++)
-      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)]
+      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)],
   ];
   final silence = [rng.nextInt(1024), rng.nextInt(1024)];
   final out = <List<int>>[];
@@ -40,14 +40,19 @@ void main() {
 
   test('static base dictionary is deterministic and CRC-verified', () {
     final a = ColdStartDictionaryManager.staticBaseDict;
-    expect(a.last, crc8(a, a.length - 1),
-        reason: 'embedded base dict must carry a valid trailing CRC-8');
+    expect(
+      a.last,
+      crc8(a, a.length - 1),
+      reason: 'embedded base dict must carry a valid trailing CRC-8',
+    );
     // Both call ends derive the identical table with zero exchange.
     final s1 = ColdStartDictionaryManager.baseState();
     final s2 = ColdStartDictionaryManager.baseState();
     final probe = speechStream(150, 11);
-    expect(encodeColumns(probe, s1.clone()),
-        equals(encodeColumns(probe, s2.clone())));
+    expect(
+      encodeColumns(probe, s1.clone()),
+      equals(encodeColumns(probe, s2.clone())),
+    );
   });
 
   test('0-RTT: the very first cold block encodes and decodes bit-exact '
@@ -57,8 +62,11 @@ void main() {
     final speech = speechStream(blockFrames, 2027);
     final wire = encodeColumns(speech, sender.snapshot());
     final decoded = decodeColumns(wire, blockFrames, receiver.snapshot());
-    expect(decoded, equals(speech),
-        reason: 'frame 0 of a cold call must decode with zero setup bytes');
+    expect(
+      decoded,
+      equals(speech),
+      reason: 'frame 0 of a cold call must decode with zero setup bytes',
+    );
   });
 
   test('first 3 seconds of a cold call cost fewer bytes with the base '
@@ -76,23 +84,28 @@ void main() {
       for (final col in personal)
         rng.nextDouble() < 0.7
             ? List.of(baseCols[rng.nextInt(baseCols.length)])
-            : col
+            : col,
     ];
     var withBase = 0, withoutBase = 0;
     final base = ColdStartDictionaryManager();
     final empty = HamsedaState(ColdStartDictionaryManager.rows);
     for (var b = 0; b < 3; b++) {
-      final block =
-          speech.sublist(b * blockFrames, (b + 1) * blockFrames);
+      final block = speech.sublist(b * blockFrames, (b + 1) * blockFrames);
       withBase += encodeColumns(block, base.snapshot()).length;
       withoutBase += encodeColumns(block, empty.clone()).length;
     }
     // ignore: avoid_print
-    print('COLD-START DIAG: first 3 s = $withBase B with base dict, '
-        '$withoutBase B from empty state');
-    expect(withBase, lessThan(withoutBase),
-        reason: 'the pre-agreed base dictionary must make the opening '
-            'seconds cheaper than a fully raw start');
+    print(
+      'COLD-START DIAG: first 3 s = $withBase B with base dict, '
+      '$withoutBase B from empty state',
+    );
+    expect(
+      withBase,
+      lessThan(withoutBase),
+      reason:
+          'the pre-agreed base dictionary must make the opening '
+          'seconds cheaper than a fully raw start',
+    );
   });
 
   test('static-to-dynamic transition: every block before and after the '
@@ -117,12 +130,14 @@ void main() {
         expect(sender.phase, DictionaryPhase.dynamicWarm);
         expect(receiver.phase, DictionaryPhase.dynamicWarm);
       }
-      final block =
-          speech.sublist(b * blockFrames, (b + 1) * blockFrames);
+      final block = speech.sublist(b * blockFrames, (b + 1) * blockFrames);
       final wire = encodeColumns(block, sender.snapshot());
       final decoded = decodeColumns(wire, blockFrames, receiver.snapshot());
-      expect(decoded, equals(block),
-          reason: 'block $b must be bit-exact across the transition');
+      expect(
+        decoded,
+        equals(block),
+        reason: 'block $b must be bit-exact across the transition',
+      );
     }
   });
 
@@ -136,15 +151,21 @@ void main() {
     final flipped = Uint8List.fromList(good)..[10] ^= 0xFF;
     expect(mgr.adoptWarmState(flipped), isFalse);
     expect(mgr.adoptWarmState(Uint8List.fromList([0x01])), isFalse);
-    expect(mgr.phase, DictionaryPhase.staticBase,
-        reason: 'a bad payload must never disturb the working state');
+    expect(
+      mgr.phase,
+      DictionaryPhase.staticBase,
+      reason: 'a bad payload must never disturb the working state',
+    );
 
     // The static state still round-trips after the rejected attempts.
     final speech = speechStream(blockFrames, 2030);
     final wire = encodeColumns(speech, mgr.snapshot());
     expect(decodeColumns(wire, blockFrames, mgr.snapshot()), equals(speech));
 
-    expect(mgr.adoptWarmState(good), isTrue,
-        reason: 'the intact payload still verifies after bad attempts');
+    expect(
+      mgr.adoptWarmState(good),
+      isTrue,
+      reason: 'the intact payload still verifies after bad attempts',
+    );
   });
 }

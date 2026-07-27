@@ -23,16 +23,20 @@ class _CountingReceiver {
 }
 
 void main() {
-  test(
-      '2KB over 95% uniform loss + GE bursts + 5s jitter/reorder: '
+  test('2KB over 95% uniform loss + GE bursts + 5s jitter/reorder: '
       'bit-exact, zero feedback, no crash on corruption', () {
     final rng = Random(7);
     final data = Uint8List.fromList(
-        List.generate(2048, (_) => rng.nextInt(256)));
+      List.generate(2048, (_) => rng.nextInt(256)),
+    );
     final enc = RatelessEncoder(data);
     final n = enc.blockCount;
     final ge = GilbertElliottLossSimulator(
-        p: 0.04, r: 0.1, badLossRate: 0.95, seed: 11); // mean 10-pkt bursts
+      p: 0.04,
+      r: 0.1,
+      badLossRate: 0.95,
+      seed: 11,
+    ); // mean 10-pkt bursts
     final receiver = _CountingReceiver();
 
     // Jitter queue: (deliveryTimeMs, datagram). Up to 5 s jitter.
@@ -44,8 +48,11 @@ void main() {
     const sendIntervalMs = 176; // 53 B per datagram at 300 B/s
 
     while (!receiver.decoder.isComplete) {
-      expect(esi, lessThanOrEqualTo(0xFFFF),
-          reason: 'did not converge within u16 esi space');
+      expect(
+        esi,
+        lessThanOrEqualTo(0xFFFF),
+        reason: 'did not converge within u16 esi space',
+      );
       final d = enc.datagramAt(esi++);
       sent++;
       nowMs += sendIntervalMs;
@@ -74,13 +81,14 @@ void main() {
     }
 
     expect(receiver.decoder.data, equals(data), reason: 'bit-exactness');
-    expect(receiver.packetsSent, 0,
-        reason: 'zero-feedback proven by counter');
+    expect(receiver.packetsSent, 0, reason: 'zero-feedback proven by counter');
     final epsilon = delivered / n;
     final wireSeconds = sent * sendIntervalMs / 1000;
     // ignore: avoid_print
-    print('rateless hostile (simulated): sent=$sent delivered=$delivered '
-        'N=$n epsilon=${epsilon.toStringAsFixed(3)} '
-        'wire=${wireSeconds.toStringAsFixed(1)}s @300B/s');
+    print(
+      'rateless hostile (simulated): sent=$sent delivered=$delivered '
+      'N=$n epsilon=${epsilon.toStringAsFixed(3)} '
+      'wire=${wireSeconds.toStringAsFixed(1)}s @300B/s',
+    );
   });
 }

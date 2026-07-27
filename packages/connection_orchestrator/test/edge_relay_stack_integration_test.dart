@@ -66,8 +66,8 @@ class _RecordingEdge implements EdgeBridgeConnection {
 }
 
 RealityCredential _credential() => RealityCredential.fromSharedSecret(
-      Uint8List.fromList(List<int>.filled(32, 0x7C)),
-    );
+  Uint8List.fromList(List<int>.filled(32, 0x7C)),
+);
 
 Uint8List _authenticatedHello(RealityAuthenticator auth) {
   final credential = _credential();
@@ -132,10 +132,10 @@ void main() {
       expect(defense.tcpProfile, TcpStackProfileId.windows);
       expect(defense.shaping.maxPadding, 128);
       // The whole client stack, and no origin address anywhere in it.
-      expect(
-        client.lane.endpoints.map((e) => e.host).toSet(),
-        {'203.0.113.10', '203.0.113.11'},
-      );
+      expect(client.lane.endpoints.map((e) => e.host).toSet(), {
+        '203.0.113.10',
+        '203.0.113.11',
+      });
     });
 
     test('media frames leave through the edge lane, shaped', () async {
@@ -162,8 +162,10 @@ void main() {
       );
 
       transport.wireTick(nowMs: 0, voiceIsSpeaking: false);
-      final results =
-          await transport.flushWireTick(nowMs: 1000, voiceIsSpeaking: false);
+      final results = await transport.flushWireTick(
+        nowMs: 1000,
+        voiceIsSpeaking: false,
+      );
 
       expect(results, isNotEmpty);
       expect(results.every((r) => r.delivered), isTrue);
@@ -176,6 +178,43 @@ void main() {
         final message = const GrpcMessageFramer().decode(frame);
         expect(() => TrafficShaper.unshape(message), returnsNormally);
       }
+    });
+
+    test('a second flush while one is in flight is refused', () async {
+      final log = <Uri, List<Uint8List>>{};
+      final client = EdgeBridgeClient(
+        directory: EdgeNodeDirectory(
+          topology: EdgeBridgeTopology.fromConfig(const {
+            'edgeBridgeNodes': ['203.0.113.10:443'],
+          }),
+        ),
+        connector: (uri) async => _RecordingEdge(uri, log),
+        shaper: TrafficShaper(random: Random(2), allowInsecureRandom: true),
+      );
+      addTearDown(client.dispose);
+
+      final transport = ResilientMediaTransport(
+        queue: MediaTransferQueue(spareBudgetBytesPerSecond: 500),
+        carriage: MediaCarriage(mtuBlockSize: 16, random: Random(3)),
+        edgeBridge: client.lane,
+      );
+      transport.send(
+        Uint8List.fromList(List<int>.generate(400, (i) => i & 0xFF)),
+        MediaType.photo,
+      );
+
+      final first = transport.flushWireTick(nowMs: 1000, voiceIsSpeaking: false);
+      // Started without awaiting the first: its frames would interleave.
+      expect(
+        () => transport.flushWireTick(nowMs: 1000, voiceIsSpeaking: false),
+        throwsStateError,
+      );
+      await first;
+      // The guard clears, so the next tick proceeds normally.
+      await expectLater(
+        transport.flushWireTick(nowMs: 2000, voiceIsSpeaking: false),
+        completes,
+      );
     });
 
     test('the lane keeps its sequence across an edge failover', () async {
@@ -204,8 +243,11 @@ void main() {
       await client.lane.send([2]);
       await client.lane.send([3]);
 
-      expect(client.lane.sessionSequence, 3,
-          reason: 'failover continues the session sequence, never rewinds it');
+      expect(
+        client.lane.sessionSequence,
+        3,
+        reason: 'failover continues the session sequence, never rewinds it',
+      );
       expect(log.keys.map((u) => u.host).toSet(), hasLength(2));
     });
   });
@@ -268,10 +310,16 @@ void main() {
 
       expect(probeOutcome.admitted, isFalse);
       expect(fallback.writtenBytes, probeBytes);
-      expect(probe.written, isEmpty,
-          reason: 'the node emits nothing a scanner could fingerprint');
-      expect(origin.writtenBytes.length, originBytesAfterRealClient,
-          reason: 'the probe added not one byte to the origin uplink');
+      expect(
+        probe.written,
+        isEmpty,
+        reason: 'the node emits nothing a scanner could fingerprint',
+      );
+      expect(
+        origin.writtenBytes.length,
+        originBytesAfterRealClient,
+        reason: 'the probe added not one byte to the origin uplink',
+      );
 
       expect(node.stats.admitted, 1);
       expect(node.stats.passedThrough, 1);

@@ -94,8 +94,16 @@ int generationForEsi(int esi, int blockCount) {
 }
 
 class RlncEncoder {
-  RlncEncoder(Uint8List data, {this.blockSize = 48})
-      : assert(blockSize >= 31 && blockSize <= 55) {
+  RlncEncoder(Uint8List data, {this.blockSize = 48}) {
+    // A throw, not an assert: asserts vanish in release builds, where
+    // blockSize == 0 would divide by zero a few lines down.
+    if (blockSize < 31 || blockSize > 55) {
+      throw ArgumentError.value(
+        blockSize,
+        'blockSize',
+        'must be 31..55 so the datagram stays within 36-60 bytes',
+      );
+    }
     assert(_gfReady);
     final framedLen = 4 + data.length;
     blockCount = (framedLen + blockSize - 1) ~/ blockSize;
@@ -105,8 +113,10 @@ class RlncEncoder {
     final padded = Uint8List(blockCount * blockSize);
     padded.buffer.asByteData().setUint32(0, data.length);
     padded.setRange(4, 4 + data.length, data);
-    _blocks = List.generate(blockCount,
-        (i) => Uint8List.sublistView(padded, i * blockSize, (i + 1) * blockSize));
+    _blocks = List.generate(
+      blockCount,
+      (i) => Uint8List.sublistView(padded, i * blockSize, (i + 1) * blockSize),
+    );
   }
 
   final int blockSize;
@@ -154,8 +164,8 @@ class RlncEncoder {
 
 class _Generation {
   _Generation(this.start, this.len, int blockSize)
-      : rows = List<Uint8List?>.filled(len, null),
-        payloads = List<Uint8List?>.filled(len, null);
+    : rows = List<Uint8List?>.filled(len, null),
+      payloads = List<Uint8List?>.filled(len, null);
 
   final int start;
   final int len;
@@ -232,8 +242,7 @@ class RlncDecoder {
   List<Uint8List?>? _decoded;
   int _decodedCount = 0;
 
-  bool get isComplete =>
-      _blockCount != null && _decodedCount == _blockCount;
+  bool get isComplete => _blockCount != null && _decodedCount == _blockCount;
 
   int get decodedBlockCount => _decodedCount;
 
@@ -251,12 +260,13 @@ class RlncDecoder {
 
   bool addDatagram(Uint8List datagram) {
     if (datagram.length < _headerBytes + 1 + _crcBytes) return false;
-    if (datagram[datagram.length - 1] !=
-        _crc8(datagram, datagram.length - 1)) {
+    if (datagram[datagram.length - 1] != _crc8(datagram, datagram.length - 1)) {
       return false;
     }
-    final bd =
-        datagram.buffer.asByteData(datagram.offsetInBytes, datagram.length);
+    final bd = datagram.buffer.asByteData(
+      datagram.offsetInBytes,
+      datagram.length,
+    );
     final esi = bd.getUint16(0);
     final blockCount = bd.getUint16(2);
     final blockSize = datagram.length - _headerBytes - _crcBytes;
@@ -278,7 +288,10 @@ class RlncDecoder {
     }
     if (isComplete) return true;
     final payload = Uint8List.sublistView(
-        datagram, _headerBytes, _headerBytes + blockSize);
+      datagram,
+      _headerBytes,
+      _headerBytes + blockSize,
+    );
     if (esi < blockCount) {
       // Systematic: a unit row for its generation.
       final gen = _gens![esi ~/ generationSize];

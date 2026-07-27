@@ -346,6 +346,24 @@ void main() {
       expect(stats.bytesToClient, 0);
     });
 
+    test('a fallback connect that never completes is cut at connectTimeout, '
+        'silently — same as an immediate refusal', () async {
+      final hanging = PassThroughRelay(
+        // Never resolves and never throws: the TCP handshake to the
+        // fallback host is stuck (e.g. a black-holed route), not refused.
+        connector: (_, __) => Completer<DuplexByteStream>().future,
+        target: const FallbackTarget(host: 'stuck.invalid'),
+        connectTimeout: const Duration(milliseconds: 30),
+      );
+      final stats = await hanging.splice(client, preface: Uint8List(0));
+      expect(client.written, isEmpty,
+          reason: 'a timed-out fallback connect must stay silent, same as '
+              'an immediately-refused one');
+      expect(client.closed, isTrue);
+      expect(stats.bytesToClient, 0);
+      expect(stats.bytesToUpstream, 0);
+    });
+
     test('closes both sides when either ends', () async {
       final done = relay.splice(client, preface: Uint8List(0));
       upstream.endOfPeerStream();

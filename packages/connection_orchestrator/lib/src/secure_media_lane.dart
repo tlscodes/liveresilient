@@ -71,18 +71,18 @@ class SecureMediaLane implements TransportChannel {
     required ChannelRelayLink relayLink,
     required DateTime Function() now,
     required Duration establishElapsed,
-  })  : _connection = connection,
-        _session = session,
-        _relayLink = relayLink,
-        _now = now,
-        health = ChannelHealth(
-          reliabilityPrior: 0.9,
-          bandwidth: 0.7,
-          // Seed RTT from the measured race-winner connect time instead of
-          // the pessimistic default, so a freshly validated lane starts in
-          // live mode rather than degraded.
-          rttMs: establishElapsed.inMilliseconds.clamp(1, 2000),
-        );
+  }) : _connection = connection,
+       _session = session,
+       _relayLink = relayLink,
+       _now = now,
+       health = ChannelHealth(
+         reliabilityPrior: 0.9,
+         bandwidth: 0.7,
+         // Seed RTT from the measured race-winner connect time instead of
+         // the pessimistic default, so a freshly validated lane starts in
+         // live mode rather than degraded.
+         rttMs: establishElapsed.inMilliseconds.clamp(1, 2000),
+       );
 
   /// Runs the full modern recipe over [endpoints] and returns a live lane.
   ///
@@ -103,7 +103,11 @@ class SecureMediaLane implements TransportChannel {
       endpoints: endpoints,
       connect: dial,
       connectionAttemptDelay: connectionAttemptDelay,
-      discard: (loser) => unawaited(loser.close()),
+      // A losing dial is closed fire-and-forget, but its close() may
+      // reject (socket already reset by the peer). Swallowing it here
+      // keeps that from surfacing as an unhandled zone error that would
+      // fail the whole establish() — the race winner is unaffected.
+      discard: (loser) => unawaited(loser.close().catchError((_) {})),
     ).race();
     final connection = raced.connection;
     final endpoint = raced.endpoint;
@@ -235,7 +239,9 @@ class SecureMediaLane implements TransportChannel {
       final pathId = endpoint.hostPort.authority;
       final challenge = validator.issueChallenge(
         pathId,
-        Uint8List.fromList(List.generate(8, (i) => (_now().microsecond + i) & 0xff)),
+        Uint8List.fromList(
+          List.generate(8, (i) => (_now().microsecond + i) & 0xff),
+        ),
       );
       final answer = await _connection.answerPathChallenge(challenge);
       final ok = validator.validateResponse(pathId, answer);

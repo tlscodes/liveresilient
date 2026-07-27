@@ -56,8 +56,13 @@ class SpatialResidual {
   static Uint8List unPaeth(Uint8List res, int w, int h, int ch) =>
       _paeth(res, w, h, ch, forward: false);
 
-  static Uint8List _paeth(Uint8List src, int w, int h, int ch,
-      {required bool forward}) {
+  static Uint8List _paeth(
+    Uint8List src,
+    int w,
+    int h,
+    int ch, {
+    required bool forward,
+  }) {
     final stride = w * ch;
     final out = Uint8List(src.length);
     // For the inverse, predictions must come from RECONSTRUCTED pixels.
@@ -170,8 +175,7 @@ class QuantizedLpc {
           final a = _levinson(r, order);
           final q = Int16List(order);
           for (var j = 1; j <= order; j++) {
-            q[j - 1] =
-                (-a[j] * (1 << _qBits)).round().clamp(-32768, 32767);
+            q[j - 1] = (-a[j] * (1 << _qBits)).round().clamp(-32768, 32767);
           }
           var cost = order * 2 * 4;
           for (var i = start; i < end; i++) {
@@ -200,12 +204,14 @@ class QuantizedLpc {
       }
     }
     final head = header.toBytes();
-    final out =
-        Uint8List(4 + head.length + n * 2 + (d.length.isOdd ? 1 : 0));
+    final out = Uint8List(4 + head.length + n * 2 + (d.length.isOdd ? 1 : 0));
     ByteData.sublistView(out).setUint32(0, head.length);
     out.setRange(4, 4 + head.length, head);
     out.setRange(
-        4 + head.length, 4 + head.length + n * 2, Uint8List.view(res.buffer));
+      4 + head.length,
+      4 + head.length + n * 2,
+      Uint8List.view(res.buffer),
+    );
     if (d.length.isOdd) out[out.length - 1] = d[d.length - 1];
     return out;
   }
@@ -216,7 +222,8 @@ class QuantizedLpc {
     final head = Uint8List.sublistView(packed, 4, 4 + headLen);
     // Copy: 4+headLen is not necessarily 2-byte aligned for a view.
     final resBytes = Uint8List.fromList(
-        Uint8List.sublistView(packed, 4 + headLen, 4 + headLen + n * 2));
+      Uint8List.sublistView(packed, 4 + headLen, 4 + headLen + n * 2),
+    );
     final res = Int16List.view(resBytes.buffer, 0, n);
     final s = Int16List(n);
     final frames = n == 0 ? 0 : (n + frameSize - 1) ~/ frameSize;
@@ -227,8 +234,11 @@ class QuantizedLpc {
       final order = head[hp++];
       final q = Int16List(order);
       for (var j = 0; j < order; j++) {
-        q[j] =
-            ByteData.sublistView(head, hp, hp + 2).getInt16(0, Endian.little);
+        q[j] = ByteData.sublistView(
+          head,
+          hp,
+          hp + 2,
+        ).getInt16(0, Endian.little);
         hp += 2;
       }
       for (var i = start; i < end; i++) {
@@ -266,8 +276,7 @@ class AdaptiveFilter {
 
   static const int filterCount = 6;
 
-  static int _predict(
-      int filter, int a, int b, int c) {
+  static int _predict(int filter, int a, int b, int c) {
     switch (filter) {
       case filterNone:
         return 0;

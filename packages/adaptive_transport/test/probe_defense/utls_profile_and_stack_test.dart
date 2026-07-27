@@ -241,6 +241,67 @@ void main() {
       expect(config.tcpProfile, TcpStackProfileId.windows);
       expect(config.unenforceableObservables, isNotEmpty);
     });
+
+    group('resolvedFallbackTarget / FALLBACK_TARGET_HOST', () {
+      test('uses the static default when the env var is unset', () {
+        final config = ProbeDefenseConfig(
+          fallbackTarget: const FallbackTarget(host: 'www.static.example'),
+        );
+        final resolved = FallbackTarget.resolve(
+          config.fallbackTarget,
+          environment: const {},
+        );
+        expect(resolved!.host, 'www.static.example');
+        expect(resolved.port, 443);
+      });
+
+      test('env var takes strict priority over the static default', () {
+        final config = ProbeDefenseConfig(
+          fallbackTarget: const FallbackTarget(host: 'www.static.example'),
+        );
+        final resolved = FallbackTarget.resolve(
+          config.fallbackTarget,
+          environment: const {'FALLBACK_TARGET_HOST': 'www.dynamic.example'},
+        );
+        expect(resolved!.host, 'www.dynamic.example');
+        expect(resolved.port, 443);
+      });
+
+      test('env var supplies an explicit port', () {
+        final resolved = FallbackTarget.resolve(
+          const FallbackTarget(host: 'www.static.example'),
+          environment: const {
+            'FALLBACK_TARGET_HOST': 'edge.dynamic.example:8443',
+          },
+        );
+        expect(resolved!.host, 'edge.dynamic.example');
+        expect(resolved.port, 8443);
+      });
+
+      test('a blank env var falls back to the static default, not null', () {
+        final resolved = FallbackTarget.resolve(
+          const FallbackTarget(host: 'www.static.example'),
+          environment: const {'FALLBACK_TARGET_HOST': '   '},
+        );
+        expect(resolved!.host, 'www.static.example');
+      });
+
+      test('no env var and no static default resolves to null', () {
+        final resolved = FallbackTarget.resolve(null, environment: const {});
+        expect(resolved, isNull);
+      });
+
+      test('ProbeDefenseConfig.resolvedFallbackTarget reads the real '
+          'process environment by default', () {
+        final config = ProbeDefenseConfig(
+          fallbackTarget: const FallbackTarget(host: 'www.static.example'),
+        );
+        // No FALLBACK_TARGET_HOST is set in this test run, so the static
+        // default must still surface through the real Platform.environment
+        // path (not just the injectable one exercised above).
+        expect(config.resolvedFallbackTarget!.host, 'www.static.example');
+      });
+    });
   });
 }
 

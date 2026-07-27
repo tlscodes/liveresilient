@@ -50,17 +50,20 @@ void main() {
       (() {
         final s = Int16List(9000);
         for (var i = 0; i < s.length; i++) {
-          s[i] = (12000 *
-                  (i % 200 < 100 ? (i % 100) / 100 : 1 - (i % 100) / 100))
-              .round();
+          s[i] =
+              (12000 * (i % 200 < 100 ? (i % 100) / 100 : 1 - (i % 100) / 100))
+                  .round();
         }
         return Uint8List.view(s.buffer);
       })(),
     ];
     for (final d in cases) {
       final packed = QuantizedLpc.encode(d);
-      expect(QuantizedLpc.decode(packed, d.length), equals(d),
-          reason: 'len ${d.length}');
+      expect(
+        QuantizedLpc.decode(packed, d.length),
+        equals(d),
+        reason: 'len ${d.length}',
+      );
     }
   });
 }

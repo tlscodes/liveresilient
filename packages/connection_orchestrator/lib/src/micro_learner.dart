@@ -2,7 +2,7 @@
 /// (place, network) pairs.
 ///
 /// Where [LaneExperience] learns per-lane delivery success and
-/// [TrendSentinel] watches one lane's live trajectory, this learner
+/// [TrendMonitor] watches one lane's live trajectory, this learner
 /// builds the device's long-term map of the physical world: "at this
 /// place, this network usually behaves like this". Each observation
 /// updates a per-(place, network) exponentially-weighted quality estimate

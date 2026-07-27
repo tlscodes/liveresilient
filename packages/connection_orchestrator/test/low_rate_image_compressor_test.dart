@@ -44,10 +44,16 @@ void main() {
       final total = sizes.reduce((a, b) => a + b);
       // ignore: avoid_print
       print('progressive kind=$kind sizes=$sizes total=$total B');
-      expect(total, inInclusiveRange(200, 2048),
-          reason: 'total must sit in the ~1KB band');
-      expect(sizes.first, lessThan(200),
-          reason: 'first level must land within the first datagrams');
+      expect(
+        total,
+        inInclusiveRange(200, 2048),
+        reason: 'total must sit in the ~1KB band',
+      );
+      expect(
+        sizes.first,
+        lessThan(200),
+        reason: 'first level must land within the first datagrams',
+      );
       // Every prefix decodes without error.
       for (var k = 1; k <= levels.length; k++) {
         final t = c.decodeProgressive(levels.sublist(0, k));

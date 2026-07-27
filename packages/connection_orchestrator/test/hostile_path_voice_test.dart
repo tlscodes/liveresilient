@@ -30,14 +30,14 @@ List<List<int>> speechStream(int frames, int seed) {
   final rng = Random(seed);
   const n = 45;
   final alphabet = [
-    for (var i = 0; i < n; i++) [rng.nextInt(1024), rng.nextInt(1024)]
+    for (var i = 0; i < n; i++) [rng.nextInt(1024), rng.nextInt(1024)],
   ];
   // Speech is strongly sequential: each sound is followed by one of a
   // few likely successors (that predictability is exactly what the
   // order-2 model exploits on the real recording).
   final successors = [
     for (var i = 0; i < n; i++)
-      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)]
+      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)],
   ];
   final silence = [rng.nextInt(1024), rng.nextInt(1024)];
   final out = <List<int>>[];
@@ -92,7 +92,9 @@ void main() {
       final blockSeconds = blockFrames / framesPerSecond;
       const window = 5;
       final packer = SlidingWindowPacker(
-          maxDatagramBytes: maxDatagramBytes, windowBlocks: window);
+        maxDatagramBytes: maxDatagramBytes,
+        windowBlocks: window,
+      );
       final unpacker = SlidingWindowUnpacker();
       final rng = Random(7);
 
@@ -139,14 +141,14 @@ void main() {
           if (dg.length > maxSeen) maxSeen = dg.length;
           if (rng.nextDouble() < loss) continue; // dropped by the path
           for (final (seq, bytes) in unpacker.offer(dg)) {
-          final src = sourceBlocks[seq];
-          if (src == null) continue;
-          final cols = decodeColumns(bytes, blockFrames, warmDec.clone());
-          for (var f = 0; f < cols.length; f++) {
-            if (cols[f][0] != src[f][0] || cols[f][1] != src[f][1]) {
-              mismatches++;
+            final src = sourceBlocks[seq];
+            if (src == null) continue;
+            final cols = decodeColumns(bytes, blockFrames, warmDec.clone());
+            for (var f = 0; f < cols.length; f++) {
+              if (cols[f][0] != src[f][0] || cols[f][1] != src[f][1]) {
+                mismatches++;
+              }
             }
-          }
             playedFrames += cols.length;
             deliveredBlocks++;
           }
@@ -158,27 +160,40 @@ void main() {
       final coverage = deliveredSeconds / talkSeconds;
 
       // ignore: avoid_print
-      print('DIAG loss=$loss blocks=$deliveredBlocks/$blockSeq '
-          'maxDg=${maxSeen}B bytes/s=${wireBytesPerSecond.toStringAsFixed(0)} '
-          'accepted=${unpacker.accepted}/$sentDatagrams avgBlock=${(blockBytesSum/blockSeq).toStringAsFixed(1)}B avgRec=${(recordsSum/blockSeq).toStringAsFixed(1)}');
+      print(
+        'DIAG loss=$loss blocks=$deliveredBlocks/$blockSeq '
+        'maxDg=${maxSeen}B bytes/s=${wireBytesPerSecond.toStringAsFixed(0)} '
+        'accepted=${unpacker.accepted}/$sentDatagrams avgBlock=${(blockBytesSum / blockSeq).toStringAsFixed(1)}B avgRec=${(recordsSum / blockSeq).toStringAsFixed(1)}',
+      );
 
       expect(mismatches, 0, reason: 'delivered speech must be bit-exact');
-      expect(maxSeen, lessThanOrEqualTo(maxDatagramBytes),
-          reason: 'every datagram must fit the tiny MTU');
-      expect(wireBytesPerSecond, lessThanOrEqualTo(budgetBytesPerSecond),
-          reason: 'must fit the throughput that actually gets through');
-      expect(coverage, greaterThanOrEqualTo(0.90),
-          reason: 'conversation must stay continuous at '
-              '${(loss * 100).toStringAsFixed(0)}% loss');
+      expect(
+        maxSeen,
+        lessThanOrEqualTo(maxDatagramBytes),
+        reason: 'every datagram must fit the tiny MTU',
+      );
+      expect(
+        wireBytesPerSecond,
+        lessThanOrEqualTo(budgetBytesPerSecond),
+        reason: 'must fit the throughput that actually gets through',
+      );
+      expect(
+        coverage,
+        greaterThanOrEqualTo(0.90),
+        reason:
+            'conversation must stay continuous at '
+            '${(loss * 100).toStringAsFixed(0)}% loss',
+      );
 
       results.add(
-          'loss ${(loss * 100).toStringAsFixed(0)}% · window $window blocks · '
-          'datagrams $sentDatagrams @ max ${maxSeen}B · '
-          'wire ${wireBytesPerSecond.toStringAsFixed(0)} B/s '
-          '(${(wireBytesPerSecond * 8).toStringAsFixed(0)} bps) · '
-          'speech ${deliveredSeconds.toStringAsFixed(1)}/${talkSeconds}s '
-          '(${(coverage * 100).toStringAsFixed(1)}%) · '
-          'blocks $deliveredBlocks/$blockSeq · bit-exact OK · no acks');
+        'loss ${(loss * 100).toStringAsFixed(0)}% · window $window blocks · '
+        'datagrams $sentDatagrams @ max ${maxSeen}B · '
+        'wire ${wireBytesPerSecond.toStringAsFixed(0)} B/s '
+        '(${(wireBytesPerSecond * 8).toStringAsFixed(0)} bps) · '
+        'speech ${deliveredSeconds.toStringAsFixed(1)}/${talkSeconds}s '
+        '(${(coverage * 100).toStringAsFixed(1)}%) · '
+        'blocks $deliveredBlocks/$blockSeq · bit-exact OK · no acks',
+      );
     }
     for (final line in results) {
       // ignore: avoid_print

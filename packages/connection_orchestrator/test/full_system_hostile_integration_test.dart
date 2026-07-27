@@ -108,11 +108,11 @@ List<List<int>> tokenStream(int frames, int seed) {
     for (var i = 0; i < n; i++)
       i < 31
           ? List.of(baseCols[rng.nextInt(baseCols.length)])
-          : [rng.nextInt(1024), rng.nextInt(1024)]
+          : [rng.nextInt(1024), rng.nextInt(1024)],
   ];
   final successors = [
     for (var i = 0; i < n; i++)
-      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)]
+      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)],
   ];
   final silence = List.of(baseCols[0]);
   final out = <List<int>>[];
@@ -136,9 +136,13 @@ List<List<int>> tokenStream(int frames, int seed) {
 /// All hostile vectors at once, on virtual time measured in ticks.
 class HostileChannel {
   HostileChannel({required this.ticksPerSecond, int seed = 99})
-      : _rng = Random(seed),
-        burstChain = GilbertElliottLossSimulator(
-            p: 0.03, r: 0.085, badLossRate: 0.97, seed: seed + 1);
+    : _rng = Random(seed),
+      burstChain = GilbertElliottLossSimulator(
+        p: 0.03,
+        r: 0.085,
+        badLossRate: 0.97,
+        seed: seed + 1,
+      );
 
   final int ticksPerSecond;
   final Random _rng;
@@ -212,8 +216,10 @@ void main() {
     // truncation on the lowest MTU dips (~14% of survivors) but carries
     // each block twice — the doubled redundancy more than pays for the
     // truncation tax, and the MTU stress vector is genuinely exercised.
-    final packer =
-        SlidingWindowPacker(maxDatagramBytes: maxDatagramBytes, windowBlocks: 2);
+    final packer = SlidingWindowPacker(
+      maxDatagramBytes: maxDatagramBytes,
+      windowBlocks: 2,
+    );
     final unpacker = SlidingWindowUnpacker();
     final channel = HostileChannel(ticksPerSecond: ticksPerSecond);
 
@@ -285,8 +291,10 @@ void main() {
       var voiceActive = false;
       for (var i = pcmFrom; i < pcmTo; i++) {
         final frameMs = i * 1000 ~/ pcmFramesPerSecond;
-        final action =
-            vad.process(isTalkSecond(second) ? voiced : quiet, frameMs);
+        final action = vad.process(
+          isTalkSecond(second) ? voiced : quiet,
+          frameMs,
+        );
         if (action == VadAction.send) voiceActive = true;
         if (action == VadAction.keepAlive) {
           keepAlives++;
@@ -320,7 +328,9 @@ void main() {
           sourceBlocks[nextSeq] = block;
           encodedBlocks.add(nextSeq);
           latestDatagram = packer.addBlock(
-              nextSeq, encodeColumns(block, senderDict.snapshot()));
+            nextSeq,
+            encodeColumns(block, senderDict.snapshot()),
+          );
           latestDatagramSecond = second;
         }
         nextSeq++;
@@ -340,8 +350,11 @@ void main() {
     }
 
     // Drain the jitter queue (max delay 5 s past the end).
-    for (var tick = totalTicks; tick < totalTicks + ticksPerSecond * 6;
-        tick++) {
+    for (
+      var tick = totalTicks;
+      tick < totalTicks + ticksPerSecond * 6;
+      tick++
+    ) {
       for (final payload in channel.deliveriesAt(tick)) {
         receive(payload);
       }
@@ -365,64 +378,90 @@ void main() {
     final coldRecovered = recovered.where((s) => s < handoverBlock).length;
 
     final firstWarmAfterBlackout = encodedBlocks
-        .where((s) =>
-            s >= handoverBlock &&
-            frameOffsetOfBlock(s) ~/ framesPerSecond >= blackoutEndS)
+        .where(
+          (s) =>
+              s >= handoverBlock &&
+              frameOffsetOfBlock(s) ~/ framesPerSecond >= blackoutEndS,
+        )
         .fold<int?>(null, (m, s) => m == null || s < m ? s : m);
-    final recoveredWithin2s = firstWarmAfterBlackout != null &&
+    final recoveredWithin2s =
+        firstWarmAfterBlackout != null &&
         recovered.contains(firstWarmAfterBlackout) &&
         frameOffsetOfBlock(firstWarmAfterBlackout) ~/ framesPerSecond <
             blackoutEndS + 2;
 
-    final lossPct = 100 *
+    final lossPct =
+        100 *
         (channel.droppedUniform + channel.droppedBurst + channel.blackedOut) /
         channel.sent;
     final b = channel.burstChain.burstLengths;
-    final meanBurst =
-        b.isEmpty ? 0.0 : b.reduce((x, y) => x + y) / b.length;
+    final meanBurst = b.isEmpty ? 0.0 : b.reduce((x, y) => x + y) / b.length;
 
     // ignore: avoid_print
-    print('FULL-SYSTEM DIAG: wire=${sentBytes ~/ talkSeconds} B/s '
-        'sentDg=${channel.sent} loss=${lossPct.toStringAsFixed(1)}% '
-        '(uniform=${channel.droppedUniform} burst=${channel.droppedBurst} '
-        'blackout=${channel.blackedOut}) truncated=${channel.truncated} '
-        'corrupted=${channel.corrupted} '
-        'bursts=${b.length}x~${meanBurst.toStringAsFixed(1)}pkt '
-        'warmSpeechRecovery=${(warmCoverage * 100).toStringAsFixed(1)}% '
-        '(${warmRecovered.length}/${warmTalkOutside.length}) '
-        'coldBlocksRecovered=$coldRecovered/$coldBlocks '
-        'recoveredWithin2sAfterBlackout=$recoveredWithin2s '
-        'keepAlives=$keepAlives minPingGap=${minPingGapMs}ms '
-        'mismatches=$mismatches pendingAtEnd=${channel.pendingCount} '
-        'dictPhase=${senderDict.phase.name}/${receiverDict.phase.name}');
+    print(
+      'FULL-SYSTEM DIAG: wire=${sentBytes ~/ talkSeconds} B/s '
+      'sentDg=${channel.sent} loss=${lossPct.toStringAsFixed(1)}% '
+      '(uniform=${channel.droppedUniform} burst=${channel.droppedBurst} '
+      'blackout=${channel.blackedOut}) truncated=${channel.truncated} '
+      'corrupted=${channel.corrupted} '
+      'bursts=${b.length}x~${meanBurst.toStringAsFixed(1)}pkt '
+      'warmSpeechRecovery=${(warmCoverage * 100).toStringAsFixed(1)}% '
+      '(${warmRecovered.length}/${warmTalkOutside.length}) '
+      'coldBlocksRecovered=$coldRecovered/$coldBlocks '
+      'recoveredWithin2sAfterBlackout=$recoveredWithin2s '
+      'keepAlives=$keepAlives minPingGap=${minPingGapMs}ms '
+      'mismatches=$mismatches pendingAtEnd=${channel.pendingCount} '
+      'dictPhase=${senderDict.phase.name}/${receiverDict.phase.name}',
+    );
 
     // 0-RTT cold start: speech reaches the far end inside the first 3 s.
-    expect(coldRecovered, greaterThan(0),
-        reason: 'cold-start voice must play within the first 3 seconds '
-            'with zero negotiation');
+    expect(
+      coldRecovered,
+      greaterThan(0),
+      reason:
+          'cold-start voice must play within the first 3 seconds '
+          'with zero negotiation',
+    );
     // Handover integrity: both ends warm, and nothing desynchronized.
     expect(senderDict.phase, DictionaryPhase.dynamicWarm);
     expect(receiverDict.phase, DictionaryPhase.dynamicWarm);
-    expect(mismatches, 0,
-        reason: 'no corrupted or desynchronized block may ever decode '
-            'into wrong speech');
+    expect(
+      mismatches,
+      0,
+      reason:
+          'no corrupted or desynchronized block may ever decode '
+          'into wrong speech',
+    );
     // Keep-alive pacing during silence.
     expect(minPingGapMs, greaterThanOrEqualTo(1000));
-    expect(keepAlives, inInclusiveRange(40, 65),
-        reason: '~60 silent seconds must produce about one ping each');
+    expect(
+      keepAlives,
+      inInclusiveRange(40, 65),
+      reason: '~60 silent seconds must produce about one ping each',
+    );
     // Post-blackout recovery within 2 s.
-    expect(recoveredWithin2s, isTrue,
-        reason: 'the call must resume within 2 s of the blackout ending');
+    expect(
+      recoveredWithin2s,
+      isTrue,
+      reason: 'the call must resume within 2 s of the blackout ending',
+    );
     // CRC integrity was genuinely exercised.
     expect(channel.corrupted, greaterThanOrEqualTo(5));
     expect(channel.truncated, greaterThanOrEqualTo(5));
     // Warm speech coverage outside the blackout.
-    expect(warmCoverage, greaterThanOrEqualTo(0.90),
-        reason: 'the conversation must stay continuous outside the '
-            'blackout');
+    expect(
+      warmCoverage,
+      greaterThanOrEqualTo(0.90),
+      reason:
+          'the conversation must stay continuous outside the '
+          'blackout',
+    );
     // Bounded buffers.
-    expect(channel.pendingCount, 0,
-        reason: 'no payload may linger in the jitter queue');
+    expect(
+      channel.pendingCount,
+      0,
+      reason: 'no payload may linger in the jitter queue',
+    );
     expect(unpacker.accepted, lessThanOrEqualTo(channel.sent));
   });
 }

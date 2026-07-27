@@ -47,9 +47,9 @@ int _squash(double x) {
 /// One hashed context model: a table of adaptive bit probabilities.
 class _ContextModel {
   _ContextModel(this.order, int tableBits)
-      : _table = Uint16List(1 << tableBits)
-          ..fillRange(0, 1 << tableBits, _pOne >> 1),
-        _mask = (1 << tableBits) - 1;
+    : _table = Uint16List(1 << tableBits)
+        ..fillRange(0, 1 << tableBits, _pOne >> 1),
+      _mask = (1 << tableBits) - 1;
 
   final int order;
   final Uint16List _table;
@@ -61,8 +61,7 @@ class _ContextModel {
   void newByte(Uint8List history, int historyLen) {
     var h = order * 0x1000193;
     for (var k = 1; k <= order; k++) {
-      final b =
-          historyLen - k >= 0 ? history[(historyLen - k) & 0xFFFF] : 0;
+      final b = historyLen - k >= 0 ? history[(historyLen - k) & 0xFFFF] : 0;
       h = ((h ^ b) * 0x01000193) & 0x3FFFFFFF;
     }
     _ctxHash = h;
@@ -76,18 +75,16 @@ class _ContextModel {
   void update(int bit) {
     final p = _table[_slot];
     // Adaptive step: fast early, slow late (variable-rate counter).
-    _table[_slot] = bit == 1
-        ? p + ((_pOne - p) >> 5)
-        : p - (p >> 5);
+    _table[_slot] = bit == 1 ? p + ((_pOne - p) >> 5) : p - (p >> 5);
   }
 }
 
 /// Adaptive logistic mixer over the model predictions.
 class _Mixer {
   _Mixer(int n, int sets)
-      : _n = n,
-        _w = Float64List(n * sets)..fillRange(0, n * sets, 0.3),
-        _t = Float64List(n);
+    : _n = n,
+      _w = Float64List(n * sets)..fillRange(0, n * sets, 0.3),
+      _t = Float64List(n);
 
   final int _n;
   final Float64List _w;
@@ -154,15 +151,15 @@ class _Apm {
 /// Shared model pipeline so encoder and decoder stay bit-identical.
 class _Pipeline {
   _Pipeline()
-      : _models = [
-          _ContextModel(0, 9),
-          _ContextModel(1, 16),
-          _ContextModel(2, 18),
-          _ContextModel(3, 18),
-          _ContextModel(4, 18),
-          _ContextModel(5, 18),
-        ],
-        _mixer = _Mixer(7, 4);
+    : _models = [
+        _ContextModel(0, 9),
+        _ContextModel(1, 16),
+        _ContextModel(2, 18),
+        _ContextModel(3, 18),
+        _ContextModel(4, 18),
+        _ContextModel(5, 18),
+      ],
+      _mixer = _Mixer(7, 4);
 
   final List<_ContextModel> _models;
   final _Mixer _mixer;
@@ -221,13 +218,12 @@ class _Pipeline {
     final set = _matchLen == 0
         ? 0
         : _matchLen < 8
-            ? 1
-            : _matchLen < 32
-                ? 2
-                : 3;
+        ? 1
+        : _matchLen < 32
+        ? 2
+        : 3;
     final mixed = _mixer.mix(_preds, set);
-    final lastByte =
-        _historyLen > 0 ? _history[(_historyLen - 1) & 0xFFFF] : 0;
+    final lastByte = _historyLen > 0 ? _history[(_historyLen - 1) & 0xFFFF] : 0;
     return _apm.refine(mixed, lastByte);
   }
 

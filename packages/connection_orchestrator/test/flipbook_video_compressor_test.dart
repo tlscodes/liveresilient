@@ -31,18 +31,26 @@ void main() {
     final coded = c.encode(frames, 240, 160);
     final sizes = coded.map((f) => f.bytes.length).toList();
     // ignore: avoid_print
-    print('flipbook keyframe sizes: $sizes '
-        '(temporal: ${coded.where((f) => f.temporal).length}/10)');
+    print(
+      'flipbook keyframe sizes: $sizes '
+      '(temporal: ${coded.where((f) => f.temporal).length}/10)',
+    );
     // The first frame is always intra and pays for the whole scene
     // texture (this synthetic one is deliberately adversarial); steady
     // state is what the ~300 B target governs.
     expect(sizes.first, lessThanOrEqualTo(700), reason: 'intra bootstrap');
     for (final s in sizes.skip(1)) {
-      expect(s, lessThanOrEqualTo(450),
-          reason: 'steady-state keyframe must stay near the 300 B target');
+      expect(
+        s,
+        lessThanOrEqualTo(450),
+        reason: 'steady-state keyframe must stay near the 300 B target',
+      );
     }
-    expect(coded.where((f) => f.temporal).length, greaterThan(5),
-        reason: 'moving scene should mostly code temporally');
+    expect(
+      coded.where((f) => f.temporal).length,
+      greaterThan(5),
+      reason: 'moving scene should mostly code temporally',
+    );
     final decoded = c.decode(coded);
     expect(decoded.length, 10);
   });
@@ -72,7 +80,7 @@ void main() {
     }
     final rebuilt = [
       for (var i = 0; i < 6; i++)
-        FlipbookFrame(i, delivered[i]!, predictor: coded[i].predictor)
+        FlipbookFrame(i, delivered[i]!, predictor: coded[i].predictor),
     ];
     final a = c.decode(rebuilt);
     final b = c.decode(coded);
@@ -80,8 +88,7 @@ void main() {
       expect(a[i], equals(b[i]), reason: 'frame $i differs after transport');
     }
   });
-  test('motion predictor wins on panning footage and round-trips exactly',
-      () {
+  test('motion predictor wins on panning footage and round-trips exactly', () {
     // A textured field translated by a constant offset every frame: the
     // classic camera pan. Plain temporal differencing sees every pixel
     // change; motion compensation sees almost nothing.
@@ -111,8 +118,11 @@ void main() {
     final motionFrames = coded
         .where((f) => f.predictor == FlipbookPredictor.temporalMotion)
         .length;
-    expect(motionFrames, greaterThan(0),
-        reason: 'a constant pan must engage the motion predictor');
+    expect(
+      motionFrames,
+      greaterThan(0),
+      reason: 'a constant pan must engage the motion predictor',
+    );
 
     // Exact reconstruction of the quantized stream is still required.
     final decoded = codec.decode(coded);
@@ -120,7 +130,9 @@ void main() {
 
     final total = coded.fold<int>(0, (a, f) => a + f.bytes.length);
     // ignore: avoid_print
-    print('pan footage: $motionFrames/${coded.length} frames motion-coded, '
-        '$total B total');
+    print(
+      'pan footage: $motionFrames/${coded.length} frames motion-coded, '
+      '$total B total',
+    );
   });
 }
