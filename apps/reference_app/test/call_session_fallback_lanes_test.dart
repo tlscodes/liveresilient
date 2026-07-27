@@ -74,6 +74,44 @@ void main() {
     expect(ids, isNot(contains(ResilientLaneIds.localMesh)));
   });
 
+  group('defaultBorderRelayEndpoints', () {
+    test('points both WAN lanes at the deployed relay, keyed on the call', () {
+      final caller = defaultBorderRelayEndpoints(
+        callId: 'sess-4b1e',
+        role: CallRole.initiator,
+      );
+      final callee = defaultBorderRelayEndpoints(
+        callId: 'sess-4b1e',
+        role: CallRole.receiver,
+      );
+
+      expect(caller.relayUri!.host, defaultBorderRelayHost);
+      expect(caller.relayUri!.path, '/ws');
+      expect(caller.longPollUri!.host, defaultBorderRelayHost);
+      expect(caller.longPollUri!.path, '/http');
+
+      // Same session, opposite roles — each side reads what the other wrote.
+      expect(caller.relayUri!.queryParameters['session'], 'sess-4b1e');
+      expect(callee.relayUri!.queryParameters['session'], 'sess-4b1e');
+      expect(caller.relayUri!.queryParameters['role'], 'a');
+      expect(callee.relayUri!.queryParameters['role'], 'b');
+
+      // The relay speaks HTTP and WebSocket only.
+      expect(caller.udpRemote, isNull);
+    });
+
+    test('a call id the relay would reject is sanitised, not fatal', () {
+      final endpoints = defaultBorderRelayEndpoints(
+        callId: 'room:42/alpha beta',
+        role: CallRole.initiator,
+      );
+      expect(
+        endpoints.relayUri!.queryParameters['session'],
+        'room-42-alpha-beta',
+      );
+    });
+  });
+
   test('with no fallback endpoints the session still builds on WebRTC', () {
     final session = build(callId: 'no-fallback');
 
