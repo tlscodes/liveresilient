@@ -135,6 +135,106 @@ void main() {
     });
   });
 
+  group('resolving relays across the three sources', () {
+    const verifier = CryptographyBroadcastVerifier();
+    const environment = {broadcastRelaysVariable: 'https://from-env.example'};
+
+    late CryptographyBroadcastSigner root;
+
+    setUp(() async => root = await CryptographyBroadcastSigner.generate());
+
+    Future<RelayDirectoryStore> storeWith({
+      required List<Uri> origins,
+      int seq = 1,
+      Duration validity = const Duration(days: 30),
+    }) async {
+      final directory = await RelayDirectory.issue(
+        rootSigner: root,
+        origins: origins,
+        seq: seq,
+        notAfter: t0.add(validity),
+      );
+      final store = RelayDirectoryStore();
+      expect(
+        await store.adopt(
+          encoded: directory.encoded,
+          rootPublicKey: root.publicKey,
+          verifier: verifier,
+          now: t0,
+        ),
+        isTrue,
+      );
+      return store;
+    }
+
+    test('a signed directory outranks the environment', () async {
+      // The author's own statement of where they publish beats an operator
+      // variable, and unlike that variable it can reach a cut-off device.
+      final store = await storeWith(
+        origins: [Uri.parse('https://from-directory.example')],
+      );
+      final origins = resolveBroadcastRelayOrigins(
+        environment: environment,
+        now: t0,
+        directory: store,
+      );
+      expect(origins.single.host, 'from-directory.example');
+    });
+
+    test('an expired directory falls back to the environment', () async {
+      final store = await storeWith(
+        origins: [Uri.parse('https://from-directory.example')],
+        validity: const Duration(days: 2),
+      );
+      final origins = resolveBroadcastRelayOrigins(
+        environment: environment,
+        now: t0.add(const Duration(days: 2, seconds: 1)),
+        directory: store,
+      );
+      expect(origins.single.host, 'from-env.example');
+    });
+
+    test('no directory at all falls back to the environment', () {
+      final origins = resolveBroadcastRelayOrigins(
+        environment: environment,
+        now: t0,
+        directory: RelayDirectoryStore(),
+      );
+      expect(origins.single.host, 'from-env.example');
+    });
+
+    test('with neither, the compiled-in relay is the last resort', () {
+      // A reader is never left with nowhere to look.
+      final origins = resolveBroadcastRelayOrigins(
+        environment: const {},
+        now: t0,
+      );
+      expect(origins.single.host, contains('voice-call-relay'));
+    });
+
+    test('a directory drives real relay clients end to end', () async {
+      final store = await storeWith(
+        origins: [
+          Uri.parse('https://one.example'),
+          Uri.parse('https://two.example'),
+          Uri.parse('https://three.example'),
+        ],
+      );
+      final relays = broadcastRelaysFor(
+        resolveBroadcastRelayOrigins(
+          environment: const {},
+          now: t0,
+          directory: store,
+        ),
+      );
+      expect(relays.map((r) => r.name), [
+        'one.example',
+        'two.example',
+        'three.example',
+      ]);
+    });
+  });
+
   group('over a loopback relay', () {
     late _LoopbackRelay server;
     late IoBroadcastHttpTransport transport;
