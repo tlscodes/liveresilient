@@ -151,63 +151,85 @@ abstract class TcpSocketTuner {
 
 /// The tuner that uses the socket options `dart:io` exposes.
 class DartIoTcpSocketTuner implements TcpSocketTuner {
-  const DartIoTcpSocketTuner();
+  const DartIoTcpSocketTuner({this.onOptionRefused});
 
-  /// `IPPROTO_IP` / `IP_TTL` (Linux, macOS, Windows all use option 2 at
-  /// level 0 for IPv4 TTL).
-  static const int _ipTtlOption = 2;
+  /// Called once per option the platform refused, with the option's name
+  /// and the reason given.
+  ///
+  /// A refusal is reported rather than thrown: sandboxes and unprivileged
+  /// processes legitimately deny these, and the connection stays usable
+  /// with a less faithful profile. But it is never silent — a caller that
+  /// cannot see the denial cannot tell a real profile from a nominal one.
+  final void Function(String option, String reason)? onOptionRefused;
 
-  /// `IPPROTO_IPV6` / `IPV6_UNICAST_HOPS`.
-  static const int _ipv6HopLimitOption = 16;
+  /// `IPPROTO_IP` / `IP_TTL`. Linux uses option 2; BSD-derived systems
+  /// (macOS, iOS) and Winsock use 4 — on those, option 2 at the IPv4 level
+  /// is `IP_HDRINCL`, an entirely different setting, so the constant must
+  /// follow the platform.
+  static int get _ipTtlOption => Platform.isLinux || Platform.isAndroid ? 2 : 4;
 
-  /// `IPPROTO_TCP` / `TCP_MAXSEG`, Linux only.
+  /// `IPPROTO_IPV6` / `IPV6_UNICAST_HOPS`. 16 on Linux, 4 on BSD/macOS and
+  /// on Winsock.
+  static int get _ipv6HopLimitOption =>
+      Platform.isLinux || Platform.isAndroid ? 16 : 4;
+
+  /// `IPPROTO_TCP` / `TCP_MAXSEG`. Linux-family only: macOS exposes it
+  /// read-mostly and Windows has no equivalent.
   static const int _tcpMaxSegOption = 2;
+
+  /// `SOL_SOCKET` / `SO_RCVBUF`. 8 on Linux, 0x1002 on BSD/macOS and on
+  /// Winsock.
+  static int get _receiveBufferOption =>
+      Platform.isLinux || Platform.isAndroid ? 8 : 0x1002;
+
+  static bool get _isLinuxFamily => Platform.isLinux || Platform.isAndroid;
 
   @override
   Future<List<String>> apply(RawSocket socket, TcpStackProfile profile) async {
     final applied = <String>[];
 
-    final isIpv6 = socket.address.type == InternetAddressType.IPv6;
-    try {
-      socket.setRawOption(RawSocketOption.fromInt(
-        isIpv6 ? RawSocketOption.levelIPv6 : RawSocketOption.levelIPv4,
-        isIpv6 ? _ipv6HopLimitOption : _ipTtlOption,
-        profile.initialTtl,
-      ));
-      applied.add('initial_ttl');
-    } on OSError {
-      // Some sandboxes forbid it; the connection is still usable, just
-      // less convincing. Never fatal.
-    } on ArgumentError {
-      // Platform rejected the option shape.
+    void set(String name, int level, int option, int value) {
+      try {
+        socket.setRawOption(RawSocketOption.fromInt(level, option, value));
+        applied.add(name);
+      } on OSError catch (e) {
+        onOptionRefused?.call(name, e.message);
+      } on SocketException catch (e) {
+        // A socket closed under us — the caller's connection is gone, but
+        // that is the caller's problem to notice, not a reason to fail
+        // here with a different exception than every other refusal.
+        onOptionRefused?.call(name, e.message);
+      } on ArgumentError catch (e) {
+        onOptionRefused?.call(name, '${e.message}');
+      }
     }
 
-    if (Platform.isLinux) {
-      try {
-        socket.setRawOption(RawSocketOption.fromInt(
-          RawSocketOption.levelTcp,
-          _tcpMaxSegOption,
-          profile.maximumSegmentSize,
-        ));
-        applied.add('mss');
-      } on OSError {
-        // TCP_MAXSEG is refused after connect on some kernels.
-      }
+    final isIpv6 = socket.address.type == InternetAddressType.IPv6;
+    set(
+      'initial_ttl',
+      isIpv6 ? RawSocketOption.levelIPv6 : RawSocketOption.levelIPv4,
+      isIpv6 ? _ipv6HopLimitOption : _ipTtlOption,
+      profile.initialTtl,
+    );
+
+    if (_isLinuxFamily) {
+      set(
+        'mss',
+        RawSocketOption.levelTcp,
+        _tcpMaxSegOption,
+        profile.maximumSegmentSize,
+      );
     }
 
     // The receive buffer is the only lever on the advertised window, and
     // the kernel doubles and rounds it — so this nudges the window toward
     // the profile rather than setting it.
-    try {
-      socket.setRawOption(RawSocketOption.fromInt(
-        RawSocketOption.levelSocket,
-        Platform.isLinux ? 8 : 0x1002, // SO_RCVBUF
-        profile.windowSize,
-      ));
-      applied.add('receive_buffer');
-    } on OSError {
-      // Not permitted; the default window stands.
-    }
+    set(
+      'receive_buffer',
+      RawSocketOption.levelSocket,
+      _receiveBufferOption,
+      profile.windowSize,
+    );
 
     return applied;
   }
