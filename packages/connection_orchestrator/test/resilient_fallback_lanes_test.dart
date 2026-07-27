@@ -304,6 +304,56 @@ void main() {
       );
     });
 
+    test('a relay host derives both WAN lanes from the worker schema', () {
+      final endpoints = ResilientLaneEndpoints.fromEnvironment(const {
+        ResilientLaneEndpoints.relayHostEnvVar: 'relay.example.workers.dev',
+        ResilientLaneEndpoints.relaySessionEnvVar: 'sess-9f2c',
+        ResilientLaneEndpoints.relayRoleEnvVar: 'b',
+      });
+
+      expect(
+        endpoints.relayUri,
+        Uri.parse(
+          'wss://relay.example.workers.dev/ws?session=sess-9f2c&role=b',
+        ),
+      );
+      expect(
+        endpoints.longPollUri,
+        Uri.parse(
+          'https://relay.example.workers.dev/http?session=sess-9f2c&role=b',
+        ),
+      );
+    });
+
+    test('an explicit lane URI still wins over the derived one', () {
+      final endpoints = ResilientLaneEndpoints.fromEnvironment(const {
+        ResilientLaneEndpoints.relayHostEnvVar: 'relay.example.workers.dev',
+        ResilientLaneEndpoints.wsEnvVar: 'wss://own.example.net/ws',
+      });
+
+      expect(endpoints.relayUri, Uri.parse('wss://own.example.net/ws'));
+      expect(endpoints.longPollUri!.host, 'relay.example.workers.dev');
+    });
+
+    test('the worker factory rejects a bad session or role', () {
+      expect(
+        () => ResilientLaneEndpoints.cloudflareWorker(
+          workerHost: 'relay.example.workers.dev',
+          session: 'has spaces',
+          role: 'a',
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => ResilientLaneEndpoints.cloudflareWorker(
+          workerHost: 'relay.example.workers.dev',
+          session: 'ok',
+          role: 'caller',
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('the development echo set is opt-in, never a default', () {
       // These are liveness toys, not relays: a lane pointed at them looks
       // reachable while delivering nothing to the peer.

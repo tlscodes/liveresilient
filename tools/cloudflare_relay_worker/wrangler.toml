@@ -1,0 +1,15 @@
+name = "voice-call-relay"
+main = "src/worker.js"
+compatibility_date = "2026-07-01"
+
+# One Durable Object class holds a session's two peers. Pairing needs a
+# single place both requests reach, which a stateless Worker cannot give.
+[[durable_objects.bindings]]
+name = "RELAY_SESSION"
+class_name = "RelaySession"
+
+# SQLite-backed Durable Objects are the class available on the free plan;
+# the older key-value backend is paid-only.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelaySession"]
