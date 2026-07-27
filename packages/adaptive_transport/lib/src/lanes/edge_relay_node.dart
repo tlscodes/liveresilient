@@ -70,8 +70,13 @@ class EdgeRelayNodeOutcome {
 
   final bool admitted;
 
-  /// First byte to routing decision. The budget is under 2 ms; the node
-  /// does a parse and one HMAC, nothing else, before deciding.
+  /// First byte to routing decision.
+  ///
+  /// The under-2 ms budget holds when the gate runs the pre-shared-key
+  /// authenticator: a parse plus one HMAC, nothing else. A gate configured
+  /// with the X25519 key-exchange authenticator spends ~2 ms per candidate
+  /// relay key on top of that (measured — see `tool/bench_x25519.dart`), so
+  /// that deployment should expect ~2-4 ms here, not sub-2 ms.
   final Duration decisionLatency;
 
   /// Set on the pass-through path only.
