@@ -12,8 +12,17 @@
  *
  *  * Every path is immutable. A given (author, seq) is one document
  *    forever and a given hash is its own bytes, so responses carry a
- *    year-long immutable cache directive and a million readers of one
- *    post cost the edge, not the origin.
+ *    year-long immutable cache directive.
+ *
+ *    Read that directive for what it is: it cuts traffic and latency, NOT
+ *    Worker invocations. On a route bound to a Worker the Worker runs in
+ *    front of the cache, so every read counts. Reaching a large audience
+ *    means serving these objects from a path that is not bound to a
+ *    Worker — a public bucket on a custom domain with cache rules — and
+ *    leaving the Worker the write path, whose volume is negligible. Until
+ *    that exists, one relay on the free tier serves on the order of
+ *    50,000 readers of one text post per day, since a post is at least
+ *    two reads.
  *  * A write may not change what a path already holds. That is what makes
  *    a duplicated signing key show up as two conflicting posts a reader
  *    can prove, instead of history being quietly replaced.
