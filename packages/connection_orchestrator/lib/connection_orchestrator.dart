@@ -20,6 +20,7 @@ export 'src/lane_experience.dart';
 export 'src/micro_learner.dart';
 export 'src/media_carriage.dart';
 export 'src/micro_datagram_lane.dart';
+export 'src/resilient_fallback_lanes.dart';
 export 'src/resilient_media_transport.dart';
 export 'src/silence_suppression_vad.dart';
 export 'src/token_voice_channel.dart';

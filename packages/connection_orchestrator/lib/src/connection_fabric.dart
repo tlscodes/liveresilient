@@ -124,6 +124,37 @@ class ConnectionFabric {
     _publish();
   }
 
+  /// Registers a [DomesticEdgeBridgeLane] under the conventional edge-bridge
+  /// id and returns that id.
+  ///
+  /// The lane is an ordinary [TransportChannel]; this wrapper exists only so
+  /// every caller declares the same profile for it — an internet-class lane
+  /// one rank above direct UDP, because it always traverses an edge hop.
+  /// [consent], when given, gates the lane exactly like any other profile.
+  String registerEdgeBridge(
+    DomesticEdgeBridgeLane lane, {
+    String id = edgeBridgeLaneId,
+    int costRank = 1,
+    int energyRank = 1,
+    DeviceLinkConsent? consent,
+  }) {
+    registerLane(
+      lane,
+      LaneProfile(
+        id: id,
+        kind: LaneKind.internet,
+        costRank: costRank,
+        energyRank: energyRank,
+        consent: consent,
+      ),
+    );
+    return id;
+  }
+
+  /// Conventional fabric-wide id for the edge-bridge lane, so a
+  /// [ConnectivitySnapshot] entry can be correlated back to it.
+  static const String edgeBridgeLaneId = 'edge.bridge';
+
   /// Removes a lane; queued bundles are unaffected and will drain through
   /// whichever lanes remain.
   void unregisterLane(String id) {
