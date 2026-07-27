@@ -41,6 +41,8 @@ dependencies:
   # workspace so Flutter SDK constraints never fight the root resolution).
   adaptive_transport:
     path: ../../packages/adaptive_transport
+  broadcast:
+    path: ../../packages/broadcast
   call_core:
     path: ../../packages/call_core
   call_media_adapter:
@@ -77,6 +79,11 @@ dev_dependencies:
   # drives the app's periodic Timer AND (via package:clock's zone clock)
   # the messenger's retryAfter window without real waiting.
   fake_async: ^1.3.1
+
+  # The broadcast publisher and reader take their time from package:clock's
+  # zone clock, so the wiring test pins an instant with Clock.fixed instead
+  # of depending on when the suite happens to run.
+  clock: ^1.1.1
 
   # Direct dev-dep (same constraint as media_webrtc_flutter): the E2E
   # support code probes `getUserMedia` directly to report the media mode.
