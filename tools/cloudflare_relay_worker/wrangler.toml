@@ -8,8 +8,19 @@ compatibility_date = "2026-07-01"
 name = "RELAY_SESSION"
 class_name = "RelaySession"
 
+# One shard of the broadcast archive: either an author's descriptors or a
+# hash prefix's objects. Sharding by name means an object is found from its
+# own hash, with no index to keep and nothing central to block.
+[[durable_objects.bindings]]
+name = "BROADCAST_ARCHIVE"
+class_name = "BroadcastArchiveObject"
+
 # SQLite-backed Durable Objects are the class available on the free plan;
 # the older key-value backend is paid-only.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RelaySession"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["BroadcastArchiveObject"]
