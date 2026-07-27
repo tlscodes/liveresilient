@@ -22,7 +22,13 @@ run_target() {
 
   local out passed
   out="$(cd "$dir" && $runner test 2>&1)"
-  passed="$(grep -oE '\+[0-9]+' <<<"$out" | tail -1 | tr -d '+')"
+  # Read the count off the runner's own summary line, not off any +N in
+  # the stream. A test's stdout can print something matching +N, and the
+  # progress line the runner rewrites in place is not reliably last —
+  # taking either the last or the largest match miscounts in both
+  # directions.
+  passed="$(grep -oE '\+[0-9]+[^:]*: (All tests passed|Some tests failed)' \
+    <<<"$out" | grep -oE '\+[0-9]+' | tail -1 | tr -d '+')"
   passed="${passed:-0}"
   if grep -qE "All tests passed|No tests ran" <<<"$out"; then
     printf 'OK   %-28s %5s passed\n' "$name" "$passed"

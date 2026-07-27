@@ -1,5 +1,9 @@
 # Border relay (Cloudflare Worker)
 
+**Deployed at `voice-call-relay.tlscodes-com.workers.dev`** — the app's
+default for both WAN fallback lanes.
+
+
 Terminates the WSS and HTTP long-poll fallback lanes. It pairs the two
 peers of a call session and forwards bytes between them verbatim — no
 parsing, no reframing, no reordering. The gRPC length-prefixed framing the
@@ -23,22 +27,68 @@ frame reader splits them exactly as it would off a socket.
 
 ## Deploy
 
+Redeploying after a change to `src/worker.js` or `wrangler.toml`:
+
 ```
-npm install -g wrangler
-wrangler login
 cd tools/cloudflare_relay_worker
-wrangler deploy
+npx wrangler login      # once per machine
+npx wrangler deploy
 ```
 
-Then point the app at the deployed hostname:
+Check the bundle without deploying — the same command CI runs, and it
+needs no Cloudflare credentials:
 
 ```
-export FALLBACK_WS_ENDPOINT="wss://voice-call-relay.<subdomain>.workers.dev/ws?session=<id>&role=a"
-export FALLBACK_HTTP_ENDPOINT="https://voice-call-relay.<subdomain>.workers.dev/http?session=<id>&role=a"
+npx wrangler deploy --dry-run --outdir=dist
+```
+
+Tail the live logs, and confirm the deployment answers:
+
+```
+npx wrangler tail
+curl https://voice-call-relay.tlscodes-com.workers.dev/health
+```
+
+## Pointing the app at a relay
+
+The app already defaults to the deployed host, keying the relay session on
+the call id and the role on the call role. To use a different deployment,
+name its host and let both lane URIs be derived:
+
+```
+export FALLBACK_RELAY_HOST="my-relay.<subdomain>.workers.dev"
+```
+
+Or override one lane with a full URI:
+
+```
+export FALLBACK_WS_ENDPOINT="wss://my-relay.<subdomain>.workers.dev/ws?session=<id>&role=a"
+export FALLBACK_HTTP_ENDPOINT="https://my-relay.<subdomain>.workers.dev/http?session=<id>&role=a"
 ```
 
 `ResilientLaneEndpoints.cloudflareWorker` builds both URIs from the
 hostname, session and role, so an app does not assemble them by hand.
+
+## Tests
+
+The protocol is covered against a loopback server implementing these same
+routes — no test reaches the deployed worker, which would measure
+Cloudflare's uptime rather than this code:
+
+```
+cd packages/connection_orchestrator
+dart test test/cloudflare_relay_protocol_test.dart
+```
+
+The failover behaviour that depends on it:
+
+```
+cd apps/reference_app
+flutter test test/fallback_lane_failover_e2e_test.dart
+```
+
+CI additionally runs `node --check` on the source and the dry-run deploy
+above, so a broken bundle or an invalid `wrangler.toml` fails the build.
 
 ## What this does and does not give you
 
