@@ -359,7 +359,15 @@ class ConnectionFabric {
     var drained = 0;
     final ranked = _ranked();
     if (ranked.isNotEmpty) {
-      drained = await _drainThrough(ranked.first);
+      // Best lane first, then the rest — the same sequential failover
+      // [deliver] uses. Draining only through `ranked.first` left the
+      // backlog parked whenever the top-scoring lane was the one that had
+      // just died: its score decays over several failures, so it can still
+      // rank first while delivering nothing.
+      for (final lane in ranked) {
+        drained += await _drainThrough(lane);
+        if (_queue.pendingCount == 0) break;
+      }
       // Self-resume: in-flight chunked transfers push their remainder
       // through the recovered lane with no caller involvement.
       for (final transfer in [..._activeTransfers.values]) {

@@ -235,4 +235,84 @@ void main() {
       },
     );
   });
+
+  group('ResilientLaneEndpoints.fromEnvironment', () {
+    test('reads all three WAN lanes from the environment', () {
+      final endpoints = ResilientLaneEndpoints.fromEnvironment(const {
+        ResilientLaneEndpoints.udpEnvVar: 'relay.example.net:7001',
+        ResilientLaneEndpoints.wsEnvVar: 'wss://relay.example.net/ws',
+        ResilientLaneEndpoints.httpEnvVar: 'https://relay.example.net/poll',
+      });
+
+      expect(endpoints.udpRemote!.host, 'relay.example.net');
+      expect(endpoints.udpRemote!.port, 7001);
+      expect(endpoints.relayUri, Uri.parse('wss://relay.example.net/ws'));
+      expect(endpoints.longPollUri, Uri.parse('https://relay.example.net/poll'));
+      expect(endpoints.hasAnyLane, isTrue);
+    });
+
+    test('an absent or blank variable falls back to the given default', () {
+      final defaults = ResilientLaneEndpoints(
+        relayUri: Uri.parse('wss://default.example.net/ws'),
+      );
+      final endpoints = ResilientLaneEndpoints.fromEnvironment(
+        const {ResilientLaneEndpoints.wsEnvVar: '   '},
+        defaults: defaults,
+      );
+
+      expect(endpoints.relayUri, Uri.parse('wss://default.example.net/ws'));
+      expect(endpoints.udpRemote, isNull);
+      expect(endpoints.longPollUri, isNull);
+    });
+
+    test('an empty environment configures nothing at all', () {
+      final endpoints = ResilientLaneEndpoints.fromEnvironment(const {});
+      expect(endpoints.hasAnyLane, isFalse);
+    });
+
+    test('mesh callbacks pass through from the defaults', () {
+      Future<SendResult> send(List<int> _) async =>
+          const SendResult(SendStatus.ok);
+      final endpoints = ResilientLaneEndpoints.fromEnvironment(
+        const {},
+        defaults: ResilientLaneEndpoints(meshSender: send),
+      );
+      expect(endpoints.meshSender, same(send));
+      expect(endpoints.hasAnyLane, isTrue);
+    });
+
+    test('a malformed endpoint throws instead of being dropped', () {
+      // Silently ignoring a bad value ships a build with no fallback path
+      // and no sign that anything is wrong.
+      expect(
+        () => ResilientLaneEndpoints.fromEnvironment(
+          const {ResilientLaneEndpoints.udpEnvVar: 'relay.example.net'},
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => ResilientLaneEndpoints.fromEnvironment(
+          const {ResilientLaneEndpoints.udpEnvVar: 'relay.example.net:99999'},
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => ResilientLaneEndpoints.fromEnvironment(
+          const {ResilientLaneEndpoints.wsEnvVar: 'not-a-uri'},
+        ),
+        throwsFormatException,
+      );
+    });
+
+    test('the development echo set is opt-in, never a default', () {
+      // These are liveness toys, not relays: a lane pointed at them looks
+      // reachable while delivering nothing to the peer.
+      expect(ResilientLaneEndpoints.fromEnvironment(const {}).hasAnyLane,
+          isFalse);
+      expect(
+        ResilientLaneEndpoints.developmentEchoEndpoints.hasAnyLane,
+        isTrue,
+      );
+    });
+  });
 }

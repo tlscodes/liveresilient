@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 void main() {
   test('budget table is strictly decreasing best-to-last', () {
     final values = [
-      for (final r in SurvivalRung.values) survivalRungMinBps[r]!
+      for (final r in OperatingRung.values) operatingRungMinBps[r]!,
     ];
     for (var i = 1; i < values.length; i++) {
       expect(values[i], lessThan(values[i - 1]));
@@ -22,21 +22,21 @@ void main() {
     for (final bps in [500000, 100000, 20000, 5000, 1500, 800, 200, 0]) {
       expect(() => rungForCapacity(bps), returnsNormally);
     }
-    expect(rungForCapacity(200), SurvivalRung.textOnly);
-    expect(rungForCapacity(800), SurvivalRung.voiceNotes);
-    expect(rungForCapacity(1000), SurvivalRung.tokenVoiceRow0);
-    expect(rungForCapacity(1600), SurvivalRung.tokenVoiceFull);
-    expect(rungForCapacity(0), SurvivalRung.textOnly);
+    expect(rungForCapacity(200), OperatingRung.textOnly);
+    expect(rungForCapacity(800), OperatingRung.voiceNotes);
+    expect(rungForCapacity(1000), OperatingRung.tokenVoiceRow0);
+    expect(rungForCapacity(1600), OperatingRung.tokenVoiceFull);
+    expect(rungForCapacity(0), OperatingRung.textOnly);
   });
 
   test('gradual death 500kbps -> 200bps: rung always active, transitions '
       'pass through every intermediate step in order', () {
-    final ladder = SurvivalLadder();
-    final seen = <SurvivalRung>[ladder.current];
+    final ladder = OperatingLadder();
+    final seen = <OperatingRung>[ladder.current];
     for (final bps in [400000, 120000, 20000, 5000, 1500, 1000, 500, 200]) {
       seen.add(ladder.report(bps));
     }
-    expect(seen.last, SurvivalRung.textOnly);
+    expect(seen.last, OperatingRung.textOnly);
     // The walked path covers every rung between start and floor, in order.
     final indices = [for (final r in seen) r.index];
     for (var i = 1; i < indices.length; i++) {
@@ -47,25 +47,25 @@ void main() {
 
   test('sudden total collapse still walks through each rung (layers can '
       'react), ending at textOnly', () {
-    final ladder = SurvivalLadder();
+    final ladder = OperatingLadder();
     ladder.report(0);
-    expect(ladder.current, SurvivalRung.textOnly);
+    expect(ladder.current, OperatingRung.textOnly);
     // 7 downward steps happened, not one jump.
-    expect(ladder.transitions, SurvivalRung.values.length - 1);
+    expect(ladder.transitions, OperatingRung.values.length - 1);
   });
 
   test('at 200 bps the conversation continues in textOnly; at 1000 bps '
       'the token-voice row0 rung carries LIVE voice', () {
-    final ladder = SurvivalLadder();
+    final ladder = OperatingLadder();
     ladder.report(1000);
-    expect(ladder.current, SurvivalRung.tokenVoiceRow0);
+    expect(ladder.current, OperatingRung.tokenVoiceRow0);
     ladder.report(200);
-    expect(ladder.current, SurvivalRung.textOnly);
+    expect(ladder.current, OperatingRung.textOnly);
   });
 
   test('recovery climbs exactly one rung per sustained window, with '
       'headroom, and never flaps at a boundary', () {
-    final ladder = SurvivalLadder(climbAfter: 3);
+    final ladder = OperatingLadder(climbAfter: 3);
     ladder.report(200); // collapse to textOnly
     final t0 = ladder.transitions;
 
@@ -73,40 +73,40 @@ void main() {
     for (var i = 0; i < 10; i++) {
       ladder.report(300);
     }
-    expect(ladder.current, SurvivalRung.textOnly);
+    expect(ladder.current, OperatingRung.textOnly);
 
     // solid 1 kbps: climb to voiceNotes after 3 reports, then row0 …
     for (var i = 0; i < 3; i++) {
       ladder.report(1200);
     }
-    expect(ladder.current, SurvivalRung.voiceNotes);
+    expect(ladder.current, OperatingRung.voiceNotes);
     for (var i = 0; i < 3; i++) {
       ladder.report(1200);
     }
-    expect(ladder.current, SurvivalRung.tokenVoiceRow0);
+    expect(ladder.current, OperatingRung.tokenVoiceRow0);
     // …but 1200 bps has no headroom for tokenVoiceFull (needs 2000):
     for (var i = 0; i < 10; i++) {
       ladder.report(1200);
     }
-    expect(ladder.current, SurvivalRung.tokenVoiceRow0);
+    expect(ladder.current, OperatingRung.tokenVoiceRow0);
     expect(ladder.transitions - t0, 2, reason: 'no flapping');
 
     // full recovery climbs one rung per window up to fullVideo
     for (var i = 0; i < 30; i++) {
       ladder.report(1000000);
     }
-    expect(ladder.current, SurvivalRung.fullVideo);
+    expect(ladder.current, OperatingRung.fullVideo);
   });
 
   test('flapping capacity around a boundary does not oscillate rungs', () {
-    final ladder = SurvivalLadder(climbAfter: 3);
+    final ladder = OperatingLadder(climbAfter: 3);
     ladder.report(900); // tokenVoiceRow0
     final before = ladder.transitions;
     // alternate 900/1900: 1900 has no 1.25x headroom for full (2000)
     for (var i = 0; i < 20; i++) {
       ladder.report(i.isEven ? 1900 : 900);
     }
-    expect(ladder.current, SurvivalRung.tokenVoiceRow0);
+    expect(ladder.current, OperatingRung.tokenVoiceRow0);
     expect(ladder.transitions, before, reason: 'zero extra transitions');
   });
 }

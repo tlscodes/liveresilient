@@ -73,6 +73,85 @@ class ResilientLaneEndpoints {
       relayUri != null ||
       longPollUri != null ||
       meshSender != null;
+
+  /// Public endpoints usable for development, and ONLY for development.
+  ///
+  /// These prove the lane machinery comes up, connects, and reports health
+  /// against something real. They are not relays and cannot carry a call:
+  /// the STUN server replies to STUN binding requests and drops anything
+  /// else, and the two echo services return your own bytes to you rather
+  /// than forwarding them to the peer. A lane pointed here will look
+  /// reachable while delivering nothing, which is worse for the fabric
+  /// than having no lane at all — the ranker will choose it over a
+  /// degraded but working path.
+  ///
+  /// So this is opt-in and never a default. Production needs real border
+  /// relays; see `docs/MODEL_ROUTING.md`'s sibling deployment notes.
+  static final ResilientLaneEndpoints developmentEchoEndpoints =
+      ResilientLaneEndpoints(
+    udpRemote: const HostPort(host: 'stun.l.google.com', port: 19302),
+    relayUri: Uri.parse('wss://ws.postman-echo.com/raw'),
+    longPollUri: Uri.parse('https://echo.free.beeceptor.com'),
+  );
+
+  /// Environment variable names, read by [fromEnvironment].
+  static const String udpEnvVar = 'FALLBACK_UDP_ENDPOINT';
+  static const String wsEnvVar = 'FALLBACK_WS_ENDPOINT';
+  static const String httpEnvVar = 'FALLBACK_HTTP_ENDPOINT';
+
+  /// Reads the three WAN lanes from [environment], falling back to
+  /// [defaults] for any variable that is absent or blank.
+  ///
+  /// The UDP variable is `host:port`; the other two are absolute URIs. A
+  /// value that will not parse is a configuration error and throws rather
+  /// than being dropped — a silently ignored endpoint is how a build ends
+  /// up shipping with no fallback path at all.
+  ///
+  /// Mesh fields are not environment-driven: they are callbacks into the
+  /// platform's link radio, so they come from [defaults] or not at all.
+  factory ResilientLaneEndpoints.fromEnvironment(
+    Map<String, String> environment, {
+    ResilientLaneEndpoints defaults = const ResilientLaneEndpoints(),
+  }) {
+    String? read(String name) {
+      final value = environment[name]?.trim();
+      return (value == null || value.isEmpty) ? null : value;
+    }
+
+    final udp = read(udpEnvVar);
+    final ws = read(wsEnvVar);
+    final http = read(httpEnvVar);
+
+    return ResilientLaneEndpoints(
+      udpRemote: udp == null ? defaults.udpRemote : _parseHostPort(udp),
+      relayUri: ws == null ? defaults.relayUri : _parseUri(wsEnvVar, ws),
+      longPollUri:
+          http == null ? defaults.longPollUri : _parseUri(httpEnvVar, http),
+      meshSender: defaults.meshSender,
+      meshProbe: defaults.meshProbe,
+      meshConsent: defaults.meshConsent,
+    );
+  }
+
+  static HostPort _parseHostPort(String value) {
+    final colon = value.lastIndexOf(':');
+    final port = colon < 0 ? null : int.tryParse(value.substring(colon + 1));
+    if (colon <= 0 || port == null || port < 1 || port > 65535) {
+      throw FormatException(
+        '$udpEnvVar must be host:port with a port in 1-65535',
+        value,
+      );
+    }
+    return HostPort(host: value.substring(0, colon), port: port);
+  }
+
+  static Uri _parseUri(String name, String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.isAbsolute || uri.host.isEmpty) {
+      throw FormatException('$name must be an absolute URI', value);
+    }
+    return uri;
+  }
 }
 
 /// Registration helper for the four fallback lanes.
