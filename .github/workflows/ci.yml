@@ -118,6 +118,39 @@ jobs:
           fi
           echo "no obvious secrets found"
 
+  relay:
+    name: Border relay — worker bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Catches a syntax error without needing wrangler at all, so a broken
+      # worker fails fast and for an obvious reason.
+      - name: Parse check
+        run: node --check tools/cloudflare_relay_worker/src/worker.js
+
+      # The real gate: wrangler builds the bundle and validates
+      # wrangler.toml (bindings, migrations, compatibility date) exactly as
+      # a deploy would. --dry-run needs no Cloudflare credentials, so a
+      # fork's pull request runs it too.
+      - name: Build the worker (dry-run deploy)
+        working-directory: tools/cloudflare_relay_worker
+        run: npx --yes wrangler@latest deploy --dry-run --outdir=dist
+
+      - name: Relay summary
+        if: always()
+        run: |
+          {
+            echo "## Border relay — ${{ job.status }}"
+            echo "- node --check on the worker source"
+            echo "- wrangler deploy --dry-run (bundle + wrangler.toml)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   deps:
     name: Dependency audit — OSV
     runs-on: ubuntu-latest

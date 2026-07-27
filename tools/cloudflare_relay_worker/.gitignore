@@ -1,0 +1,4 @@
+# wrangler build output (`deploy --dry-run --outdir=dist`) and its caches
+dist/
+.wrangler/
+node_modules/
