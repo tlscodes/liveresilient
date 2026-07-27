@@ -54,25 +54,30 @@ void main() {
     await fabric.dispose();
   });
 
-  test('an attachment rides the fabric as a resumable chunked transfer',
-      () async {
-    final channel = _OkChannel();
-    final fabric =
-        ConnectionFabric(fallbackQueue: DtnBundleQueue(), nowMs: () => 0)
-          ..registerLane(
-            channel,
-            LaneProfile(id: channel.name, kind: LaneKind.internet),
-          );
-    final bigBytes = List<int>.filled(48 * 1024, 7);
-    final transfer = await fabric.deliverChunked(
-      bigBytes,
-      transferId: 'photo-1',
-    );
+  test(
+    'an attachment rides the fabric as a resumable chunked transfer',
+    () async {
+      final channel = _OkChannel();
+      final fabric =
+          ConnectionFabric(fallbackQueue: DtnBundleQueue(), nowMs: () => 0)
+            ..registerLane(
+              channel,
+              LaneProfile(id: channel.name, kind: LaneKind.internet),
+            );
+      final bigBytes = List<int>.filled(48 * 1024, 7);
+      final transfer = await fabric.deliverChunked(
+        bigBytes,
+        transferId: 'photo-1',
+      );
 
-    expect(transfer.complete, isTrue);
-    expect(transfer.totalChunks, greaterThan(1), reason: 'actually chunked');
-    expect(channel.sends, greaterThan(transfer.totalChunks),
-        reason: 'data + parity chunks all carried');
-    await fabric.dispose();
-  });
+      expect(transfer.complete, isTrue);
+      expect(transfer.totalChunks, greaterThan(1), reason: 'actually chunked');
+      expect(
+        channel.sends,
+        greaterThan(transfer.totalChunks),
+        reason: 'data + parity chunks all carried',
+      );
+      await fabric.dispose();
+    },
+  );
 }

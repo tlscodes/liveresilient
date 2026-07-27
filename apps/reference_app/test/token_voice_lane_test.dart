@@ -8,7 +8,7 @@ import 'dart:async';
 import 'package:call_core/call_core.dart';
 import 'package:device_link/device_link.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:reference_app/src/survival_mode_driver.dart';
+import 'package:reference_app/src/degraded_mode_driver.dart';
 import 'package:reference_app/src/token_voice_lane.dart';
 
 class _FakeCall {
@@ -31,12 +31,12 @@ class _FakeCall {
   }
 
   DegradableCallHandle get handle => DegradableCallHandle(
-        states: _states.stream,
-        stateOf: () => _state,
-        enterDegradedMode: (m) async => emitPhase(CallPhase.degraded,
-            degradedMode: m),
-        exitDegradedMode: () async => emitPhase(CallPhase.connected),
-      );
+    states: _states.stream,
+    stateOf: () => _state,
+    enterDegradedMode: (m) async =>
+        emitPhase(CallPhase.degraded, degradedMode: m),
+    exitDegradedMode: () async => emitPhase(CallPhase.connected),
+  );
 }
 
 void main() {
@@ -62,8 +62,7 @@ void main() {
       speaker: played.add,
     );
 
-    call.emitPhase(CallPhase.degraded,
-        degradedMode: DegradedMode.tokenVoice);
+    call.emitPhase(CallPhase.degraded, degradedMode: DegradedMode.tokenVoice);
     await Future<void>.delayed(Duration.zero);
     expect(near.active, isTrue);
     expect(far.active, isTrue);
@@ -84,8 +83,11 @@ void main() {
     }, nowMs: 0);
     expect(far.blocksPlayed, 2);
     expect(played, hasLength(2));
-    expect(played.first.length, 160 * 5,
-        reason: 'frame-aligned PCM at the speaker');
+    expect(
+      played.first.length,
+      160 * 5,
+      reason: 'frame-aligned PCM at the speaker',
+    );
 
     // leaving the mode stops the lane and clears buffers
     call.emitPhase(CallPhase.connected);
@@ -100,20 +102,21 @@ void main() {
     await mic.close();
   });
 
-  test('codec not installed: lane refuses to activate (ladder guard)',
-      () async {
-    final call = _FakeCall();
-    final lane = TokenVoiceLane(
-      call: call.handle,
-      codec: SimulatedVoiceCodecBinding(),
-      queue: DtnBundleQueue(),
-      microphone: const Stream.empty(),
-      speaker: (_) {},
-    );
-    call.emitPhase(CallPhase.degraded,
-        degradedMode: DegradedMode.tokenVoice);
-    await Future<void>.delayed(Duration.zero);
-    expect(lane.active, isFalse);
-    await lane.dispose();
-  });
+  test(
+    'codec not installed: lane refuses to activate (ladder guard)',
+    () async {
+      final call = _FakeCall();
+      final lane = TokenVoiceLane(
+        call: call.handle,
+        codec: SimulatedVoiceCodecBinding(),
+        queue: DtnBundleQueue(),
+        microphone: const Stream.empty(),
+        speaker: (_) {},
+      );
+      call.emitPhase(CallPhase.degraded, degradedMode: DegradedMode.tokenVoice);
+      await Future<void>.delayed(Duration.zero);
+      expect(lane.active, isFalse);
+      await lane.dispose();
+    },
+  );
 }

@@ -1,5 +1,5 @@
-/// Drives the live call from the survival ladder: capacity reports walk
-/// [SurvivalLadder]; rungs at or below the real-time-media floor map to
+/// Drives the live call from the operating ladder: capacity reports walk
+/// [OperatingLadder]; rungs at or below the real-time-media floor map to
 /// the controller's first-class degraded modes, so the call NEVER drops
 /// — it only gets thinner, and climbs back when the link recovers.
 ///
@@ -17,38 +17,35 @@ import 'dart:async';
 
 import 'package:call_core/call_core.dart';
 
-import 'survival_mode_driver.dart' show DegradableCallHandle;
+import 'degraded_mode_driver.dart' show DegradableCallHandle;
 
 class CapacityLadderDriver {
   CapacityLadderDriver({
     required this.call,
     required Stream<int> capacityBps,
-    SurvivalLadder? ladder,
-  }) : ladder = ladder ?? SurvivalLadder() {
+    OperatingLadder? ladder,
+  }) : ladder = ladder ?? OperatingLadder() {
     _sub = capacityBps.listen(_onCapacity);
   }
 
   final DegradableCallHandle call;
-  final SurvivalLadder ladder;
+  final OperatingLadder ladder;
   late final StreamSubscription<int> _sub;
   bool _disposed = false;
 
   /// Mode transitions applied (telemetry / tests).
   int modeChanges = 0;
 
-  static DegradedMode? _modeFor(SurvivalRung rung) => switch (rung) {
-        SurvivalRung.fullVideo ||
-        SurvivalRung.reducedVideo ||
-        SurvivalRung.audioOnly =>
-          null,
-        SurvivalRung.lowRateVoice => DegradedMode.lowRateVoice,
-        SurvivalRung.tokenVoiceFull ||
-        SurvivalRung.tokenVoiceRow0 =>
-          DegradedMode.tokenVoice,
-        SurvivalRung.voiceNotes ||
-        SurvivalRung.textOnly =>
-          DegradedMode.voiceNotes,
-      };
+  static DegradedMode? _modeFor(OperatingRung rung) => switch (rung) {
+    OperatingRung.fullVideo ||
+    OperatingRung.reducedVideo ||
+    OperatingRung.audioOnly => null,
+    OperatingRung.lowRateVoice => DegradedMode.lowRateVoice,
+    OperatingRung.tokenVoiceFull ||
+    OperatingRung.tokenVoiceRow0 => DegradedMode.tokenVoice,
+    OperatingRung.voiceNotes ||
+    OperatingRung.textOnly => DegradedMode.voiceNotes,
+  };
 
   void _onCapacity(int bps) {
     if (_disposed) return;

@@ -142,7 +142,8 @@ void main() {
   test('repairs that do not help trigger judged restraint (backoff)', () async {
     final lane = _ToggleChannel('net');
     final stack = await boot(lane);
-    lane.health.availability = 0.1; // stays below the switch threshold for the whole test
+    lane.health.availability =
+        0.1; // stays below the switch threshold for the whole test
     await stack.fabric.refresh();
     await Future<void>.delayed(Duration.zero);
     // The director's own healing refresh publishes further snapshots that

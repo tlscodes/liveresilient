@@ -10,7 +10,7 @@ import 'package:call_core/call_core.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/capacity_ladder_driver.dart';
-import 'package:reference_app/src/survival_mode_driver.dart';
+import 'package:reference_app/src/degraded_mode_driver.dart';
 
 class _FakeCall {
   final _states = StreamController<CallState>.broadcast(sync: true);
@@ -44,11 +44,11 @@ class _FakeCall {
   }
 
   DegradableCallHandle get handle => DegradableCallHandle(
-        states: _states.stream,
-        stateOf: () => _state,
-        enterDegradedMode: enterDegradedMode,
-        exitDegradedMode: exitDegradedMode,
-      );
+    states: _states.stream,
+    stateOf: () => _state,
+    enterDegradedMode: enterDegradedMode,
+    exitDegradedMode: exitDegradedMode,
+  );
 }
 
 void main() {
@@ -60,7 +60,7 @@ void main() {
       final driver = CapacityLadderDriver(
         call: call.handle,
         capacityBps: capacity.stream,
-        ladder: SurvivalLadder(climbAfter: 2),
+        ladder: OperatingLadder(climbAfter: 2),
       );
       call.emitPhase(CallPhase.connected);
       async.flushMicrotasks();
@@ -77,8 +77,11 @@ void main() {
       expect(call.modeLog.last, DegradedMode.tokenVoice);
       capacity.add(900); // row0 sub-rung: same call mode, codec knob
       async.flushMicrotasks();
-      expect(call.modeLog.last, DegradedMode.tokenVoice,
-          reason: 'row0 stays tokenVoice — no extra user-visible mode');
+      expect(
+        call.modeLog.last,
+        DegradedMode.tokenVoice,
+        reason: 'row0 stays tokenVoice — no extra user-visible mode',
+      );
       capacity.add(200);
       async.flushMicrotasks();
       expect(call.modeLog.last, DegradedMode.voiceNotes);

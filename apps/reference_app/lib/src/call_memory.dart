@@ -1,4 +1,4 @@
-/// Call memory — the third survival rung: the last seconds of outgoing
+/// Call memory — the third operating rung: the last seconds of outgoing
 /// audio before a drop are kept in a bounded ring buffer and, after the
 /// reconnect lands, replayed to the peer over the call's own reliable
 /// data channel — so the sentence that was cut mid-word arrives anyway.
@@ -74,7 +74,7 @@ class CallMemory {
   }
 
   /// Built lazily over the call's data channel (same seam as the
-  /// survival driver's voice notes).
+  /// degraded-mode driver's voice notes).
   final Future<ReliableMessenger> Function() messenger;
 
   final AudioRingBuffer _buffer;

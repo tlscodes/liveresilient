@@ -22,7 +22,7 @@ import 'package:signaling/signaling.dart';
 import 'call_memory.dart';
 import 'media_adaptation_driver.dart';
 import 'path_health_monitor.dart';
-import 'survival_mode_driver.dart';
+import 'degraded_mode_driver.dart';
 import 'ws_connector.dart';
 
 /// One live call session plus the teardown of everything it owns.
@@ -31,7 +31,7 @@ class CallSessionHandle {
     required this.controller,
     required this.dispose,
     this.openChatPort,
-    this.survivalFallbackQueue,
+    this.dtnFallbackQueue,
     this.connectionFabric,
   });
 
@@ -43,11 +43,11 @@ class CallSessionHandle {
   /// for the UI. Null on session builds that skip production wiring.
   final ConnectionFabric? connectionFabric;
 
-  /// The durable (or overridden) queue backing survival-mode's fallback
-  /// store, if one was built — exposed for tests to prove restart survival
+  /// The durable (or overridden) queue backing degraded-mode's fallback
+  /// store, if one was built — exposed for tests to prove the queue survives a restart
   /// without reaching into private wiring.
   @visibleForTesting
-  final DtnBundleQueue? survivalFallbackQueue;
+  final DtnBundleQueue? dtnFallbackQueue;
 
   /// Opens the messaging layer's transport over THIS call's negotiated data
   /// channel (frames ride the call's existing DTLS transport). Both peers
@@ -81,7 +81,7 @@ CallSessionHandle buildWebRtcCallSession({
   ClipRecorder? recordVoiceClip,
   AudioFrameTap? audioFrameTap,
 
-  /// Directory the survival-mode fallback bundle log lives in. Injectable
+  /// Directory the degraded-mode fallback bundle log lives in. Injectable
   /// so tests control it (and the app can later supply its documents dir)
   /// without this file taking a `path_provider` dependency. Defaults to a
   /// per-callId folder under the system temp dir.
@@ -93,6 +93,13 @@ CallSessionHandle buildWebRtcCallSession({
   /// `DurableBundleStore`-backed queue keyed on [callId].
   DtnBundleQueue? fallbackBundleQueue,
   bool useDurableFallbackStore = true,
+
+  /// Endpoints for the resilient fallback stack (direct UDP, WebSocket
+  /// relay, HTTP long-poll, local mesh). Each configured lane is built and
+  /// registered with the session's fabric alongside the live WebRTC path,
+  /// so the fabric can fail over when that path dies. Lanes left
+  /// unconfigured are simply absent — the call still runs on WebRTC alone.
+  ResilientLaneEndpoints fallbackLanes = const ResilientLaneEndpoints(),
 }) {
   final client = SignalingClient(
     endpoint: endpoint,
@@ -154,7 +161,7 @@ CallSessionHandle buildWebRtcCallSession({
   // its first-class degraded phase instead of ever failing; voice-note
   // clips ride the chat outbox. The messenger is created lazily over this
   // call's own data channel and reused for every clip.
-  ReliableMessenger? survivalMessenger;
+  ReliableMessenger? storeAndForwardMessenger;
   // Durable fallback: clips offered while the call has no live data channel
   // survive a process restart too, backed by a per-call log file on disk.
   final resolvedFallbackQueue =
@@ -163,14 +170,14 @@ CallSessionHandle buildWebRtcCallSession({
           ? DtnBundleQueue(
               store: DurableBundleStore.open(
                 File(
-                  '${(storageDirFactory ?? _defaultSurvivalStorageDir)().path}/'
+                  '${(storageDirFactory ?? _defaultStoreAndForwardDir)().path}/'
                   'survival_$callId.jsonl',
                 ),
               ),
             )
           : null);
   // Connectivity fabric: the one owner of every lane this session has.
-  // Today it carries the live media path and shares the survival fallback
+  // Today it carries the live media path and shares the store-and-forward fallback
   // queue, so `snapshot.pendingBundles` and `FabricMode` give the UI a
   // single connectivity truth; new lanes (local peer, carrier) register
   // here without touching the call pipeline.
@@ -182,8 +189,12 @@ CallSessionHandle buildWebRtcCallSession({
     WebRtcPathChannel(readCounters: () async => livePort?.readStatsCounters()),
     const LaneProfile(id: 'webrtc-media', kind: LaneKind.internet),
   );
+  // The fallback stack, ranked behind the live media path by its own cost
+  // ranks. Registered here rather than at first failure so the fabric has
+  // health history on each lane before it has to choose one.
+  ResilientFallbackLanes.buildAndRegister(fabric, fallbackLanes);
   fabric.onUnhealthy(() => controller.requestRecovery());
-  final survivalDriver = SurvivalModeDriver(
+  final degradedModeDriver = DegradedModeDriver(
     call: DegradableCallHandle.of(controller),
     adaptationDecisions: adaptationDriver.decisions,
     // Foresight feed: the trend watch on the live media lane. Predicting
@@ -199,19 +210,19 @@ CallSessionHandle buildWebRtcCallSession({
     fallbackStore: resolvedFallbackQueue,
     messenger: recordVoiceClip == null
         ? null
-        : () async => survivalMessenger ??= ReliableMessenger(
+        : () async => storeAndForwardMessenger ??= ReliableMessenger(
             MediaChannelDataPort(await media.openDataChannel()),
             peerId: '${role.name}-survival',
           ),
   );
-  // NOTE: the survival driver and call memory share survivalMessenger via
+  // NOTE: the degraded-mode driver and call memory share storeAndForwardMessenger via
   // the ??= factory, so at most one messenger rides the data channel.
   // Call memory: the outgoing-audio tail buffered before a drop is
   // frozen at the reconnect edge and replayed to the peer once the call
   // is live again — the cut-off sentence still arrives. Active only when
   // the platform provides a frame tap.
-  Future<ReliableMessenger> survivalMessengerFactory() async =>
-      survivalMessenger ??= ReliableMessenger(
+  Future<ReliableMessenger> storeAndForwardMessengerFactory() async =>
+      storeAndForwardMessenger ??= ReliableMessenger(
         MediaChannelDataPort(await media.openDataChannel()),
         peerId: '${role.name}-survival',
       );
@@ -219,7 +230,7 @@ CallSessionHandle buildWebRtcCallSession({
       ? null
       : CallMemory(
           states: controller.states,
-          messenger: survivalMessengerFactory,
+          messenger: storeAndForwardMessengerFactory,
           tap: audioFrameTap,
         );
   final phaseSubscription = controller.states.listen((state) {
@@ -237,15 +248,15 @@ CallSessionHandle buildWebRtcCallSession({
   });
   return CallSessionHandle(
     controller: controller,
-    survivalFallbackQueue: resolvedFallbackQueue,
+    dtnFallbackQueue: resolvedFallbackQueue,
     connectionFabric: fabric,
     openChatPort: () async =>
         MediaChannelDataPort(await media.openDataChannel()),
     dispose: () async {
       await phaseSubscription.cancel();
       await callMemory?.dispose();
-      await survivalDriver.dispose();
-      await survivalMessenger?.close();
+      await degradedModeDriver.dispose();
+      await storeAndForwardMessenger?.close();
       await pathMonitor.dispose();
       await fabric.dispose();
       await adaptationDriver.dispose();
@@ -255,10 +266,10 @@ CallSessionHandle buildWebRtcCallSession({
   );
 }
 
-/// Default location for the survival-mode fallback bundle log: a stable
+/// Default location for the degraded-mode fallback bundle log: a stable
 /// subfolder under the system temp dir (created if absent) so restarts on
 /// the same device find the same file without a `path_provider` dependency.
-Directory _defaultSurvivalStorageDir() {
+Directory _defaultStoreAndForwardDir() {
   final dir = Directory('${Directory.systemTemp.path}/voice_call_kit_survival');
   if (!dir.existsSync()) {
     dir.createSync(recursive: true);

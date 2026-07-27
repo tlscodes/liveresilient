@@ -38,7 +38,7 @@ String formatBytes(int sizeBytes) {
   return '${(kb / 1024).toStringAsFixed(1)} MB';
 }
 
-/// Whether [attachment] is playable voice audio (a survival-mode voice
+/// Whether [attachment] is playable voice audio (a degraded-mode voice
 /// note or a recovered gap replay).
 bool isVoiceAttachment(Attachment attachment) =>
     attachment.contentType.startsWith('audio/');

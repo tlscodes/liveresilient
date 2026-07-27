@@ -33,9 +33,83 @@ class ResilientLaneIds {
   static const String localMesh = 'resilient.mesh';
 }
 
+/// Where each fallback lane should point.
+///
+/// Every field is optional and a null field simply means "this device has
+/// no such lane right now" — an app with only a relay URL configured gets
+/// a relay lane and nothing else, rather than lanes aimed at nowhere.
+/// [ResilientFallbackLanes.buildAndRegister] turns this into live lanes.
+class ResilientLaneEndpoints {
+  const ResilientLaneEndpoints({
+    this.udpRemote,
+    this.relayUri,
+    this.longPollUri,
+    this.meshSender,
+    this.meshProbe,
+    this.meshConsent,
+  });
+
+  /// Media endpoint for the direct UDP lane.
+  final HostPort? udpRemote;
+
+  /// WebSocket relay endpoint, one hop from the media endpoint.
+  final Uri? relayUri;
+
+  /// HTTP endpoint for the long-poll lane of last resort on the WAN.
+  final Uri? longPollUri;
+
+  /// Hands a payload to a nearby peer over the platform's link radio.
+  final Future<SendResult> Function(List<int> payload)? meshSender;
+
+  /// Reports whether a peer is currently in range.
+  final Future<bool> Function()? meshProbe;
+
+  /// Gates the mesh lane; it stays ineligible until consent is granted.
+  final DeviceLinkConsent? meshConsent;
+
+  /// True when at least one lane can be built from this configuration.
+  bool get hasAnyLane =>
+      udpRemote != null ||
+      relayUri != null ||
+      longPollUri != null ||
+      meshSender != null;
+}
+
 /// Registration helper for the four fallback lanes.
 class ResilientFallbackLanes {
   const ResilientFallbackLanes._();
+
+  /// Builds every lane [endpoints] configures and registers it with
+  /// [fabric], returning the ids that were registered.
+  ///
+  /// Returns an empty list when nothing is configured, so an app with no
+  /// fallback endpoints yet keeps whatever lanes it already registered
+  /// instead of failing to start. That is the one difference from
+  /// [registerAll], which treats an empty set as a caller bug because the
+  /// caller has already decided it has lanes to hand over.
+  static List<String> buildAndRegister(
+    ConnectionFabric fabric,
+    ResilientLaneEndpoints endpoints,
+  ) {
+    if (!endpoints.hasAnyLane) return const [];
+    final mesh = endpoints.meshSender;
+    return registerAll(
+      fabric,
+      primaryUdp: endpoints.udpRemote == null
+          ? null
+          : PrimaryUdpLane(remote: endpoints.udpRemote!),
+      webSocketRelay: endpoints.relayUri == null
+          ? null
+          : WebSocketRelayLane(relayUri: endpoints.relayUri!),
+      httpLongPoll: endpoints.longPollUri == null
+          ? null
+          : HttpLongPollLane(sendUri: endpoints.longPollUri!),
+      localMesh: mesh == null
+          ? null
+          : LocalMeshLane(peerSender: mesh, peerProbe: endpoints.meshProbe),
+      meshConsent: endpoints.meshConsent,
+    );
+  }
 
   /// Registers every non-null lane with [fabric] and returns the ids that
   /// were registered, in the order they were added.

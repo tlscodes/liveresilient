@@ -27,7 +27,7 @@ void main() {
         role: CallRole.initiator,
         storageDirFactory: () => dir,
       );
-      final queue = first.survivalFallbackQueue;
+      final queue = first.dtnFallbackQueue;
       expect(queue, isNotNull);
 
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -63,7 +63,7 @@ void main() {
         role: CallRole.initiator,
         storageDirFactory: () => dir,
       );
-      final restored = second.survivalFallbackQueue!;
+      final restored = second.dtnFallbackQueue!;
       final pending = restored.pendingInDeliveryOrder(
         DateTime.now().millisecondsSinceEpoch,
       );
@@ -80,7 +80,7 @@ void main() {
       callId: callId,
       role: CallRole.receiver,
     );
-    final queue = first.survivalFallbackQueue!;
+    final queue = first.dtnFallbackQueue!;
     final now = DateTime.now().millisecondsSinceEpoch;
     queue.offer(
       DtnBundle(
@@ -99,7 +99,7 @@ void main() {
       callId: callId,
       role: CallRole.receiver,
     );
-    final restored = second.survivalFallbackQueue!;
+    final restored = second.dtnFallbackQueue!;
     expect(restored.pendingCount, 1);
     await second.dispose();
   });
