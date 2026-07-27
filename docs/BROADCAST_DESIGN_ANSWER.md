@@ -689,12 +689,32 @@ packages/signed_config/lib/src/endpoint_manifest.dart   (grep شد)
 آنچه از این طرح ساخته و سبز شده است:
 
 ```
-packages/broadcast                    177 tests   descriptor, hash list, chain, reader, HTTP client
+packages/broadcast                    207 tests   descriptor · hash list · chain · reader
+                                                  HTTP client · fanout · signed relay directory
 tools/cloudflare_relay_worker          24 tests   archive routes, write-once, retention, rate limit
-apps/reference_app                     15 tests   dart:io transport over a loopback relay
-workspace total                      1824 passing · format · analyze · guard · worker : green
+apps/reference_app                     20 tests   dart:io transport over a loopback relay
+                                                  + directory-over-environment precedence
+workspace total                      1859 passing · format · analyze · guard · worker : green
 ```
 
-از فهرستِ بندِ ۶، لایه‌ی متن و توصیف‌گر و آدرس‌دهیِ ترتیبی و سه‌رله‌ای
-خواندن ساخته شده‌اند. کدِ بی‌نرخ و لایه‌ی عکس و QR بوت‌استرپ ساخته
-نشده‌اند.
+وضعیتِ چهار بندِ کمینه‌ی بخشِ ۶:
+
+```
+signed descriptor + text layer + pull by (author, seq)   DONE
+served as immutable objects                              DONE
+from several independent relays                          DONE in code, 1 deployed
+bootstrapped by a code anyone connected can produce      bytes DONE, QR rendering NOT built
+```
+
+بندِ سوم دقیق‌تر: انتشار و خواندن روی چند رله ساخته و تست شده — انتشار
+موازی با تحملِ شکستِ جزئی، خواندن با گذر از رله‌ی خراب یا دست‌کاری‌کننده.
+آنچه نیست، رله‌ی دومِ **مستقر** است؛ یعنی این بند از یک کارِ مهندسی به یک
+کارِ عملیاتی تبدیل شد.
+
+بندِ چهارم هم دقیق‌تر: فهرستِ امضاشده با شمارنده و انقضا ساخته شده و زیرِ
+دویست بایت است، پس در یک QR جا می‌شود. خودِ رمزگذارِ QR و آن صفحه‌ی «به
+کسی که وصل نمی‌شود کمک کن» ساخته نشده — یک کارِ رابطِ کاربری است، نه
+پروتکل.
+
+هنوز ساخته نشده: کدِ بی‌نرخ برای توزیعِ چندرله‌ای بی‌مذاکره، لایه‌ی عکس،
+و رمزگذارِ QR.
