@@ -41,3 +41,4 @@ export 'src/probe_defense/traffic_shaper.dart';
 export 'src/probe_defense/probe_defense_config.dart';
 export 'src/probe_defense/socket_duplex_stream.dart';
 export 'src/probe_defense/reality_handshake.dart';
+export 'src/probe_defense/relay_key_rotation.dart';

@@ -28,9 +28,20 @@
 ///
 /// The split is deliberate: the hello proves *authorization* (may this
 /// connection continue at all — the question the pass-through decision
-/// turns on, answerable in one HMAC), and the first record proves
-/// *identity* (which peer this is — a slower question that no longer needs
-/// to be answered in under 2 ms).
+/// turns on), and the first record proves *identity* (which peer this is —
+/// a slower question that no longer has to be answered before the routing
+/// decision).
+///
+/// **What the exchange costs, measured.** Adding X25519 to the admission
+/// path is not free, and the number is bigger than it looks:
+/// `tool/bench_x25519.dart` measures the pure-Dart scalar multiply at
+/// ~1876 us, against ~77 us for the HKDF-plus-HMAC work around it. So this
+/// path spends ~2 ms per candidate key, and the sub-2 ms routing budget
+/// that [RealityAuthenticator]'s pre-shared path meets comfortably is
+/// missed here. [KeyAgreement] is an interface precisely so a native
+/// backend can close that gap; until one is wired in, the trade is real
+/// and a deployment should choose it knowingly — forward secrecy for
+/// roughly 2 ms of admission latency.
 library;
 
 import 'dart:typed_data';
@@ -292,7 +303,15 @@ class RealityKeyExchangeAuthenticator {
     return _guard.verifyWith(hello, credential);
   }
 
-  /// The client's X25519 `key_share` public key, or null.
+  /// The client's X25519 `key_share` public key, or null when the hello
+  /// carries none of the right shape.
+  ///
+  /// Public because the rotating authenticator needs the same extraction
+  /// and a second copy of this parser would be a place for the two to
+  /// disagree about what counts as a valid share.
+  static Uint8List? clientX25519Share(TlsClientHello hello) =>
+      _x25519Share(hello);
+
   static Uint8List? _x25519Share(TlsClientHello hello) {
     final ext = hello.extension(TlsExtensionType.keyShare);
     if (ext == null) return null;
