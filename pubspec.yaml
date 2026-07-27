@@ -13,6 +13,7 @@ environment:
 # resolves every member package below in one shared lockfile.
 workspace:
   - packages/adaptive_transport
+  - packages/broadcast
   - packages/call_core
   - packages/call_media_adapter
   - packages/call_signaling_adapter

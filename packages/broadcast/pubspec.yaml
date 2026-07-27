@@ -1,0 +1,23 @@
+name: broadcast
+description: >-
+  Signed one-to-many publishing: a fixed-layout descriptor that commits
+  to each layer by hash, content-addressed objects served from
+  interchangeable relays, predictable per-author sequence addressing with
+  no mutable head, short-lived delegated publishing keys, and local fork
+  detection that turns a duplicated key into transferable proof.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  clock: ^1.1.1
+  crypto: ^3.0.3
+  cryptography: ^2.7.0
+
+dev_dependencies:
+  test: ^1.25.0
+  fake_async: ^1.3.1
