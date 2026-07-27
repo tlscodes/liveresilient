@@ -149,8 +149,12 @@ class RedundancyPlanner {
   /// Smallest send count k such that, walking the ESTIMATED chain,
   /// P(at least [blocks] arrivals among k sends) >= [targetSuccess].
   /// Deterministic Monte-Carlo (seeded) so plans are reproducible.
-  int planSendCount(int blocks,
-      {double targetSuccess = 0.99, int trials = 400, int seed = 1}) {
+  int planSendCount(
+    int blocks, {
+    double targetSuccess = 0.99,
+    int trials = 400,
+    int seed = 1,
+  }) {
     var k = (blocks / (1 - estimate.longRunLossRate)).ceil();
     final kMax = blocks * 60;
     while (k < kMax) {

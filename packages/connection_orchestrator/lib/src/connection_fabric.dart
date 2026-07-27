@@ -21,7 +21,7 @@ import 'delivery_planner.dart';
 import 'lane.dart';
 import 'lane_experience.dart';
 import 'micro_learner.dart';
-import 'trend_sentinel.dart';
+import 'trend_monitor.dart';
 
 /// How a single delivery ended.
 enum DeliveryOutcome {
@@ -64,7 +64,7 @@ class ConnectionFabric {
     LaneExperience? experience,
     DeliveryPlanner planner = const DeliveryPlanner(),
     String Function()? place,
-    TrendSentinel? trend,
+    TrendMonitor? trend,
     bool Function()? lowBattery,
   }) : _queue = fallbackQueue,
        _nowMs = nowMs,
@@ -72,7 +72,7 @@ class ConnectionFabric {
        experience = experience ?? LaneExperience(),
        _planner = planner,
        _place = place ?? (() => 'unknown'),
-       trend = trend ?? TrendSentinel(),
+       trend = trend ?? TrendMonitor(),
        _lowBattery = lowBattery ?? (() => false);
 
   final DtnBundleQueue _queue;
@@ -95,7 +95,7 @@ class ConnectionFabric {
   /// Proactive trend watch: every refresh feeds each lane's score in, and
   /// a best-lane projected to cross the failure floor fires the unhealthy
   /// hook BEFORE the lane actually dies.
-  final TrendSentinel trend;
+  final TrendMonitor trend;
 
   /// Battery probe: when true, energy-hungry lanes lose near-ties.
   final bool Function() _lowBattery;

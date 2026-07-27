@@ -10,7 +10,8 @@ Uint8List bytes(int value, int count) =>
     Uint8List.fromList(List.filled(count, value));
 
 Uint8List exporter([int seed = 5]) => Uint8List.fromList(
-    List.generate(tlsExporterLength, (i) => (i * seed + 1) & 0xff));
+  List.generate(tlsExporterLength, (i) => (i * seed + 1) & 0xff),
+);
 
 /// Runs the full SCRAM exchange and returns the server-side wire session.
 SecureTransportSession establishSession({int messagesPerEpoch = 1 << 20}) {
@@ -121,8 +122,11 @@ void main() {
       expect(session.keyEpoch, 0);
       transport.receiveFromWire(wire[0]);
       transport.receiveFromWire(wire[1]);
-      expect(session.keyEpoch, 1,
-          reason: '2-message budget must have rotated the epoch');
+      expect(
+        session.keyEpoch,
+        1,
+        reason: '2-message budget must have rotated the epoch',
+      );
     });
 
     test('plain transport (no session) is byte-identical to before', () {
@@ -144,10 +148,15 @@ void main() {
       final wire = primedTick(transport);
       transport.receiveFromWire(wire.first); // budget 1 -> rotates
       expect(session.keyEpoch, 1);
-      expect(session.verifyContinuityToken(token), isFalse,
-          reason: 'rotation must invalidate previously minted tokens');
-      expect(session.verifyContinuityToken(session.mintContinuityToken()),
-          isTrue);
+      expect(
+        session.verifyContinuityToken(token),
+        isFalse,
+        reason: 'rotation must invalidate previously minted tokens',
+      );
+      expect(
+        session.verifyContinuityToken(session.mintContinuityToken()),
+        isTrue,
+      );
     });
 
     test('endpoint switch releases media only after path validation', () async {
@@ -157,8 +166,10 @@ void main() {
       final switcher = ValidatedSwitcher<String>(
         connect: (e) async => 'conn-${e.hostPort.host}',
         validatePath: (e, conn) async {
-          final challenge =
-              probe.issueChallenge(e.hostPort.authority, bytes(0x0a, 8));
+          final challenge = probe.issueChallenge(
+            e.hostPort.authority,
+            bytes(0x0a, 8),
+          );
           // The genuine peer holds the same session key, so it can answer.
           return probe.validateResponse(
             e.hostPort.authority,

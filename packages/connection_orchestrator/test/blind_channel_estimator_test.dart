@@ -19,14 +19,19 @@ void main() {
     }
     final e = est.estimate();
     // ignore: avoid_print
-    print('blind estimate: $e (true p=0.04 r=0.1 gl=0.05 bl=0.95); '
-        'mean burst est ${e.meanBurstLength.toStringAsFixed(1)} (true 10)');
+    print(
+      'blind estimate: $e (true p=0.04 r=0.1 gl=0.05 bl=0.95); '
+      'mean burst est ${e.meanBurstLength.toStringAsFixed(1)} (true 10)',
+    );
     expect(e.p, inInclusiveRange(0.02, 0.08), reason: 'p within 2x');
     expect(e.r, inInclusiveRange(0.05, 0.2), reason: 'r within 2x');
     expect(e.badLoss, greaterThan(0.8));
     expect(e.goodLoss, lessThan(0.15));
-    expect(e.longRunLossRate, inInclusiveRange(0.25, 0.45),
-        reason: 'true long-run loss is ~0.31');
+    expect(
+      e.longRunLossRate,
+      inInclusiveRange(0.25, 0.45),
+      reason: 'true long-run loss is ~0.31',
+    );
   });
 
   test('planner calibration: planned k reaches target on TRUE channel', () {
@@ -42,8 +47,11 @@ void main() {
     const trials = 300;
     final rng = Random(9);
     for (var t = 0; t < trials; t++) {
-      final sim =
-          GilbertElliottLossSimulator(p: 0.04, r: 0.1, seed: rng.nextInt(1 << 30));
+      final sim = GilbertElliottLossSimulator(
+        p: 0.04,
+        r: 0.1,
+        seed: rng.nextInt(1 << 30),
+      );
       var got = 0;
       for (var i = 0; i < k; i++) {
         if (!sim.shouldDrop()) got++;
@@ -52,12 +60,20 @@ void main() {
     }
     final measured = ok / trials;
     // ignore: avoid_print
-    print('planner: k=$k for $blocks blocks @ target 0.99; '
-        'measured success on true channel: ${measured.toStringAsFixed(3)}');
-    expect(measured, greaterThanOrEqualTo(0.97),
-        reason: 'blind plan must hold within 2% of target');
-    expect(k, lessThan(blocks * 8),
-        reason: 'plan must not be wastefully padded');
+    print(
+      'planner: k=$k for $blocks blocks @ target 0.99; '
+      'measured success on true channel: ${measured.toStringAsFixed(3)}',
+    );
+    expect(
+      measured,
+      greaterThanOrEqualTo(0.97),
+      reason: 'blind plan must hold within 2% of target',
+    );
+    expect(
+      k,
+      lessThan(blocks * 8),
+      reason: 'plan must not be wastefully padded',
+    );
   });
 
   test('end-to-end: RLNC + blind plan delivers a 2KB file open-loop', () {
@@ -67,11 +83,13 @@ void main() {
       if (!ge.shouldDrop()) est.onReceivedEsi(esi);
     }
     final rng = Random(11);
-    final data =
-        Uint8List.fromList(List.generate(2048, (_) => rng.nextInt(256)));
+    final data = Uint8List.fromList(
+      List.generate(2048, (_) => rng.nextInt(256)),
+    );
     final enc = RlncEncoder(data);
-    final k = RedundancyPlanner(est.estimate())
-        .planSendCount(enc.blockCount, targetSuccess: 0.995);
+    final k = RedundancyPlanner(
+      est.estimate(),
+    ).planSendCount(enc.blockCount, targetSuccess: 0.995);
     var delivered = 0;
     final sim = GilbertElliottLossSimulator(p: 0.04, r: 0.1, seed: 77);
     final dec = RlncDecoder();
@@ -83,10 +101,15 @@ void main() {
       }
     }
     // ignore: avoid_print
-    print('end-to-end: sent k=$k, delivered=$delivered, '
-        'N=${enc.blockCount}, complete=${dec.isComplete}');
-    expect(dec.isComplete, isTrue,
-        reason: 'open-loop send of the planned k must suffice');
+    print(
+      'end-to-end: sent k=$k, delivered=$delivered, '
+      'N=${enc.blockCount}, complete=${dec.isComplete}',
+    );
+    expect(
+      dec.isComplete,
+      isTrue,
+      reason: 'open-loop send of the planned k must suffice',
+    );
     expect(dec.data, equals(data));
   });
 }

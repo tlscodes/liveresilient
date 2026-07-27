@@ -73,8 +73,17 @@ class ProbeDefenseConfig {
   final TrafficShapingPolicy shaping;
 
   /// Relay side: where unauthenticated connections are spliced. Required
-  /// to run a [RealityGate]; null disables the gate entirely.
+  /// to run a [RealityGate]; null disables the gate entirely. This is the
+  /// statically configured value; use [resolvedFallbackTarget] to honor a
+  /// `FALLBACK_TARGET_HOST` environment override.
   final FallbackTarget? fallbackTarget;
+
+  /// [fallbackTarget], with [FallbackTarget.hostEnvironmentVariable]
+  /// applied on top: an operator can redirect the splice destination at
+  /// deploy time without rebuilding the config, and the environment always
+  /// wins over whatever is statically configured here.
+  FallbackTarget? get resolvedFallbackTarget =>
+      FallbackTarget.resolve(fallbackTarget);
 
   /// Relay side: the credentials admitted.
   final List<RealityCredential> shortIds;

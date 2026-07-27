@@ -19,7 +19,7 @@ import 'rateless_stream.dart';
 
 class MediaTransfer {
   MediaTransfer._(this.id, Uint8List data, int blockSize)
-      : _encoder = RatelessEncoder(data, blockSize: blockSize);
+    : _encoder = RatelessEncoder(data, blockSize: blockSize);
 
   final int id;
   final RatelessEncoder _encoder;
@@ -52,8 +52,9 @@ class MediaTransferQueue {
   MediaTransferQueue({
     this.spareBudgetBytesPerSecond = 300,
     this.blockSize = 48,
-  }) : assert(spareBudgetBytesPerSecond >= 200 &&
-            spareBudgetBytesPerSecond <= 500);
+  }) : assert(
+         spareBudgetBytesPerSecond >= 200 && spareBudgetBytesPerSecond <= 500,
+       );
 
   /// Cap on media wire rate; only ever spent during silence.
   final int spareBudgetBytesPerSecond;
@@ -92,8 +93,10 @@ class MediaTransferQueue {
   /// wire now, tagged with the transfer that produced each one. During
   /// speech this is always empty and no budget accrues beyond one
   /// second's worth (the token bucket is capped).
-  List<TaggedDatagram> tick(
-      {required int nowMs, required bool voiceIsSpeaking}) {
+  List<TaggedDatagram> tick({
+    required int nowMs,
+    required bool voiceIsSpeaking,
+  }) {
     final last = _lastTickMs;
     _lastTickMs = nowMs;
     if (last != null && nowMs > last) {

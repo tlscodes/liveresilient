@@ -121,7 +121,8 @@ Uint8List pdfUnpack(Uint8List d) {
 /// Minimal PNG decoder (8-bit RGB/RGBA, non-interlaced) for the 2D
 /// prediction probe: chunks -> inflate IDAT -> unfilter -> raw pixels.
 ({Uint8List pixels, int width, int height, int channels})? pngDecode(
-    Uint8List d) {
+  Uint8List d,
+) {
   if (d.length < 8 || d[0] != 0x89 || d[1] != 0x50) return null;
   var i = 8;
   int? w, h, colorType, bitDepth;
@@ -236,18 +237,20 @@ void race(String label, Uint8List data, {bool pcm = false, bool pdf = false}) {
     pdfStreamsDecoded = 0;
     final unpacked = pdfUnpack(data);
     results['unpack+cm*'] = c.compress(unpacked).length;
-    print('  [pdf: $pdfStreamsDecoded streams inflated, '
-        '${data.length} -> ${unpacked.length} B unpacked]');
+    print(
+      '  [pdf: $pdfStreamsDecoded streams inflated, '
+      '${data.length} -> ${unpacked.length} B unpacked]',
+    );
   }
 
   final best = results.entries.reduce((a, b) => a.value <= b.value ? a : b);
   final vsGzip = 100 * (1 - best.value / results['gzip9']!);
-  final line = results.entries
-      .map((e) => '${e.key}=${e.value}')
-      .join('  ');
-  print('$label (${data.length} B): $line  '
-      '=> WINNER ${best.key} (${vsGzip.toStringAsFixed(1)}% vs gzip9) '
-      '[${sw.elapsedMilliseconds} ms]');
+  final line = results.entries.map((e) => '${e.key}=${e.value}').join('  ');
+  print(
+    '$label (${data.length} B): $line  '
+    '=> WINNER ${best.key} (${vsGzip.toStringAsFixed(1)}% vs gzip9) '
+    '[${sw.elapsedMilliseconds} ms]',
+  );
 }
 
 bool _eq(Uint8List a, Uint8List b) {
@@ -280,16 +283,20 @@ void main() {
       print('$label: MISSING $path');
       return;
     }
-    race(label, _load(path, cap),
-        pcm: label.contains('PCM'), pdf: label.contains('PDF'));
+    race(
+      label,
+      _load(path, cap),
+      pcm: label.contains('PCM'),
+      pdf: label.contains('PDF'),
+    );
   });
 
   // 2D image probe: full PNG -> pixels -> Paeth residual -> CM,
   // against a fair PNG-equivalent (gzip9 over the same residual, which
   // is exactly PNG's own filter+deflate pipeline on this crop).
-  final pngFile =
-      File('/Users/behnam/Downloads/voorrang_tram_afslaan_topdown.png')
-          .readAsBytesSync();
+  final pngFile = File(
+    '/Users/behnam/Downloads/voorrang_tram_afslaan_topdown.png',
+  ).readAsBytesSync();
   final img = pngDecode(Uint8List.fromList(pngFile));
   if (img == null) {
     print('2D probe: PNG decode unsupported for this file');
@@ -297,15 +304,20 @@ void main() {
   }
   final rows = img.height < 500 ? img.height : 500;
   final crop = Uint8List.sublistView(
-      img.pixels, 0, rows * img.width * img.channels);
+    img.pixels,
+    0,
+    rows * img.width * img.channels,
+  );
   final res = residual2d(crop, img.width, rows, img.channels);
   final sw = Stopwatch()..start();
   final ours = c.compress(res).length;
   final pngProxy = gz.encode(res).length;
   final rawCm = c.compress(crop).length;
-  print('2D probe (${img.width}x$rows x${img.channels}, '
-      '${crop.length} B raw pixels): png-proxy(gzip9)=$pngProxy  '
-      '2d+cm=$ours  cm-no-2d=$rawCm  '
-      '=> ${(100 * (1 - ours / pngProxy)).toStringAsFixed(1)}% smaller than '
-      'PNG-equivalent [${sw.elapsedMilliseconds} ms]');
+  print(
+    '2D probe (${img.width}x$rows x${img.channels}, '
+    '${crop.length} B raw pixels): png-proxy(gzip9)=$pngProxy  '
+    '2d+cm=$ours  cm-no-2d=$rawCm  '
+    '=> ${(100 * (1 - ours / pngProxy)).toStringAsFixed(1)}% smaller than '
+    'PNG-equivalent [${sw.elapsedMilliseconds} ms]',
+  );
 }

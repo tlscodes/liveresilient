@@ -20,8 +20,11 @@ void main() {
         while (!dec.isComplete) {
           dec.addDatagram(enc.nextDatagram());
           fed++;
-          expect(fed, lessThan(enc.blockCount * 3 + 30),
-              reason: 'decode did not converge for $size B');
+          expect(
+            fed,
+            lessThan(enc.blockCount * 3 + 30),
+            reason: 'decode did not converge for $size B',
+          );
         }
         expect(dec.data, equals(data), reason: 'size $size');
       }
@@ -52,8 +55,7 @@ void main() {
         final corrupt = Uint8List.fromList(clean);
         corrupt[bit ~/ 8] ^= 1 << (bit % 8);
         final dec = RatelessDecoder();
-        expect(dec.addDatagram(corrupt), isFalse,
-            reason: 'bit $bit accepted');
+        expect(dec.addDatagram(corrupt), isFalse, reason: 'bit $bit accepted');
         expect(dec.decodedBlockCount, 0);
       }
     });
@@ -83,8 +85,10 @@ void main() {
       }
       final epsilon = totalUsed / (trials * n);
       // ignore: avoid_print
-      print('rateless overhead epsilon (measured): '
-          '${epsilon.toStringAsFixed(3)} over $trials trials, N=$n');
+      print(
+        'rateless overhead epsilon (measured): '
+        '${epsilon.toStringAsFixed(3)} over $trials trials, N=$n',
+      );
       expect(epsilon, lessThan(1.6));
     });
 

@@ -17,11 +17,11 @@ class GilbertElliottLossSimulator {
     this.goodLossRate = 0.05,
     this.badLossRate = 0.95,
     int seed = 42,
-  })  : assert(p > 0 && p < 1),
-        assert(r > 0 && r < 1),
-        assert(goodLossRate >= 0 && goodLossRate <= 0.05),
-        assert(badLossRate >= 0.90 && badLossRate <= 1.0),
-        _rng = Random(seed);
+  }) : assert(p > 0 && p < 1),
+       assert(r > 0 && r < 1),
+       assert(goodLossRate >= 0 && goodLossRate <= 0.05),
+       assert(badLossRate >= 0.90 && badLossRate <= 1.0),
+       _rng = Random(seed);
 
   /// Per-packet probability of entering a burst (Good -> Bad).
   final double p;

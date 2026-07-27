@@ -82,7 +82,7 @@ class TokenVoiceSender {
 /// Receiver side: reorders delivered blocks and replays them in order.
 class TokenVoiceReceiver {
   TokenVoiceReceiver({required this.nRows, HamsedaState? initialState})
-      : _state = initialState ?? HamsedaState(nRows);
+    : _state = initialState ?? HamsedaState(nRows);
 
   final int nRows;
 
@@ -126,8 +126,7 @@ class TokenVoiceReceiver {
     while (_buffer.containsKey(_nextSeq)) {
       final b = _buffer.remove(_nextSeq)!;
       final nFrames = ByteData.sublistView(b, 0, 6).getUint16(4);
-      final cols =
-          decodeColumns(Uint8List.sublistView(b, 6), nFrames, _state);
+      final cols = decodeColumns(Uint8List.sublistView(b, 6), nFrames, _state);
       ready.add(cols);
       played.add(cols);
       _nextSeq += 1;

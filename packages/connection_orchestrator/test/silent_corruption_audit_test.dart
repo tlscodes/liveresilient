@@ -83,9 +83,11 @@ class DoomsdayNetworkChannel {
     }
 
     final delayMs = _rng.nextInt(maxJitterMs);
-    _pending.add(Timer(Duration(milliseconds: delayMs), () {
-      onDeliver(payload);
-    }));
+    _pending.add(
+      Timer(Duration(milliseconds: delayMs), () {
+        onDeliver(payload);
+      }),
+    );
   }
 
   /// Cancels any timers still pending (test cleanup).
@@ -101,11 +103,11 @@ List<List<int>> speechStream(int frames, int seed) {
   final rng = Random(seed);
   const n = 45;
   final alphabet = [
-    for (var i = 0; i < n; i++) [rng.nextInt(1024), rng.nextInt(1024)]
+    for (var i = 0; i < n; i++) [rng.nextInt(1024), rng.nextInt(1024)],
   ];
   final successors = [
     for (var i = 0; i < n; i++)
-      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)]
+      [rng.nextInt(n), rng.nextInt(n), rng.nextInt(n)],
   ];
   final out = <List<int>>[];
   var cur = 0;
@@ -159,8 +161,7 @@ void main() {
     const ticksPerBlock = 8;
     for (var seq = 0; seq < totalBlocks; seq++) {
       channel.isBlackoutActive = seq >= blackoutStart && seq < blackoutEnd;
-      final block =
-          speech.sublist(seq * blockFrames, (seq + 1) * blockFrames);
+      final block = speech.sublist(seq * blockFrames, (seq + 1) * blockFrames);
       sourceBlocks[seq] = block;
       final data = encodeColumns(block, warm.clone());
       final dg = packer.addBlock(seq, data);
@@ -217,29 +218,41 @@ void main() {
 
     // Drain every pending jittered delivery (max jitter + margin).
     await Future<void>.delayed(
-        Duration(milliseconds: channel.maxJitterMs + 200));
+      Duration(milliseconds: channel.maxJitterMs + 200),
+    );
 
     final survivableBlocks = totalBlocks - (blackoutEnd - blackoutStart);
     final coverage = recoveredBlocks / survivableBlocks;
 
     // ignore: avoid_print
-    print('DOOMSDAY AUDIT: sent=$sentDatagrams delivered=$deliveredDatagrams '
-        'recovered=$recoveredBlocks/$survivableBlocks '
-        '(${(coverage * 100).toStringAsFixed(1)}%) '
-        'acceptedGarbage=$acceptedGarbage mismatches=$mismatches '
-        'recoveredAfterBlackout=${playedAfterBlackout.length}');
+    print(
+      'DOOMSDAY AUDIT: sent=$sentDatagrams delivered=$deliveredDatagrams '
+      'recovered=$recoveredBlocks/$survivableBlocks '
+      '(${(coverage * 100).toStringAsFixed(1)}%) '
+      'acceptedGarbage=$acceptedGarbage mismatches=$mismatches '
+      'recoveredAfterBlackout=${playedAfterBlackout.length}',
+    );
 
     // 1. no crash reaching this line is itself the first pass condition.
     // 2. corrupted/garbage input must never be silently accepted as
     //    correct speech.
-    expect(mismatches, 0,
-        reason: 'corrupted data must never be mistaken for real speech');
+    expect(
+      mismatches,
+      0,
+      reason: 'corrupted data must never be mistaken for real speech',
+    );
     // 3. delivered speech is bit-exact by construction of the loop above
     //    (recoveredBlocks only counts exact matches).
-    expect(recoveredBlocks, greaterThan(0),
-        reason: 'at least some speech must survive a 90% base loss rate');
+    expect(
+      recoveredBlocks,
+      greaterThan(0),
+      reason: 'at least some speech must survive a 90% base loss rate',
+    );
     // 4. the call recovers once the blackout window ends.
-    expect(playedAfterBlackout, isNotEmpty,
-        reason: 'delivery must resume after the blackout window');
+    expect(
+      playedAfterBlackout,
+      isNotEmpty,
+      reason: 'delivery must resume after the blackout window',
+    );
   }, timeout: const Timeout(Duration(seconds: 30)));
 }

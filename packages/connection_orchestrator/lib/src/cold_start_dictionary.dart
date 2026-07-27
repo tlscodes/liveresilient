@@ -111,11 +111,11 @@ class ColdStartDictionaryManager {
 
     const alphabetSize = 48;
     final alphabet = [
-      for (var i = 0; i < alphabetSize; i++) [next(1024), next(1024)]
+      for (var i = 0; i < alphabetSize; i++) [next(1024), next(1024)],
     ];
     final successors = [
       for (var i = 0; i < alphabetSize; i++)
-        [next(alphabetSize), next(alphabetSize), next(alphabetSize)]
+        [next(alphabetSize), next(alphabetSize), next(alphabetSize)],
     ];
     final silence = [next(1024), next(1024)];
     final out = <List<int>>[];
@@ -155,10 +155,18 @@ class ColdStartDictionaryManager {
     if (payload[end] != crc8(payload, end)) return false;
     final HamsedaState warm;
     try {
-      warm = HamsedaState.fromJson(jsonDecode(
-              utf8.decode(Uint8List.sublistView(payload, 0, end)))
-          as Map<String, dynamic>);
+      // A CRC-valid payload can still decode to valid JSON of the wrong
+      // shape (a number, a list). That cast raises TypeError, not
+      // FormatException, so catching only FormatException would let it
+      // escape a method documented to return false on bad input.
+      final decoded = jsonDecode(
+        utf8.decode(Uint8List.sublistView(payload, 0, end)),
+      );
+      if (decoded is! Map<String, dynamic>) return false;
+      warm = HamsedaState.fromJson(decoded);
     } on FormatException {
+      return false;
+    } on TypeError {
       return false;
     }
     _state = warm;

@@ -86,9 +86,20 @@ class ResumableTransfer {
     required List<int> payload,
     this.chunkSize = 16 * 1024,
     this.parityGroupSize = 4,
-  }) : _payload = List.unmodifiable(payload),
-       assert(chunkSize > 0, 'chunkSize must be positive'),
-       assert(parityGroupSize >= 2, 'a parity group needs >= 2 data chunks') {
+  }) : _payload = List.unmodifiable(payload) {
+    // Explicit throws, not asserts: asserts are compiled out in release
+    // builds, where chunkSize == 0 would reach the division below and
+    // raise an opaque IntegerDivisionByZeroException instead.
+    if (chunkSize <= 0) {
+      throw ArgumentError.value(chunkSize, 'chunkSize', 'must be positive');
+    }
+    if (parityGroupSize < 2) {
+      throw ArgumentError.value(
+        parityGroupSize,
+        'parityGroupSize',
+        'a parity group needs >= 2 data chunks',
+      );
+    }
     _total = (_payload.length + chunkSize - 1) ~/ chunkSize;
     if (_total == 0) _total = 1; // empty-guard: payload is validated upstream
   }
@@ -105,7 +116,8 @@ class ResumableTransfer {
   final Set<int> _parityDelivered = {};
 
   int get totalChunks => _total;
-  int get totalParityChunks => (_total + parityGroupSize - 1) ~/ parityGroupSize;
+  int get totalParityChunks =>
+      (_total + parityGroupSize - 1) ~/ parityGroupSize;
   int get deliveredChunks => _delivered.length;
   bool get complete => _delivered.length == _total;
 
@@ -197,14 +209,39 @@ class ResumableTransfer {
 /// Receiver-side reassembly with per-group parity healing: a transfer
 /// completes even when one data chunk per parity group never arrives.
 class ChunkReassembler {
-  ChunkReassembler({this.parityGroupSize = 4});
+  ChunkReassembler({this.parityGroupSize = 4, this.maxOpenTransfers = 64});
 
   final int parityGroupSize;
 
+  /// Cap on transfers held in flight at once. A peer that opens transfers
+  /// and never finishes them would otherwise grow these maps without
+  /// bound; past the cap the oldest-started incomplete transfer is
+  /// dropped so memory stays proportional to the cap, not to traffic.
+  final int maxOpenTransfers;
+
+  // Insertion-ordered: the first key is the oldest open transfer.
   final Map<String, Map<int, List<int>>> _parts = {};
   final Map<String, Map<int, List<int>>> _parityParts = {};
   final Map<String, int> _totals = {};
   final Map<String, int> _totalBytes = {};
+
+  /// Transfers currently held in flight (open, not yet reassembled).
+  int get openTransfers => _totals.length;
+
+  /// Forgets one transfer's partial state; returns true when it existed.
+  bool forget(String transferId) {
+    final had = _totals.remove(transferId) != null;
+    _parts.remove(transferId);
+    _parityParts.remove(transferId);
+    _totalBytes.remove(transferId);
+    return had;
+  }
+
+  void _evictOldestIfFull() {
+    while (_totals.length > maxOpenTransfers) {
+      forget(_totals.keys.first);
+    }
+  }
 
   /// Feeds one received bundle (data or parity). Returns the fully
   /// reassembled payload when the transfer completes (directly or via
@@ -213,7 +250,20 @@ class ChunkReassembler {
   List<int>? accept(String bundleId, List<int> payload) {
     final id = ChunkId.decode(bundleId);
     if (id == null) return null;
-    _totals[id.transferId] = id.total;
+    // The chunk count is pinned by the first bundle seen for a transfer.
+    // A later bundle claiming a different total is rejected: a shrinking
+    // total would make _tryComplete splice a truncated payload (or
+    // null-assert on a missing index), so disagreement is a protocol
+    // error, not something to average over.
+    final known = _totals[id.transferId];
+    if (known != null && known != id.total) return null;
+    if (known == null) {
+      _totals[id.transferId] = id.total;
+      _evictOldestIfFull();
+      // The evictor may have just dropped this very transfer when the
+      // cap is saturated; if so there is nothing left to complete.
+      if (!_totals.containsKey(id.transferId)) return null;
+    }
     if (id.parity) {
       _parityParts.putIfAbsent(id.transferId, () => {})[id.index] = payload;
       if (id.totalBytes != null && id.totalBytes! > 0) {
@@ -231,9 +281,7 @@ class ChunkReassembler {
     final parts = _parts.putIfAbsent(transferId, () => {});
     _healWithParity(transferId, parts, total);
     if (parts.length < total) return null;
-    final whole = <int>[
-      for (var i = 0; i < total; i++) ...parts[i]!,
-    ];
+    final whole = <int>[for (var i = 0; i < total; i++) ...parts[i]!];
     _parts.remove(transferId);
     _parityParts.remove(transferId);
     _totals.remove(transferId);

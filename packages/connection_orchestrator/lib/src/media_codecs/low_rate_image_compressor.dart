@@ -55,7 +55,13 @@ class LowRateImageCompressor {
 
   /// Grayscale mean-downsample of an interleaved 8-bit image.
   static Uint8List _grayDown(
-      Uint8List px, int w, int h, int ch, int ow, int oh) {
+    Uint8List px,
+    int w,
+    int h,
+    int ch,
+    int ow,
+    int oh,
+  ) {
     final out = Uint8List(ow * oh);
     for (var oy = 0; oy < oh; oy++) {
       final y0 = oy * h ~/ oh, y1 = ((oy + 1) * h ~/ oh).clamp(y0 + 1, h);
@@ -78,8 +84,7 @@ class LowRateImageCompressor {
   /// Nearest-neighbour upsample of a single-channel plane. Deterministic
   /// and identical on both sides, which is what lets the pyramid residual
   /// invert exactly.
-  static Uint8List _upsample(
-      Uint8List src, int sw, int sh, int dw, int dh) {
+  static Uint8List _upsample(Uint8List src, int sw, int sh, int dw, int dh) {
     final out = Uint8List(dw * dh);
     for (var y = 0; y < dh; y++) {
       final sy = (y * sh) ~/ dh;
@@ -99,8 +104,7 @@ class LowRateImageCompressor {
   /// levels subtract the upsampled previous level in mod-16 arithmetic;
   /// the residual concentrates around zero, which is exactly what the
   /// context-mixing coder exploits.
-  List<ProgressiveLevel> encodeProgressive(
-      Uint8List px, int w, int h, int ch) {
+  List<ProgressiveLevel> encodeProgressive(Uint8List px, int w, int h, int ch) {
     final out = <ProgressiveLevel>[];
     Uint8List? prevQ;
     var prevW = 0, prevH = 0;
@@ -127,9 +131,11 @@ class LowRateImageCompressor {
       // Three candidate preparations, smallest compressed output wins.
       final candidates = <LevelCoder, Uint8List>{
         LevelCoder.fixedPaeth: _cm.compress(
-            SpatialResidual.paeth(plane, lw, lh, 1)),
-        LevelCoder.adaptiveRow:
-            _cm.compress(AdaptiveFilter.forward(plane, lw, lh, 1)),
+          SpatialResidual.paeth(plane, lw, lh, 1),
+        ),
+        LevelCoder.adaptiveRow: _cm.compress(
+          AdaptiveFilter.forward(plane, lw, lh, 1),
+        ),
         LevelCoder.rawResidual: _cm.compress(plane),
       };
       var bestCoder = LevelCoder.fixedPaeth;
@@ -163,10 +169,13 @@ class LowRateImageCompressor {
       switch (level.coder) {
         case LevelCoder.fixedPaeth:
           plane = SpatialResidual.unPaeth(
-              payload, level.width, level.height, 1);
+            payload,
+            level.width,
+            level.height,
+            1,
+          );
         case LevelCoder.adaptiveRow:
-          plane = AdaptiveFilter.inverse(
-              payload, level.width, level.height, 1);
+          plane = AdaptiveFilter.inverse(payload, level.width, level.height, 1);
         case LevelCoder.rawResidual:
           plane = payload;
       }
@@ -174,8 +183,7 @@ class LowRateImageCompressor {
       if (prevQ == null) {
         q = plane;
       } else {
-        final pred =
-            _upsample(prevQ, prevW, prevH, level.width, level.height);
+        final pred = _upsample(prevQ, prevW, prevH, level.width, level.height);
         q = Uint8List(plane.length);
         for (var i = 0; i < plane.length; i++) {
           q[i] = (plane[i] + pred[i]) & 0x0F;
@@ -204,8 +212,9 @@ class LowRateImageCompressor {
     }
     mean ~/= gray.length;
     final sb = StringBuffer(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $gridW $gridH">'
-        '<path d="');
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $gridW $gridH">'
+      '<path d="',
+    );
     for (var y = 0; y < gridH; y++) {
       var x = 0;
       while (x < gridW) {

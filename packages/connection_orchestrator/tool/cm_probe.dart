@@ -11,11 +11,14 @@ void main() {
   final ok = c.decompress(out);
   print('roundtrip ok: ${ok.length == rep.length}');
 
-  final persian = Uint8List.fromList(utf8.encode(
+  final persian = Uint8List.fromList(
+    utf8.encode(
       ('در سکوت، داده‌ها منتقل می‌شوند و صدا همیشه مقدم است؛ '
-              'سند و عکس در پس‌زمینه، ذره‌ذره، بدون بازخورد. ')
-          .padRight(1, ' ') *
-          120));
+                  'سند و عکس در پس‌زمینه، ذره‌ذره، بدون بازخورد. ')
+              .padRight(1, ' ') *
+          120,
+    ),
+  );
   final pOut = c.compress(persian);
   print('persian ${persian.length}B -> ${pOut.length} B');
 }

@@ -45,11 +45,11 @@ class SilenceSuppressionVAD {
     this.quietFactor = 0.4,
     this.hangoverFrames = 5,
     this.keepAliveIntervalMs = 1000,
-  })  : assert(rmsThreshold > 0),
-        assert(zcrSpeechRate > 0 && zcrSpeechRate < 1),
-        assert(quietFactor > 0 && quietFactor <= 1),
-        assert(hangoverFrames >= 0),
-        assert(keepAliveIntervalMs > 0);
+  }) : assert(rmsThreshold > 0),
+       assert(zcrSpeechRate > 0 && zcrSpeechRate < 1),
+       assert(quietFactor > 0 && quietFactor <= 1),
+       assert(hangoverFrames >= 0),
+       assert(keepAliveIntervalMs > 0);
 
   /// RMS level (in 16-bit sample units) at or above which a frame is
   /// speech regardless of ZCR. Raise to desensitize in noisy rooms.

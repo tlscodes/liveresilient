@@ -50,8 +50,8 @@ class ResilientMediaTransport {
     this.secureSession,
     this.edgeBridge,
     TlsParameterNormalizer? tlsParameters,
-  })  : queue = queue ?? MediaTransferQueue(),
-        tlsParameters = tlsParameters ?? TlsParameterNormalizer();
+  }) : queue = queue ?? MediaTransferQueue(),
+       tlsParameters = tlsParameters ?? TlsParameterNormalizer();
 
   final MediaTransferQueue queue;
 
@@ -89,7 +89,8 @@ class ResilientMediaTransport {
 
   /// Standard ALPN identifiers offered on the TLS handshake (RFC 7301
   /// registrations; `h2` is the one the HTTP/2 carrier needs).
-  List<String> get alpnProtocols => TlsParameterNormalizer.standardAlpnProtocols;
+  List<String> get alpnProtocols =>
+      TlsParameterNormalizer.standardAlpnProtocols;
 
   /// Makes sure a relay allocation is in place for [localAddress], allocating,
   /// refreshing or re-allocating as RFC 8656 requires. Returns null when this
@@ -117,13 +118,17 @@ class ResilientMediaTransport {
     final session = secureSession;
     final relay = relayLink;
     Uint8List frame(TaggedDatagram d) {
-      final sealed =
-          session == null ? wire.wrap(d) : session.seal(wire.wrap(d));
+      final sealed = session == null
+          ? wire.wrap(d)
+          : session.seal(wire.wrap(d));
       return relay == null ? sealed : relay.wrap(sealed);
     }
 
     return [
-      for (final d in queue.tick(nowMs: nowMs, voiceIsSpeaking: voiceIsSpeaking))
+      for (final d in queue.tick(
+        nowMs: nowMs,
+        voiceIsSpeaking: voiceIsSpeaking,
+      ))
         frame(d),
     ];
   }
@@ -135,7 +140,10 @@ class ResilientMediaTransport {
   /// later frames — the undelivered remainder simply is not attempted, and
   /// the returned list is shorter than the tick's frame count.
   ///
-  /// Throws [StateError] when no [edgeBridge] was configured.
+  /// Throws [StateError] when no [edgeBridge] was configured, or when a
+  /// previous flush is still in flight: two overlapping flushes would
+  /// interleave their frames on the wire, which is exactly the ordering
+  /// this method exists to preserve. Callers tick one at a time.
   Future<List<SendResult>> flushWireTick({
     required int nowMs,
     required bool voiceIsSpeaking,
@@ -146,9 +154,32 @@ class ResilientMediaTransport {
         'flushWireTick needs a DomesticEdgeBridgeLane; none was configured',
       );
     }
+    if (_flushInFlight) {
+      throw StateError(
+        'flushWireTick is already running; overlapping flushes would '
+        'reorder frames on the wire',
+      );
+    }
+    _flushInFlight = true;
+    try {
+      return await _flushFrames(lane, nowMs, voiceIsSpeaking);
+    } finally {
+      _flushInFlight = false;
+    }
+  }
+
+  bool _flushInFlight = false;
+
+  Future<List<SendResult>> _flushFrames(
+    DomesticEdgeBridgeLane lane,
+    int nowMs,
+    bool voiceIsSpeaking,
+  ) async {
     final results = <SendResult>[];
-    for (final frame
-        in wireTick(nowMs: nowMs, voiceIsSpeaking: voiceIsSpeaking)) {
+    for (final frame in wireTick(
+      nowMs: nowMs,
+      voiceIsSpeaking: voiceIsSpeaking,
+    )) {
       final result = await lane.send(frame);
       results.add(result);
       if (!result.delivered) break;
@@ -205,7 +236,9 @@ class ResilientMediaTransport {
   /// object. Returns one (transfer, compressedSize) record per layer, in
   /// the order given.
   List<(MediaTransfer, int)> sendLayered(
-      List<Uint8List> layers, MediaType type) {
+    List<Uint8List> layers,
+    MediaType type,
+  ) {
     if (layers.isEmpty) throw ArgumentError('no layers to send');
     if (layers.length > 0xFF) {
       throw ArgumentError('at most 255 layers per object');
@@ -240,14 +273,20 @@ class ResilientMediaTransport {
       final bytes = type == MediaType.audioPcm
           ? QuantizedLpc.decode(_cm.decompress(compressed), originalLen)
           : _cm.decompress(compressed);
-      return ReceivedMedia(type, bytes,
-          layerIndex: framed[5], layerCount: framed[6]);
+      return ReceivedMedia(
+        type,
+        bytes,
+        layerIndex: framed[5],
+        layerCount: framed[6],
+      );
     }
     final compressed = Uint8List.sublistView(framed, 5);
     switch (type) {
       case MediaType.audioPcm:
         return ReceivedMedia(
-            type, QuantizedLpc.decode(_cm.decompress(compressed), originalLen));
+          type,
+          QuantizedLpc.decode(_cm.decompress(compressed), originalLen),
+        );
       case MediaType.document:
       case MediaType.photo:
       case MediaType.flipbook:

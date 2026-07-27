@@ -10,11 +10,16 @@ void main() {
         <int>[],
         [255],
       ];
-      expect(MessageCoalescer.unpack(MessageCoalescer.pack(messages)), messages);
+      expect(
+        MessageCoalescer.unpack(MessageCoalescer.pack(messages)),
+        messages,
+      );
     });
 
     test('frame overhead is small for tiny messages', () {
-      final messages = [for (var i = 0; i < 50; i++) [i, i, i]];
+      final messages = [
+        for (var i = 0; i < 50; i++) [i, i, i],
+      ];
       final frame = MessageCoalescer.pack(messages);
       final rawBytes = 50 * 3;
       expect(frame.length, lessThan(rawBytes + 60), reason: '~1B/message');
@@ -24,7 +29,10 @@ void main() {
       final frame = MessageCoalescer.pack([
         [1, 2, 3, 4, 5],
       ]);
-      expect(MessageCoalescer.unpack(frame.sublist(0, frame.length - 2)), isNull);
+      expect(
+        MessageCoalescer.unpack(frame.sublist(0, frame.length - 2)),
+        isNull,
+      );
     });
   });
 
@@ -115,7 +123,12 @@ void main() {
         lostLength: chunks[2].length,
       );
 
-      final reassembled = [...chunks[0], ...chunks[1], ...rebuilt, ...chunks[3]];
+      final reassembled = [
+        ...chunks[0],
+        ...chunks[1],
+        ...rebuilt,
+        ...chunks[3],
+      ];
       final decoded = MessageCoalescer.unpack(
         WeakLinkCompressor.decode(reassembled)!,
       );

@@ -24,5 +24,5 @@ export 'src/resilient_fallback_lanes.dart';
 export 'src/resilient_media_transport.dart';
 export 'src/silence_suppression_vad.dart';
 export 'src/token_voice_channel.dart';
-export 'src/trend_sentinel.dart';
+export 'src/trend_monitor.dart';
 export 'src/weak_link_codec.dart';

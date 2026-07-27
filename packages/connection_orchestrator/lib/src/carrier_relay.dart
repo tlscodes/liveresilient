@@ -88,6 +88,7 @@ class CarrierRelay {
     this.capacityBytes = 8 * 1024 * 1024,
     this.maxHops = 8,
     this.maxAcceptPerPeer = 50,
+    this.maxSeenIds = 10000,
   });
 
   /// Bounded so relaying for others can never exhaust this device.
@@ -101,13 +102,18 @@ class CarrierRelay {
   /// custody is shared across everyone we meet.
   final int maxAcceptPerPeer;
 
+  /// Cap on the dedup/summary vector, so a device that relays for months
+  /// does not grow one entry per bundle it has ever touched.
+  final int maxSeenIds;
+
   final Map<String, CustodyBundle> _held = {};
-  final Set<String> _seen = {}; // ids ever accepted or handed over
+
+  // Insertion-ordered: ids ever accepted or handed over, oldest first.
+  final Set<String> _seen = {};
   final Map<String, int> _acceptedFromPeer = {};
 
   int get heldCount => _held.length;
-  int get heldBytes =>
-      _held.values.fold(0, (a, b) => a + b.payload.length);
+  int get heldBytes => _held.values.fold(0, (a, b) => a + b.payload.length);
 
   /// Offers a bundle for custody. Returns null on acceptance, or the
   /// refusal reason (the offering peer keeps custody on refusal).
@@ -129,7 +135,7 @@ class CarrierRelay {
       return CustodyRefusal.storeFull;
     }
     _held[bundle.bundleId] = bundle;
-    _seen.add(bundle.bundleId);
+    _rememberSeen(bundle.bundleId);
     if (fromPeer != null) {
       _acceptedFromPeer[fromPeer] = (_acceptedFromPeer[fromPeer] ?? 0) + 1;
     }
@@ -219,14 +225,42 @@ class CarrierRelay {
     for (final b in _held.values) b.toJson(),
   ];
 
-  void restore(Object? json, {required int nowMs}) {
-    if (json is! List) return;
+  /// Reloads persisted custody. Storage is not trusted to have been
+  /// written by this build: a file from a higher-capacity version, or a
+  /// tampered one, would otherwise push the store permanently past the
+  /// bounds this class advertises. Every row therefore passes the same
+  /// capacity and hop gates as a live [accept]; rows beyond them are
+  /// dropped. Returns how many bundles were actually restored.
+  int restore(Object? json, {required int nowMs}) {
+    if (json is! List) return 0;
+    var restored = 0;
     for (final row in json) {
       final b = CustodyBundle.fromJson(row);
-      if (b != null && !b.expired(nowMs)) {
-        _held[b.bundleId] = b;
-        _seen.add(b.bundleId);
+      if (b == null || b.expired(nowMs)) continue;
+      if (b.hopCount >= maxHops) continue;
+      if (_held.containsKey(b.bundleId)) continue;
+      if (_held.length >= capacityBundles ||
+          heldBytes + b.payload.length > capacityBytes) {
+        continue;
       }
+      _held[b.bundleId] = b;
+      _rememberSeen(b.bundleId);
+      restored++;
+    }
+    return restored;
+  }
+
+  /// Records a bundle id in the dedup vector, evicting the oldest ids
+  /// once the vector is full. Without the cap a long-lived carrier that
+  /// meets many peers accumulates every id it has ever touched for the
+  /// life of the process; the trade is that an id evicted from the
+  /// vector can be accepted a second time, which the hop and expiry
+  /// gates still bound.
+  void _rememberSeen(String bundleId) {
+    if (_seen.contains(bundleId)) return;
+    _seen.add(bundleId);
+    while (_seen.length > maxSeenIds) {
+      _seen.remove(_seen.first);
     }
   }
 }

@@ -45,8 +45,8 @@ int _crc8(Uint8List bytes, int end) {
 /// Builds datagrams that each carry the newest block plus recent ones.
 class SlidingWindowPacker {
   SlidingWindowPacker({this.maxDatagramBytes = 60, this.windowBlocks = 8})
-      : assert(maxDatagramBytes > 8),
-        assert(windowBlocks >= 1);
+    : assert(maxDatagramBytes > 8),
+      assert(windowBlocks >= 1);
 
   /// Total datagram size cap, header and trailing CRC included.
   final int maxDatagramBytes;
@@ -62,8 +62,10 @@ class SlidingWindowPacker {
   /// fragmented block needs every piece and cannot exploit the window.
   Uint8List addBlock(int seq, Uint8List blockBytes) {
     if (blockBytes.length + 5 > maxDatagramBytes) {
-      throw ArgumentError('block of ${blockBytes.length} B exceeds the '
-          '$maxDatagramBytes B datagram budget — use fewer frames');
+      throw ArgumentError(
+        'block of ${blockBytes.length} B exceeds the '
+        '$maxDatagramBytes B datagram budget — use fewer frames',
+      );
     }
     _recent.insert(0, (seq, blockBytes));
     if (_recent.length > windowBlocks) _recent.removeLast();

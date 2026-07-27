@@ -84,7 +84,10 @@ void main() {
         payload: List.filled(100, 1),
         chunkSize: 10,
       )..restore(t.toJson());
-      expect(reborn.remainingChunks().map((c) => c.id.index), isNot(contains(4)));
+      expect(
+        reborn.remainingChunks().map((c) => c.id.index),
+        isNot(contains(4)),
+      );
     });
   });
 
@@ -175,8 +178,7 @@ void main() {
       );
     });
 
-    test('refresh self-resumes an in-flight transfer to completion',
-        () async {
+    test('refresh self-resumes an in-flight transfer to completion', () async {
       var clockMs = 0;
       final queue = DtnBundleQueue();
       final fabric = ConnectionFabric(
@@ -226,7 +228,8 @@ void main() {
       );
       for (final chunk in transfer.remainingChunks()) {
         await fabric.deliver(chunk.payload, bundleId: chunk.id.encode());
-        whole = reassembler.accept(chunk.id.encode(), lane.lastPayload!) ?? whole;
+        whole =
+            reassembler.accept(chunk.id.encode(), lane.lastPayload!) ?? whole;
       }
       expect(whole, payload);
       await fabric.dispose();

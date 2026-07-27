@@ -21,7 +21,7 @@ void main() {
     // 8 seconds of synthetic "speech" at 24kHz-ish frame granularity
     final rng = Random(5);
     final samples = [
-      for (var i = 0; i < 160 * 300; i++) sin(i / 17) * (rng.nextDouble())
+      for (var i = 0; i < 160 * 300; i++) sin(i / 17) * (rng.nextDouble()),
     ];
     final tokens = await codec.encodeFrames(samples);
     expect(tokens.length, 300);
@@ -33,8 +33,10 @@ void main() {
     // send in 25-frame blocks over a link alive 1 pulse in 4
     var nowMs = 0;
     for (var i = 0; i < tokens.length; i += 25) {
-      sender.sendBlock(tokens.sublist(i, min(i + 25, tokens.length)),
-          nowMs: nowMs);
+      sender.sendBlock(
+        tokens.sublist(i, min(i + 25, tokens.length)),
+        nowMs: nowMs,
+      );
       if ((i ~/ 25) % 4 == 3) {
         await queue.flush((bundle) async {
           receiver.offer(bundle.payload);
@@ -54,7 +56,10 @@ void main() {
 
     // and the speaker end produces frame-aligned audio
     final out = await codec.decodeFrames(received);
-    expect(out.length, samples.length,
-        reason: '160 samples per token column, nothing dropped');
+    expect(
+      out.length,
+      samples.length,
+      reason: '160 samples per token column, nothing dropped',
+    );
   });
 }

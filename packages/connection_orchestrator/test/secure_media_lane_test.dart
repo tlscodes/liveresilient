@@ -17,10 +17,10 @@ class FakeRelayPeer implements SecureLaneConnection {
     required String password,
     this.dialDelay = Duration.zero,
     int exporterSeed = 13,
-  })  : _password = password,
-        tlsExporter = Uint8List.fromList(
-          List.generate(tlsExporterLength, (i) => (i * exporterSeed + 5) & 0xff),
-        );
+  }) : _password = password,
+       tlsExporter = Uint8List.fromList(
+         List.generate(tlsExporterLength, (i) => (i * exporterSeed + 5) & 0xff),
+       );
 
   final String username;
   final String _password;
@@ -40,7 +40,9 @@ class FakeRelayPeer implements SecureLaneConnection {
 
   @override
   Future<({String serverNonce, Uint8List salt, int iterations})> startAuth(
-      String user, String clientNonce) async {
+    String user,
+    String clientNonce,
+  ) async {
     _clientNonce = clientNonce;
     return (serverNonce: 'srv-1', salt: salt, iterations: iterations);
   }
@@ -97,52 +99,63 @@ void main() {
   Future<SecureMediaLane> connectLane(
     Map<String, FakeRelayPeer> peers, {
     String password = 'lane secret',
-  }) =>
-      SecureMediaLane.establish(
-        endpoints: endpoints,
-        dial: (e) async {
-          final peer = peers[e.hostPort.host]!;
-          if (peer.dialDelay > Duration.zero) {
-            await Future<void>.delayed(peer.dialDelay);
-          }
-          return peer;
-        },
-        username: 'caller',
-        password: password,
-        randomBytes: fixedBytes,
-        connectionAttemptDelay: const Duration(milliseconds: 20),
-      );
+  }) => SecureMediaLane.establish(
+    endpoints: endpoints,
+    dial: (e) async {
+      final peer = peers[e.hostPort.host]!;
+      if (peer.dialDelay > Duration.zero) {
+        await Future<void>.delayed(peer.dialDelay);
+      }
+      return peer;
+    },
+    username: 'caller',
+    password: password,
+    randomBytes: fixedBytes,
+    connectionAttemptDelay: const Duration(milliseconds: 20),
+  );
 
   Map<String, FakeRelayPeer> twoPeers({Duration slowA = Duration.zero}) => {
-        'relay-a.example':
-            FakeRelayPeer(username: 'caller', password: 'lane secret', dialDelay: slowA),
-        'relay-b.example':
-            FakeRelayPeer(username: 'caller', password: 'lane secret'),
-      };
+    'relay-a.example': FakeRelayPeer(
+      username: 'caller',
+      password: 'lane secret',
+      dialDelay: slowA,
+    ),
+    'relay-b.example': FakeRelayPeer(
+      username: 'caller',
+      password: 'lane secret',
+    ),
+  };
 
   group('SecureMediaLane end-to-end', () {
-    test('full recipe: race -> mutual auth -> path validation -> framed send',
-        () async {
-      final peers = twoPeers();
-      final lane = await connectLane(peers);
-      expect(lane.name, startsWith('secure-relay:'));
-      final result = await lane.send([1, 2, 3, 4]);
-      expect(result.delivered, isTrue);
-      final server = peers[lane.endpoint.hostPort.host]!;
-      expect(server.receivedPayloads.single, [1, 2, 3, 4]);
-      expect(await lane.probe(), isTrue,
-          reason: 'probe re-validates the path cryptographically');
-    });
+    test(
+      'full recipe: race -> mutual auth -> path validation -> framed send',
+      () async {
+        final peers = twoPeers();
+        final lane = await connectLane(peers);
+        expect(lane.name, startsWith('secure-relay:'));
+        final result = await lane.send([1, 2, 3, 4]);
+        expect(result.delivered, isTrue);
+        final server = peers[lane.endpoint.hostPort.host]!;
+        expect(server.receivedPayloads.single, [1, 2, 3, 4]);
+        expect(
+          await lane.probe(),
+          isTrue,
+          reason: 'probe re-validates the path cryptographically',
+        );
+      },
+    );
 
-    test('slow first endpoint loses the race and its dial is discarded',
-        () async {
-      final peers = twoPeers(slowA: const Duration(milliseconds: 300));
-      final lane = await connectLane(peers);
-      expect(lane.endpoint.hostPort.host, 'relay-b.example');
-      await lane.send([9]);
-      expect(peers['relay-b.example']!.receivedPayloads, hasLength(1));
-      expect(peers['relay-a.example']!.receivedPayloads, isEmpty);
-    });
+    test(
+      'slow first endpoint loses the race and its dial is discarded',
+      () async {
+        final peers = twoPeers(slowA: const Duration(milliseconds: 300));
+        final lane = await connectLane(peers);
+        expect(lane.endpoint.hostPort.host, 'relay-b.example');
+        await lane.send([9]);
+        expect(peers['relay-b.example']!.receivedPayloads, hasLength(1));
+        expect(peers['relay-a.example']!.receivedPayloads, isEmpty);
+      },
+    );
 
     test('wrong password fails closed at mutual auth', () async {
       final peers = twoPeers();
@@ -151,7 +164,8 @@ void main() {
         throwsA(isA<LaneEstablishmentException>()),
       );
       expect(
-        peers.values.where((p) => p.closed), isNotEmpty,
+        peers.values.where((p) => p.closed),
+        isNotEmpty,
         reason: 'a failed lane never leaks its connection',
       );
     });
@@ -162,12 +176,13 @@ void main() {
       await lane.send([5, 6]);
       final server = peers[lane.endpoint.hostPort.host]!;
       final captured = server.wireLog.single;
-      expect(() => server.sendDatagram(captured),
-          throwsA(isA<ReplayedDatagramException>()));
+      expect(
+        () => server.sendDatagram(captured),
+        throwsA(isA<ReplayedDatagramException>()),
+      );
     });
 
-    test('registered in ConnectionFabric it carries a delivery live',
-        () async {
+    test('registered in ConnectionFabric it carries a delivery live', () async {
       final peers = twoPeers();
       final lane = await connectLane(peers);
       final fabric = ConnectionFabric(
@@ -190,19 +205,23 @@ void main() {
       await fabric.dispose();
     });
 
-    test('measured: per-datagram lane overhead and establish round count',
-        () async {
-      final peers = twoPeers();
-      final lane = await connectLane(peers);
-      const payload = 160;
-      final framed = lane.frame(Uint8List(payload));
-      final overhead = framed.length - payload;
-      // ignore: avoid_print
-      print('MEASURED secure lane overhead: $overhead B per $payload B '
-          'datagram (channel 4 + sequence 6 + padding)');
-      expect(overhead, lessThanOrEqualTo(13));
-      expect(lane.keyEpoch, 0);
-      expect(lane.channelNumber, ChannelRelayBinder.firstChannel);
-    });
+    test(
+      'measured: per-datagram lane overhead and establish round count',
+      () async {
+        final peers = twoPeers();
+        final lane = await connectLane(peers);
+        const payload = 160;
+        final framed = lane.frame(Uint8List(payload));
+        final overhead = framed.length - payload;
+        // ignore: avoid_print
+        print(
+          'MEASURED secure lane overhead: $overhead B per $payload B '
+          'datagram (channel 4 + sequence 6 + padding)',
+        );
+        expect(overhead, lessThanOrEqualTo(13));
+        expect(lane.keyEpoch, 0);
+        expect(lane.channelNumber, ChannelRelayBinder.firstChannel);
+      },
+    );
   });
 }

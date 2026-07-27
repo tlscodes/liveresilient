@@ -68,7 +68,8 @@ Uint8List residualGap(Uint8List px, int w, int h, int ch) {
       final ww = at(y, x - 2 * ch);
       final nn = at(y - 2, x);
       final dh = (wv - ww).abs() + (n - nw).abs() + (n - ne).abs();
-      final dv = (wv - nw).abs() + (n - nn).abs() + (ne - at(y - 2, x + ch)).abs();
+      final dv =
+          (wv - nw).abs() + (n - nn).abs() + (ne - at(y - 2, x + ch)).abs();
       int pred;
       final d = dv - dh;
       if (d > 80) {
@@ -100,12 +101,12 @@ const _frame = 4096;
 
 /// FLAC's fixed predictors, orders 0-4, residual as int16 wraparound.
 int _predict(Int16List s, int i, int order) => switch (order) {
-      0 => 0,
-      1 => s[i - 1],
-      2 => 2 * s[i - 1] - s[i - 2],
-      3 => 3 * s[i - 1] - 3 * s[i - 2] + s[i - 3],
-      _ => 4 * s[i - 1] - 6 * s[i - 2] + 4 * s[i - 3] - s[i - 4],
-    };
+  0 => 0,
+  1 => s[i - 1],
+  2 => 2 * s[i - 1] - s[i - 2],
+  3 => 3 * s[i - 1] - 3 * s[i - 2] + s[i - 3],
+  _ => 4 * s[i - 1] - 6 * s[i - 2] + 4 * s[i - 3] - s[i - 4],
+};
 
 /// Output layout: [u8 order per frame ...][int16 residuals]. Exactly
 /// invertible; the per-frame header bytes are part of the size.
@@ -148,8 +149,7 @@ Uint8List unLpcAdaptive(Uint8List packed, int originalLen) {
   final n = originalLen ~/ 2;
   final frames = (n + _frame - 1) ~/ _frame;
   final orders = Uint8List.sublistView(packed, 0, frames);
-  final res = Int16List.view(packed.buffer,
-      packed.offsetInBytes + frames, n);
+  final res = Int16List.view(packed.buffer, packed.offsetInBytes + frames, n);
   final s = Int16List(n);
   for (var f = 0; f < frames; f++) {
     final start = f * _frame;
@@ -176,12 +176,16 @@ bool _eq(Uint8List a, Uint8List b) {
 
 void main() {
   // ---- image: Paeth baseline vs GAP vs YCoCg-R+each ----
-  final png = File('/Users/behnam/Downloads/voorrang_tram_afslaan_topdown.png')
-      .readAsBytesSync();
+  final png = File(
+    '/Users/behnam/Downloads/voorrang_tram_afslaan_topdown.png',
+  ).readAsBytesSync();
   final img = pngDecode(Uint8List.fromList(png))!;
   final rows = img.height < 500 ? img.height : 500;
-  final crop =
-      Uint8List.sublistView(img.pixels, 0, rows * img.width * img.channels);
+  final crop = Uint8List.sublistView(
+    img.pixels,
+    0,
+    rows * img.width * img.channels,
+  );
   final w = img.width, ch = img.channels;
 
   // Round-trip proof of the two new image transforms on real pixels.
@@ -189,34 +193,44 @@ void main() {
 
   final paeth = c.compress(residual2d(crop, w, rows, ch)).length;
   final gap = c.compress(residualGap(crop, w, rows, ch)).length;
-  final yPaeth =
-      c.compress(residual2d(ycocgR(crop, ch), w, rows, ch)).length;
+  final yPaeth = c.compress(residual2d(ycocgR(crop, ch), w, rows, ch)).length;
   final yGap = c.compress(residualGap(ycocgR(crop, ch), w, rows, ch)).length;
   final pngProxy = gz.encode(residual2d(crop, w, rows, ch)).length;
-  print('image (${w}x$rows x$ch): png-proxy=$pngProxy  paeth+cm=$paeth  '
-      'gap+cm=$gap  ycocg+paeth+cm=$yPaeth  ycocg+gap+cm=$yGap');
+  print(
+    'image (${w}x$rows x$ch): png-proxy=$pngProxy  paeth+cm=$paeth  '
+    'gap+cm=$gap  ycocg+paeth+cm=$yPaeth  ycocg+gap+cm=$yGap',
+  );
   final bestImg = [paeth, gap, yPaeth, yGap].reduce((a, b) => a < b ? a : b);
-  print('  best image variant: '
-      '${(100 * (1 - bestImg / pngProxy)).toStringAsFixed(1)}% under '
-      'PNG-equivalent');
+  print(
+    '  best image variant: '
+    '${(100 * (1 - bestImg / pngProxy)).toStringAsFixed(1)}% under '
+    'PNG-equivalent',
+  );
 
   // ---- audio: lpc2 baseline vs per-frame adaptive ----
   final wav = File(
-          '/Users/behnam/Downloads/voice_call_kit_v3/demo_audio/gift_24k.wav')
-      .readAsBytesSync();
+    '/Users/behnam/Downloads/voice_call_kit_v3/demo_audio/gift_24k.wav',
+  ).readAsBytesSync();
   final pcm = Uint8List.sublistView(
-      Uint8List.fromList(wav), 44, 44 + 131072); // skip WAV header
+    Uint8List.fromList(wav),
+    44,
+    44 + 131072,
+  ); // skip WAV header
   assert(_eq(unlpc2(lpc2(pcm)), pcm));
   final packed = lpcAdaptive(pcm);
   assert(_eq(unLpcAdaptive(packed, pcm.length), pcm));
   final gzB = gz.encode(pcm).length;
   final l2 = c.compress(lpc2(pcm)).length;
   final lAd = c.compress(packed).length;
-  print('audio PCM (${pcm.length} B): gzip9=$gzB  lpc2+cm=$l2  '
-      'lpcAdaptive+cm=$lAd');
+  print(
+    'audio PCM (${pcm.length} B): gzip9=$gzB  lpc2+cm=$l2  '
+    'lpcAdaptive+cm=$lAd',
+  );
   final bestA = lAd < l2 ? lAd : l2;
-  print('  best audio variant: '
-      '${(100 * (1 - bestA / gzB)).toStringAsFixed(1)}% under gzip9');
+  print(
+    '  best audio variant: '
+    '${(100 * (1 - bestA / gzB)).toStringAsFixed(1)}% under gzip9',
+  );
 
   // Video probe: no real video sample in reach today — 3D temporal
   // residual stays DESIGNED-NOT-MEASURED until phase 4c synthesizes

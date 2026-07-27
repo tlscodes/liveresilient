@@ -33,6 +33,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:clock/clock.dart';
@@ -376,6 +377,32 @@ class FallbackTarget {
   /// a signal.
   final String host;
   final int port;
+
+  /// Name of the environment variable that overrides any statically
+  /// configured fallback target at process start.
+  static const String hostEnvironmentVariable = 'FALLBACK_TARGET_HOST';
+
+  /// Resolves the operative fallback target: [hostEnvironmentVariable]
+  /// takes strict priority over [staticDefault] when it is set to a
+  /// non-empty value; otherwise [staticDefault] is used unchanged. Accepts
+  /// a `host`, `host:port`, or full `scheme://host:port` value in the
+  /// environment variable, mirroring [ProbeDefenseConfig]'s own parsing of
+  /// the `fallbackTarget` config field.
+  ///
+  /// [environment] is injectable for tests; defaults to the real process
+  /// environment.
+  static FallbackTarget? resolve(
+    FallbackTarget? staticDefault, {
+    Map<String, String>? environment,
+  }) {
+    final env = environment ?? Platform.environment;
+    final raw = env[hostEnvironmentVariable]?.trim();
+    if (raw == null || raw.isEmpty) return staticDefault;
+
+    final uri = raw.contains('://') ? Uri.parse(raw) : Uri.parse('https://$raw');
+    if (uri.host.isEmpty) return staticDefault;
+    return FallbackTarget(host: uri.host, port: uri.hasPort ? uri.port : 443);
+  }
 
   @override
   String toString() => '$host:$port';

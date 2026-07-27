@@ -42,11 +42,12 @@ class MediaCarriage {
     MicroDatagramLane? lane,
     SctpDataChannelFramer? framer,
     Random? random,
-  })  : lane = lane ??
-            (random == null
-                ? MicroDatagramLane()
-                : MicroDatagramLane(random: random, allowInsecureRandom: true)),
-        _framer = framer ?? SctpDataChannelFramer() {
+  }) : lane =
+           lane ??
+           (random == null
+               ? MicroDatagramLane()
+               : MicroDatagramLane(random: random, allowInsecureRandom: true)),
+       _framer = framer ?? SctpDataChannelFramer() {
     if (mtuBlockSize < 1) {
       throw ArgumentError.value(mtuBlockSize, 'mtuBlockSize', 'must be >= 1');
     }
@@ -164,9 +165,9 @@ class MediaCarriage {
 
   /// Bytes this carrier adds on top of the padded datagram.
   int get framingOverheadBytes => switch (carrier) {
-        MediaCarrier.http2DataFrame => Http2DataFrame.headerLength,
-        MediaCarrier.sctpDataChannel => 2,
-      };
+    MediaCarrier.http2DataFrame => Http2DataFrame.headerLength,
+    MediaCarrier.sctpDataChannel => 2,
+  };
 }
 
 /// Internal wrapper so [MediaCarriage.unwrap] can attribute a failure to

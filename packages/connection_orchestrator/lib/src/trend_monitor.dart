@@ -29,8 +29,8 @@ class _Series {
 }
 
 /// Per-lane linear trend estimator over a sliding sample window.
-class TrendSentinel {
-  TrendSentinel({
+class TrendMonitor {
+  TrendMonitor({
     this.window = 8,
     this.horizonMs = 10000,
     this.floor = 0.2,

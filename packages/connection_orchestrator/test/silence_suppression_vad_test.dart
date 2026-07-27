@@ -58,8 +58,10 @@ void main() {
 
   group('process', () {
     test('silence drops frames and pings exactly once per second', () {
-      final vad =
-          SilenceSuppressionVAD(hangoverFrames: 0, keepAliveIntervalMs: 1000);
+      final vad = SilenceSuppressionVAD(
+        hangoverFrames: 0,
+        keepAliveIntervalMs: 1000,
+      );
       final quiet = noiseFrame(30, 2);
       var sends = 0, drops = 0, pings = 0;
       // 10 s of pure silence, one 20 ms frame per tick.
@@ -79,8 +81,10 @@ void main() {
     });
 
     test('speech resumes sending and hangover covers word endings', () {
-      final vad =
-          SilenceSuppressionVAD(hangoverFrames: 3, keepAliveIntervalMs: 1000);
+      final vad = SilenceSuppressionVAD(
+        hangoverFrames: 3,
+        keepAliveIntervalMs: 1000,
+      );
       final quiet = noiseFrame(30, 3);
       var ms = 0;
       // lead-in silence long enough to leave keep-alive mode
@@ -91,8 +95,11 @@ void main() {
       ms += 20;
       // 3 hangover frames after speech stops are still sent
       for (var i = 0; i < 3; i++, ms += 20) {
-        expect(vad.process(quiet, ms), VadAction.send,
-            reason: 'hangover frame $i');
+        expect(
+          vad.process(quiet, ms),
+          VadAction.send,
+          reason: 'hangover frame $i',
+        );
       }
       expect(vad.process(quiet, ms), VadAction.drop);
     });
@@ -107,8 +114,10 @@ void main() {
 
     test('byte budget: VAD cuts transmitted codec frames on a half-silent '
         'conversation', () {
-      final vad =
-          SilenceSuppressionVAD(hangoverFrames: 5, keepAliveIntervalMs: 1000);
+      final vad = SilenceSuppressionVAD(
+        hangoverFrames: 5,
+        keepAliveIntervalMs: 1000,
+      );
       final quiet = noiseFrame(30, 4);
       var framesSent = 0, framesTotal = 0;
       var ms = 0;
@@ -121,8 +130,11 @@ void main() {
           if (vad.process(frame, ms) == VadAction.send) framesSent++;
         }
       }
-      expect(framesSent / framesTotal, closeTo(0.5, 0.05),
-          reason: 'roughly the talk half is sent, the pause half is not');
+      expect(
+        framesSent / framesTotal,
+        closeTo(0.5, 0.05),
+        reason: 'roughly the talk half is sent, the pause half is not',
+      );
     });
   });
 
@@ -149,8 +161,11 @@ void main() {
       sw.stop();
       expect(vad.speechFrames, 50000);
       expect(vad.silenceFrames, 50000);
-      expect(sw.elapsedMilliseconds, lessThan(2000),
-          reason: '100k frames must stay far from allocation-churn pace');
+      expect(
+        sw.elapsedMilliseconds,
+        lessThan(2000),
+        reason: '100k frames must stay far from allocation-churn pace',
+      );
     });
   });
 }

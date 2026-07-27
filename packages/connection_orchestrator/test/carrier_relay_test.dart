@@ -35,10 +35,7 @@ void main() {
       final relay = CarrierRelay();
       relay.accept(bundle('new', at: 5000), nowMs: 5000);
       relay.accept(bundle('old', at: 0, life: 99000), nowMs: 5000);
-      expect(
-        relay.bundlesFor('peer-b', nowMs: 6000).first.bundleId,
-        'old',
-      );
+      expect(relay.bundlesFor('peer-b', nowMs: 6000).first.bundleId, 'old');
     });
 
     test('refuses duplicates, expired, hop-exhausted and over-capacity', () {
@@ -79,8 +76,7 @@ void main() {
       relay.accept(bundle('dying', life: 1000), nowMs: 0);
       expect(relay.prune(nowMs: 5000), 1);
 
-      final reborn = CarrierRelay()
-        ..restore(relay.toJson(), nowMs: 5000);
+      final reborn = CarrierRelay()..restore(relay.toJson(), nowMs: 5000);
       expect(reborn.heldCount, 1);
       expect(reborn.bundlesFor('peer-b', nowMs: 5000).single.bundleId, 'live');
     });
