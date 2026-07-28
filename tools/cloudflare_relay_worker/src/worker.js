@@ -25,7 +25,14 @@
  * requests for the same session can land on different machines.
  */
 
-import { BroadcastArchive, parseBroadcastPath } from './broadcast.js';
+import {
+  AUTH_HEADER,
+  BroadcastArchive,
+  parseBroadcastPath,
+} from './broadcast.js';
+
+/** How often a shard wakes to expire what it holds. */
+const _sweepIntervalMs = 60 * 60 * 1000;
 
 /** Frames buffered for a peer that has not connected yet, per direction. */
 const MAX_QUEUED_FRAMES = 256;
@@ -147,30 +154,38 @@ export class BroadcastArchiveObject {
       request.method === 'PUT' || request.method === 'POST'
         ? await request.arrayBuffer()
         : null;
-    const response = await this.archive.handle(route, request.method, body);
+    const response = await this.archive.handle(
+      route,
+      request.method,
+      body,
+      request.headers.get(AUTH_HEADER),
+    );
 
-    // Schedule the sweep after a successful write, not on every request:
-    // setAlarm is idempotent for a time already set, so this costs nothing
-    // when one is already pending.
-    if (response.status === 201) {
+    // Any write attempt schedules the sweep, not only a successful one.
+    // Scheduling on 201 alone left a dead end: a shard that reported
+    // itself full answered 507, a 507 scheduled nothing, and once the last
+    // alarm had fired there was no path left that could ever free it.
+    if (request.method === 'PUT' || request.method === 'POST') {
       const pending = await this.state.storage.getAlarm();
       if (pending === null) {
-        await this.state.storage.setAlarm(Date.now() + 60 * 60 * 1000);
+        await this.state.storage.setAlarm(Date.now() + _sweepIntervalMs);
       }
     }
     return response;
   }
 
-  /** Expires what is past retention, and keeps sweeping while anything is left. */
+  /// Expires what is past retention, and keeps sweeping while anything is
+  /// still held that will eventually expire.
   async alarm() {
     await this.archive.sweep();
+    // Rescheduled while anything remains, because everything here has an
+    // expiry and something must be awake to act on it.
     const remaining = await this.state.storage.list();
-    let live = 0;
     for (const key of remaining.keys()) {
-      if (key !== 'meta') live += 1;
-    }
-    if (live > 0) {
-      await this.state.storage.setAlarm(Date.now() + 60 * 60 * 1000);
+      if (key !== 'meta') {
+        await this.state.storage.setAlarm(Date.now() + _sweepIntervalMs);
+        return;
+      }
     }
   }
 }

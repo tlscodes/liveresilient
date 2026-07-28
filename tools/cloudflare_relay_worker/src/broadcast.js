@@ -92,6 +92,180 @@ export function parseBroadcastPath(pathname) {
   return null;
 }
 
+/**
+ * Header carrying the credentials a descriptor write must prove itself
+ * with: base64url of the 32-byte root public key followed by the
+ * 115-byte publishing certificate.
+ */
+export const AUTH_HEADER = 'x-broadcast-auth';
+
+/** Exact byte length of the credential blob: root key plus certificate. */
+export const AUTH_BYTES = 32 + 115;
+
+/** Offsets into a descriptor, from the Dart format's own layout. */
+const DESCRIPTOR_AUTHOR_OFFSET = 2;
+const DESCRIPTOR_AUTHOR_BYTES = 8;
+const DESCRIPTOR_SIGNATURE_BYTES = 64;
+
+/** Offsets into a publishing certificate. */
+const CERT_AUTHOR_OFFSET = 1;
+const CERT_KEY_OFFSET = 9;
+const CERT_KEY_BYTES = 32;
+const CERT_SIGNATURE_BYTES = 64;
+
+const CERT_DOMAIN = 'vck/broadcast/publishing-key/v1\n';
+const DESCRIPTOR_DOMAIN = 'vck/broadcast/descriptor/v1\n';
+
+/** Decode base64url without padding. */
+function fromBase64Url(text) {
+  const padded = text.replace(/-/g, '+').replace(/_/g, '/');
+  try {
+    const binary = atob(padded);
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function concat(prefix, bytes) {
+  const out = new Uint8Array(prefix.length + bytes.length);
+  out.set(prefix, 0);
+  out.set(bytes, prefix.length);
+  return out;
+}
+
+const TEXT = new TextEncoder();
+
+/**
+ * Verify an Ed25519 signature with WebCrypto.
+ *
+ * Needs a compatibility date where workerd exposes Ed25519 through
+ * SubtleCrypto. If a deployment's date predates that, importKey throws and
+ * this returns false, which fails writes closed rather than open — the
+ * safe direction, and loud enough to notice immediately.
+ */
+async function verifyEd25519(publicKey, message, signature) {
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      publicKey,
+      { name: 'Ed25519' },
+      false,
+      ['verify'],
+    );
+    return await crypto.subtle.verify('Ed25519', key, signature, message);
+  } catch {
+    return false;
+  }
+}
+
+function bytesEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Whether the credentials in [authHeader] authorize writing [descriptor]
+ * at [authorId].
+ *
+ * The relay holds no keys and knows no authors, but it does not need to:
+ * the credentials carry the whole chain, and every link is checkable from
+ * the bytes alone.
+ *
+ *   1. the author id in the path is the truncated hash of the root key
+ *   2. the certificate names that same author and is signed by that root
+ *   3. the descriptor names that same author and is signed by the
+ *      publishing key the certificate delegates to
+ *
+ * Without this, write-once worked against the author it was meant to
+ * protect: anyone could PUT a one-byte body to a hundred of an author's
+ * future sequence numbers and lock them for the whole retention window.
+ * Note what is still NOT checked here — certificate validity dates. Time
+ * is the reader's business; the relay only establishes that these bytes
+ * come from whoever holds that root key.
+ */
+export async function authorizeDescriptorWrite({
+  authorId,
+  descriptor,
+  authHeader,
+  verify = verifyEd25519,
+  hash = sha256Hex,
+}) {
+  if (!authHeader) return false;
+  const credentials = fromBase64Url(authHeader);
+  if (!credentials || credentials.length !== AUTH_BYTES) return false;
+
+  const rootKey = credentials.subarray(0, 32);
+  const certificate = credentials.subarray(32);
+
+  // 1. The path names this root key.
+  const rootHash = await hash(rootKey);
+  if (rootHash.slice(0, DESCRIPTOR_AUTHOR_BYTES * 2) !== authorId) {
+    return false;
+  }
+
+  // 2. The certificate is this author's, and the root key signed it.
+  const certAuthor = certificate.subarray(
+    CERT_AUTHOR_OFFSET,
+    CERT_AUTHOR_OFFSET + DESCRIPTOR_AUTHOR_BYTES,
+  );
+  const pathAuthor = new Uint8Array(
+    authorId.match(/../g).map((pair) => parseInt(pair, 16)),
+  );
+  if (!bytesEqual(certAuthor, pathAuthor)) return false;
+
+  const certBody = certificate.subarray(
+    0,
+    certificate.length - CERT_SIGNATURE_BYTES,
+  );
+  const certSignature = certificate.subarray(
+    certificate.length - CERT_SIGNATURE_BYTES,
+  );
+  const certOk = await verify(
+    rootKey,
+    concat(TEXT.encode(CERT_DOMAIN), certBody),
+    certSignature,
+  );
+  if (!certOk) return false;
+
+  // 3. The descriptor is this author's, and the delegated key signed it.
+  if (
+    descriptor.length <
+    DESCRIPTOR_AUTHOR_OFFSET +
+      DESCRIPTOR_AUTHOR_BYTES +
+      DESCRIPTOR_SIGNATURE_BYTES
+  ) {
+    return false;
+  }
+  const descriptorAuthor = descriptor.subarray(
+    DESCRIPTOR_AUTHOR_OFFSET,
+    DESCRIPTOR_AUTHOR_OFFSET + DESCRIPTOR_AUTHOR_BYTES,
+  );
+  if (!bytesEqual(descriptorAuthor, pathAuthor)) return false;
+
+  const publishingKey = certificate.subarray(
+    CERT_KEY_OFFSET,
+    CERT_KEY_OFFSET + CERT_KEY_BYTES,
+  );
+  const descriptorBody = descriptor.subarray(
+    0,
+    descriptor.length - DESCRIPTOR_SIGNATURE_BYTES,
+  );
+  const descriptorSignature = descriptor.subarray(
+    descriptor.length - DESCRIPTOR_SIGNATURE_BYTES,
+  );
+  return verify(
+    publishingKey,
+    concat(TEXT.encode(DESCRIPTOR_DOMAIN), descriptorBody),
+    descriptorSignature,
+  );
+}
+
 /** SHA-256 of [bytes] as lowercase hex. */
 export async function sha256Hex(bytes) {
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -109,6 +283,19 @@ function storageKey(route) {
   return route.kind === 'descriptor'
     ? `d:${route.authorId}:${route.seq}`
     : `o:${route.hash}`;
+}
+
+/**
+ * Accounted size of a stored entry.
+ *
+ * Tolerates both a typed array and a plain array, because a shard written
+ * by an older build holds the latter and its bytes must still be counted
+ * and freed correctly.
+ */
+function entryLength(entry) {
+  const bytes = entry?.bytes;
+  if (!bytes) return 0;
+  return bytes.byteLength ?? bytes.length ?? 0;
 }
 
 function sameBytes(a, b) {
@@ -135,24 +322,52 @@ export class BroadcastArchive {
     this.storage = storage;
     this.now = options.now ?? (() => Date.now());
     this.retentionMs = options.retentionMs ?? RETENTION_MS;
+    // Injected so the authorization logic runs under a plain object in a
+    // unit test, with no workerd and no real keys.
+    this.verify = options.verify ?? verifyEd25519;
   }
 
-  /** Handles one already-parsed broadcast request. */
-  async handle(route, method, body) {
+  /// Handles one already-parsed broadcast request.
+  ///
+  /// [authHeader] is required for a descriptor write and ignored for an
+  /// object write, whose name already proves what it holds.
+  async handle(route, method, body, authHeader) {
     if (method === 'GET' || method === 'HEAD') {
       return this.read(route, method === 'HEAD');
     }
     if (method === 'PUT' || method === 'POST') {
+      // Size first, signatures second. Verifying an Ed25519 chain is the
+      // most expensive thing this code does, and there is no sense
+      // spending it on a body that is already too big or empty to store.
+      const refusal = this.checkSize(route, body);
+      if (refusal) return refusal;
+
+      if (route.kind === 'descriptor') {
+        const bytes = new Uint8Array(body ?? new Uint8Array(0));
+        const authorized = await authorizeDescriptorWrite({
+          authorId: route.authorId,
+          descriptor: bytes,
+          authHeader,
+          verify: this.verify,
+        });
+        if (!authorized) {
+          return new Response(
+            'a descriptor write must prove the author signed it\n',
+            { status: 403 },
+          );
+        }
+      }
       return this.write(route, body);
     }
     return new Response('method not allowed\n', { status: 405 });
   }
 
   async read(route, headOnly) {
-    const held = await this.storage.get(storageKey(route));
+    const key = storageKey(route);
+    const held = await this.storage.get(key);
     if (!held) return new Response(null, { status: 404 });
     if (this.isExpired(held)) {
-      await this.storage.delete(storageKey(route));
+      await this.forget(key, held);
       return new Response(null, { status: 404 });
     }
     const bytes = new Uint8Array(held.bytes);
@@ -162,16 +377,24 @@ export class BroadcastArchive {
     });
   }
 
-  async write(route, body) {
-    const bytes = new Uint8Array(body);
-    if (bytes.length === 0) {
+  /// Refuses a body that cannot be stored, or null when it can.
+  checkSize(route, body) {
+    const length = body?.byteLength ?? body?.length ?? 0;
+    if (length === 0) {
       return new Response('empty body\n', { status: 400 });
     }
     const limit =
       route.kind === 'descriptor' ? MAX_DESCRIPTOR_BYTES : MAX_OBJECT_BYTES;
-    if (bytes.length > limit) {
+    if (length > limit) {
       return new Response(`at most ${limit} bytes\n`, { status: 413 });
     }
+    return null;
+  }
+
+  async write(route, body) {
+    const bytes = new Uint8Array(body);
+    const refusal = this.checkSize(route, bytes);
+    if (refusal) return refusal;
 
     // An object must hash to the name it is filed under. This is the only
     // claim the relay can check without keys, and checking it means a
@@ -188,6 +411,13 @@ export class BroadcastArchive {
 
     const key = storageKey(route);
     const held = await this.storage.get(key);
+    if (held && this.isExpired(held)) {
+      // Discount it before writing over it. Without this the old entry's
+      // bytes stay counted while the new entry's are added, and the
+      // shard's accounting drifts upward every time an address is reused
+      // until it reports itself full while holding almost nothing.
+      await this.forget(key, held);
+    }
     if (held && !this.isExpired(held)) {
       // Write-once. Identical bytes are a retry and succeed quietly;
       // different bytes are a conflict, and refusing them is what keeps a
@@ -208,13 +438,29 @@ export class BroadcastArchive {
     }
 
     const at = this.now();
-    await this.storage.put(key, { bytes: [...bytes], at });
+    // Stored as the typed array, not `[...bytes]`. Spreading turns 100 kB
+    // into a 100,000-element JS array whose serialized form is several
+    // times the byte count it is accounted at, so the shard ceiling would
+    // bound nothing real. Structured clone handles a Uint8Array directly.
+    await this.storage.put(key, { bytes, at });
     await this.storage.put('meta', {
       bytes: meta.bytes + bytes.length,
       posts: meta.posts + (route.kind === 'descriptor' ? 1 : 0),
       since: meta.since ?? at,
     });
     return new Response(null, { status: 201 });
+  }
+
+  /// Delete one entry and give back what it was accounted at.
+  async forget(key, entry) {
+    await this.storage.delete(key);
+    const meta = await this.loadMeta();
+    const length = entryLength(entry);
+    await this.storage.put('meta', {
+      ...meta,
+      bytes: Math.max(0, meta.bytes - length),
+      posts: key.startsWith('d:') ? Math.max(0, meta.posts - 1) : meta.posts,
+    });
   }
 
   isExpired(entry) {
@@ -227,13 +473,26 @@ export class BroadcastArchive {
       posts: 0,
       since: null,
     };
-    // The rate limit is per window, so the counters reset with it.
-    // Otherwise an author who published a lot once would be locked out
-    // long after those posts had already been forgotten.
-    if (meta.since !== null && this.now() - meta.since > this.retentionMs) {
-      return { bytes: 0, posts: 0, since: null };
+    if (meta.since === null || this.now() - meta.since <= this.retentionMs) {
+      return meta;
     }
-    return meta;
+    // The window has rolled. The counters reset with it — otherwise an
+    // author who published a lot once stays locked out long after those
+    // posts are gone — but they are recomputed from what is actually
+    // held rather than zeroed. Zeroing was wrong in both directions:
+    // entries written just before the boundary are still live for nearly
+    // another full window, so an author could hold twice the stated cap
+    // by publishing on either side of it, and the shard's byte ceiling
+    // undercounted the same set.
+    let bytes = 0;
+    let posts = 0;
+    const all = await this.storage.list();
+    for (const [key, entry] of all) {
+      if (key === 'meta' || this.isExpired(entry)) continue;
+      bytes += entryLength(entry);
+      if (key.startsWith('d:')) posts += 1;
+    }
+    return { bytes, posts, since: posts > 0 || bytes > 0 ? this.now() : null };
   }
 
   /**
@@ -245,19 +504,39 @@ export class BroadcastArchive {
     const all = await this.storage.list();
     let removed = 0;
     let liveBytes = 0;
+    let livePosts = 0;
     for (const [key, entry] of all) {
       if (key === 'meta') continue;
       if (this.isExpired(entry)) {
         await this.storage.delete(key);
         removed += 1;
       } else {
-        liveBytes += entry.bytes.length;
+        liveBytes += entryLength(entry);
+        if (key.startsWith('d:')) livePosts += 1;
       }
     }
-    if (removed > 0) {
-      const meta = await this.loadMeta();
-      await this.storage.put('meta', { ...meta, bytes: liveBytes });
-    }
+    // Both counters are recomputed from what is actually held, not just
+    // the byte one. Leaving `posts` alone meant an author whose posts had
+    // all expired and been swept still counted against the rate limit
+    // until the window rolled.
+    const meta = await this.loadMeta();
+    await this.storage.put('meta', {
+      ...meta,
+      bytes: liveBytes,
+      posts: livePosts,
+    });
     return removed;
+  }
+
+  /// Whether anything held has passed its retention.
+  ///
+  /// Cheap enough to ask before rescheduling an alarm, and it keeps the
+  /// alarm loop from being the only thing that can notice.
+  async hasExpired() {
+    const all = await this.storage.list();
+    for (const [key, entry] of all) {
+      if (key !== 'meta' && this.isExpired(entry)) return true;
+    }
+    return false;
   }
 }

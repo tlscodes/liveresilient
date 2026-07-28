@@ -26,7 +26,11 @@ class _FakeTransport implements BroadcastHttpTransport {
   }
 
   @override
-  Future<BroadcastHttpResponse> put(Uri url, Uint8List body) async {
+  Future<BroadcastHttpResponse> put(
+    Uri url,
+    Uint8List body, {
+    Map<String, String> headers = const {},
+  }) async {
     puts.add(url);
     if (onPut != null) return onPut!(url, body);
     stored[url.path] = Uint8List.fromList(body);
@@ -40,8 +44,11 @@ class _ThrowingTransport implements BroadcastHttpTransport {
       throw StateError('socket failed');
 
   @override
-  Future<BroadcastHttpResponse> put(Uri url, Uint8List body) async =>
-      throw StateError('socket failed');
+  Future<BroadcastHttpResponse> put(
+    Uri url,
+    Uint8List body, {
+    Map<String, String> headers = const {},
+  }) async => throw StateError('socket failed');
 }
 
 void main() {

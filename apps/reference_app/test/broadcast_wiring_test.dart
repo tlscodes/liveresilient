@@ -22,6 +22,12 @@ class _LoopbackRelay {
   final HttpServer _server;
   final Map<String, Uint8List> _stored = {};
 
+  /// Request headers seen per written path, so a test can check what the
+  /// client actually put on the wire.
+  final Map<String, Map<String, String?>> _headers = {};
+
+  Map<String, String?>? headersFor(String path) => _headers[path];
+
   /// Paths this server will answer 500 for, to model a broken relay.
   final Set<String> failing = {};
 
@@ -42,6 +48,9 @@ class _LoopbackRelay {
       return;
     }
     if (request.method == 'PUT') {
+      _headers[path] = {
+        broadcastAuthHeader: request.headers.value(broadcastAuthHeader),
+      };
       final body = <int>[];
       await for (final chunk in request) {
         body.addAll(chunk);
@@ -404,6 +413,60 @@ void main() {
         );
       },
     );
+
+    test('a descriptor write carries the credentials a relay checks', () async {
+      // Without these on the wire, a relay that enforces authorship
+      // refuses every publish — and, worse, one that does not enforce it
+      // lets anyone squat the author's coming sequence numbers.
+      final credentials = BroadcastCredentials.of(
+        root.publicKey,
+        publisher.certificate,
+      );
+      final relay = HttpBroadcastRelay(
+        origin: server.origin,
+        transport: transport,
+        credentials: credentials,
+      );
+      final post = await withClock(
+        Clock.fixed(t0),
+        () => publisher.publish(text: Uint8List.fromList('hello'.codeUnits)),
+      );
+      await publisher.pushTo(relay, post);
+
+      final seen = server.headersFor(post.address.path);
+      expect(seen, isNotNull);
+      expect(seen![broadcastAuthHeader], credentials.headerValue);
+      // The object write needs none: its name already proves its bytes.
+      final objectPath = ObjectAddress(
+        contentHash(post.objects.values.first),
+      ).path;
+      expect(server.headersFor(objectPath)![broadcastAuthHeader], isNull);
+    });
+
+    test('the credential blob is the documented fixed size', () {
+      final credentials = BroadcastCredentials.of(
+        root.publicKey,
+        publisher.certificate,
+      );
+      expect(
+        credentials.rootPublicKey.length + credentials.certificate.length,
+        147,
+      );
+      expect(
+        () => BroadcastCredentials(
+          rootPublicKey: Uint8List(31),
+          certificate: publisher.certificate.encoded,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => BroadcastCredentials(
+          rootPublicKey: root.publicKey,
+          certificate: Uint8List(10),
+        ),
+        throwsArgumentError,
+      );
+    });
 
     test('a body over the ceiling is refused rather than buffered', () async {
       final small = IoBroadcastHttpTransport(maxResponseBytes: 16);
