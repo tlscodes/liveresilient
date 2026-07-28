@@ -61,10 +61,10 @@ async function sign(privateKey, message) {
 
 /** The truncated author id for a root public key. */
 export async function authorIdOf(rootPublicKey) {
-  return (await sha256Hex(rootPublicKey)).slice(0, 16);
+  return (await sha256Hex(rootPublicKey)).slice(0, 32);
 }
 
-/** A 117-byte version-2 publishing certificate, signed by the root key. */
+/** A 125-byte version-2 publishing certificate, signed by the root key. */
 export async function makeCertificate({
   root,
   publishingPublicKey,

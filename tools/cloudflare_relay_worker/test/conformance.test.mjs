@@ -76,7 +76,7 @@ test('the author id is the truncated hash of the root key', async () => {
   // sides ever disagree about the derivation, every publish fails.
   const rootKey = fromHex(VECTORS.keys.rootPublicKeyHex);
   const hash = await sha256Hex(rootKey);
-  assert.equal(hash.slice(0, 16), VECTORS.keys.authorIdHex);
+  assert.equal(hash.slice(0, 32), VECTORS.keys.authorIdHex);
 });
 
 test('the client paths are the paths this relay routes', () => {
@@ -147,7 +147,7 @@ test('a real post is stored and read back byte for byte', async () => {
 test('a descriptor from these vectors cannot be written to another author',
   async () => {
     const archive = new BroadcastArchive(new FakeStorage());
-    const otherAuthor = 'aabbccddeeff0011';
+    const otherAuthor = 'aabbccddeeff0011aabbccddeeff0011';
     const response = await archive.handle(
       { kind: 'descriptor', authorId: otherAuthor, seq: 41, shard: `a:${otherAuthor}` },
       'PUT',

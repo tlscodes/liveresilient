@@ -32,13 +32,13 @@ void main() {
   );
 
   group('byte budget', () {
-    test('a text-only descriptor is 147 bytes', () async {
+    test('a text-only descriptor is 155 bytes', () async {
       final d = await signGenesis();
-      expect(d.encoded.length, 147);
-      expect(descriptorSizeFor(LayerFlag.text), 147);
+      expect(d.encoded.length, 155);
+      expect(descriptorSizeFor(LayerFlag.text), 155);
     });
 
-    test('a descriptor with every layer is 243 bytes', () async {
+    test('a descriptor with every layer is 251 bytes', () async {
       final d = await signGenesis(
         layers: {
           LayerFlag.text: _hash(1),
@@ -47,7 +47,7 @@ void main() {
           LayerFlag.mediaList: _hash(4),
         },
       );
-      expect(d.encoded.length, 243);
+      expect(d.encoded.length, 251);
       expect(
         descriptorSizeFor(
           LayerFlag.text |
@@ -55,12 +55,12 @@ void main() {
               LayerFlag.voice |
               LayerFlag.mediaList,
         ),
-        243,
+        251,
       );
       // The retraction slot is a fifth commitment, so the largest possible
       // descriptor is one hash wider than the largest possible post.
-      expect(descriptorSizeFor(LayerFlag.known), 243 + hashBytes);
-      expect(descriptorSizeFor(LayerFlag.known), 275);
+      expect(descriptorSizeFor(LayerFlag.known), 251 + hashBytes);
+      expect(descriptorSizeFor(LayerFlag.known), 283);
     });
 
     test('a retraction costs one hash on top of what it says', () async {
@@ -75,7 +75,7 @@ void main() {
         retracts: _hash(9),
       );
       expect(withdrawal.encoded.length, plain.encoded.length + hashBytes);
-      expect(withdrawal.encoded.length, 179);
+      expect(withdrawal.encoded.length, 187);
     });
 
     test('size grows by exactly one hash per added layer', () {

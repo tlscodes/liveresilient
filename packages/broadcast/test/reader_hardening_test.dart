@@ -437,7 +437,7 @@ void main() {
 
     test('a chain window smaller than two posts is refused', () {
       expect(
-        () => BroadcastChain(authorId: Uint8List(8), maxRetained: 1),
+        () => BroadcastChain(authorId: Uint8List(16), maxRetained: 1),
         throwsArgumentError,
       );
     });

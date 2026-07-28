@@ -198,8 +198,8 @@ test('a malformed credential blob is refused without throwing', async () => {
 test('the credential blob is a fixed size', async () => {
   const author = await newAuthor();
   assert.equal(author.root.publicKey.length + author.certificate.length, AUTH_BYTES);
-  // 32-byte root key plus a 117-byte version-2 certificate.
-  assert.equal(AUTH_BYTES, 149);
+  // 32-byte root key plus a 125-byte version-2 certificate.
+  assert.equal(AUTH_BYTES, 157);
 });
 
 test('object writes need no credentials, because the name proves them', async () => {

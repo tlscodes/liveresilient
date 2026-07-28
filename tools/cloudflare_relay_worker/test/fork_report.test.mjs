@@ -44,7 +44,7 @@ class FakeStorage {
   }
 }
 
-const AUTHOR = 'd3c05ab2093cb220';
+const AUTHOR = 'd3c05ab2093cb220d3c05ab2093cb220';
 
 function archive() {
   return new BroadcastArchive(new FakeStorage(), { verify: async () => true });

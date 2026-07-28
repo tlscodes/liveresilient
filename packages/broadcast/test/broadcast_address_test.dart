@@ -4,15 +4,15 @@ import 'package:broadcast/broadcast.dart';
 import 'package:test/test.dart';
 
 void main() {
-  final authorId = Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8]);
+  final authorId = Uint8List.fromList(List.generate(16, (i) => i + 1));
 
   group('DescriptorAddress', () {
     test('is predictable from author and sequence alone', () {
       // The whole point: a reader names the next post without consulting
       // any mutable index, so there is no "latest" endpoint to block.
       final address = DescriptorAddress(authorId: authorId, seq: 41);
-      expect(address.path, '/a/0102030405060708/41');
-      expect(address.next!.path, '/a/0102030405060708/42');
+      expect(address.path, '/a/0102030405060708090a0b0c0d0e0f10/41');
+      expect(address.next!.path, '/a/0102030405060708090a0b0c0d0e0f10/42');
     });
 
     test('round-trips through its own path', () {
@@ -47,25 +47,34 @@ void main() {
     test('rejects a second spelling of the same address', () {
       // Two paths for one post would split the cache and let the same
       // bytes be served twice under different names.
-      expect(DescriptorAddress.tryParse('/a/0102030405060708/007'), isNull);
-      expect(DescriptorAddress.tryParse('/a/0102030405060708/+7'), isNull);
-      expect(DescriptorAddress.tryParse('/a/0102030405060708/ 7'), isNull);
+      expect(
+        DescriptorAddress.tryParse('/a/0102030405060708090a0b0c0d0e0f10/007'),
+        isNull,
+      );
+      expect(
+        DescriptorAddress.tryParse('/a/0102030405060708090a0b0c0d0e0f10/+7'),
+        isNull,
+      );
+      expect(
+        DescriptorAddress.tryParse('/a/0102030405060708090a0b0c0d0e0f10/ 7'),
+        isNull,
+      );
     });
 
     test('rejects a malformed path', () {
       for (final path in [
         '',
         '/',
-        '/a/0102030405060708',
-        '/a/0102030405060708/1/2',
-        '/b/0102030405060708/1',
-        'a/0102030405060708/1',
+        '/a/0102030405060708090a0b0c0d0e0f10',
+        '/a/0102030405060708090a0b0c0d0e0f10/1/2',
+        '/b/0102030405060708090a0b0c0d0e0f10/1',
+        'a/0102030405060708090a0b0c0d0e0f10/1',
         '/a/01020304050607/1',
-        '/a/010203040506070809/1',
+        '/a/0102030405060708090a0b0c0d0e0f1009/1',
         '/a/zzzzzzzzzzzzzzzz/1',
-        '/a/0102030405060708/-1',
-        '/a/0102030405060708/x',
-        '/a/0102030405060708/4294967296',
+        '/a/0102030405060708090a0b0c0d0e0f10/-1',
+        '/a/0102030405060708090a0b0c0d0e0f10/x',
+        '/a/0102030405060708090a0b0c0d0e0f10/4294967296',
       ]) {
         expect(
           DescriptorAddress.tryParse(path),
@@ -76,9 +85,16 @@ void main() {
     });
 
     test('accepts sequence zero and the maximum', () {
-      expect(DescriptorAddress.tryParse('/a/0102030405060708/0')!.seq, 0);
       expect(
-        DescriptorAddress.tryParse('/a/0102030405060708/$maxSeq')!.seq,
+        DescriptorAddress.tryParse(
+          '/a/0102030405060708090a0b0c0d0e0f10/0',
+        )!.seq,
+        0,
+      );
+      expect(
+        DescriptorAddress.tryParse(
+          '/a/0102030405060708090a0b0c0d0e0f10/$maxSeq',
+        )!.seq,
         maxSeq,
       );
     });

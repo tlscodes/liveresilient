@@ -18,10 +18,10 @@
  */
 
 export const EVIDENCE_VERSION = 1;
-export const CERTIFICATE_BYTES = 117;
+export const CERTIFICATE_BYTES = 125;
 export const CERTIFICATE_VERSION = 2;
 export const DESCRIPTOR_VERSION = 1;
-export const AUTHOR_ID_BYTES = 8;
+export const AUTHOR_ID_BYTES = 16;
 export const MAX_TEXT_BYTES = 64 * 1024;
 
 const CERT_DOMAIN = 'vck/broadcast/publishing-key/v1\n';

@@ -51,7 +51,7 @@ function fakeClock(startMs) {
 /// parts of authorization are NOT stubbed: the author id still has to be
 /// the hash of the root key, and a descriptor still has to name it.
 const ROOT_KEY = new Uint8Array(32).fill(7);
-const AUTHOR = (await sha256Hex(ROOT_KEY)).slice(0, 16);
+const AUTHOR = (await sha256Hex(ROOT_KEY)).slice(0, 32);
 
 const AUTHOR_BYTES = new Uint8Array(
   AUTHOR.match(/../g).map((pair) => parseInt(pair, 16)),
@@ -60,10 +60,10 @@ const AUTHOR_BYTES = new Uint8Array(
 /// Credentials whose signatures the stubbed verifier accepts, but whose
 /// shape and author binding are the real thing.
 const AUTH = (() => {
-  const certificate = new Uint8Array(117);
+  const certificate = new Uint8Array(125);
   certificate[0] = 2;
   certificate.set(AUTHOR_BYTES, 1);
-  const blob = new Uint8Array(32 + 117);
+  const blob = new Uint8Array(32 + 125);
   blob.set(ROOT_KEY, 0);
   blob.set(certificate, 32);
   let binary = '';
@@ -74,11 +74,11 @@ const AUTH = (() => {
 /// A descriptor-shaped body: the real header layout with [fill] as its
 /// payload, so two bodies can differ while both stay well formed.
 function descriptorBody(fill) {
-  const out = new Uint8Array(147);
+  const out = new Uint8Array(155);
   out[0] = 1;
   out[1] = 0x01;
   out.set(AUTHOR_BYTES, 2);
-  out.fill(fill, 20, 83);
+  out.fill(fill, 28, 91);
   return out;
 }
 
@@ -188,7 +188,7 @@ test('HEAD answers without a body', async () => {
   await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(9), AUTH);
   const head = await archive.handle(descriptorRoute(0), 'HEAD', null);
   assert.equal(head.status, 200);
-  assert.equal(head.headers.get('content-length'), '147');
+  assert.equal(head.headers.get('content-length'), '155');
   assert.equal((await head.arrayBuffer()).byteLength, 0);
 });
 
@@ -351,15 +351,15 @@ test('descriptors of two authors do not collide', async () => {
   // two addresses are separate storage, not that one can write the other.
   const archive = archiveAt(fakeClock(0));
   const otherRoot = new Uint8Array(32).fill(11);
-  const other = (await sha256Hex(otherRoot)).slice(0, 16);
+  const other = (await sha256Hex(otherRoot)).slice(0, 32);
   const otherBytes = new Uint8Array(
     other.match(/../g).map((pair) => parseInt(pair, 16)),
   );
   const otherAuth = (() => {
-    const certificate = new Uint8Array(117);
+    const certificate = new Uint8Array(125);
     certificate[0] = 2;
     certificate.set(otherBytes, 1);
-    const blob = new Uint8Array(149);
+    const blob = new Uint8Array(157);
     blob.set(otherRoot, 0);
     blob.set(certificate, 32);
     let binary = '';
@@ -370,7 +370,7 @@ test('descriptors of two authors do not collide', async () => {
       .replace(/=+$/, '');
   })();
   const otherBody = (() => {
-    const out = new Uint8Array(147);
+    const out = new Uint8Array(155);
     out[0] = 1;
     out[1] = 0x01;
     out.set(otherBytes, 2);

@@ -37,7 +37,7 @@
  * under, and that nothing exceeds its limits.
  */
 
-/** Longest descriptor accepted. The format's maximum is 243 bytes. */
+/** Longest descriptor accepted. The format's maximum is 283 bytes. */
 export const MAX_DESCRIPTOR_BYTES = 512;
 
 /**
@@ -71,7 +71,8 @@ export const MAX_SHARD_BYTES = 64 * 1024 * 1024;
 /** Highest sequence number the client's wire format can express. */
 const MAX_SEQ = 0xffffffff;
 
-const HEX_16 = /^[0-9a-f]{16}$/;
+/** A 16-byte author id, as 32 lowercase hex characters. */
+const HEX_AUTHOR = /^[0-9a-f]{32}$/;
 const HEX_64 = /^[0-9a-f]{64}$/;
 const DECIMAL = /^(0|[1-9][0-9]*)$/;
 
@@ -86,7 +87,7 @@ export function parseBroadcastPath(pathname) {
   const parts = pathname.split('/');
   if (parts.length === 4 && parts[0] === '' && parts[1] === 'a') {
     const [, , authorId, seqText] = parts;
-    if (!HEX_16.test(authorId) || !DECIMAL.test(seqText)) return null;
+    if (!HEX_AUTHOR.test(authorId) || !DECIMAL.test(seqText)) return null;
     const seq = Number(seqText);
     if (!Number.isSafeInteger(seq) || seq > MAX_SEQ) return null;
     return { kind: 'descriptor', authorId, seq, shard: `a:${authorId}` };
@@ -98,7 +99,7 @@ export function parseBroadcastPath(pathname) {
   // without any key, which is what lets anyone at all publish one.
   if (parts.length === 4 && parts[0] === '' && parts[1] === 'f') {
     const [, , authorId, hash] = parts;
-    if (!HEX_16.test(authorId) || !HEX_64.test(hash)) return null;
+    if (!HEX_AUTHOR.test(authorId) || !HEX_64.test(hash)) return null;
     return {
       kind: 'forkReport',
       authorId,
@@ -119,27 +120,29 @@ export function parseBroadcastPath(pathname) {
 /**
  * Header carrying the credentials a descriptor write must prove itself
  * with: base64url of the 32-byte root public key followed by the
- * 115-byte publishing certificate.
+ * 125-byte publishing certificate.
  */
 export const AUTH_HEADER = 'x-broadcast-auth';
 
 /**
  * Exact byte length of the credential blob: root key plus certificate.
  *
- * The 117 is a version-2 certificate — version 1 was two bytes shorter,
- * before the publishing cadence. Kept as arithmetic rather than a literal
- * so the reason the number moved stays visible.
+ * The 125 is a version-2 certificate with a 16-byte author id. Kept as
+ * arithmetic rather than a literal so the reason the number moved stays
+ * visible — this length has changed twice, once for the publishing
+ * cadence and once for the wider author id, and both times the relay
+ * knowing it as its own constant is what the conformance vectors caught.
  */
-export const AUTH_BYTES = 32 + 117;
+export const AUTH_BYTES = 32 + 125;
 
 /** Offsets into a descriptor, from the Dart format's own layout. */
 const DESCRIPTOR_AUTHOR_OFFSET = 2;
-const DESCRIPTOR_AUTHOR_BYTES = 8;
+const DESCRIPTOR_AUTHOR_BYTES = 16;
 const DESCRIPTOR_SIGNATURE_BYTES = 64;
 
 /** Offsets into a publishing certificate. */
 const CERT_AUTHOR_OFFSET = 1;
-const CERT_KEY_OFFSET = 9;
+const CERT_KEY_OFFSET = 17;
 const CERT_KEY_BYTES = 32;
 const CERT_SIGNATURE_BYTES = 64;
 
