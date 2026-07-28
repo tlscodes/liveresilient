@@ -50,6 +50,15 @@ export const MAX_DESCRIPTOR_BYTES = 512;
  */
 export const MAX_OBJECT_BYTES = 100_000;
 
+/**
+ * Largest fork report accepted.
+ *
+ * A report is a certificate and two descriptors — under 600 bytes for any
+ * real one. The cap is generous enough for a future layout and small
+ * enough that the open write path cannot be used as storage.
+ */
+export const MAX_FORK_REPORT_BYTES = 2048;
+
 /** How long anything written here survives. */
 export const RETENTION_MS = 48 * 60 * 60 * 1000;
 
@@ -81,6 +90,21 @@ export function parseBroadcastPath(pathname) {
     const seq = Number(seqText);
     if (!Number.isSafeInteger(seq) || seq > MAX_SEQ) return null;
     return { kind: 'descriptor', authorId, seq, shard: `a:${authorId}` };
+  }
+  // Fork reports are content-addressed inside one author's slot, so a
+  // relay may hold several — two readers can see different forks — and
+  // none may overwrite another. The hash is always in the path for the
+  // same reason it is for an object: it is what makes the write checkable
+  // without any key, which is what lets anyone at all publish one.
+  if (parts.length === 4 && parts[0] === '' && parts[1] === 'f') {
+    const [, , authorId, hash] = parts;
+    if (!HEX_16.test(authorId) || !HEX_64.test(hash)) return null;
+    return {
+      kind: 'forkReport',
+      authorId,
+      hash,
+      shard: `f:${authorId}`,
+    };
   }
   if (parts.length === 3 && parts[0] === '' && parts[1] === 'o') {
     const hash = parts[2];
@@ -280,9 +304,14 @@ const IMMUTABLE_HEADERS = {
 };
 
 function storageKey(route) {
-  return route.kind === 'descriptor'
-    ? `d:${route.authorId}:${route.seq}`
-    : `o:${route.hash}`;
+  switch (route.kind) {
+    case 'descriptor':
+      return `d:${route.authorId}:${route.seq}`;
+    case 'forkReport':
+      return `f:${route.authorId}:${route.hash}`;
+    default:
+      return `o:${route.hash}`;
+  }
 }
 
 /**
@@ -383,8 +412,11 @@ export class BroadcastArchive {
     if (length === 0) {
       return new Response('empty body\n', { status: 400 });
     }
-    const limit =
-      route.kind === 'descriptor' ? MAX_DESCRIPTOR_BYTES : MAX_OBJECT_BYTES;
+    const limit = {
+      descriptor: MAX_DESCRIPTOR_BYTES,
+      forkReport: MAX_FORK_REPORT_BYTES,
+      object: MAX_OBJECT_BYTES,
+    }[route.kind];
     if (length > limit) {
       return new Response(`at most ${limit} bytes\n`, { status: 413 });
     }
@@ -399,8 +431,10 @@ export class BroadcastArchive {
     // An object must hash to the name it is filed under. This is the only
     // claim the relay can check without keys, and checking it means a
     // reader that trusts nothing still cannot be handed the wrong bytes
-    // under a right name.
-    if (route.kind === 'object') {
+    // under a right name. A fork report is filed the same way, which is
+    // what lets anyone at all publish one: a false report is bytes that
+    // fail on the reader's side, so the relay needs no opinion about it.
+    if (route.kind === 'object' || route.kind === 'forkReport') {
       const actual = await sha256Hex(bytes);
       if (actual !== route.hash) {
         return new Response('object does not hash to its name\n', {
