@@ -18,6 +18,7 @@
 /// surface with private messaging.
 library;
 
+export 'src/bootstrap_code.dart';
 export 'src/broadcast_address.dart';
 export 'src/broadcast_chain.dart';
 export 'src/broadcast_descriptor.dart';
