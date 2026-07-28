@@ -64,23 +64,27 @@ export async function authorIdOf(rootPublicKey) {
   return (await sha256Hex(rootPublicKey)).slice(0, 16);
 }
 
-/** A 115-byte publishing certificate, signed by the root key. */
+/** A 117-byte version-2 publishing certificate, signed by the root key. */
 export async function makeCertificate({
   root,
   publishingPublicKey,
   notBeforeSeconds = 1_800_000_000,
   notAfterSeconds = 1_800_600_000,
+  cadenceHours = 720,
 }) {
   const authorHex = await authorIdOf(root.publicKey);
   const author = new Uint8Array(
     authorHex.match(/../g).map((pair) => parseInt(pair, 16)),
   );
+  const cadence = new Uint8Array(2);
+  new DataView(cadence.buffer).setUint16(0, cadenceHours);
   const body = concat(
-    new Uint8Array([1]),
+    new Uint8Array([2]),
     author,
     publishingPublicKey,
     u40(notBeforeSeconds),
     u40(notAfterSeconds),
+    cadence,
   );
   const signature = await sign(
     root.privateKey,

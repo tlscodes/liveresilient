@@ -256,6 +256,91 @@ void main() {
       expect(reader.chain.length, 3);
     });
 
+    test('the author declares the staleness bound, not the reader', () async {
+      // A fixed number is wrong in both directions at once. An author who
+      // posts hourly can now say so, and a stolen key gets hours rather
+      // than a month to speak in their name.
+      final hourly = await CryptographyBroadcastSigner.generate();
+      final tightCert = await PublishingKeyCertificate.issue(
+        rootSigner: root,
+        publishingKey: hourly.publicKey,
+        notBefore: t0,
+        notAfter: t0.add(const Duration(days: 7)),
+        cadence: const Duration(hours: 6),
+      );
+      expect(tightCert.cadence, const Duration(hours: 6));
+
+      final relay = InMemoryBroadcastRelay();
+      final tightPublisher = BroadcastPublisher(
+        rootPublicKey: root.publicKey,
+        publishingSigner: hourly,
+        certificate: tightCert,
+      );
+      await withClock(Clock.fixed(t0), () async {
+        await tightPublisher.pushTo(
+          relay,
+          await tightPublisher.publish(text: _text('first')),
+        );
+      });
+
+      final reader = BroadcastReader(
+        rootPublicKey: root.publicKey,
+        relays: [relay],
+        // Deliberately generous: the author's own six hours must win.
+        maxHeadAge: const Duration(days: 365),
+      );
+      await withClock(
+        Clock.fixed(t0),
+        () => reader.adoptCertificate(tightCert.encoded),
+      );
+      await withClock(
+        Clock.fixed(t0.add(const Duration(minutes: 1))),
+        () async {
+          expect((await reader.fetchNext()).isDelivered, isTrue);
+        },
+      );
+
+      // A post dated a day back, offered as the next one, is beyond the
+      // rhythm this author declared.
+      await withClock(Clock.fixed(t0), () async {
+        await tightPublisher.pushTo(
+          relay,
+          await tightPublisher.publish(
+            text: _text('stale continuation'),
+            at: t0.add(const Duration(hours: 1)),
+          ),
+        );
+      });
+      final result = await withClock(
+        Clock.fixed(t0.add(const Duration(days: 1))),
+        () => reader.fetchNext(),
+      );
+      expect(result.rejection, ReadRejection.staleHeadExtension);
+    });
+
+    test('a cadence outside the sane range is refused on both sides', () {
+      expect(
+        () => PublishingKeyCertificate.issue(
+          rootSigner: root,
+          publishingKey: publishingKey.publicKey,
+          notBefore: t0,
+          notAfter: t0.add(const Duration(days: 1)),
+          cadence: Duration.zero,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => PublishingKeyCertificate.issue(
+          rootSigner: root,
+          publishingKey: publishingKey.publicKey,
+          notBefore: t0,
+          notAfter: t0.add(const Duration(days: 1)),
+          cadence: const Duration(days: 800),
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('a fresh head inside the window is still accepted', () async {
       final relay = InMemoryBroadcastRelay();
       await withClock(Clock.fixed(t0), () async {

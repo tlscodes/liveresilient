@@ -24,7 +24,8 @@ void main() {
 
   test('encodes to the documented fixed size', () {
     expect(cert.encoded.length, certificateBytes);
-    expect(certificateBytes, 115);
+    // Version 2 added the two-byte cadence.
+    expect(certificateBytes, 117);
   });
 
   test('verifies against the issuing root key', () async {
@@ -237,7 +238,7 @@ void main() {
     test('returns null on a wrong length or unknown version', () {
       expect(PublishingKeyCertificate.parseWindowStart(Uint8List(10)), isNull);
       final bad = Uint8List.fromList(cert.encoded);
-      bad[0] = 2;
+      bad[0] = certificateVersion + 1;
       expect(PublishingKeyCertificate.parseWindowStart(bad), isNull);
     });
   });

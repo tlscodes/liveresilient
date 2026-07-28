@@ -450,7 +450,8 @@ void main() {
       );
       expect(
         credentials.rootPublicKey.length + credentials.certificate.length,
-        147,
+        // 32-byte root key plus a 117-byte version-2 certificate.
+        149,
       );
       expect(
         () => BroadcastCredentials(

@@ -146,7 +146,15 @@ class BroadcastReader {
   /// and occupy the sequence space ahead of the real author.
   final Duration maxClockSkew;
 
-  /// How far behind local time a *new head* may be dated.
+  /// How far behind local time a *new head* may be dated, when the
+  /// author's own certificate does not say.
+  ///
+  /// A certificate declares the author's publishing cadence and that is
+  /// what the reader enforces; this is only the fallback for a post no
+  /// adopted certificate covers. Preferring the author's own number is
+  /// the point: a fixed one is wrong in both directions at once — far too
+  /// loose for someone who posts hourly, far too tight for someone who
+  /// speaks twice a year.
   ///
   /// This is what makes a publishing certificate's expiry mean anything.
   /// Certificates are checked against the time a post declares, so that an
@@ -294,17 +302,28 @@ class BroadcastReader {
     if (parsed.publishedAt.isAfter(now.add(maxClockSkew))) {
       return const ReadResult.rejected(ReadRejection.timeTooFarAhead);
     }
-    final head = chain.highestSeq;
-    final extendsHead = head != null && parsed.seq == head + 1;
-    if (extendsHead && now.difference(parsed.publishedAt) > maxHeadAge) {
-      return const ReadResult.rejected(ReadRejection.staleHeadExtension);
-    }
-
     final covering = _certificates
         .where((cert) => cert.isValidAt(parsed.publishedAt))
         .toList();
     if (covering.isEmpty) {
       return const ReadResult.rejected(ReadRejection.noCertificateForTime);
+    }
+
+    // The staleness bound comes from the author when they declared one.
+    // Where several certificates cover the instant, the most generous
+    // wins, so an author who slowed down is not cut off by a stricter
+    // certificate they have since replaced.
+    final head = chain.highestSeq;
+    final extendsHead = head != null && parsed.seq == head + 1;
+    if (extendsHead) {
+      var allowed = Duration.zero;
+      for (final cert in covering) {
+        if (cert.cadence > allowed) allowed = cert.cadence;
+      }
+      if (allowed == Duration.zero) allowed = maxHeadAge;
+      if (now.difference(parsed.publishedAt) > allowed) {
+        return const ReadResult.rejected(ReadRejection.staleHeadExtension);
+      }
     }
 
     BroadcastDescriptor? verified;
