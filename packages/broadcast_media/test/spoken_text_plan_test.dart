@@ -185,7 +185,6 @@ void main() {
       final rendered = renderer.render(
         voiceLayer: layers.voice,
         voiceSession: receiver,
-        voiceFrameCount: columns.length,
       );
       expect(rendered.voiceProvenance, VoiceProvenance.reconstructedFromTokens);
     });
