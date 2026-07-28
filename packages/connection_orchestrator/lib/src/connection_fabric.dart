@@ -110,8 +110,16 @@ class ConnectionFabric {
   /// delivery, refresh, and drain.
   Stream<ConnectivitySnapshot> get snapshots => _snapshots.stream;
 
-  /// Latest published snapshot (computed on demand before the first emit).
-  ConnectivitySnapshot get snapshot => _last ?? _compute();
+  /// The fabric's state right now.
+  ///
+  /// Computed on every read rather than returned from the last publish.
+  /// Lane health is owned and mutated by the channels themselves, so
+  /// between two publishes every lane can go down without the fabric being
+  /// told — and a getter that answered "live" from a stale cache while
+  /// nothing was reachable is worse than one that answered "down", because
+  /// a caller acts on it. The stream still carries transitions; this
+  /// carries truth.
+  ConnectivitySnapshot get snapshot => _compute();
 
   /// Registers a lane. The channel stays owned by the caller; the fabric
   /// never disposes channels it did not create.
@@ -403,7 +411,22 @@ class ConnectionFabric {
     List<int> payload,
     DeliveryContext ctx,
   ) async {
-    final result = await lane.channel.send(payload);
+    // A transport that throws is the ordinary case on a bad network — a
+    // socket dies, a platform channel goes away — not an exceptional one.
+    // Letting it escape took the payload with it: the caller got an
+    // exception instead of an outcome, so the bytes were neither carried
+    // nor parked. That is the one failure this fabric exists to prevent,
+    // and it is treated as exactly what it is: this lane did not deliver.
+    final SendResult result;
+    try {
+      result = await lane.channel.send(payload);
+    } on Object catch (error) {
+      lane.channel.health.observe(
+        SendResult(SendStatus.unavailable, error: error),
+      );
+      experience.record(lane.profile.id, ctx, success: false);
+      return false;
+    }
     lane.channel.health.observe(result);
     final delivered =
         result.status == SendStatus.ok || result.status == SendStatus.duplicate;
@@ -414,7 +437,17 @@ class ConnectionFabric {
   Future<int> _drainThrough(_Lane lane) async {
     if (_queue.pendingCount == 0) return 0;
     return _queue.flush((bundle) async {
-      final result = await lane.channel.send(bundle.payload);
+      // Same reason as _attempt: a throwing lane must fail this bundle,
+      // not abandon the drain and leave the rest of the queue unattempted.
+      final SendResult result;
+      try {
+        result = await lane.channel.send(bundle.payload);
+      } on Object catch (error) {
+        lane.channel.health.observe(
+          SendResult(SendStatus.unavailable, error: error),
+        );
+        return false;
+      }
       lane.channel.health.observe(result);
       return result.status == SendStatus.ok ||
           result.status == SendStatus.duplicate;
