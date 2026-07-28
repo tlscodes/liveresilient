@@ -190,6 +190,62 @@ void main() {
       expect(rendered.unreadableParts, 1);
     });
 
+    test('a colour picture survives the whole path in colour', () {
+      // Grayscale cannot say whether the thing in the photograph is fire
+      // or water, and that is often the only question that matters.
+      final layers = composer.compose(picture: _picture());
+      expect(
+        layers.report.included.map((p) => p.name),
+        contains('image.colour'),
+      );
+
+      final rendered = renderer.render(
+        stillLayer: layers.still,
+        heavyLayer: layers.heavy,
+      );
+      expect(rendered.thumbnail!.hasColour, isTrue);
+      expect(
+        rendered.thumbnail!.rgb!.length,
+        rendered.thumbnail!.width * rendered.thumbnail!.height * 3,
+      );
+      expect(rendered.unreadableParts, 0);
+    });
+
+    test('the still layer alone is a picture without colour', () {
+      // Colour rides the optional bundle, so a reader that fetched only
+      // the small layer gets a grayscale photograph rather than nothing.
+      final layers = composer.compose(picture: _picture());
+      final rendered = renderer.render(stillLayer: layers.still);
+      expect(rendered.thumbnail, isNotNull);
+      expect(rendered.thumbnail!.hasColour, isFalse);
+      expect(rendered.unreadableParts, 0);
+    });
+
+    test('colour costs a fraction of the picture it colours', () {
+      final layers = composer.compose(picture: _picture());
+      final colour = layers.report.parts
+          .firstWhere((p) => p.name == 'image.colour')
+          .bytes;
+      final luma = layers.report.parts
+          .where((p) => p.name.startsWith('image.level'))
+          .fold<int>(0, (sum, p) => sum + p.bytes);
+      expect(colour, lessThan(luma ~/ 3));
+    });
+
+    test('a grayscale source produces no colour part at all', () {
+      final grey = RasterImage(
+        pixels: Uint8List(64 * 48),
+        width: 64,
+        height: 48,
+        channels: 1,
+      );
+      final layers = composer.compose(picture: grey);
+      expect(
+        layers.report.parts.map((p) => p.name),
+        isNot(contains('image.colour')),
+      );
+    });
+
     test('every level is named in the report with its size', () {
       final layers = composer.compose(picture: _picture());
       final names = layers.report.parts.map((p) => p.name).toList();
