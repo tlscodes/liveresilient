@@ -111,6 +111,16 @@ void main() {
         if (record.containsKey('prevHex')) {
           expect(hexEncode(verified.prev), record['prevHex']);
         }
+        if (record.containsKey('retractsHex')) {
+          expect(
+            verified.isRetraction,
+            isTrue,
+            reason: '$name is a retraction',
+          );
+          expect(hexEncode(verified.retracts!), record['retractsHex']);
+        } else {
+          expect(verified.retracts, isNull, reason: '$name withdraws nothing');
+        }
       }
     },
   );

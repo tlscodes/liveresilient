@@ -125,6 +125,7 @@ class BroadcastPublisher {
     Uint8List? still,
     Uint8List? voice,
     Uint8List? media,
+    Uint8List? retracts,
     int mediaChunkSize = 64 * 1024,
     DateTime? at,
   }) async {
@@ -171,6 +172,7 @@ class BroadcastPublisher {
       publishedAt: at?.toUtc() ?? clock.now().toUtc(),
       prev: _prev,
       layers: layers,
+      retracts: retracts,
     );
 
     _nextSeq += 1;
@@ -181,6 +183,36 @@ class BroadcastPublisher {
       objects: Map.unmodifiable(objects),
       mediaHashList: hashList,
     );
+  }
+
+  /// Withdraw an earlier post, saying why.
+  ///
+  /// A correction is the most consequential thing a trusted voice does in
+  /// a crisis, and it is the one thing the format made no room for: the
+  /// only alternative was another post that a reader might never connect
+  /// to the first. Here the link is inside the signature, so anyone
+  /// holding both knows the original no longer stands.
+  ///
+  /// [reason] is required and becomes the new post's text. A withdrawal
+  /// with nothing said is worse than none — it removes a claim without
+  /// replacing it, and leaves a reader unable to tell a correction from a
+  /// deletion.
+  Future<BroadcastPost> retract(
+    BroadcastDescriptor post, {
+    required Uint8List reason,
+    DateTime? at,
+  }) {
+    if (reason.isEmpty) {
+      throw ArgumentError.value(reason, 'reason', 'say why it is withdrawn');
+    }
+    if (!bytesEqual(post.authorId, authorId)) {
+      throw ArgumentError.value(
+        post,
+        'post',
+        'an author may only withdraw their own post',
+      );
+    }
+    return publish(text: reason, retracts: post.id, at: at);
   }
 
   /// Write [post] to [relay].

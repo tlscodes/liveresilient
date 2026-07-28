@@ -137,6 +137,43 @@ class BroadcastChain {
   /// The post at [seq], if held.
   BroadcastDescriptor? at(int seq) => _bySeq[seq];
 
+  /// Ids of posts this author has withdrawn, and the post that withdrew
+  /// each.
+  ///
+  /// Kept by id rather than by sequence number because a retraction is
+  /// meaningful even for a post this reader never held: knowing that a
+  /// post was withdrawn is exactly as useful as having it.
+  final Map<String, BroadcastDescriptor> _retractions = {};
+
+  /// Whether [descriptor] has been withdrawn by a later post.
+  bool isRetracted(BroadcastDescriptor descriptor) =>
+      _retractions.containsKey(hexEncode(descriptor.id));
+
+  /// The post that withdrew the one with this id, if any.
+  ///
+  /// A reader showing a withdrawn post must show this alongside it. The
+  /// correction is not a separate item in a feed; it is part of what the
+  /// original now means.
+  BroadcastDescriptor? retractionOf(Uint8List descriptorId) =>
+      _retractions[hexEncode(descriptorId)];
+
+  /// Every withdrawal seen, newest first.
+  List<BroadcastDescriptor> get retractions {
+    final seen = _retractions.values.toSet().toList()
+      ..sort((a, b) => b.seq.compareTo(a.seq));
+    return List.unmodifiable(seen);
+  }
+
+  void _noteRetraction(BroadcastDescriptor descriptor) {
+    final target = descriptor.retracts;
+    if (target == null) return;
+    // A post may not withdraw itself, which would be a fixed point with no
+    // meaning, and is the shape a crafted descriptor would take to make a
+    // reader hide the very thing it just verified.
+    if (bytesEqual(target, descriptor.id)) return;
+    _retractions[hexEncode(target)] = descriptor;
+  }
+
   /// Every post held, oldest first.
   List<BroadcastDescriptor> get posts {
     final keys = _bySeq.keys.toList()..sort();
@@ -168,6 +205,7 @@ class BroadcastChain {
       _bySeq[descriptor.seq] = descriptor;
       _lowest = descriptor.seq;
       _highest = descriptor.seq;
+      _noteRetraction(descriptor);
       return const ChainResult(ChainOutcome.accepted);
     }
 
@@ -184,6 +222,7 @@ class BroadcastChain {
       }
       _bySeq[descriptor.seq] = descriptor;
       _highest = descriptor.seq;
+      _noteRetraction(descriptor);
       _trimOldest();
       return const ChainResult(ChainOutcome.accepted);
     }
@@ -198,6 +237,7 @@ class BroadcastChain {
       }
       _bySeq[descriptor.seq] = descriptor;
       _lowest = descriptor.seq;
+      _noteRetraction(descriptor);
       // Deliberately no trim here: a reader walking backwards is asking
       // for exactly these posts, and dropping them as they arrive would
       // make the walk never finish. A backfill past the ceiling instead

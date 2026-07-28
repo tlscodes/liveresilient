@@ -48,7 +48,34 @@ void main() {
         },
       );
       expect(d.encoded.length, 243);
-      expect(descriptorSizeFor(LayerFlag.known), 243);
+      expect(
+        descriptorSizeFor(
+          LayerFlag.text |
+              LayerFlag.still |
+              LayerFlag.voice |
+              LayerFlag.mediaList,
+        ),
+        243,
+      );
+      // The retraction slot is a fifth commitment, so the largest possible
+      // descriptor is one hash wider than the largest possible post.
+      expect(descriptorSizeFor(LayerFlag.known), 243 + hashBytes);
+      expect(descriptorSizeFor(LayerFlag.known), 275);
+    });
+
+    test('a retraction costs one hash on top of what it says', () async {
+      final plain = await signGenesis();
+      final withdrawal = await BroadcastDescriptor.sign(
+        signer: publishing,
+        authorId: authorId,
+        seq: 0,
+        publishedAt: t0,
+        prev: zeroHash,
+        layers: {LayerFlag.text: _hash(1)},
+        retracts: _hash(9),
+      );
+      expect(withdrawal.encoded.length, plain.encoded.length + hashBytes);
+      expect(withdrawal.encoded.length, 179);
     });
 
     test('size grows by exactly one hash per added layer', () {

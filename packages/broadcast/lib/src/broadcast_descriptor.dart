@@ -40,13 +40,27 @@ class LayerFlag {
   static const int voice = 0x04;
   static const int mediaList = 0x08;
 
-  /// Every bit this version defines. Anything outside this mask is a
-  /// future layer, and a descriptor carrying one is refused rather than
-  /// silently mis-parsed — the unknown bit would shift every field
-  /// after it.
-  static const int known = text | still | voice | mediaList;
+  /// Not a layer: the id of an earlier post by this author that this one
+  /// withdraws. Occupies a commitment slot because it is the same shape —
+  /// a 32-byte hash — and reusing the mechanism means no new parsing.
+  ///
+  /// See [BroadcastDescriptor.retracts].
+  static const int retraction = 0x10;
 
+  /// Every bit this version defines. Anything outside this mask is from a
+  /// future build, and a descriptor carrying one is refused rather than
+  /// silently mis-parsed — the unknown bit would shift every field after
+  /// it. That refusal is why adding [retraction] is safe: an older reader
+  /// declines a retracting post instead of showing it stripped of the
+  /// very thing that made it a correction.
+  static const int known = text | still | voice | mediaList | retraction;
+
+  /// The layer bits, in wire order. [retraction] is deliberately absent:
+  /// it carries no content and is not fetched.
   static const List<int> ordered = [text, still, voice, mediaList];
+
+  /// Every commitment slot in wire order, layers first.
+  static const List<int> allSlots = [text, still, voice, mediaList, retraction];
 }
 
 /// Fixed part of a descriptor: version, flags, author id, seq, time, prev.
@@ -55,7 +69,7 @@ const int _descriptorHeaderBytes = 1 + 1 + authorIdBytes + 4 + 5 + hashBytes;
 /// Encoded size of a descriptor with [flags] set.
 int descriptorSizeFor(int flags) {
   var count = 0;
-  for (final flag in LayerFlag.ordered) {
+  for (final flag in LayerFlag.allSlots) {
     if ((flags & flag) != 0) count++;
   }
   return _descriptorHeaderBytes + count * hashBytes + 64;
@@ -81,10 +95,11 @@ class BroadcastDescriptor {
     required this.seq,
     required this.publishedAt,
     required this.prev,
-    required this.layers,
+    required Map<int, Uint8List> commitments,
     required this.signature,
     required this.encoded,
-  }) : id = contentHash(encoded);
+  }) : _commitments = Map.unmodifiable(commitments),
+       id = contentHash(encoded);
 
   /// Truncated identifier of the author's root key.
   final Uint8List authorId;
@@ -99,8 +114,31 @@ class BroadcastDescriptor {
   /// Hash of the descriptor at `seq - 1`, or [zeroHash] at genesis.
   final Uint8List prev;
 
+  /// Every 32-byte commitment this descriptor carries, keyed by slot.
+  final Map<int, Uint8List> _commitments;
+
   /// Hash per present layer, keyed by [LayerFlag].
-  final Map<int, Uint8List> layers;
+  ///
+  /// Excludes the retraction slot, which commits to a post rather than to
+  /// content and must never be fetched as one.
+  Map<int, Uint8List> get layers => {
+    for (final flag in LayerFlag.ordered)
+      if (_commitments.containsKey(flag)) flag: _commitments[flag]!,
+  };
+
+  /// The id of an earlier post by this author that this one withdraws.
+  ///
+  /// A correction is the most consequential thing a trusted voice does in
+  /// a crisis, and without a signed way to say it the only option is
+  /// another post that a reader may never connect to the first. This makes
+  /// the link part of what the author signed, so a reader that holds both
+  /// cannot show the withdrawn one as though it still stood.
+  ///
+  /// Never null for a post that retracts nothing — a reader checks
+  /// presence, not a sentinel.
+  Uint8List? get retracts => _commitments[LayerFlag.retraction];
+
+  bool get isRetraction => retracts != null;
 
   final Uint8List signature;
 
@@ -113,8 +151,8 @@ class BroadcastDescriptor {
   /// Bit set of present layers.
   int get flags {
     var out = 0;
-    for (final flag in LayerFlag.ordered) {
-      if (layers.containsKey(flag)) out |= flag;
+    for (final flag in LayerFlag.allSlots) {
+      if (_commitments.containsKey(flag)) out |= flag;
     }
     return out;
   }
@@ -122,7 +160,8 @@ class BroadcastDescriptor {
   bool get isGenesis => seq == 0;
 
   /// Hash of the named layer, or null when the post has no such layer.
-  Uint8List? layer(int flag) => layers[flag];
+  Uint8List? layer(int flag) =>
+      LayerFlag.ordered.contains(flag) ? _commitments[flag] : null;
 
   /// Build and sign a descriptor.
   ///
@@ -136,6 +175,7 @@ class BroadcastDescriptor {
     required DateTime publishedAt,
     required Uint8List prev,
     required Map<int, Uint8List> layers,
+    Uint8List? retracts,
   }) async {
     if (authorId.length != authorIdBytes) {
       throw ArgumentError.value(
@@ -146,6 +186,13 @@ class BroadcastDescriptor {
     }
     if (layers.isEmpty) {
       throw ArgumentError.value(layers, 'layers', 'a post needs a layer');
+    }
+    if (retracts != null && retracts.length != hashBytes) {
+      throw ArgumentError.value(
+        retracts.length,
+        'retracts.length',
+        'a descriptor id is $hashBytes bytes',
+      );
     }
     for (final entry in layers.entries) {
       if (!LayerFlag.ordered.contains(entry.key)) {
@@ -173,12 +220,16 @@ class BroadcastDescriptor {
       throw ArgumentError.value(prev, 'prev', 'only genesis may be unlinked');
     }
 
+    final commitments = <int, Uint8List>{
+      ...layers,
+      if (retracts != null) LayerFlag.retraction: retracts,
+    };
     final body = _body(
       authorId: authorId,
       seq: seq,
       publishedAt: publishedAt,
       prev: prev,
-      layers: layers,
+      commitments: commitments,
     );
     final signature = await signer.sign(_signingInput(body));
     final out = WireWriter()
@@ -189,10 +240,11 @@ class BroadcastDescriptor {
       seq: seq,
       publishedAt: publishedAt.toUtc(),
       prev: Uint8List.fromList(prev),
-      layers: Map.unmodifiable({
-        for (final flag in LayerFlag.ordered)
-          if (layers.containsKey(flag)) flag: Uint8List.fromList(layers[flag]!),
-      }),
+      commitments: {
+        for (final flag in LayerFlag.allSlots)
+          if (commitments.containsKey(flag))
+            flag: Uint8List.fromList(commitments[flag]!),
+      },
       signature: signature,
       encoded: out.take(),
     );
@@ -241,9 +293,9 @@ class BroadcastDescriptor {
         isUtc: true,
       );
       final prev = reader.bytes(hashBytes);
-      final layers = <int, Uint8List>{};
-      for (final flag in LayerFlag.ordered) {
-        if ((flags & flag) != 0) layers[flag] = reader.bytes(hashBytes);
+      final commitments = <int, Uint8List>{};
+      for (final flag in LayerFlag.allSlots) {
+        if ((flags & flag) != 0) commitments[flag] = reader.bytes(hashBytes);
       }
       final signature = reader.bytes(64);
 
@@ -261,7 +313,7 @@ class BroadcastDescriptor {
         seq: seq,
         publishedAt: publishedAt,
         prev: prev,
-        layers: Map.unmodifiable(layers),
+        commitments: commitments,
         signature: signature,
         encoded: Uint8List.fromList(encoded),
       );
@@ -313,11 +365,11 @@ class BroadcastDescriptor {
     required int seq,
     required DateTime publishedAt,
     required Uint8List prev,
-    required Map<int, Uint8List> layers,
+    required Map<int, Uint8List> commitments,
   }) {
     var flags = 0;
-    for (final flag in LayerFlag.ordered) {
-      if (layers.containsKey(flag)) flags |= flag;
+    for (final flag in LayerFlag.allSlots) {
+      if (commitments.containsKey(flag)) flags |= flag;
     }
     final seconds = publishedAt.toUtc().millisecondsSinceEpoch ~/ 1000;
     if (seconds < 0 || seconds > 0xFFFFFFFFFF) {
@@ -334,8 +386,8 @@ class BroadcastDescriptor {
       ..u32(seq)
       ..u40(seconds)
       ..bytes(prev);
-    for (final flag in LayerFlag.ordered) {
-      final hash = layers[flag];
+    for (final flag in LayerFlag.allSlots) {
+      final hash = commitments[flag];
       if (hash != null) out.bytes(hash);
     }
     return out.take();
