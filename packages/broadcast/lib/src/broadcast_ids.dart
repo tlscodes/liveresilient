@@ -15,11 +15,19 @@ const int hashBytes = 32;
 
 /// Length of the truncated author identifier carried in a descriptor.
 ///
-/// Eight bytes is a deliberate trade: it keeps the descriptor small, and
-/// it is never the only thing checked. A reader always verifies the
-/// full 32-byte root key against this identifier before accepting a
-/// post, so a collision here buys an attacker nothing.
-const int authorIdBytes = 8;
+/// Sixteen bytes — the same 128 bits a UUID spends — for a reason that is
+/// about the namespace rather than about forgery. A reader always checks
+/// the full 32-byte root key against this identifier before accepting a
+/// post, so no collision here lets anyone impersonate anyone.
+///
+/// What a collision *would* do is put two unrelated authors in one slot of
+/// the relay's address space, where each can occupy sequence numbers the
+/// other needs. At eight bytes that becomes likely somewhere around four
+/// billion authors by the birthday bound — a number a successful network
+/// reaches. At sixteen it does not happen. The cost is sixteen bytes per
+/// descriptor and sixteen hex characters per path, which is nothing
+/// against a namespace that cannot be outgrown.
+const int authorIdBytes = 16;
 
 /// The all-zero hash, used as the `prev` link of a genesis descriptor.
 final Uint8List zeroHash = Uint8List(hashBytes);

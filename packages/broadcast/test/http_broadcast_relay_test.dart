@@ -53,7 +53,7 @@ class _ThrowingTransport implements BroadcastHttpTransport {
 
 void main() {
   final origin = Uri.parse('https://relay.example');
-  final authorId = Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8]);
+  final authorId = Uint8List.fromList(List.generate(16, (i) => i + 1));
   final t0 = DateTime.utc(2026, 7, 28, 12);
 
   group('addressing', () {
@@ -69,7 +69,7 @@ void main() {
 
       expect(
         transport.gets.first.toString(),
-        'https://relay.example/a/0102030405060708/41',
+        'https://relay.example/a/0102030405060708090a0b0c0d0e0f10/41',
       );
       expect(
         transport.gets.last.toString(),
@@ -96,7 +96,7 @@ void main() {
       );
       expect(
         transport.gets.single.toString(),
-        'https://relay.example/a/0102030405060708/0',
+        'https://relay.example/a/0102030405060708090a0b0c0d0e0f10/0',
       );
     });
 
@@ -242,11 +242,14 @@ void main() {
       final error = BroadcastPublishRejected(
         BroadcastPublishFailure.conflict,
         409,
-        Uri.parse('https://relay.example/a/0102030405060708/3'),
+        Uri.parse('https://relay.example/a/0102030405060708090a0b0c0d0e0f10/3'),
       );
       expect(error.toString(), contains('conflict'));
       expect(error.toString(), contains('409'));
-      expect(error.toString(), contains('/a/0102030405060708/3'));
+      expect(
+        error.toString(),
+        contains('/a/0102030405060708090a0b0c0d0e0f10/3'),
+      );
     });
   });
 

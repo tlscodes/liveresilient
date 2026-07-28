@@ -52,16 +52,16 @@ function fakeClock(startMs) {
 }
 
 const ROOT_KEY = new Uint8Array(32).fill(7);
-const AUTHOR = (await sha256Hex(ROOT_KEY)).slice(0, 16);
+const AUTHOR = (await sha256Hex(ROOT_KEY)).slice(0, 32);
 const AUTHOR_BYTES = new Uint8Array(
   AUTHOR.match(/../g).map((pair) => parseInt(pair, 16)),
 );
 
 const AUTH = (() => {
-  const certificate = new Uint8Array(117);
+  const certificate = new Uint8Array(125);
   certificate[0] = 2;
   certificate.set(AUTHOR_BYTES, 1);
-  const blob = new Uint8Array(32 + 117);
+  const blob = new Uint8Array(32 + 125);
   blob.set(ROOT_KEY, 0);
   blob.set(certificate, 32);
   let binary = '';
@@ -70,11 +70,11 @@ const AUTH = (() => {
 })();
 
 function descriptorBody(fill) {
-  const out = new Uint8Array(147);
+  const out = new Uint8Array(155);
   out[0] = 1;
   out[1] = 0x01;
   out.set(AUTHOR_BYTES, 2);
-  out.fill(fill, 20, 83);
+  out.fill(fill, 28, 91);
   return out;
 }
 
@@ -128,14 +128,14 @@ test('it counts each kind separately', async () => {
   assert.equal(stats.descriptors, 2);
   assert.equal(stats.objects, 1);
   assert.equal(stats.forkReports, 1);
-  assert.equal(stats.liveBytes, 147 * 2 + 3 + 2);
+  assert.equal(stats.liveBytes, 155 * 2 + 3 + 2);
 });
 
 test('it reports how full the shard is, as a fraction', async () => {
   const archive = archiveAt(fakeClock(1000));
   await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(1), AUTH);
   const stats = await archive.stats();
-  assert.equal(stats.liveBytes, 147);
+  assert.equal(stats.liveBytes, 155);
   assert.ok(stats.shardBytesUsedFraction > 0);
   assert.ok(stats.shardBytesUsedFraction < 0.001);
   assert.equal(stats.shardBytesLimit, 64 * 1024 * 1024);
@@ -153,7 +153,7 @@ test('expired entries are counted apart from live ones', async () => {
   const stats = await archive.stats();
   assert.equal(stats.descriptors, 1, 'only the live one counts');
   assert.equal(stats.expiredAwaitingSweep, 1);
-  assert.equal(stats.liveBytes, 147);
+  assert.equal(stats.liveBytes, 155);
 });
 
 test('the age of the oldest live entry is reported', async () => {
@@ -181,8 +181,8 @@ test('accounting drift is named, not hidden', async () => {
   await archive.storage.put('meta', { bytes: 999999, posts: 3, since: 1000 });
   stats = await archive.stats();
   assert.equal(stats.accountedBytes, 999999);
-  assert.equal(stats.liveBytes, 147);
-  assert.equal(stats.accountingDriftBytes, 999999 - 147);
+  assert.equal(stats.liveBytes, 155);
+  assert.equal(stats.accountingDriftBytes, 999999 - 155);
 });
 
 test('a sweep brings the drift back to zero', async () => {

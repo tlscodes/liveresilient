@@ -43,7 +43,7 @@ void main() {
     () async {
       // The rule that makes a fork visible instead of letting history be
       // quietly replaced.
-      final address = DescriptorAddress(authorId: Uint8List(8), seq: 0);
+      final address = DescriptorAddress(authorId: Uint8List(16), seq: 0);
       await relay.putDescriptor(address, Uint8List.fromList([1, 2, 3]));
       expect(
         () => relay.putDescriptor(address, Uint8List.fromList([4, 5, 6])),
@@ -56,7 +56,7 @@ void main() {
   test(
     'rewriting a descriptor address with identical bytes is allowed',
     () async {
-      final address = DescriptorAddress(authorId: Uint8List(8), seq: 0);
+      final address = DescriptorAddress(authorId: Uint8List(16), seq: 0);
       final bytes = Uint8List.fromList([1, 2, 3]);
       await relay.putDescriptor(address, bytes);
       await relay.putDescriptor(address, Uint8List.fromList(bytes));
@@ -65,9 +65,9 @@ void main() {
   );
 
   test('descriptor slots are keyed by author as well as sequence', () async {
-    final a = DescriptorAddress(authorId: Uint8List(8), seq: 0);
+    final a = DescriptorAddress(authorId: Uint8List(16), seq: 0);
     final b = DescriptorAddress(
-      authorId: Uint8List.fromList(List.filled(8, 1)),
+      authorId: Uint8List.fromList(List.filled(16, 1)),
       seq: 0,
     );
     await relay.putDescriptor(a, Uint8List.fromList([1]));
@@ -80,7 +80,7 @@ void main() {
   test('clear models the short retention a relay is meant to have', () async {
     await relay.putObject(Uint8List.fromList([1]));
     await relay.putDescriptor(
-      DescriptorAddress(authorId: Uint8List(8), seq: 0),
+      DescriptorAddress(authorId: Uint8List(16), seq: 0),
       Uint8List.fromList([1]),
     );
     relay.clear();

@@ -128,7 +128,7 @@ void main() {
         Clock.fixed(t0),
         () => publisher.publish(text: _text('نان و آب و آزادی')),
       );
-      expect(post.descriptor.encoded.length, 147);
+      expect(post.descriptor.encoded.length, 155);
       expect(post.totalBytes, lessThan(1024));
     });
 
@@ -203,7 +203,7 @@ void main() {
         return p;
       });
 
-      expect(post.descriptor.encoded.length, 243);
+      expect(post.descriptor.encoded.length, 251);
 
       final reader = await readerOver([relay]);
       final result = await withClock(

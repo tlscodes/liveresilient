@@ -25,7 +25,7 @@ void main() {
   test('encodes to the documented fixed size', () {
     expect(cert.encoded.length, certificateBytes);
     // Version 2 added the two-byte cadence.
-    expect(certificateBytes, 117);
+    expect(certificateBytes, 125);
   });
 
   test('verifies against the issuing root key', () async {
