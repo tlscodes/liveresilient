@@ -75,6 +75,18 @@ Future<void> main() async {
     },
   );
 
+  final retraction = await BroadcastDescriptor.sign(
+    signer: publishing,
+    authorId: authorId,
+    seq: 42,
+    publishedAt: DateTime.utc(2026, 1, 2, 10),
+    prev: everyLayer.id,
+    layers: {
+      LayerFlag.text: contentHash(Uint8List.fromList([5])),
+    },
+    retracts: textOnly.id,
+  );
+
   final directory = await RelayDirectory.issue(
     rootSigner: root,
     origins: [
@@ -132,6 +144,18 @@ Future<void> main() async {
         'encodedHex': _hex(everyLayer.encoded),
         'idHex': _hex(everyLayer.id),
         'byteLength': everyLayer.encoded.length,
+      },
+      {
+        'name': 'a retraction, withdrawing the genesis post',
+        'seq': 42,
+        'flags': retraction.flags,
+        'publishedAtSeconds':
+            retraction.publishedAt.millisecondsSinceEpoch ~/ 1000,
+        'prevHex': _hex(retraction.prev),
+        'retractsHex': _hex(retraction.retracts!),
+        'encodedHex': _hex(retraction.encoded),
+        'idHex': _hex(retraction.id),
+        'byteLength': retraction.encoded.length,
       },
     ],
     'relayDirectory': {
