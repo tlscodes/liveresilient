@@ -60,10 +60,10 @@ const AUTHOR_BYTES = new Uint8Array(
 /// Credentials whose signatures the stubbed verifier accepts, but whose
 /// shape and author binding are the real thing.
 const AUTH = (() => {
-  const certificate = new Uint8Array(115);
-  certificate[0] = 1;
+  const certificate = new Uint8Array(117);
+  certificate[0] = 2;
   certificate.set(AUTHOR_BYTES, 1);
-  const blob = new Uint8Array(32 + 115);
+  const blob = new Uint8Array(32 + 117);
   blob.set(ROOT_KEY, 0);
   blob.set(certificate, 32);
   let binary = '';
@@ -356,10 +356,10 @@ test('descriptors of two authors do not collide', async () => {
     other.match(/../g).map((pair) => parseInt(pair, 16)),
   );
   const otherAuth = (() => {
-    const certificate = new Uint8Array(115);
-    certificate[0] = 1;
+    const certificate = new Uint8Array(117);
+    certificate[0] = 2;
     certificate.set(otherBytes, 1);
-    const blob = new Uint8Array(147);
+    const blob = new Uint8Array(149);
     blob.set(otherRoot, 0);
     blob.set(certificate, 32);
     let binary = '';

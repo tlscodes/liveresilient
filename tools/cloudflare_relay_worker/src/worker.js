@@ -93,6 +93,21 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/health') {
+      // A shard's own numbers, when one is named. Capacity questions
+      // about this relay have been answered with arithmetic on
+      // assumptions; this is what settles them. Read-only, and it exposes
+      // nothing an author has not already published — counts and bytes,
+      // never content.
+      const shard = url.searchParams.get('shard');
+      if (shard !== null) {
+        if (!/^[a-z]:[0-9a-f]{1,16}$/.test(shard)) {
+          return badRequest('shard must look like a:<hex> or o:<hex>');
+        }
+        const id = env.BROADCAST_ARCHIVE.idFromName(shard);
+        return env.BROADCAST_ARCHIVE.get(id).fetch(
+          new Request(new URL('/__stats', url), { method: 'GET' }),
+        );
+      }
       return new Response('ok\n', { status: 200 });
     }
 
@@ -147,6 +162,20 @@ export class BroadcastArchiveObject {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === '/__stats') {
+      return new Response(
+        `${JSON.stringify(await this.archive.stats(), null, 2)}\n`,
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            // Never cached: the whole value of these numbers is that they
+            // are current.
+            'cache-control': 'no-store',
+          },
+        },
+      );
+    }
     const route = parseBroadcastPath(url.pathname);
     if (!route) return new Response(null, { status: 404 });
 

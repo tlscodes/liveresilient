@@ -20,11 +20,28 @@ final Uint8List _certDomain = Uint8List.fromList(
 );
 
 /// The only certificate version this build understands.
-const int certificateVersion = 1;
+///
+/// Version 2 added the publishing cadence. A version-1 certificate is
+/// refused rather than read with a default filled in: the cadence is a
+/// security bound, and inventing one on the author's behalf is exactly
+/// the thing this field exists to stop.
+const int certificateVersion = 2;
 
 /// Encoded certificate length: version, author id, key, two timestamps,
-/// signature.
-const int certificateBytes = 1 + authorIdBytes + 32 + 5 + 5 + 64;
+/// cadence, signature.
+const int certificateBytes = 1 + authorIdBytes + 32 + 5 + 5 + 2 + 64;
+
+/// Bounds on a declared publishing cadence, in hours.
+///
+/// The floor stops an author from declaring a window so tight that
+/// ordinary clock skew rejects their own posts. The ceiling stops the
+/// field from being set to "never expire", which would put the reader
+/// back where it started.
+const int minCadenceHours = 1;
+const int maxCadenceHours = 24 * 365;
+
+/// The cadence a reader assumes when it must choose one itself.
+const Duration defaultPublishingCadence = Duration(days: 30);
 
 /// The longest validity window a reader will accept.
 ///
@@ -43,6 +60,7 @@ enum CertificateRejection {
   windowTooLong,
   notYetValid,
   expired,
+  cadenceOutOfRange,
   badSignature,
 }
 
@@ -53,6 +71,7 @@ class PublishingKeyCertificate {
     required this.publishingKey,
     required this.notBefore,
     required this.notAfter,
+    required this.cadence,
     required this.encoded,
   });
 
@@ -64,6 +83,16 @@ class PublishingKeyCertificate {
 
   final DateTime notBefore;
   final DateTime notAfter;
+
+  /// How stale a post extending this author's chain may be.
+  ///
+  /// The author declares their own rhythm, and the reader enforces it.
+  /// Before this field the reader picked a number — thirty days — which
+  /// was wrong in both directions: far too loose for someone who posts
+  /// hourly, and far too tight for someone who speaks twice a year. A
+  /// daily publisher can now say so, and a stolen key gets a day rather
+  /// than a month to speak in their name.
+  final Duration cadence;
 
   /// The exact bytes this was parsed from, or produced as.
   final Uint8List encoded;
@@ -78,6 +107,7 @@ class PublishingKeyCertificate {
     required Uint8List publishingKey,
     required DateTime notBefore,
     required DateTime notAfter,
+    Duration cadence = defaultPublishingCadence,
   }) async {
     if (publishingKey.length != 32) {
       throw ArgumentError.value(
@@ -93,12 +123,21 @@ class PublishingKeyCertificate {
         'must be strictly after notBefore',
       );
     }
+    final cadenceHours = cadence.inHours;
+    if (cadenceHours < minCadenceHours || cadenceHours > maxCadenceHours) {
+      throw ArgumentError.value(
+        cadence,
+        'cadence',
+        'must be $minCadenceHours..$maxCadenceHours hours',
+      );
+    }
     final authorId = authorIdFor(rootSigner.publicKey);
     final body = _body(
       authorId: authorId,
       publishingKey: publishingKey,
       notBefore: notBefore,
       notAfter: notAfter,
+      cadenceHours: cadenceHours,
     );
     final signature = await rootSigner.sign(_signingInput(body));
     final out = WireWriter()
@@ -109,6 +148,7 @@ class PublishingKeyCertificate {
       publishingKey: publishingKey,
       notBefore: notBefore,
       notAfter: notAfter,
+      cadence: Duration(hours: cadenceHours),
       encoded: out.take(),
     );
   }
@@ -138,6 +178,7 @@ class PublishingKeyCertificate {
     final Uint8List publishingKey;
     final int notBeforeSeconds;
     final int notAfterSeconds;
+    final int cadenceHours;
     final Uint8List signature;
     try {
       version = reader.u8();
@@ -145,6 +186,7 @@ class PublishingKeyCertificate {
       publishingKey = reader.bytes(32);
       notBeforeSeconds = reader.u40();
       notAfterSeconds = reader.u40();
+      cadenceHours = reader.u16();
       signature = reader.bytes(64);
     } on FormatException {
       reject(CertificateRejection.malformed);
@@ -158,6 +200,11 @@ class PublishingKeyCertificate {
     if (rootPublicKey.length != 32 ||
         !bytesEqual(authorId, authorIdFor(rootPublicKey))) {
       reject(CertificateRejection.authorMismatch);
+      return null;
+    }
+
+    if (cadenceHours < minCadenceHours || cadenceHours > maxCadenceHours) {
+      reject(CertificateRejection.cadenceOutOfRange);
       return null;
     }
 
@@ -196,6 +243,7 @@ class PublishingKeyCertificate {
       publishingKey: publishingKey,
       notBefore: notBefore,
       notAfter: notAfter,
+      cadence: Duration(hours: cadenceHours),
       encoded: Uint8List.fromList(encoded),
     );
   }
@@ -225,13 +273,15 @@ class PublishingKeyCertificate {
     required Uint8List publishingKey,
     required DateTime notBefore,
     required DateTime notAfter,
+    required int cadenceHours,
   }) {
     final out = WireWriter()
       ..u8(certificateVersion)
       ..bytes(authorId)
       ..bytes(publishingKey)
       ..u40(_toSeconds(notBefore))
-      ..u40(_toSeconds(notAfter));
+      ..u40(_toSeconds(notAfter))
+      ..u16(cadenceHours);
     return out.take();
   }
 

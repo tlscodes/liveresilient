@@ -123,8 +123,14 @@ export function parseBroadcastPath(pathname) {
  */
 export const AUTH_HEADER = 'x-broadcast-auth';
 
-/** Exact byte length of the credential blob: root key plus certificate. */
-export const AUTH_BYTES = 32 + 115;
+/**
+ * Exact byte length of the credential blob: root key plus certificate.
+ *
+ * The 117 is a version-2 certificate — version 1 was two bytes shorter,
+ * before the publishing cadence. Kept as arithmetic rather than a literal
+ * so the reason the number moved stays visible.
+ */
+export const AUTH_BYTES = 32 + 117;
 
 /** Offsets into a descriptor, from the Dart format's own layout. */
 const DESCRIPTOR_AUTHOR_OFFSET = 2;
@@ -560,6 +566,56 @@ export class BroadcastArchive {
       posts: livePosts,
     });
     return removed;
+  }
+
+  /**
+   * What this shard is actually holding, counted rather than estimated.
+   *
+   * Every capacity question about this relay has so far been answered
+   * with arithmetic on assumptions. These are the numbers that settle
+   * them: what is stored, what is live, what has expired but not yet been
+   * swept, and how far into its own limits the shard is. Nothing here is
+   * derived from the meta record — it is counted from storage — so it
+   * also reveals a meta record that has drifted.
+   */
+  async stats() {
+    const all = await this.storage.list();
+    let descriptors = 0;
+    let objects = 0;
+    let forkReports = 0;
+    let liveBytes = 0;
+    let expired = 0;
+    let oldestAt = null;
+    for (const [key, entry] of all) {
+      if (key === 'meta') continue;
+      if (this.isExpired(entry)) {
+        expired += 1;
+        continue;
+      }
+      liveBytes += entryLength(entry);
+      if (key.startsWith('d:')) descriptors += 1;
+      else if (key.startsWith('f:')) forkReports += 1;
+      else objects += 1;
+      if (oldestAt === null || entry.at < oldestAt) oldestAt = entry.at;
+    }
+    const meta = (await this.storage.get('meta')) ?? { bytes: 0, posts: 0 };
+    return {
+      descriptors,
+      objects,
+      forkReports,
+      liveBytes,
+      expiredAwaitingSweep: expired,
+      shardBytesLimit: MAX_SHARD_BYTES,
+      shardBytesUsedFraction: liveBytes / MAX_SHARD_BYTES,
+      postsThisWindow: meta.posts ?? 0,
+      postsPerAuthorLimit: MAX_POSTS_PER_AUTHOR,
+      retentionMs: this.retentionMs,
+      oldestEntryAgeMs: oldestAt === null ? null : this.now() - oldestAt,
+      // Named so a drift between what is stored and what is accounted is
+      // visible at a glance rather than inferred from a bug report.
+      accountedBytes: meta.bytes ?? 0,
+      accountingDriftBytes: (meta.bytes ?? 0) - liveBytes,
+    };
   }
 
   /// Whether anything held has passed its retention.

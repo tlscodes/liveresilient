@@ -11,8 +11,8 @@
   "certificate": {
     "notBeforeSeconds": 1767225600,
     "notAfterSeconds": 1767830400,
-    "encodedHex": "01d3c05ab2093cb2209ca0da86726d8282ce4e0719df6d1f4db2902bdfe78632ac4890d0b9a8e38e27006955b90000695ef380270f3382e5b12828732494d18663a2cfd11069a4715008ac1d23ba5d346670932733c21f4898b5a0230f8c13d907c30200f13b71c248656bb80ef26f229a7f07",
-    "byteLength": 115
+    "encodedHex": "02d3c05ab2093cb2209ca0da86726d8282ce4e0719df6d1f4db2902bdfe78632ac4890d0b9a8e38e27006955b90000695ef38002d0eb3cc65ffa605cc470947d29e21862868c023a4e5d7382e4321da22899fd5ee4d51af4443d1a61377b391c87a9e9c5f28f4139dcfe4fc6eba54f45dc21d69b0c",
+    "byteLength": 117
   },
   "descriptors": [
     {
@@ -66,6 +66,6 @@
   },
   "authHeader": {
     "name": "x-broadcast-auth",
-    "value": "5AMJmM_VrRcjwWn5VqoLnrhhm1mSvWEsKvQo68efjfAB08Basgk8siCcoNqGcm2Cgs5OBxnfbR9NspAr3-eGMqxIkNC5qOOOJwBpVbkAAGle84AnDzOC5bEoKHMklNGGY6LP0RBppHFQCKwdI7pdNGZwkyczwh9ImLWgIw-ME9kHwwIA8Ttxwkhla7gO8m8imn8H"
+    "value": "5AMJmM_VrRcjwWn5VqoLnrhhm1mSvWEsKvQo68efjfAC08Basgk8siCcoNqGcm2Cgs5OBxnfbR9NspAr3-eGMqxIkNC5qOOOJwBpVbkAAGle84AC0Os8xl_6YFzEcJR9KeIYYoaMAjpOXXOC5DIdoiiZ_V7k1Rr0RD0aYTd7ORyHqenF8o9BOdz-T8brpU9F3CHWmww"
   }
 }
