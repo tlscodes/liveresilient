@@ -46,6 +46,15 @@
       "byteLength": 179
     }
   ],
+  "postEvidence": {
+    "note": "A self-contained bundle the offline web verifier checks. Both the Dart implementation and tools/web_verifier read these bytes.",
+    "text": "the bridge is closed; do not go north",
+    "seq": 7,
+    "publishedAtSeconds": 1767290400,
+    "encodedHex": "01e4030998cfd5ad1723c169f956aa0b9eb8619b5992bd612c2af428ebc79f8df002d3c05ab2093cb2209ca0da86726d8282ce4e0719df6d1f4db2902bdfe78632ac4890d0b9a8e38e27006955b90000695ef38002d0eb3cc65ffa605cc470947d29e21862868c023a4e5d7382e4321da22899fd5ee4d51af4443d1a61377b391c87a9e9c5f28f4139dcfe4fc6eba54f45dc21d69b0c00930101d3c05ab2093cb22000000007006956b620dbee3d35a8d35178089e25a7621721449de6e15cabf2cd78fac235a7042912a727d47e7b236aab70a2320fa32fe743c39da785c8d1006240dc428f1ba0de7dcb155dd3fa1d8ddb74e4db1ed4f3103d41f049cb2b2a3428a273bd0b28edd4f81db0ef6a40d74539365427e1cbef98cdcc013e9966659f7591bbd66c4c818b5704000000257468652062726964676520697320636c6f7365643b20646f206e6f7420676f206e6f727468",
+    "base64": "AeQDCZjP1a0XI8Fp+VaqC564YZtZkr1hLCr0KOvHn43wAtPAWrIJPLIgnKDahnJtgoLOTgcZ320fTbKQK9/nhjKsSJDQuajjjicAaVW5AABpXvOAAtDrPMZf+mBcxHCUfSniGGKGjAI6Tl1zguQyHaIomf1e5NUa9EQ9GmE3ezkch6npxfKPQTnc/k/G66VPRdwh1psMAJMBAdPAWrIJPLIgAAAABwBpVrYg2+49NajTUXgIniWnYhchRJ3m4Vyr8s14+sI1pwQpEqcn1H57I2qrcKIyD6Mv50PDnaeFyNEAYkDcQo8boN59yxVd0/odjdt05Nse1PMQPUHwScsrKjQoonO9Cyjt1PgdsO9qQNdFOTZUJ+HL75jNzAE+mWZln3WRu9ZsTIGLVwQAAAAldGhlIGJyaWRnZSBpcyBjbG9zZWQ7IGRvIG5vdCBnbyBub3J0aA==",
+    "byteLength": 340
+  },
   "relayDirectory": {
     "seq": 3,
     "origins": [
