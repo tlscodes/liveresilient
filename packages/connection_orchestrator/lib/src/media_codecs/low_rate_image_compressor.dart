@@ -28,6 +28,17 @@ enum LevelCoder {
 
   /// The plane is already a pyramid residual; code it directly.
   rawResidual,
+
+  /// The plane is a coarse chroma pair, two bits each of Co and Cg packed
+  /// into one byte per sample.
+  ///
+  /// Colour is carried separately from the luma pyramid, and far coarser,
+  /// because that is where the information actually is: a viewer reads
+  /// shape from brightness and almost nothing from the precision of hue.
+  /// A crisis photograph is a different photograph in colour — fire,
+  /// blood, a uniform — and this buys that for a fraction of the bytes
+  /// the same detail would cost in the luma plane.
+  chromaPair,
 }
 
 class ProgressiveLevel {
@@ -39,10 +50,19 @@ class ProgressiveLevel {
 }
 
 class DecodedThumbnail {
-  DecodedThumbnail(this.width, this.height, this.gray);
+  DecodedThumbnail(this.width, this.height, this.gray, {this.rgb});
   final int width;
   final int height;
   final Uint8List gray; // 8-bit grayscale (upscaled from 4-bit)
+
+  /// Interleaved 8-bit RGB, present only when a chroma level arrived.
+  ///
+  /// Null is the ordinary case, not an error: colour is the last thing
+  /// sent and the first thing a thin link drops, so a decoder that has
+  /// only luma returns a picture without it rather than nothing.
+  final Uint8List? rgb;
+
+  bool get hasColour => rgb != null;
 }
 
 class LowRateImageCompressor {
@@ -71,7 +91,11 @@ class LowRateImageCompressor {
         for (var y = y0; y < y1; y++) {
           for (var x = x0; x < x1; x++) {
             final i = (y * w + x) * ch;
-            sum += (px[i] + px[i + 1] + px[i + 2]) ~/ 3;
+            // A single-channel source is already luminance. Reading three
+            // channels from it walked off the end of the buffer, which is
+            // the kind of defect that only shows up the first time
+            // somebody hands this a grayscale photograph.
+            sum += ch >= 3 ? (px[i] + px[i + 1] + px[i + 2]) ~/ 3 : px[i];
             cnt++;
           }
         }
@@ -104,6 +128,70 @@ class LowRateImageCompressor {
   /// levels subtract the upsampled previous level in mod-16 arithmetic;
   /// the residual concentrates around zero, which is exactly what the
   /// context-mixing coder exploits.
+  ///
+  /// Colour is not part of this pyramid; see [encodeChroma].
+
+  /// Width of the chroma plane, as a fraction of the coarsest luma level.
+  ///
+  /// Colour survives brutal subsampling in a way brightness does not, so
+  /// the chroma plane is deliberately coarser than the coarsest luma
+  /// level rather than matching the finest.
+  static const int chromaWidth = 8;
+
+  /// Encode a coarse chroma plane for [px], as a level a decoder applies
+  /// on top of whatever luma it managed to receive.
+  ///
+  /// Two bits per component: four steps of Co and four of Cg is enough to
+  /// tell a fire from a flood, which is the decision this layer exists to
+  /// support. More precision costs bytes that the luma pyramid spends
+  /// better.
+  ProgressiveLevel encodeChroma(Uint8List px, int w, int h, int ch) {
+    if (ch < 3) {
+      throw ArgumentError.value(ch, 'ch', 'colour needs at least 3 channels');
+    }
+    final cw = chromaWidth.clamp(1, w);
+    final chh = (h * cw / w).round().clamp(1, 1 << 12);
+    final plane = Uint8List(cw * chh);
+    for (var y = 0; y < chh; y++) {
+      for (var x = 0; x < cw; x++) {
+        // Box-average the source block, so a single loud pixel does not
+        // decide the colour of a whole region.
+        final x0 = x * w ~/ cw;
+        final x1 = ((x + 1) * w ~/ cw).clamp(x0 + 1, w);
+        final y0 = y * h ~/ chh;
+        final y1 = ((y + 1) * h ~/ chh).clamp(y0 + 1, h);
+        var r = 0, g = 0, b = 0, n = 0;
+        for (var sy = y0; sy < y1; sy++) {
+          for (var sx = x0; sx < x1; sx++) {
+            final i = (sy * w + sx) * ch;
+            r += px[i];
+            g += px[i + 1];
+            b += px[i + 2];
+            n++;
+          }
+        }
+        r ~/= n;
+        g ~/= n;
+        b ~/= n;
+        final co = (r - b).clamp(-255, 255);
+        final cg = (g - (r + b) ~/ 2).clamp(-255, 255);
+        plane[y * cw + x] = (_quant2(co) << 2) | _quant2(cg);
+      }
+    }
+    return ProgressiveLevel(
+      cw,
+      chh,
+      _cm.compress(plane),
+      LevelCoder.chromaPair,
+    );
+  }
+
+  /// Map a signed chroma difference onto two bits.
+  static int _quant2(int value) => (((value + 256) * 3) ~/ 512).clamp(0, 3);
+
+  /// The centre of the band a two-bit code stands for.
+  static int _dequant2(int code) => (code * 512) ~/ 3 - 256 + 85;
+
   List<ProgressiveLevel> encodeProgressive(Uint8List px, int w, int h, int ch) {
     final out = <ProgressiveLevel>[];
     Uint8List? prevQ;
@@ -163,8 +251,19 @@ class LowRateImageCompressor {
     }
     Uint8List? prevQ;
     var prevW = 0, prevH = 0;
+    Uint8List? chroma;
+    var chromaW = 0, chromaH = 0;
     for (final level in received) {
       final payload = _cm.decompress(level.bytes);
+      if (level.coder == LevelCoder.chromaPair) {
+        // Colour is applied at the end, over whatever luma arrived, so it
+        // is order-independent: a chroma level is just as usable whether
+        // it came before or after the refinements it will be painted on.
+        chroma = payload;
+        chromaW = level.width;
+        chromaH = level.height;
+        continue;
+      }
       final Uint8List plane;
       switch (level.coder) {
         case LevelCoder.fixedPaeth:
@@ -178,6 +277,9 @@ class LowRateImageCompressor {
           plane = AdaptiveFilter.inverse(payload, level.width, level.height, 1);
         case LevelCoder.rawResidual:
           plane = payload;
+        case LevelCoder.chromaPair:
+          // Handled above; unreachable, and stated rather than defaulted.
+          continue;
       }
       final Uint8List q;
       if (prevQ == null) {
@@ -193,12 +295,68 @@ class LowRateImageCompressor {
       prevW = level.width;
       prevH = level.height;
     }
-    final q = prevQ!;
+    if (prevQ == null) {
+      // Chroma with nothing to paint it on. Refused rather than invented:
+      // a flat grey field tinted by colour is not a photograph, and
+      // returning one would be the same class of mistake as rendering a
+      // refinement level as though it were a picture.
+      throw ArgumentError('a chroma level needs a luma level');
+    }
+    final q = prevQ;
     final gray = Uint8List(q.length);
     for (var i = 0; i < q.length; i++) {
       gray[i] = (q[i] << 4) | q[i]; // 4-bit -> 8-bit
     }
-    return DecodedThumbnail(prevW, prevH, gray);
+    if (chroma == null) {
+      // A picture without colour: the ordinary outcome, not a failure.
+      // Chroma is the last thing sent and the first thing a thin link
+      // drops.
+      return DecodedThumbnail(prevW, prevH, gray);
+    }
+    return DecodedThumbnail(
+      prevW,
+      prevH,
+      gray,
+      rgb: _paint(gray, prevW, prevH, chroma, chromaW, chromaH),
+    );
+  }
+
+  /// Rebuild interleaved RGB from a luma plane and a coarse chroma plane.
+  ///
+  /// The chroma plane is nearest-sampled up to the luma resolution, which
+  /// is the right choice for a plane this coarse: interpolating four
+  /// two-bit samples invents gradients that were never measured.
+  static Uint8List _paint(
+    Uint8List gray,
+    int w,
+    int h,
+    Uint8List chroma,
+    int cw,
+    int chh,
+  ) {
+    final rgb = Uint8List(w * h * 3);
+    for (var y = 0; y < h; y++) {
+      final cy = (y * chh ~/ h).clamp(0, chh - 1);
+      for (var x = 0; x < w; x++) {
+        final cx = (x * cw ~/ w).clamp(0, cw - 1);
+        final packed = chroma[cy * cw + cx];
+        final co = _dequant2((packed >> 2) & 0x03);
+        final cg = _dequant2(packed & 0x03);
+        final luma = gray[y * w + x];
+
+        // The YCoCg inverse, in integers.
+        final tmp = luma - (cg >> 1);
+        final g = (cg + tmp).clamp(0, 255);
+        final b = (tmp - (co >> 1)).clamp(0, 255);
+        final r = (b + co).clamp(0, 255);
+
+        final i = (y * w + x) * 3;
+        rgb[i] = r;
+        rgb[i + 1] = g;
+        rgb[i + 2] = b;
+      }
+    }
+    return rgb;
   }
 
   /// Contour trace: threshold at the mean, emit merged horizontal runs

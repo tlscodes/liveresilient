@@ -219,7 +219,15 @@ class BroadcastMediaRenderer {
     for (var ordinal = 0; imageLevels.containsKey(ordinal); ordinal++) {
       ordered.add(imageLevels[ordinal]!);
     }
-    unreadable += imageLevels.length - ordered.length;
+    // Colour is not part of that run: it is painted over whatever luma
+    // arrived, so it is appended when there is something to paint on and
+    // dropped when there is not.
+    final chroma = imageLevels[chromaOrdinal];
+    if (chroma != null && ordered.isNotEmpty) ordered.add(chroma);
+    unreadable +=
+        imageLevels.length -
+        ordered.length -
+        (chroma != null && ordered.isEmpty ? 1 : 0);
 
     // Decoded one prefix at a time, keeping the best that worked. The
     // whole promise of a progressive format is that a partial arrival is

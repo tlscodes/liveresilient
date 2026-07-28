@@ -253,6 +253,39 @@ class BroadcastMediaComposer {
           );
         }
       }
+
+      // Colour last, and only when there is colour to send. It is the
+      // cheapest meaningful thing in the bundle and the first a thin link
+      // should drop, which is exactly why it goes at the end: a reader
+      // that stops early loses the hue and keeps the picture.
+      if (picture.channels >= 3) {
+        final level = image.encodeChroma(
+          picture.pixels,
+          picture.width,
+          picture.height,
+          picture.channels,
+        );
+        final envelope = PayloadEnvelope(
+          kind: PayloadKind.imageLevel,
+          body: ImageLevelPayload(
+            ordinal: chromaOrdinal,
+            width: level.width,
+            height: level.height,
+            coderIndex: level.coder.index,
+            bytes: level.bytes,
+          ).encode(),
+        );
+        final encoded = envelope.encode();
+        final fits = _fitsHeavy(heavyParts, encoded);
+        if (fits) heavyParts.add(envelope);
+        parts.add(
+          PartReport(
+            name: 'image.colour',
+            bytes: encoded.length,
+            included: fits,
+          ),
+        );
+      }
     }
 
     if (voiceTokens != null) {

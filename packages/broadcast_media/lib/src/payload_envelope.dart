@@ -62,6 +62,13 @@ const int maxImageDimension = 4096;
 /// Most levels one image pyramid may declare.
 const int maxImageLevels = 16;
 
+/// The ordinal reserved for the chroma plane.
+///
+/// Colour is not a pyramid level — it is painted over whatever luma
+/// arrived — so it sits outside the contiguous run a reader assembles,
+/// and cannot be mistaken for a refinement whose base is missing.
+const int chromaOrdinal = maxImageLevels;
+
 /// Most token columns one voice block may declare.
 ///
 /// At the codec's framing this is several hours of speech, and it stops a
