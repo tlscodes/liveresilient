@@ -73,20 +73,29 @@ List<Uri> broadcastRelayOrigins(Map<String, String> environment) {
 List<BroadcastRelay> broadcastRelaysFromEnvironment(
   Map<String, String> environment, {
   BroadcastHttpTransport? transport,
+  BroadcastCredentials? credentials,
 }) => broadcastRelaysFor(
   broadcastRelayOrigins(environment),
   transport: transport,
+  credentials: credentials,
 );
 
 /// Builds relay clients for [origins], sharing one transport.
 List<BroadcastRelay> broadcastRelaysFor(
   List<Uri> origins, {
   BroadcastHttpTransport? transport,
+  BroadcastCredentials? credentials,
 }) {
   final shared = transport ?? IoBroadcastHttpTransport();
   return [
     for (final origin in origins)
-      HttpBroadcastRelay(origin: origin, transport: shared),
+      HttpBroadcastRelay(
+        origin: origin,
+        transport: shared,
+        // Only a publisher needs these. A reader that passes none simply
+        // cannot write, which is the right default for a following app.
+        credentials: credentials,
+      ),
   ];
 }
 
@@ -129,15 +138,22 @@ class IoBroadcastHttpTransport implements BroadcastHttpTransport {
       _send('GET', url, null).timeout(timeout);
 
   @override
-  Future<BroadcastHttpResponse> put(Uri url, Uint8List body) =>
-      _send('PUT', url, body).timeout(timeout);
+  Future<BroadcastHttpResponse> put(
+    Uri url,
+    Uint8List body, {
+    Map<String, String> headers = const {},
+  }) => _send('PUT', url, body, headers).timeout(timeout);
 
   Future<BroadcastHttpResponse> _send(
     String method,
     Uri url,
-    Uint8List? body,
-  ) async {
+    Uint8List? body, [
+    Map<String, String> headers = const {},
+  ]) async {
     final request = await _client.openUrl(method, url);
+    for (final entry in headers.entries) {
+      request.headers.set(entry.key, entry.value);
+    }
     // Redirects are off: every address here is immutable and content
     // addressed, so a redirect can only send a reader somewhere it did not
     // name. Nothing legitimate needs one.

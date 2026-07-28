@@ -7,11 +7,13 @@
 /// a PUT and nothing else.
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'broadcast_address.dart';
 import 'broadcast_ids.dart';
 import 'broadcast_relay.dart';
+import 'publishing_key_certificate.dart';
 
 /// One HTTP response, reduced to what this protocol reads.
 class BroadcastHttpResponse {
@@ -30,8 +32,66 @@ abstract interface class BroadcastHttpTransport {
   /// the caller treats as "this relay is down".
   Future<BroadcastHttpResponse> get(Uri url);
 
-  /// PUT [body] to [url].
-  Future<BroadcastHttpResponse> put(Uri url, Uint8List body);
+  /// PUT [body] to [url], sending [headers].
+  Future<BroadcastHttpResponse> put(
+    Uri url,
+    Uint8List body, {
+    Map<String, String> headers = const {},
+  });
+}
+
+/// Header a relay reads to check that a descriptor write is the author's.
+const String broadcastAuthHeader = 'x-broadcast-auth';
+
+/// What a publisher shows a relay to prove a descriptor is its own.
+///
+/// The relay holds no keys and knows no authors, so the proof has to be
+/// self-contained: the root key names the address, the certificate is
+/// signed by that root, and the descriptor is signed by the key the
+/// certificate delegates to. Every link is checkable from these bytes
+/// alone.
+///
+/// Without it, write-once protected nobody: anyone could put a byte at an
+/// author's coming sequence numbers and hold them for the whole retention
+/// window.
+class BroadcastCredentials {
+  BroadcastCredentials({
+    required this.rootPublicKey,
+    required this.certificate,
+  }) {
+    if (rootPublicKey.length != 32) {
+      throw ArgumentError.value(
+        rootPublicKey.length,
+        'rootPublicKey.length',
+        'an Ed25519 public key is 32 bytes',
+      );
+    }
+    if (certificate.length != certificateBytes) {
+      throw ArgumentError.value(
+        certificate.length,
+        'certificate.length',
+        'a publishing certificate is $certificateBytes bytes',
+      );
+    }
+  }
+
+  /// Build credentials from a publisher's own material.
+  factory BroadcastCredentials.of(
+    Uint8List rootPublicKey,
+    PublishingKeyCertificate certificate,
+  ) => BroadcastCredentials(
+    rootPublicKey: rootPublicKey,
+    certificate: certificate.encoded,
+  );
+
+  final Uint8List rootPublicKey;
+  final Uint8List certificate;
+
+  /// The header value: base64url of the key followed by the certificate.
+  String get headerValue =>
+      base64Url.encode([...rootPublicKey, ...certificate]).replaceAll('=', '');
+
+  Map<String, String> get headers => {broadcastAuthHeader: headerValue};
 }
 
 /// Why a publish attempt did not store anything.
@@ -78,6 +138,7 @@ class HttpBroadcastRelay implements BroadcastRelay {
   HttpBroadcastRelay({
     required this.origin,
     required BroadcastHttpTransport transport,
+    this.credentials,
     String? name,
   }) : _transport = transport,
        name = name ?? origin.host {
@@ -89,6 +150,9 @@ class HttpBroadcastRelay implements BroadcastRelay {
   /// Scheme and authority of the relay, for example
   /// `https://relay.example`. Any path on it is ignored.
   final Uri origin;
+
+  /// Proof for descriptor writes. A read-only reader needs none.
+  final BroadcastCredentials? credentials;
 
   final BroadcastHttpTransport _transport;
 
@@ -132,16 +196,27 @@ class HttpBroadcastRelay implements BroadcastRelay {
 
   @override
   Future<void> putDescriptor(DescriptorAddress address, Uint8List encoded) =>
-      _put(_url(address.path), encoded);
+      // Only a descriptor write needs proving. An object is filed under
+      // the hash of its own bytes, so its name already says everything a
+      // relay could check about it.
+      _put(
+        _url(address.path),
+        encoded,
+        headers: credentials?.headers ?? const {},
+      );
 
   @override
   Future<void> putObject(Uint8List bytes) =>
       _put(_url(ObjectAddress(contentHash(bytes)).path), bytes);
 
-  Future<void> _put(Uri url, Uint8List bytes) async {
+  Future<void> _put(
+    Uri url,
+    Uint8List bytes, {
+    Map<String, String> headers = const {},
+  }) async {
     final BroadcastHttpResponse response;
     try {
-      response = await _transport.put(url, bytes);
+      response = await _transport.put(url, bytes, headers: headers);
     } on Object {
       throw BroadcastPublishRejected(BroadcastPublishFailure.refused, 0, url);
     }

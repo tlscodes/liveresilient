@@ -45,10 +45,48 @@ function fakeClock(startMs) {
   };
 }
 
-const AUTHOR = '0102030405060708';
+/// These tests cover storage behaviour — write-once, retention, quotas —
+/// so the signature check is stubbed out here and exercised for real,
+/// against live Ed25519 keys, in broadcast_auth.test.mjs. The structural
+/// parts of authorization are NOT stubbed: the author id still has to be
+/// the hash of the root key, and a descriptor still has to name it.
+const ROOT_KEY = new Uint8Array(32).fill(7);
+const AUTHOR = (await sha256Hex(ROOT_KEY)).slice(0, 16);
+
+const AUTHOR_BYTES = new Uint8Array(
+  AUTHOR.match(/../g).map((pair) => parseInt(pair, 16)),
+);
+
+/// Credentials whose signatures the stubbed verifier accepts, but whose
+/// shape and author binding are the real thing.
+const AUTH = (() => {
+  const certificate = new Uint8Array(115);
+  certificate[0] = 1;
+  certificate.set(AUTHOR_BYTES, 1);
+  const blob = new Uint8Array(32 + 115);
+  blob.set(ROOT_KEY, 0);
+  blob.set(certificate, 32);
+  let binary = '';
+  for (const b of blob) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+})();
+
+/// A descriptor-shaped body: the real header layout with [fill] as its
+/// payload, so two bodies can differ while both stay well formed.
+function descriptorBody(fill) {
+  const out = new Uint8Array(147);
+  out[0] = 1;
+  out[1] = 0x01;
+  out.set(AUTHOR_BYTES, 2);
+  out.fill(fill, 20, 83);
+  return out;
+}
 
 function archiveAt(clock) {
-  return new BroadcastArchive(new FakeStorage(), { now: clock.now });
+  return new BroadcastArchive(new FakeStorage(), {
+    now: clock.now,
+    verify: async () => true,
+  });
 }
 
 async function objectRoute(bytes) {
@@ -120,9 +158,14 @@ test('a stored descriptor reads back with an immutable cache directive',
   async () => {
     const clock = fakeClock(1_000_000);
     const archive = archiveAt(clock);
-    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const bytes = descriptorBody(4);
 
-    const write = await archive.handle(descriptorRoute(0), 'PUT', bytes);
+    const write = await archive.handle(
+      descriptorRoute(0),
+      'PUT',
+      bytes,
+      AUTH,
+    );
     assert.equal(write.status, 201);
 
     const read = await archive.handle(descriptorRoute(0), 'GET', null);
@@ -142,10 +185,10 @@ test('a missing address is a 404, not an empty success', async () => {
 
 test('HEAD answers without a body', async () => {
   const archive = archiveAt(fakeClock(0));
-  await archive.handle(descriptorRoute(0), 'PUT', new Uint8Array([9]));
+  await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(9), AUTH);
   const head = await archive.handle(descriptorRoute(0), 'HEAD', null);
   assert.equal(head.status, 200);
-  assert.equal(head.headers.get('content-length'), '1');
+  assert.equal(head.headers.get('content-length'), '147');
   assert.equal((await head.arrayBuffer()).byteLength, 0);
 });
 
@@ -163,13 +206,13 @@ test('an object must hash to the name it is filed under', async () => {
 
 test('a rewrite with identical bytes is a quiet retry', async () => {
   const archive = archiveAt(fakeClock(0));
-  const bytes = new Uint8Array([1, 2, 3]);
+  const bytes = descriptorBody(3);
   assert.equal(
-    (await archive.handle(descriptorRoute(0), 'PUT', bytes)).status,
+    (await archive.handle(descriptorRoute(0), 'PUT', bytes, AUTH)).status,
     201,
   );
   assert.equal(
-    (await archive.handle(descriptorRoute(0), 'PUT', bytes)).status,
+    (await archive.handle(descriptorRoute(0), 'PUT', bytes, AUTH)).status,
     204,
   );
 });
@@ -177,17 +220,16 @@ test('a rewrite with identical bytes is a quiet retry', async () => {
 test('a rewrite with different bytes is refused, so a fork stays visible',
   async () => {
     const archive = archiveAt(fakeClock(0));
-    await archive.handle(descriptorRoute(0), 'PUT', new Uint8Array([1]));
-    const conflict = await archive.handle(
-      descriptorRoute(0),
-      'PUT',
-      new Uint8Array([2]),
-    );
+    await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(1), AUTH);
+    const conflict = await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(2), AUTH);
     assert.equal(conflict.status, 409);
 
     // The original is still what reads back.
     const read = await archive.handle(descriptorRoute(0), 'GET', null);
-    assert.deepEqual(new Uint8Array(await read.arrayBuffer()), new Uint8Array([1]));
+    assert.deepEqual(
+      new Uint8Array(await read.arrayBuffer()),
+      descriptorBody(1),
+    );
   });
 
 test('an empty body is refused', async () => {
@@ -196,6 +238,7 @@ test('an empty body is refused', async () => {
     descriptorRoute(0),
     'PUT',
     new Uint8Array(0),
+    AUTH,
   );
   assert.equal(result.status, 400);
 });
@@ -203,7 +246,7 @@ test('an empty body is refused', async () => {
 test('an oversized descriptor is refused', async () => {
   const archive = archiveAt(fakeClock(0));
   const tooBig = new Uint8Array(MAX_DESCRIPTOR_BYTES + 1);
-  const result = await archive.handle(descriptorRoute(0), 'PUT', tooBig);
+  const result = await archive.handle(descriptorRoute(0), 'PUT', tooBig, AUTH);
   assert.equal(result.status, 413);
 });
 
@@ -224,25 +267,17 @@ test('an object at exactly the limit is accepted', async () => {
 
 test('an unsupported method is refused', async () => {
   const archive = archiveAt(fakeClock(0));
-  const result = await archive.handle(descriptorRoute(0), 'DELETE', null);
+  const result = await archive.handle(descriptorRoute(0), 'DELETE', null, AUTH);
   assert.equal(result.status, 405);
 });
 
 test('an author is rate limited within one retention window', async () => {
   const archive = archiveAt(fakeClock(0));
   for (let seq = 0; seq < MAX_POSTS_PER_AUTHOR; seq += 1) {
-    const result = await archive.handle(
-      descriptorRoute(seq),
-      'PUT',
-      new Uint8Array([seq & 0xff, 1]),
-    );
+    const result = await archive.handle(descriptorRoute(seq), 'PUT', descriptorBody(seq & 0xff), AUTH);
     assert.equal(result.status, 201, `post ${seq} should be accepted`);
   }
-  const overflow = await archive.handle(
-    descriptorRoute(MAX_POSTS_PER_AUTHOR),
-    'PUT',
-    new Uint8Array([1, 2]),
-  );
+  const overflow = await archive.handle(descriptorRoute(MAX_POSTS_PER_AUTHOR), 'PUT', descriptorBody(1), AUTH);
   assert.equal(overflow.status, 429);
 });
 
@@ -252,14 +287,10 @@ test('the rate limit resets with the window it belongs to', async () => {
   const clock = fakeClock(0);
   const archive = archiveAt(clock);
   for (let seq = 0; seq < MAX_POSTS_PER_AUTHOR; seq += 1) {
-    await archive.handle(descriptorRoute(seq), 'PUT', new Uint8Array([1, seq & 0xff]));
+    await archive.handle(descriptorRoute(seq), 'PUT', descriptorBody(1), AUTH);
   }
   clock.advance(RETENTION_MS + 1);
-  const after = await archive.handle(
-    descriptorRoute(MAX_POSTS_PER_AUTHOR),
-    'PUT',
-    new Uint8Array([3]),
-  );
+  const after = await archive.handle(descriptorRoute(MAX_POSTS_PER_AUTHOR), 'PUT', descriptorBody(3), AUTH);
   assert.equal(after.status, 201);
 });
 
@@ -267,7 +298,7 @@ test('an entry past retention is gone, and a read does not resurrect it',
   async () => {
     const clock = fakeClock(0);
     const archive = archiveAt(clock);
-    await archive.handle(descriptorRoute(0), 'PUT', new Uint8Array([1]));
+    await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(1), AUTH);
 
     clock.advance(RETENTION_MS - 1);
     assert.equal(
@@ -287,9 +318,9 @@ test('an entry past retention is gone, and a read does not resurrect it',
 test('a sweep removes only what has expired', async () => {
   const clock = fakeClock(0);
   const archive = archiveAt(clock);
-  await archive.handle(descriptorRoute(0), 'PUT', new Uint8Array([1]));
+  await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(1), AUTH);
   clock.advance(RETENTION_MS - 1000);
-  await archive.handle(descriptorRoute(1), 'PUT', new Uint8Array([2]));
+  await archive.handle(descriptorRoute(1), 'PUT', descriptorBody(2), AUTH);
 
   clock.advance(2000);
   assert.equal(await archive.sweep(), 1);
@@ -299,7 +330,7 @@ test('a sweep removes only what has expired', async () => {
 
 test('a sweep with nothing expired reports no work', async () => {
   const archive = archiveAt(fakeClock(0));
-  await archive.handle(descriptorRoute(0), 'PUT', new Uint8Array([1]));
+  await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(1), AUTH);
   assert.equal(await archive.sweep(), 0);
 });
 
@@ -309,28 +340,53 @@ test('an expired address can be written again with different bytes',
     // most it can honestly promise. Durability is the readers' job.
     const clock = fakeClock(0);
     const archive = archiveAt(clock);
-    await archive.handle(descriptorRoute(0), 'PUT', new Uint8Array([1]));
+    await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(1), AUTH);
     clock.advance(RETENTION_MS + 1);
-    const again = await archive.handle(
-      descriptorRoute(0),
-      'PUT',
-      new Uint8Array([2]),
-    );
+    const again = await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(2), AUTH);
     assert.equal(again.status, 201);
   });
 
 test('descriptors of two authors do not collide', async () => {
+  // Each author writes with their own credentials; the point is that the
+  // two addresses are separate storage, not that one can write the other.
   const archive = archiveAt(fakeClock(0));
-  const other = 'aabbccddeeff0011';
-  await archive.handle(descriptorRoute(0), 'PUT', new Uint8Array([1]));
+  const otherRoot = new Uint8Array(32).fill(11);
+  const other = (await sha256Hex(otherRoot)).slice(0, 16);
+  const otherBytes = new Uint8Array(
+    other.match(/../g).map((pair) => parseInt(pair, 16)),
+  );
+  const otherAuth = (() => {
+    const certificate = new Uint8Array(115);
+    certificate[0] = 1;
+    certificate.set(otherBytes, 1);
+    const blob = new Uint8Array(147);
+    blob.set(otherRoot, 0);
+    blob.set(certificate, 32);
+    let binary = '';
+    for (const b of blob) binary += String.fromCharCode(b);
+    return btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  })();
+  const otherBody = (() => {
+    const out = new Uint8Array(147);
+    out[0] = 1;
+    out[1] = 0x01;
+    out.set(otherBytes, 2);
+    out.fill(2, 20, 83);
+    return out;
+  })();
+  await archive.handle(descriptorRoute(0), 'PUT', descriptorBody(1), AUTH);
   const second = await archive.handle(
     descriptorRoute(0, other),
     'PUT',
-    new Uint8Array([2]),
+    otherBody,
+    otherAuth,
   );
   assert.equal(second.status, 201);
   const read = await archive.handle(descriptorRoute(0, other), 'GET', null);
-  assert.deepEqual(new Uint8Array(await read.arrayBuffer()), new Uint8Array([2]));
+  assert.deepEqual(new Uint8Array(await read.arrayBuffer()), otherBody);
 });
 
 test('sha256Hex matches the published digest of the empty input', async () => {
