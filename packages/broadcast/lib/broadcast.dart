@@ -31,5 +31,6 @@ export 'src/broadcast_relay.dart';
 export 'src/fork_report.dart';
 export 'src/http_broadcast_relay.dart';
 export 'src/layer_hash_list.dart';
+export 'src/post_evidence.dart';
 export 'src/publishing_key_certificate.dart';
 export 'src/relay_directory.dart';

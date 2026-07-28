@@ -178,6 +178,15 @@ jobs:
         working-directory: tools/cloudflare_relay_worker
         run: node --test
 
+      # The offline verifier page is the only thing in this repository a
+      # stranger is asked to trust without running the app, so it is gated
+      # against the same conformance vectors the client is — and checked
+      # for any network call at all, since a verifier that quietly fetched
+      # anything would leak who is checking what.
+      - name: Web verifier tests
+        working-directory: tools/web_verifier
+        run: node --test
+
       # The real gate: wrangler builds the bundle and validates
       # wrangler.toml (bindings, migrations, compatibility date) exactly as
       # a deploy would. --dry-run needs no Cloudflare credentials, so a

@@ -96,8 +96,17 @@ if command -v node > /dev/null 2>&1; then
     grep -E '^(✖|not ok)' /tmp/gate-worker.log | head -10
     fail=1
   fi
+  if (cd tools/web_verifier && node --test) > /tmp/gate-verifier.log 2>&1
+  then
+    echo "OK   web verifier      $(grep -c '^✔' /tmp/gate-verifier.log) passed"
+  else
+    echo "FAIL web verifier"
+    grep -E '^(✖|not ok)' /tmp/gate-verifier.log | head -10
+    fail=1
+  fi
 else
   echo "SKIP relay worker      node not installed"
+  echo "SKIP web verifier      node not installed"
 fi
 
 exit "$fail"

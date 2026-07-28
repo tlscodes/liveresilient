@@ -87,6 +87,24 @@ Future<void> main() async {
     retracts: textOnly.id,
   );
 
+  final quotableText = Uint8List.fromList(
+    'the bridge is closed; do not go north'.codeUnits,
+  );
+  final quotable = await BroadcastDescriptor.sign(
+    signer: publishing,
+    authorId: authorId,
+    seq: 7,
+    publishedAt: DateTime.utc(2026, 1, 1, 18),
+    prev: textOnly.id,
+    layers: {LayerFlag.text: contentHash(quotableText)},
+  );
+  final evidence = PostEvidence.build(
+    rootPublicKey: root.publicKey,
+    certificate: certificate,
+    descriptor: quotable,
+    text: quotableText,
+  );
+
   final directory = await RelayDirectory.issue(
     rootSigner: root,
     origins: [
@@ -158,6 +176,17 @@ Future<void> main() async {
         'byteLength': retraction.encoded.length,
       },
     ],
+    'postEvidence': {
+      'note':
+          'A self-contained bundle the offline web verifier checks. Both '
+          'the Dart implementation and tools/web_verifier read these bytes.',
+      'text': String.fromCharCodes(quotableText),
+      'seq': 7,
+      'publishedAtSeconds': quotable.publishedAt.millisecondsSinceEpoch ~/ 1000,
+      'encodedHex': _hex(evidence),
+      'base64': base64.encode(evidence),
+      'byteLength': evidence.length,
+    },
     'relayDirectory': {
       'seq': 3,
       'origins': [for (final o in directory.origins) o.toString()],
