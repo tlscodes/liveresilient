@@ -77,7 +77,7 @@ class ChainResult {
 
 /// A contiguous, link-verified window of one author's posts.
 class BroadcastChain {
-  BroadcastChain({required Uint8List authorId})
+  BroadcastChain({required Uint8List authorId, this.maxRetained = 4096})
     : authorId = Uint8List.fromList(authorId) {
     if (authorId.length != authorIdBytes) {
       throw ArgumentError.value(
@@ -86,7 +86,23 @@ class BroadcastChain {
         'must be $authorIdBytes bytes',
       );
     }
+    if (maxRetained < 2) {
+      throw ArgumentError.value(
+        maxRetained,
+        'maxRetained',
+        'a window needs room for at least two posts to link them',
+      );
+    }
   }
+
+  /// How many posts the window keeps before dropping its oldest.
+  ///
+  /// A chain is unbounded by design; a reader's memory is not. Anyone able
+  /// to sign as this author can otherwise make a polling reader retain
+  /// every post it is handed. Dropping from the old end is the right end
+  /// to drop from: the newest post is the one a reader is following, and
+  /// history can always be walked again from a relay that still has it.
+  final int maxRetained;
 
   /// The author this chain tracks.
   final Uint8List authorId;
@@ -168,6 +184,7 @@ class BroadcastChain {
       }
       _bySeq[descriptor.seq] = descriptor;
       _highest = descriptor.seq;
+      _trimOldest();
       return const ChainResult(ChainOutcome.accepted);
     }
 
@@ -181,9 +198,23 @@ class BroadcastChain {
       }
       _bySeq[descriptor.seq] = descriptor;
       _lowest = descriptor.seq;
+      // Deliberately no trim here: a reader walking backwards is asking
+      // for exactly these posts, and dropping them as they arrive would
+      // make the walk never finish. A backfill past the ceiling instead
+      // grows the window, which is the caller's own doing and bounded by
+      // how far it chooses to walk.
       return const ChainResult(ChainOutcome.accepted);
     }
 
     return const ChainResult(ChainOutcome.notAdjacent);
+  }
+
+  /// Drops from the old end until the window fits [maxRetained].
+  void _trimOldest() {
+    while (_bySeq.length > maxRetained) {
+      final oldest = _lowest!;
+      _bySeq.remove(oldest);
+      _lowest = oldest + 1;
+    }
   }
 }

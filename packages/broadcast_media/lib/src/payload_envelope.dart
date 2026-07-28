@@ -53,6 +53,24 @@ const int maxPayloadBytes = 8 * 1024 * 1024;
 /// Most parts one bundle may carry.
 const int maxBundleParts = 256;
 
+/// Largest edge of a declared image level.
+///
+/// The progressive codec's own levels are tens of pixels wide; this is
+/// far above anything legitimate and far below anything that hurts.
+const int maxImageDimension = 4096;
+
+/// Most levels one image pyramid may declare.
+const int maxImageLevels = 16;
+
+/// Most token columns one voice block may declare.
+///
+/// At the codec's framing this is several hours of speech, and it stops a
+/// declared count from driving a decode loop no payload can satisfy.
+const int maxVoiceFrames = 1 << 20;
+
+/// Most codebook rows a voice model may use.
+const int maxVoiceRows = 32;
+
 /// A tagged payload.
 class PayloadEnvelope {
   const PayloadEnvelope({required this.kind, required this.body});
@@ -90,11 +108,22 @@ class PayloadEnvelope {
 /// it does not.
 class ImageLevelPayload {
   const ImageLevelPayload({
+    required this.ordinal,
     required this.width,
     required this.height,
     required this.coderIndex,
     required this.bytes,
   });
+
+  /// Position in the pyramid, coarsest first.
+  ///
+  /// Carried because a refinement level is a residual against the level
+  /// below it, not a picture. Without an ordinal a decoder shown levels
+  /// 1 and 2 with no level 0 treats the first one it sees as the base and
+  /// renders a residual as the photograph. That is not a decode failure —
+  /// it produces a plausible-looking image — so the format has to make it
+  /// impossible rather than leaving it to be noticed.
+  final int ordinal;
 
   final int width;
   final int height;
@@ -105,27 +134,81 @@ class ImageLevelPayload {
 
   final Uint8List bytes;
 
-  /// `u16 width · u16 height · u8 coder · bytes`
+  /// `u8 ordinal · u16 width · u16 height · u8 coder · bytes`
   Uint8List encode() {
-    final out = Uint8List(5 + bytes.length);
+    final out = Uint8List(6 + bytes.length);
+    out[0] = ordinal;
     ByteData.sublistView(out)
-      ..setUint16(0, width)
-      ..setUint16(2, height);
-    out[4] = coderIndex;
-    out.setRange(5, 5 + bytes.length, bytes);
+      ..setUint16(1, width)
+      ..setUint16(3, height);
+    out[5] = coderIndex;
+    out.setRange(6, 6 + bytes.length, bytes);
     return out;
   }
 
   static ImageLevelPayload? decode(Uint8List body) {
-    if (body.length < 6) return null;
+    if (body.length < 7) return null;
     final view = ByteData.sublistView(body);
-    final width = view.getUint16(0);
-    final height = view.getUint16(2);
+    final width = view.getUint16(1);
+    final height = view.getUint16(3);
     if (width == 0 || height == 0) return null;
+    // A declared geometry is attacker-controlled and drives an allocation
+    // of width * height before the payload is even looked at, so it is
+    // bounded here rather than wherever it eventually gets multiplied.
+    if (width > maxImageDimension || height > maxImageDimension) return null;
+    if (body[0] > maxImageLevels) return null;
     return ImageLevelPayload(
+      ordinal: body[0],
       width: width,
       height: height,
-      coderIndex: body[4],
+      coderIndex: body[5],
+      bytes: Uint8List.fromList(Uint8List.sublistView(body, 6)),
+    );
+  }
+}
+
+/// A block of voice tokens, with the shape needed to decode it.
+///
+/// The token codec needs the frame count as a separate input — it is not
+/// recoverable from the coded bytes. Leaving it to the caller to supply
+/// out of band was a real hazard rather than a theoretical one: a wrong
+/// count does not fail, it decodes fewer columns and advances the shared
+/// codec state to a place the sender is not, and every later block from
+/// that author is noise from then on. Self-describing framing exists
+/// precisely so a field like this cannot go missing.
+class VoiceTokensPayload {
+  const VoiceTokensPayload({
+    required this.frameCount,
+    required this.rows,
+    required this.bytes,
+  });
+
+  final int frameCount;
+
+  /// Codebook rows per column, so a reader can refuse a block from a
+  /// model its session was not built for instead of decoding gibberish.
+  final int rows;
+
+  final Uint8List bytes;
+
+  /// `u32 frameCount · u8 rows · bytes`
+  Uint8List encode() {
+    final out = Uint8List(5 + bytes.length);
+    ByteData.sublistView(out).setUint32(0, frameCount);
+    out[4] = rows;
+    out.setRange(5, 5 + bytes.length, bytes);
+    return out;
+  }
+
+  static VoiceTokensPayload? decode(Uint8List body) {
+    if (body.length < 6) return null;
+    final frameCount = ByteData.sublistView(body).getUint32(0);
+    final rows = body[4];
+    if (frameCount == 0 || frameCount > maxVoiceFrames) return null;
+    if (rows == 0 || rows > maxVoiceRows) return null;
+    return VoiceTokensPayload(
+      frameCount: frameCount,
+      rows: rows,
       bytes: Uint8List.fromList(Uint8List.sublistView(body, 5)),
     );
   }

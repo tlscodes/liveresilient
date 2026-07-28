@@ -92,11 +92,10 @@ class BroadcastMediaRenderer {
     Uint8List? voiceLayer,
     Uint8List? heavyLayer,
     HamsedaSession? voiceSession,
-    int? voiceFrameCount,
   }) {
     var unreadable = 0;
     String? body;
-    final imageLevels = <ProgressiveLevel>[];
+    final imageLevels = <int, ProgressiveLevel>{};
     List<List<int>>? voiceColumns;
     final frames = <FlipbookFrame>[];
 
@@ -115,13 +114,15 @@ class BroadcastMediaRenderer {
 
     if (stillLayer != null) {
       final envelope = PayloadEnvelope.decode(stillLayer);
-      final level = envelope != null && envelope.kind == PayloadKind.imageLevel
-          ? _levelFrom(envelope.body)
+      final payload =
+          envelope != null && envelope.kind == PayloadKind.imageLevel
+          ? ImageLevelPayload.decode(envelope.body)
           : null;
+      final level = payload == null ? null : _levelFrom(payload);
       if (level == null) {
         unreadable += 1;
       } else {
-        imageLevels.add(level);
+        imageLevels[payload!.ordinal] = level;
       }
     }
 
@@ -147,13 +148,14 @@ class BroadcastMediaRenderer {
             provenance = VoiceProvenance.synthesizedFromText;
           }
         case PayloadKind.voiceTokens:
-          if (voiceSession == null || voiceFrameCount == null) {
+          final payload = VoiceTokensPayload.decode(envelope!.body);
+          if (voiceSession == null || payload == null) {
             unreadable += 1;
           } else {
             try {
               voiceColumns = voiceSession.decodeBlock(
-                envelope!.body,
-                voiceFrameCount,
+                payload.bytes,
+                payload.frameCount,
               );
               voiceSession.commit();
               provenance = VoiceProvenance.reconstructedFromTokens;
@@ -181,11 +183,14 @@ class BroadcastMediaRenderer {
         for (final part in bundle.parts) {
           switch (part.kind) {
             case PayloadKind.imageLevel:
-              final level = _levelFrom(part.body);
-              if (level == null) {
+              final payload = ImageLevelPayload.decode(part.body);
+              final level = payload == null ? null : _levelFrom(payload);
+              if (level == null || imageLevels.containsKey(payload!.ordinal)) {
+                // A duplicate ordinal is refused rather than allowed to
+                // silently replace the level already held.
                 unreadable += 1;
               } else {
-                imageLevels.add(level);
+                imageLevels[payload.ordinal] = level;
               }
             case PayloadKind.videoFrame:
               final frame = _frameFrom(part.body);
@@ -206,21 +211,48 @@ class BroadcastMediaRenderer {
       }
     }
 
+    // Only the run starting at the base level is usable. A refinement is a
+    // residual against the level below it, so levels 1 and 2 without
+    // level 0 are not a lower-quality picture — they are noise that would
+    // decode without complaint and be shown as the photograph.
+    final ordered = <ProgressiveLevel>[];
+    for (var ordinal = 0; imageLevels.containsKey(ordinal); ordinal++) {
+      ordered.add(imageLevels[ordinal]!);
+    }
+    unreadable += imageLevels.length - ordered.length;
+
+    // Decoded one prefix at a time, keeping the best that worked. The
+    // whole promise of a progressive format is that a partial arrival is
+    // still a picture, and decoding the full list in one attempt threw
+    // that away the moment any refinement was damaged.
     DecodedThumbnail? thumbnail;
-    if (imageLevels.isNotEmpty) {
+    for (var count = 1; count <= ordered.length; count++) {
       try {
-        thumbnail = image.decodeProgressive(imageLevels);
+        thumbnail = image.decodeProgressive(ordered.sublist(0, count));
       } on Object {
-        unreadable += 1;
+        unreadable += ordered.length - count + 1;
+        break;
       }
     }
+    if (thumbnail != null && !_geometryHolds(thumbnail)) {
+      // A level may declare a size its payload cannot fill. Caught here
+      // rather than left to crash whoever indexes the buffer.
+      thumbnail = null;
+      unreadable += 1;
+    }
 
-    var decodedFrames = const <Uint8List>[];
-    if (frames.isNotEmpty) {
+    final decodedFrames = <Uint8List>[];
+    for (var count = 1; count <= frames.length; count++) {
       try {
-        decodedFrames = video.decode(frames);
+        final attempt = video.decode(frames.sublist(0, count));
+        decodedFrames
+          ..clear()
+          ..addAll(attempt);
       } on Object {
-        unreadable += 1;
+        // A temporal frame whose predecessor is missing or damaged ends
+        // the run; everything before it is still good.
+        unreadable += frames.length - count + 1;
+        break;
       }
     }
 
@@ -235,11 +267,13 @@ class BroadcastMediaRenderer {
     );
   }
 
+  /// Whether a decoded thumbnail's buffer matches the size it claims.
+  static bool _geometryHolds(DecodedThumbnail thumbnail) =>
+      thumbnail.gray.length >= thumbnail.width * thumbnail.height;
+
   /// Rebuild a progressive level, refusing a coder this build does not
   /// have rather than picking the nearest one.
-  static ProgressiveLevel? _levelFrom(Uint8List body) {
-    final payload = ImageLevelPayload.decode(body);
-    if (payload == null) return null;
+  static ProgressiveLevel? _levelFrom(ImageLevelPayload payload) {
     if (payload.coderIndex >= LevelCoder.values.length) return null;
     return ProgressiveLevel(
       payload.width,

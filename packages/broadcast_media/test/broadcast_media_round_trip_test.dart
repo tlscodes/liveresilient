@@ -136,10 +136,58 @@ void main() {
       );
     });
 
-    test('a reader that gets only the heavy layer still sees something', () {
+    test('refinements without their base level show nothing at all', () {
+      // This test previously asserted the opposite, and the opposite was a
+      // defect. A refinement is a residual against the level below it, so
+      // levels 1 and 2 with no level 0 are not a coarser picture — they
+      // decode without complaint into noise that would be displayed as the
+      // author's photograph. Showing nothing is the only honest outcome.
       final layers = composer.compose(picture: _picture());
       final rendered = renderer.render(heavyLayer: layers.heavy);
-      expect(rendered.thumbnail, isNotNull);
+      expect(rendered.thumbnail, isNull);
+      expect(rendered.unreadableParts, greaterThan(0));
+    });
+
+    test(
+      'the base level alone is a picture; adding refinements improves it',
+      () {
+        final layers = composer.compose(picture: _picture());
+        final base = renderer.render(stillLayer: layers.still);
+        expect(base.thumbnail, isNotNull);
+        expect(base.unreadableParts, 0);
+
+        final full = renderer.render(
+          stillLayer: layers.still,
+          heavyLayer: layers.heavy,
+        );
+        expect(full.thumbnail!.width, greaterThan(base.thumbnail!.width));
+        expect(full.unreadableParts, 0);
+      },
+    );
+
+    test('a damaged refinement keeps the picture decoded so far', () {
+      // Partial recovery is the whole promise of a progressive format.
+      final layers = composer.compose(picture: _picture());
+      final damaged = Uint8List.fromList(layers.heavy!);
+      // Corrupt deep inside the last part's entropy payload.
+      damaged[damaged.length - 5] ^= 0xFF;
+      final rendered = renderer.render(
+        stillLayer: layers.still,
+        heavyLayer: damaged,
+      );
+      expect(
+        rendered.thumbnail,
+        isNotNull,
+        reason: 'the levels that did decode must survive',
+      );
+    });
+
+    test('a duplicate level ordinal is refused, not silently substituted', () {
+      final layers = composer.compose(picture: _picture());
+      final base = PayloadEnvelope.decode(layers.still!)!;
+      final doubled = PayloadBundle([base, base]).encode();
+      final rendered = renderer.render(heavyLayer: doubled);
+      expect(rendered.unreadableParts, 1);
     });
 
     test('every level is named in the report with its size', () {
@@ -169,7 +217,6 @@ void main() {
       final rendered = renderer.render(
         voiceLayer: layers.voice,
         voiceSession: receiver,
-        voiceFrameCount: columns.length,
       );
       expect(rendered.voiceColumns, columns);
       expect(rendered.unreadableParts, 0);
@@ -231,7 +278,6 @@ void main() {
         final rendered = renderer.render(
           voiceLayer: damaged,
           voiceSession: receiver,
-          voiceFrameCount: columns.length,
         );
         // Either it decoded to something wrong or it threw; what must hold
         // is that a failure did not advance the shared state.
@@ -435,6 +481,7 @@ void main() {
 
     test('an unknown image coder is refused rather than approximated', () {
       final level = ImageLevelPayload(
+        ordinal: 0,
         width: 12,
         height: 12,
         coderIndex: 200,

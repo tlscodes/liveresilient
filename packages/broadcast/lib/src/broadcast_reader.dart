@@ -25,6 +25,23 @@ enum ReadRejection {
   /// The bytes are not a descriptor this build can parse.
   malformedDescriptor,
 
+  /// Longer than any descriptor can be, so refused before parsing.
+  oversizeDescriptor,
+
+  /// A correctly signed descriptor, but not the one that was asked for.
+  ///
+  /// A relay answering one address with another author's-own post is not
+  /// a forgery, so every signature check passes; only comparing the
+  /// sequence number catches it.
+  wrongSequence,
+
+  /// Offered as the next post, but dated far enough in the past that the
+  /// delegation covering it has long since expired.
+  ///
+  /// History may be old. A new head may not, or an expired publishing key
+  /// could keep speaking for the author forever by backdating.
+  staleHeadExtension,
+
   /// Parsed, but not signed by any publishing key this author delegated
   /// to during the window the post claims.
   unverifiedSignature,
@@ -100,9 +117,14 @@ class BroadcastReader {
     required List<BroadcastRelay> relays,
     this.verifier = const CryptographyBroadcastVerifier(),
     this.maxClockSkew = const Duration(days: 1),
+    this.maxHeadAge = const Duration(days: 30),
     this.maxLayerBytes = 8 * 1024 * 1024,
+    this.maxRetainedPosts = 4096,
   }) : _relays = List.unmodifiable(relays),
-       chain = BroadcastChain(authorId: authorIdFor(rootPublicKey)) {
+       chain = BroadcastChain(
+         authorId: authorIdFor(rootPublicKey),
+         maxRetained: maxRetainedPosts,
+       ) {
     if (relays.isEmpty) {
       throw ArgumentError.value(
         relays,
@@ -123,6 +145,26 @@ class BroadcastReader {
   /// Without a bound, a compromised key could sign posts dated years out
   /// and occupy the sequence space ahead of the real author.
   final Duration maxClockSkew;
+
+  /// How far behind local time a *new head* may be dated.
+  ///
+  /// This is what makes a publishing certificate's expiry mean anything.
+  /// Certificates are checked against the time a post declares, so that an
+  /// expired one still verifies the posts it covered — otherwise rotation
+  /// would erase history. But that alone lets a stolen key keep appending
+  /// forever, by dating each new post inside the long-dead window. Bounding
+  /// how stale a post extending the chain may be closes that, while leaving
+  /// history as walkable as it ever was: this applies only to a post
+  /// offered as the next one, never to a backfill and never to the first
+  /// post a reader anchors on.
+  final Duration maxHeadAge;
+
+  /// Descriptors held before the oldest are dropped.
+  ///
+  /// An author's chain is unbounded by design and a reader's memory is
+  /// not. Without this, anyone able to sign as the author can make a
+  /// polling reader retain every post it is fed.
+  final int maxRetainedPosts;
 
   /// Ceiling on a single reassembled layer, so a hostile hash list
   /// cannot turn a reader into an allocation target.
@@ -173,6 +215,11 @@ class BroadcastReader {
   /// Fetch the next post after the newest one held.
   Future<ReadResult> fetchNext() {
     final head = chain.highestSeq;
+    if (head == maxSeq) {
+      // The top of the sequence space is exhaustion, not an error — the
+      // same answer the bottom gives in fetchPrevious.
+      return Future.value(const ReadResult.notAvailable());
+    }
     return fetchSeq(head == null ? 0 : head + 1);
   }
 
@@ -210,7 +257,7 @@ class BroadcastReader {
       }
       if (encoded == null) continue;
 
-      final result = await _admit(encoded, relay.name);
+      final result = await _admit(encoded, relay.name, seq);
       if (result.outcome == ReadOutcome.delivered ||
           result.outcome == ReadOutcome.fork) {
         return result;
@@ -220,13 +267,37 @@ class BroadcastReader {
     return lastRejection ?? const ReadResult.notAvailable();
   }
 
-  Future<ReadResult> _admit(Uint8List encoded, String relayName) async {
+  Future<ReadResult> _admit(
+    Uint8List encoded,
+    String relayName,
+    int requestedSeq,
+  ) async {
+    // Bounded before parsing, and before anything is hashed or verified:
+    // a descriptor's largest possible size is a compile-time constant, so
+    // a relay answering with a gigabyte cannot make a reader hold it.
+    if (encoded.length > descriptorSizeFor(LayerFlag.known)) {
+      return const ReadResult.rejected(ReadRejection.oversizeDescriptor);
+    }
     final parsed = BroadcastDescriptor.parse(encoded);
     if (parsed == null) {
       return const ReadResult.rejected(ReadRejection.malformedDescriptor);
     }
-    if (parsed.publishedAt.isAfter(clock.now().toUtc().add(maxClockSkew))) {
+    // A relay may answer any address with any genuinely signed post by
+    // this author. Every signature check would pass, so the only thing
+    // that catches it is asking whether this is the post that was
+    // requested.
+    if (parsed.seq != requestedSeq) {
+      return const ReadResult.rejected(ReadRejection.wrongSequence);
+    }
+
+    final now = clock.now().toUtc();
+    if (parsed.publishedAt.isAfter(now.add(maxClockSkew))) {
       return const ReadResult.rejected(ReadRejection.timeTooFarAhead);
+    }
+    final head = chain.highestSeq;
+    final extendsHead = head != null && parsed.seq == head + 1;
+    if (extendsHead && now.difference(parsed.publishedAt) > maxHeadAge) {
+      return const ReadResult.rejected(ReadRejection.staleHeadExtension);
     }
 
     final covering = _certificates

@@ -107,6 +107,7 @@ class ComposedLayers {
     this.still,
     this.voice,
     this.heavy,
+    this.pendingVoiceSession,
   });
 
   final CompositionReport report;
@@ -117,6 +118,19 @@ class ComposedLayers {
 
   /// The optional bundle: image refinements and video frames.
   final Uint8List? heavy;
+
+  /// The voice session whose state advanced to produce [voice], and which
+  /// must be committed once the post is out or rolled back if it is not.
+  ///
+  /// Exposed rather than hidden because only the caller knows whether the
+  /// post was really published. [publishComposed] does the right thing;
+  /// a caller that publishes some other way owns this.
+  final HamsedaSession? pendingVoiceSession;
+
+  /// Abandon a composed post, returning the codec to where readers are.
+  ///
+  /// Safe to call when there is no voice layer.
+  void discard() => pendingVoiceSession?.rollback();
 
   bool get isEmpty =>
       text == null && still == null && voice == null && heavy == null;
@@ -177,6 +191,7 @@ class BroadcastMediaComposer {
     Uint8List? textLayer;
     Uint8List? stillLayer;
     Uint8List? voiceLayer;
+    HamsedaSession? pendingVoiceSession;
     final heavyParts = <PayloadEnvelope>[];
 
     if (body != null && body.isNotEmpty) {
@@ -213,6 +228,7 @@ class BroadcastMediaComposer {
         final envelope = PayloadEnvelope(
           kind: PayloadKind.imageLevel,
           body: ImageLevelPayload(
+            ordinal: i,
             width: levels[i].width,
             height: levels[i].height,
             coderIndex: levels[i].coder.index,
@@ -242,16 +258,23 @@ class BroadcastMediaComposer {
     if (voiceTokens != null) {
       final encoded = PayloadEnvelope(
         kind: PayloadKind.voiceTokens,
-        body: voiceSession!.encodeBlock(voiceTokens.columns),
+        body: VoiceTokensPayload(
+          frameCount: voiceTokens.frameCount,
+          rows: voiceTokens.rows,
+          bytes: voiceSession!.encodeBlock(voiceTokens.columns),
+        ).encode(),
       ).encode();
       final fits = encoded.length <= budget.voiceBytes;
       if (fits) {
         voiceLayer = encoded;
-        voiceSession.commit();
+        // Deliberately NOT committed here. The codec's shared state may
+        // only advance once the block has actually gone out: composing is
+        // not publishing, and a caller that inspects the report and then
+        // abandons the post would otherwise leave the sender permanently
+        // ahead of every reader. publishComposed commits.
+        pendingVoiceSession = voiceSession;
       } else {
-        // Roll the codec state back, or the reader's state would advance
-        // past a block it never received and every later block would
-        // decode to nonsense.
+        // Never sent, so the state must go back to where the readers are.
         voiceSession.rollback();
       }
       parts.add(
@@ -316,6 +339,7 @@ class BroadcastMediaComposer {
       still: stillLayer,
       voice: voiceLayer,
       heavy: heavy,
+      pendingVoiceSession: pendingVoiceSession,
     );
   }
 
@@ -340,16 +364,28 @@ Future<BroadcastPost> publishComposed(
   ComposedLayers layers, {
   int mediaChunkSize = 64 * 1024,
   DateTime? at,
-}) {
+}) async {
   if (layers.isEmpty) {
     throw ArgumentError.value(layers, 'layers', 'nothing was composed');
   }
-  return publisher.publish(
-    text: layers.text,
-    still: layers.still,
-    voice: layers.voice,
-    media: layers.heavy,
-    mediaChunkSize: mediaChunkSize,
-    at: at,
-  );
+  final BroadcastPost post;
+  try {
+    post = await publisher.publish(
+      text: layers.text,
+      still: layers.still,
+      voice: layers.voice,
+      media: layers.heavy,
+      mediaChunkSize: mediaChunkSize,
+      at: at,
+    );
+  } on Object {
+    // The post does not exist, so the voice codec must not act as though
+    // it does.
+    layers.discard();
+    rethrow;
+  }
+  // Signed and sequenced: from here the block is part of the author's
+  // chain, and the shared codec state advances with it.
+  layers.pendingVoiceSession?.commit();
+  return post;
 }

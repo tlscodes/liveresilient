@@ -44,6 +44,34 @@
   است، نه ضبط‌شده. یک برچسبِ صریح، نه یک پانویس.
 - و پاسخِ پرسشِ ۱۰ عوض می‌شود؛ در بخشِ خودش می‌آید.
 
+### ۱.۱ب راهِ حلی که برچسب‌زدن را هم لازم نمی‌کند — ساخته و تست شد
+
+برچسب یک وصله است. راهِ حلِ ساختاری این است که لایه‌ی صوت اصلاً صدا حمل
+نکند: یک دستور باشد که «متنِ امضاشده‌ی همین پست را روی دستگاهِ خواننده
+بخوان».
+
+سه مسئله با یک تغییر بسته می‌شود:
+
+- صداقت: هیچ چیزی ادای ضبط‌شده بودن را در نمی‌آورد، پس چیزی برای برچسب
+  زدن و چیزی برای اشتباه گرفتن نمی‌ماند.
+- وابستگی: کدکِ عصبیِ صوت در این مخزن نیست و پروژه‌ی تحقیقاتی است؛ موتورِ
+  تبدیلِ متن به گفتار روی هر گوشی‌ای از قبل هست و یک فراخوانِ API است.
+- بایت: واژه‌ها از قبل فرستاده شده‌اند. اندازه‌ی سنجیده‌شده‌ی این دستور
+  چهار بایت است، روی لایه‌ای که به‌هرحال باید می‌بود.
+
+آنچه از دست می‌رود و باید صریح گفته شود: شنونده یک قرائتِ ماشینی می‌شنود،
+نه صدای آن شخص. برای پیامی که اصالتش از امضا می‌آید نه از صدا، این
+معامله‌ی درستی است — و همان معامله‌ای است که صوتِ نرخ‌پایین هم می‌کرد،
+منهای توهمش.
+
+```
+packages/broadcast_media/lib/src/spoken_text_plan.dart
+VoiceProvenance.synthesizedFromText | reconstructedFromTokens
+```
+
+هر دو مقدار یک چیز به رابطِ کاربری می‌گویند: آنچه شنیده می‌شود ضبطِ
+نویسنده نیست.
+
 نسنجیده و ارزشِ سنجیدن دارد: یک آزمونِ کور که در آن شنونده باید تشخیص دهد
 کدام خروجی از صدای شخصِ الف است و کدام از شخصِ ب، هر دو از همان کدک. اگر
 تشخیص در حدِ شانس بود — که حدسِ من همین است — این بند اثبات می‌شود.
@@ -559,6 +587,11 @@ independence                             : 3 relays on 3 different providers
 
 اگر بشود دو لایه ساخت، دومی **عکس** است نه صدا، به دلیلِ بندِ ۳.۳.
 
+به‌روزرسانیِ ۲۰۲۶-۰۷-۲۸: با راهِ حلِ بندِ ۱.۱ب این انتخاب دیگر انحصاری
+نیست. وقتی لایه‌ی صوت فقط یک دستورِ چهاربایتی برای خواندنِ همان متن است،
+«متن یا صدا» به «متن، و صدا تقریباً مجانی روی آن» تبدیل می‌شود. پس
+ترتیبِ درست شد: متن، صدا از روی متن، عکس، و ویدیو اختیاری.
+
 ### ۱۱. آیا ویدیو ارزشش را دارد
 
 نه، و پیشنهادِ سند برای کنار گذاشتنش درست است. سه دلیل، که یکی‌اش در سند
@@ -691,11 +724,18 @@ packages/signed_config/lib/src/endpoint_manifest.dart   (grep شد)
 ```
 packages/broadcast                    207 tests   descriptor · hash list · chain · reader
                                                   HTTP client · fanout · signed relay directory
+packages/broadcast_media               67 tests   the four layers bound to the workspace codecs
+                                                  + voice as a local reading of the signed text
 tools/cloudflare_relay_worker          24 tests   archive routes, write-once, retention, rate limit
 apps/reference_app                     20 tests   dart:io transport over a loopback relay
                                                   + directory-over-environment precedence
-workspace total                      1859 passing · format · analyze · guard · worker : green
+workspace total                      1926 passing · format · analyze · guard · worker : green
 ```
+
+لایه‌ها با کدک‌های خودِ همین workspace رمزگذاری می‌شوند، نه کدکِ تازه:
+فشرده‌سازِ متنِ آمیزه‌ی زمینه، فشرده‌سازِ تصویرِ پیش‌رونده، کدکِ آنتروپیِ
+توکن، و فشرده‌سازِ فلیپ‌بوک. ترکیب بودجه‌محور است و هر بخشی که جا نشود با
+اندازه‌اش در گزارش نام برده می‌شود.
 
 وضعیتِ چهار بندِ کمینه‌ی بخشِ ۶:
 
@@ -716,5 +756,15 @@ bootstrapped by a code anyone connected can produce      bytes DONE, QR renderin
 کسی که وصل نمی‌شود کمک کن» ساخته نشده — یک کارِ رابطِ کاربری است، نه
 پروتکل.
 
-هنوز ساخته نشده: کدِ بی‌نرخ برای توزیعِ چندرله‌ای بی‌مذاکره، لایه‌ی عکس،
-و رمزگذارِ QR.
+وضعیتِ چهار لایه، پس از بستنِ لایه‌ی رسانه:
+
+```
+text    end to end, real codec                                     DONE
+voice   as a local reading of the signed text, 4 bytes             DONE
+        as transmitted tokens                       entropy DONE · speech->token MISSING
+image   progressive, grayscale on the low-rate path                DONE
+video   flipbook, 120x80 mono, ~1 frame / 3 s                      DONE
+```
+
+هنوز ساخته نشده: کدِ بی‌نرخ برای توزیعِ چندرله‌ای بی‌مذاکره، رمزگذارِ QR،
+و کدکِ عصبیِ گفتار — که با راهِ حلِ بندِ ۱.۱ب دیگر مسیرِ بحرانی نیست.
