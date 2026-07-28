@@ -28,6 +28,7 @@ export 'src/broadcast_keys.dart';
 export 'src/broadcast_publisher.dart';
 export 'src/broadcast_reader.dart';
 export 'src/broadcast_relay.dart';
+export 'src/fork_report.dart';
 export 'src/http_broadcast_relay.dart';
 export 'src/layer_hash_list.dart';
 export 'src/publishing_key_certificate.dart';
