@@ -88,6 +88,8 @@ Future<MultiOriginRefreshResult> fetchVerifiedManifest({
   required ManifestVerifier verifier,
   required int lastAcceptedRevision,
   required DateTime now,
+  // Forwarded verbatim to [ManifestVerifier.verify]; see its doc comment.
+  DateTime? persistedTimeFloorUtc,
   Duration staggerDelay = defaultOriginStaggerDelay,
 }) {
   if (origins.isEmpty) {
@@ -157,6 +159,7 @@ Future<MultiOriginRefreshResult> fetchVerifiedManifest({
         document,
         lastAcceptedRevision: lastAcceptedRevision,
         now: now,
+        persistedTimeFloorUtc: persistedTimeFloorUtc,
       );
       if (outer.isCompleted) return;
       switch (result) {

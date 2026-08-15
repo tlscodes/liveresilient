@@ -157,6 +157,21 @@ class SignedManifestDocument {
   /// short; anything past this is malformed input, not a future algorithm.
   static const int maxAlgorithmLabelLength = 64;
 
+  /// Upper bound on a signed document, enforced before any parsing.
+  ///
+  /// The entry-count limits in `endpoint_manifest.dart` bound how many
+  /// entries a manifest may carry, not how many bytes: a single entry can
+  /// hold a multi-megabyte string and impose the same memory pressure. The
+  /// network fetcher and the out-of-band importer each carry their own cap,
+  /// but the persisted-document load path had none — a document already on
+  /// disk was decoded uncapped. Capping here, at the one parse entry point
+  /// all three paths funnel through, is what makes the bound true of every
+  /// path rather than of the two that happened to remember.
+  ///
+  /// Matches the fetcher's `maxBodyBytes` default so a document that was
+  /// accepted from the network cannot be rejected when it is read back.
+  static const int maxSignedDocumentBytes = 256 * 1024;
+
   final Map<String, Object?> manifestJson;
   final Uint8List signature;
 
@@ -185,6 +200,14 @@ class SignedManifestDocument {
   /// `{"manifest": {...}, "alg": "<name>", "signature": "<base64>"}`
   /// where `"alg"` is optional and defaults to `"ed25519"`.
   factory SignedManifestDocument.fromBytes(List<int> bytes) {
+    // Byte cap first, before decode and before parse: the order of
+    // operations the plan requires is cap -> verify -> deep parse.
+    if (bytes.length > maxSignedDocumentBytes) {
+      throw FormatException(
+        'Signed manifest is limited to $maxSignedDocumentBytes bytes, '
+        'got ${bytes.length}.',
+      );
+    }
     final Object? decoded;
     try {
       decoded = jsonDecode(utf8.decode(bytes));
@@ -242,12 +265,35 @@ class ManifestVerifier {
   ///
   /// [now] is injectable for tests. [lastAcceptedRevision] enables rollback
   /// protection; pass the value from the manifest cache (0 when none).
+  ///
+  /// [persistedTimeFloorUtc] is the monotonic time floor persisted beside
+  /// the accepted revision: the latest issuedAt of any document ever
+  /// accepted on this device, in UTC. The validity window is evaluated at
+  /// the LATER of the device clock and the floor, so a device clock lagging
+  /// behind an authentic newer document's issuedAt no longer rejects it as
+  /// not-yet-valid. The floor is advisory about the past only — it can only
+  /// move the effective instant forward, so it never makes a document
+  /// appear valid before its issuedAt was genuinely reached and never
+  /// extends one past its expiresAt. Null means no floor has been recorded
+  /// (fresh install) and preserves prior behaviour exactly.
   Future<ManifestVerification> verify(
     SignedManifestDocument document, {
     required int lastAcceptedRevision,
     DateTime? now,
+    DateTime? persistedTimeFloorUtc,
   }) async {
-    final effectiveNow = (now ?? clock.now()).toUtc();
+    final floor = persistedTimeFloorUtc;
+    if (floor != null && !floor.isUtc) {
+      throw ArgumentError.value(
+        floor,
+        'persistedTimeFloorUtc',
+        'The persisted time floor must be UTC.',
+      );
+    }
+    final deviceNowUtc = (now ?? clock.now()).toUtc();
+    final effectiveNow = (floor != null && floor.isAfter(deviceNowUtc))
+        ? floor
+        : deviceNowUtc;
 
     final EndpointManifest manifest;
     try {

@@ -68,7 +68,7 @@ class IoManifestFetcher {
   /// and an https connection is then upgraded with `SecureSocket.secure`
   /// against the ORIGINAL hostname — so SNI and TLS certificate hostname
   /// verification behave exactly as a direct connection would.
-  final String? Function(String host)? _resolveAddress;
+  final Future<String?> Function(String host)? _resolveAddress;
 
   IoManifestFetcher({
     this.timeout = const Duration(seconds: 10),
@@ -83,7 +83,7 @@ class IoManifestFetcher {
     String Function(Uri uri)? proxyResolver,
 
     /// Optional hostname-to-address mapping (see [_resolveAddress]).
-    String? Function(String host)? resolveAddress,
+    Future<String?> Function(String host)? resolveAddress,
 
     /// Optional post-proxy client setup hook (see [_proxyConfigurator]).
     void Function(HttpClient client)? proxyConfigurator,
@@ -184,9 +184,16 @@ class IoManifestFetcher {
     if (proxyHost != null && proxyPort != null) {
       return Socket.startConnect(proxyHost, proxyPort);
     }
-    final connectHost = _resolveAddress!(url.host) ?? url.host;
     var cancelled = false;
     final socketFuture = () async {
+      // Asynchronous and per-attempt. The name is an INPUT the HTTP stack
+      // hands us at connect time, and the redirect loop above can produce up
+      // to `maxRedirects` further names mid-flight, so there is no boundary
+      // moment at which a caller could resolve a fixed set in advance.
+      final connectHost = (await _resolveAddress!(url.host)) ?? url.host;
+      if (cancelled) {
+        throw const SocketException('Connection attempt cancelled.');
+      }
       final socket = await Socket.connect(
         connectHost,
         url.port,

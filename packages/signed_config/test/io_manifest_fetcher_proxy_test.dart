@@ -72,7 +72,7 @@ void main() {
       final resolved = <String>[];
       final fetcher = IoManifestFetcher(
         timeout: const Duration(milliseconds: 300),
-        resolveAddress: (host) {
+        resolveAddress: (host) async {
           resolved.add(host);
           return '127.0.0.1';
         },
@@ -92,7 +92,7 @@ void main() {
     test('resolver returning null falls back to the original host', () async {
       final fetcher = IoManifestFetcher(
         timeout: const Duration(milliseconds: 300),
-        resolveAddress: (_) => null,
+        resolveAddress: (_) async => null,
       );
 
       await expectLater(
