@@ -184,15 +184,97 @@ class ProbeDefenseConfig {
       mean = low + (high - low) ~/ 2;
     }
     final jitterMicros = (json['jitterMicroseconds'] as num?)?.toInt();
+    final jitter = jitterMicros == null
+        ? TrafficShapingPolicy.voice.maxJitter
+        : Duration(microseconds: jitterMicros);
+    final distribution = _parseDistribution(json['distribution']);
+
+    // Gate 1c: the bucket ladder comes from a sampled histogram or an
+    // explicit list, never from the hardcoded default when the config asked
+    // for bucketed lengths. Before this, `distribution: "bucketed"` was
+    // selectable while its ladder silently stayed the guess compiled into
+    // TrafficShapingPolicy — a target distribution nothing had measured.
+    final histogram = json['lengthHistogram'];
+    if (histogram != null) {
+      if (json['lengthBuckets'] != null) {
+        throw const ProbeDefenseConfigError(
+          'Give either lengthHistogram or lengthBuckets, not both: two '
+          'ladders for one distribution is a silent conflict.',
+        );
+      }
+      return TrafficShapingPolicy.fromLengthHistogram(
+        _parseHistogram(histogram),
+        distribution: distribution,
+        maxPadding: maxPadding,
+        maxJitter: jitter,
+      );
+    }
+
     return TrafficShapingPolicy(
-      distribution: _parseDistribution(json['distribution']),
+      distribution: distribution,
       maxPadding: maxPadding,
       gaussianMean: mean,
       gaussianStdDev: (mean ~/ 2).clamp(1, 1 << 30),
-      maxJitter: jitterMicros == null
-          ? TrafficShapingPolicy.voice.maxJitter
-          : Duration(microseconds: jitterMicros),
+      lengthBuckets: _parseBuckets(json['lengthBuckets']),
+      maxJitter: jitter,
     );
+  }
+
+  /// `{"1200": 431, "1350": 88}` — observed wire length to observation count.
+  static Map<int, int> _parseHistogram(Object? value) {
+    if (value is! Map) {
+      throw const ProbeDefenseConfigError(
+        'lengthHistogram must be an object mapping length to count',
+      );
+    }
+    final out = <int, int>{};
+    for (final entry in value.entries) {
+      final length = int.tryParse('${entry.key}');
+      final count = entry.value;
+      if (length == null || count is! num) {
+        throw ProbeDefenseConfigError(
+          'lengthHistogram entry "${entry.key}": "${entry.value}" is not a '
+          'length-to-count pair',
+        );
+      }
+      out[length] = count.toInt();
+    }
+    try {
+      // Validated here rather than at first use, so a bad sample fails when
+      // the config is read and names the field, not later inside the shaper.
+      TrafficShapingPolicy.fromLengthHistogram(out);
+    } on ArgumentError catch (e) {
+      throw ProbeDefenseConfigError('lengthHistogram: ${e.message}');
+    }
+    return out;
+  }
+
+  /// An explicit ascending ladder, when the caller has one and does not want
+  /// it derived.
+  static List<int> _parseBuckets(Object? value) {
+    if (value == null) return TrafficShapingPolicy.voice.lengthBuckets;
+    if (value is! List || value.isEmpty) {
+      throw const ProbeDefenseConfigError(
+        'lengthBuckets must be a non-empty ascending list of lengths',
+      );
+    }
+    final out = <int>[];
+    for (final raw in value) {
+      if (raw is! num) {
+        throw ProbeDefenseConfigError('lengthBuckets entry "$raw" is not a number');
+      }
+      final length = raw.toInt();
+      if (length <= 0) {
+        throw ProbeDefenseConfigError('lengthBuckets entry $length is not positive');
+      }
+      if (out.isNotEmpty && length <= out.last) {
+        throw ProbeDefenseConfigError(
+          'lengthBuckets must ascend strictly: $length follows ${out.last}',
+        );
+      }
+      out.add(length);
+    }
+    return List.unmodifiable(out);
   }
 
   static LengthDistribution _parseDistribution(Object? value) {

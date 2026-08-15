@@ -1,0 +1,61 @@
+{
+  "goal": "PLAN_five_tickets_v4 — finish waves 5 to 7, then a Fable 5 review pass raising all six tickets to their final version",
+  "armed_at": "2026-08-13",
+  "approved_irreversible": [],
+  "route_source": "Fable 5 consult 2026-08-13: gate first, then capability, then resilience, then rotation.",
+  "steps": [
+    {
+      "id": "6b",
+      "desc": "Wiring. Parameter stays optional at the library boundary so the package compiles standalone; the composition root passes an explicit NAMED value at every construction site, including a named value meaning 'platform behaviour, by choice' so silence and deliberate opt-out are distinguishable. An architecture test asserts no construction site omits it, wrapper constructors included.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3/apps/reference_app && dart analyze 2>&1 | grep -q 'No issues found' && flutter test 2>&1 | grep -q 'All tests passed'",
+      "timeout_s": 900,
+      "irreversible": false,
+      "status": "passed"
+    },
+    {
+      "id": "6c",
+      "desc": "Name lookup over an HTTPS carrier behind the async seam. Closes the bootstrap cycle first: the lookup service's own address is configured numerically, or that single host deliberately and documentedly uses the platform mechanism.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3/packages/signed_config && dart analyze 2>&1 | grep -q 'No issues found' && dart test 2>&1 | grep -q 'All tests passed'",
+      "timeout_s": 900,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "6e",
+      "desc": "Cache: serve-stale-while-revalidating with ONE authority for validity. The time-to-live only schedules a refresh; it never stands between the caller and a usable answer. An entry leaves service only on a positive signal — a successful refresh, a real connection failure against that address, or epoch invalidation.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3/packages/signed_config && dart analyze 2>&1 | grep -q 'No issues found' && dart test 2>&1 | grep -q 'All tests passed'",
+      "timeout_s": 900,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "wave6-3e",
+      "desc": "Key rotation on the existing epoch object and its validity window. Windows overlap during rotation so a rotation never invalidates an in-flight connection; each record carries only its epoch id, never a personal expiry field.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3/packages/adaptive_transport && dart analyze 2>&1 | grep -q 'No issues found' && dart test 2>&1 | grep -q 'All tests passed'",
+      "timeout_s": 900,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "wave7-repo-green",
+      "desc": "Whole-repository gate: every touched package analyzes clean and its suite passes.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && for p in packages/signed_config packages/media_webrtc packages/call_core packages/adaptive_transport; do (cd $p && dart analyze 2>&1 | grep -q 'No issues found' && dart test 2>&1 | grep -q 'All tests passed') || exit 1; done",
+      "timeout_s": 1800,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "fable-review-all",
+      "desc": "Review pass, one dispatch per ticket, reviewer never the author. Each brief asks for an adversarial delta, not a restatement: name two or three concrete failure modes with inputs and state; check the ticket against the locked decisions it touches; flag any claim with no named verifier; then a final version in which every change traces to a named finding. 'No change needed' plus the list of checks performed is a correct answer.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test $(grep -c 'بازبینیِ نهاییِ فابل ۵' docs/PLAN_five_tickets_v4.md) -ge 6",
+      "timeout_s": 3600,
+      "irreversible": false,
+      "status": "pending"
+    }
+  ],
+  "notes": [
+    "3f packet capture and the physical-device row are rig work: recorded as a dated blocker with a wave-7 slot, never silently closed.",
+    "6d is deferred to ticket 4's trigger per cross-cutting verdict 3 and is NOT part of this run.",
+    "Fable 5 quota resets shortly after arming. Mechanical steps run first; design-carrying dispatches and the review pass run after the reset."
+  ]
+}

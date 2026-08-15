@@ -85,6 +85,7 @@ EndpointManifest buildManifest({
     'relay_failover': true,
     'ipv6_candidates': false,
   },
+  List<IceServerEntry> iceServers = const [],
 }) {
   final issued = issuedAt ?? DateTime.utc(2026, 1, 1);
   final expires = expiresAt ?? issued.add(const Duration(hours: 1));
@@ -95,7 +96,7 @@ EndpointManifest buildManifest({
     issuedAt: issued,
     expiresAt: expires,
     signalingEndpoints: [Uri.parse('wss://signal.example.com/v1')],
-    iceServers: const [],
+    iceServers: iceServers,
     configServiceUris:
         configServiceUris ??
         [
@@ -136,6 +137,7 @@ List<int> encodeSignedDocument(SignedManifestDocument document) => utf8.encode(
 class FakeManifestStorage implements ManifestStorage {
   List<int>? document;
   int acceptedRevision = 0;
+  DateTime? timeFloorUtc;
 
   @override
   Future<List<int>?> readDocument() async => document;
@@ -151,6 +153,21 @@ class FakeManifestStorage implements ManifestStorage {
   @override
   Future<void> writeAcceptedRevision(int revision) async {
     acceptedRevision = revision;
+  }
+
+  @override
+  Future<DateTime?> readTimeFloorUtc() async => timeFloorUtc;
+
+  @override
+  Future<void> writeTimeFloorUtc(DateTime value) async {
+    if (!value.isUtc) {
+      throw ArgumentError.value(value, 'value', 'Time floor must be UTC.');
+    }
+    // Monotonic per the ManifestStorage contract: older writes are ignored.
+    final current = timeFloorUtc;
+    if (current == null || value.isAfter(current)) {
+      timeFloorUtc = value;
+    }
   }
 }
 

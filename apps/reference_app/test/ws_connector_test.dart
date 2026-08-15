@@ -39,7 +39,7 @@ void main() {
           () => connectWebSocketWithCustomRules(
             endpoint,
             timeout: const Duration(milliseconds: 100),
-            hostResolver: (_) => '127.0.0.1',
+            hostResolver: (_) async => '127.0.0.1',
           ),
           throwsA(anything),
         );
@@ -88,7 +88,7 @@ void main() {
         addTearDown(() => server.close(force: true));
 
         final resolvedHosts = <String>[];
-        String? resolver(String host) {
+        Future<String?> resolver(String host) async {
           resolvedHosts.add(host);
           return host == _unresolvableHost ? '127.0.0.1' : null;
         }

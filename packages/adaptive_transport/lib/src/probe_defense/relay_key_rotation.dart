@@ -141,7 +141,19 @@ class RelayKeyRing {
   /// How long one epoch lasts.
   final Duration epochDuration;
 
-  /// How long after a rotation the previous key still authenticates.
+  /// The overlap window: how long after a rotation the outgoing epoch's
+  /// key still authenticates material that arrives. Defaults to one day
+  /// (set in the constructor and in [generate]) — long enough for a
+  /// client holding a pre-rotation config to connect once more and be
+  /// handed a [RelayKeyUpdate] on the authenticated channel.
+  ///
+  /// Zero is constructible and wrong to run: with no overlap, the instant
+  /// of rotation invalidates every connection already in flight under the
+  /// outgoing key and strands every client whose config predates the
+  /// rotation, turning routine key hygiene into a scheduled outage. The
+  /// overlap exists so a rotation never invalidates work already in
+  /// progress; shortening it to zero saves nothing and removes exactly
+  /// that guarantee.
   final Duration gracePeriod;
 
   /// Epoch-numbering origin. Null means epochs count from the Unix epoch.
@@ -189,21 +201,60 @@ class RelayKeyRing {
   /// Whether [_next] has reached its epoch and should be promoted.
   bool get rotationDue => currentEpoch >= (_next?.epoch ?? 1 << 62);
 
-  /// Keys eligible to authenticate an admission right now, best first.
+  /// ACCEPT role: the epochs whose keys may verify material that arrives
+  /// right now, best first.
   ///
-  /// `next` is deliberately absent: it is published so clients can
-  /// pre-fetch, not accepted before its time.
+  /// During the overlap this holds two entries — the current epoch and
+  /// the previous one still inside [gracePeriod]. `next` is deliberately
+  /// absent: it is published so clients can pre-fetch, not accepted
+  /// before its time.
+  ///
+  /// Contrast [emissionEpoch]: what the ring accepts is plural during an
+  /// overlap; what it emits under never is.
   List<RelayKeyEpoch> get admissibleKeys => [
     _current,
     if (previousInGrace) _previous!,
   ];
 
-  /// Promotes `next` to `current`, `current` to `previous`, and installs
-  /// [freshNext] as the new `next`.
+  /// EMIT role: the single epoch used for material being produced right
+  /// now.
   ///
-  /// Zero-downtime by construction: the outgoing key stays admissible for
-  /// [gracePeriod], so a client mid-connection or holding a config from
-  /// before the rotation is unaffected.
+  /// Always the newest promoted epoch. During the overlap the ring still
+  /// *accepts* the previous epoch ([admissibleKeys]) but never *emits*
+  /// under it — new material carries the new epoch from the moment of
+  /// rotation, so the population converges on the new key while nothing
+  /// already in flight breaks.
+  RelayKeyEpoch get emissionEpoch => _current;
+
+  /// The one validity authority: whether material stamped with [epoch]
+  /// is acceptable right now.
+  ///
+  /// A record carries only its epoch identifier — never an expiry of its
+  /// own. A per-record expiry field was considered and rejected: each
+  /// record would then hold its own clock opinion, and validity would
+  /// have two authorities able to disagree. Instead every "is this still
+  /// good?" question funnels here, and the answer is derived from ring
+  /// state alone: acceptable means the current epoch, or the previous
+  /// epoch while its overlap window is still open.
+  bool acceptsEpoch(int epoch) {
+    if (epoch == _current.epoch) return true;
+    final previous = _previous;
+    return previous != null && epoch == previous.epoch && previousInGrace;
+  }
+
+  /// Rotates one epoch forward: promotes `next` to `current`, demotes
+  /// `current` to `previous`, and installs [freshNext] as the newly
+  /// staged `next`.
+  ///
+  /// The incoming epoch begins while the outgoing one is still valid —
+  /// their validity windows overlap by [gracePeriod]. That overlap is the
+  /// point of staged rotation: a rotation must never invalidate a
+  /// connection already in flight, so the outgoing key keeps verifying
+  /// arrivals ([admissibleKeys]) while everything newly produced already
+  /// uses the promoted key ([emissionEpoch]).
+  ///
+  /// Time comes from `clock.now()` (package:clock), so a test drives a
+  /// full rotate-overlap-retire cycle under `withClock` without waiting.
   void rotate({required KeyPairBytes freshNext}) {
     final promoted = _next;
     if (promoted == null) {
@@ -220,17 +271,33 @@ class RelayKeyRing {
     _next = RelayKeyEpoch(epoch: _current.epoch + 1, keyPair: keyPair);
   }
 
-  /// Drops the previous key once its grace window has closed. Idempotent.
+  /// Drops the previous epoch once its overlap window has closed.
+  /// Idempotent; returns true when a key was actually retired.
   ///
-  /// Returns true when a key was actually retired.
+  /// This is the history bound. The ring retains at most ONE past epoch,
+  /// and only for [gracePeriod] after the rotation that demoted it. Past
+  /// the overlap it is dropped — explicitly here, or implicitly by the
+  /// next [rotate] overwriting the `previous` slot. Old epochs therefore
+  /// never accumulate: whatever the rotation count, the ring holds at
+  /// most [maxKeys] entries (previous + current + next), and
+  /// [acceptsEpoch] answers false for anything older.
   bool retireExpired() {
     if (_previous == null || previousInGrace) return false;
     _previous = null;
     return true;
   }
 
-  /// The public key a client should be provisioned with, plus the one it
-  /// should pre-fetch for the next epoch.
+  /// Distribution: what a peer receives in order to learn a new epoch —
+  /// the current epoch number with its public key, plus the staged next
+  /// epoch and its key so the peer can pre-fetch before the rotation
+  /// lands. Public material only; private keys never leave the ring.
+  ///
+  /// What this file deliberately does NOT do: it does not fetch, push, or
+  /// deliver this announcement anywhere, and it does not decide when to
+  /// publish it. Transport and publication policy belong to whoever owns
+  /// the transport. The one delivery this library does define,
+  /// [RelayKeyUpdate], rides a channel the handshake has already
+  /// authenticated.
   RelayKeyAnnouncement get announcement => RelayKeyAnnouncement(
     currentEpoch: _current.epoch,
     currentPublicKey: _current.publicKey,

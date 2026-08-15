@@ -138,6 +138,93 @@ class TrafficShapingPolicy {
     maxPadding: 0,
     maxJitter: Duration.zero,
   );
+
+  /// Derives [lengthBuckets] from a SAMPLED length histogram instead of the
+  /// hardcoded ladder (gate 1c).
+  ///
+  /// WHY. The default ladder is a guess. A target distribution that does not
+  /// come from a measurement cannot be checked against one, so a shaped
+  /// stream could sit far from the shape it was supposed to take and nothing
+  /// would say so. [histogram] maps an observed wire length to how many times
+  /// it was observed; the buckets are placed at evenly spaced quantiles of
+  /// that observed mass, so each bucket receives roughly the same share of
+  /// frames and the ladder follows the sample rather than a hunch.
+  ///
+  /// [buckets] is how many rungs to produce. Fewer rungs mean more padding
+  /// per frame and a flatter histogram; more rungs mean less padding and a
+  /// histogram closer to the original. Duplicate quantile edges are collapsed,
+  /// so a histogram with less variety than [buckets] yields fewer rungs
+  /// rather than repeated ones.
+  ///
+  /// Throws [ArgumentError] on an empty histogram, a non-positive length, a
+  /// negative count, or a total count of zero — a ladder derived from no
+  /// observations would be the same guess wearing a measurement's name.
+  factory TrafficShapingPolicy.fromLengthHistogram(
+    Map<int, int> histogram, {
+    int buckets = 6,
+    LengthDistribution distribution = LengthDistribution.bucketed,
+    int maxPadding = 96,
+    Duration minJitter = Duration.zero,
+    Duration maxJitter = const Duration(microseconds: 1500),
+  }) {
+    if (histogram.isEmpty) {
+      throw ArgumentError.value(histogram, 'histogram', 'Must not be empty.');
+    }
+    if (buckets < 1) {
+      throw ArgumentError.value(buckets, 'buckets', 'Must be at least 1.');
+    }
+    var total = 0;
+    for (final entry in histogram.entries) {
+      if (entry.key <= 0) {
+        throw ArgumentError.value(
+          entry.key,
+          'histogram',
+          'Observed lengths must be positive.',
+        );
+      }
+      if (entry.value < 0) {
+        throw ArgumentError.value(
+          entry.value,
+          'histogram',
+          'Observation counts must not be negative.',
+        );
+      }
+      total += entry.value;
+    }
+    if (total == 0) {
+      throw ArgumentError.value(
+        histogram,
+        'histogram',
+        'Total observation count is zero: no sample to derive a ladder from.',
+      );
+    }
+
+    final lengths = histogram.keys.toList()..sort();
+    final edges = <int>[];
+    var cumulative = 0;
+    var next = 1;
+    for (final length in lengths) {
+      cumulative += histogram[length]!;
+      // Every quantile boundary this length's mass carries us past becomes
+      // an edge; the loop rather than an if is what makes a single dominant
+      // length collapse to one rung instead of repeating.
+      while (next <= buckets && cumulative * buckets >= total * next) {
+        if (edges.isEmpty || edges.last != length) edges.add(length);
+        next++;
+      }
+    }
+    // Floating boundaries can leave the largest observation off the ladder;
+    // it must be representable or the longest frames have nowhere to pad to.
+    if (edges.isEmpty || edges.last != lengths.last) edges.add(lengths.last);
+
+    return TrafficShapingPolicy(
+      distribution: distribution,
+      maxPadding: maxPadding,
+      lengthBuckets: List.unmodifiable(edges),
+      minJitter: minJitter,
+      maxJitter: maxJitter,
+    );
+  }
 }
 
 /// Chooses wire lengths and pads frames to them.
@@ -314,5 +401,167 @@ class AdaptiveJitter {
   void _expire() {
     final cutoff = clock.now().subtract(policy.burstWindow);
     _sendTimes.removeWhere((t) => t.isBefore(cutoff));
+  }
+}
+
+/// Whether [FixedTickEmitter] emits on its own clock.
+///
+/// Both states are named rather than expressed as a nullable parameter that
+/// defaults to off. This project has already lost months to an optional seam
+/// nobody supplied: it stayed null in production while the code read as
+/// though the capability existed, and it was found only by tracing the
+/// argument by hand. A required choice between two named values cannot be
+/// satisfied by forgetting, and either state can be grepped for.
+enum TickEmissionMode {
+  /// The emitter does nothing. [AdaptiveJitter] governs timing exactly as it
+  /// does today, so enabling nothing changes nothing.
+  off,
+
+  /// The emitter runs its own clock: one frame per tick, whether or not the
+  /// caller had anything queued.
+  fixedTick,
+}
+
+/// Emits one frame per fixed tick, independent of the caller's own rate.
+///
+/// WHY THIS EXISTS. [AdaptiveJitter] perturbs a send the caller has already
+/// decided to make, so the output rate follows the application's rate: when
+/// the caller has nothing, nothing goes out. This emitter inverts that. It
+/// runs its own clock and asks the caller for a frame on each tick; if the
+/// caller has none, it emits a filler frame instead. The output rate becomes
+/// a property of the tick, not of the application.
+///
+/// FILLER IDENTIFICATION. A filler frame must cost the same on the wire as a
+/// real one and must still be droppable by the receiver. The mechanism is one
+/// discriminator byte prefixed to the payload BEFORE shaping — [_real] or
+/// [_filler] — after which both kinds take the identical [TrafficShaper.shape]
+/// path and the identical length distribution. The discriminator sits inside
+/// what `shape` treats as payload, so [TrafficShaper.unshape] keeps its
+/// existing contract untouched: it still returns exactly what was handed to
+/// `shape`. Callers on the receiving side peel the byte with [classify] and
+/// [unwrap]. One byte was chosen over a separate channel or a length
+/// convention because a length convention would make the two kinds
+/// distinguishable by size, which is the property this class exists to
+/// remove.
+///
+/// The tick interval is supplied by the caller, never computed here: it is
+/// bounded by an interactive-delay budget derived in another package that
+/// this one does not depend on.
+class FixedTickEmitter {
+  /// [mode] is required: there is no default, by design.
+  ///
+  /// [tick] is the emission period and must be positive. [nextFrame] is
+  /// pulled once per tick and returns the next queued payload, or null when
+  /// the caller has nothing — that null is what produces a filler frame.
+  /// [delay] is injectable so a test can drive the clock without waiting.
+  FixedTickEmitter({
+    required this.mode,
+    required this.tick,
+    required this.shaper,
+    required List<int>? Function() nextFrame,
+    Future<void> Function(Duration)? delay,
+  }) : _nextFrame = nextFrame,
+       _delay = delay ?? _realDelay {
+    if (tick <= Duration.zero) {
+      throw ArgumentError.value(tick, 'tick', 'Must be positive.');
+    }
+  }
+
+  static Future<void> _realDelay(Duration d) => Future<void>.delayed(d);
+
+  /// Discriminator prefixed to a caller-supplied payload.
+  static const int _real = 0x00;
+
+  /// Discriminator prefixed to a filler payload.
+  static const int _filler = 0x01;
+
+  /// Whether the emitter runs at all.
+  final TickEmissionMode mode;
+
+  /// The emission period.
+  final Duration tick;
+
+  /// The shaper both kinds of frame pass through, so both draw their length
+  /// from the same distribution.
+  final TrafficShaper shaper;
+
+  final List<int>? Function() _nextFrame;
+  final Future<void> Function(Duration) _delay;
+
+  var _realFramesEmitted = 0;
+  var _fillerFramesEmitted = 0;
+  var _running = false;
+
+  /// Frames emitted that carried a caller payload.
+  int get realFramesEmitted => _realFramesEmitted;
+
+  /// Frames emitted because the caller had nothing queued at tick time.
+  ///
+  /// Exposed so a shadow run can be measured from outside without a rebuild:
+  /// the ratio of the two counters is what the emitter is for.
+  int get fillerFramesEmitted => _fillerFramesEmitted;
+
+  /// Total frames emitted, real and filler.
+  int get framesEmitted => _realFramesEmitted + _fillerFramesEmitted;
+
+  /// Whether [run] is currently emitting.
+  bool get isRunning => _running;
+
+  /// Builds the next frame: the caller's payload if one is queued, a filler
+  /// frame otherwise. Both are shaped identically.
+  ///
+  /// Exposed separately from [run] so a test can step the emitter one frame
+  /// at a time without any clock at all.
+  Uint8List emitOnce() {
+    final payload = _nextFrame();
+    if (payload == null) {
+      _fillerFramesEmitted++;
+      return shaper.shape(<int>[_filler]);
+    }
+    _realFramesEmitted++;
+    return shaper.shape(<int>[_real, ...payload]);
+  }
+
+  /// Emits one frame per [tick] until [stop] is called.
+  ///
+  /// In [TickEmissionMode.off] this returns immediately without emitting, so
+  /// a caller that constructs the emitter but has not enabled it pays
+  /// nothing and changes nothing.
+  Stream<Uint8List> run() async* {
+    if (mode == TickEmissionMode.off) return;
+    _running = true;
+    while (_running) {
+      await _delay(tick);
+      if (!_running) break;
+      yield emitOnce();
+    }
+  }
+
+  /// Stops [run] after the current tick.
+  void stop() => _running = false;
+
+  /// Whether an unshaped frame was filler. Operates on the output of
+  /// [TrafficShaper.unshape].
+  static bool isFiller(Uint8List unshaped) =>
+      unshaped.isNotEmpty && unshaped.first == _filler;
+
+  /// The caller payload inside an unshaped real frame, discriminator
+  /// removed. Throws on a filler frame: a filler has no payload to return,
+  /// and silently returning empty bytes would let one reach the application.
+  static Uint8List unwrap(Uint8List unshaped) {
+    if (unshaped.isEmpty) {
+      throw const FormatException('frame carries no discriminator byte');
+    }
+    if (unshaped.first == _filler) {
+      throw const FormatException(
+        'filler frame has no payload; check isFiller first',
+      );
+    }
+    if (unshaped.first != _real) {
+      throw FormatException(
+        'unknown frame discriminator 0x${unshaped.first.toRadixString(16)}',
+      );
+    }
+    return Uint8List.sublistView(unshaped, 1);
   }
 }

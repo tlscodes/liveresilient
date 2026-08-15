@@ -220,7 +220,7 @@ void main() {
       final mappedFetcher = IoManifestFetcher(
         timeout: const Duration(seconds: 5),
         securityContext: clientContext,
-        resolveAddress: (host) {
+        resolveAddress: (host) async {
           resolvedHosts.add(host);
           return host == 'localhost' ? '127.0.0.1' : null;
         },

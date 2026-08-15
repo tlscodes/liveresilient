@@ -16,12 +16,22 @@ import 'package:call_signaling_adapter/call_signaling_adapter.dart';
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:device_link/device_link.dart' show DtnBundleQueue;
 import 'package:device_link/durable_store.dart' show DurableBundleStore;
+import 'package:media_webrtc/media_webrtc.dart'
+    show
+        CallAdmissionRefused,
+        OpusSdpPolicy,
+        OpusWireBudget,
+        OpusWireFitted,
+        OpusWireUnconstrained,
+        OpusWireNoCandidateFits;
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
+import 'package:signed_config/signed_config.dart';
 import 'package:meta/meta.dart';
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
 import 'call_memory.dart';
+import 'intelligence/intelligence_hub.dart';
 import 'media_adaptation_driver.dart';
 import 'path_health_monitor.dart';
 import 'degraded_mode_driver.dart';
@@ -35,9 +45,19 @@ class CallSessionHandle {
     this.openChatPort,
     this.dtnFallbackQueue,
     this.connectionFabric,
+    this.connectionBudget,
   });
 
   final CallController controller;
+
+  /// The deadlines this session was built with, and the model behind them.
+  ///
+  /// Exposed so a test can assert that the call connected within
+  /// [AdaptiveConnectionBudget.expectedConnectBy] — roughly one modelled
+  /// attempt — rather than merely inside the retry budget. Without that
+  /// assertion a widened budget would hide a genuine connect defect instead of
+  /// reporting it. Null on session builds that skip production wiring.
+  final AdaptiveConnectionBudget? connectionBudget;
 
   /// The session's unified connectivity fabric: every lane (live media
   /// path today; local-peer and carrier lanes as they come online) plus
@@ -130,12 +150,37 @@ CallSessionHandle buildWebRtcCallSession({
   required Uri endpoint,
   required String callId,
   required CallRole role,
-  String? Function(String host)? resolveAddress,
+  /// Maps a host name to an address, asynchronously, once per connection
+  /// attempt (ticket 6). The name is an input the HTTP stack produces at
+  /// connect time and a redirect can introduce a new one mid-flight, so this
+  /// is never pre-resolved into a fixed set.
+  Future<String?> Function(String host)? resolveAddress,
   String Function(Uri uri)? proxyResolver,
   void Function(HttpClient client)? proxyConfigurator,
   SecurityContext? securityContext,
   ClipRecorder? recordVoiceClip,
   AudioFrameTap? audioFrameTap,
+  /// Whether a fixed-tick emitter governs this call's output rate. It
+  /// decides the codec's silence handling (gate 1e), so it is stated here
+  /// rather than inferred: false is today's behaviour everywhere.
+  bool fixedTickEmitterRunning = false,
+
+  /// The signed manifest's STUN/TURN servers, mapped for the peer connection.
+  ///
+  /// Until this existed the port was created with its `iceServers` default of
+  /// `const []`, so every call was placed with no STUN and no TURN and only
+  /// connected when both peers happened to be directly reachable. Build it with
+  /// `buildRtcIceConfig(manifest, profile: ...)`. Null keeps the old behaviour
+  /// for callers that have no manifest yet.
+  RtcIceConfig? iceConfig,
+
+  /// Opus knobs applied to every local description: in-band FEC on, DTX off.
+  /// Null derives the rate/ptime from [initialConditions]' bandwidth via
+  /// [OpusWireBudget] when the link capacity is known (measured 2026-08-06:
+  /// an unbudgeted default stream saturated a 32 kbit/s link and starved
+  /// the signaling until liveness killed the call), and leaves the stack's
+  /// defaults on an unknown link — which is what shipped before.
+  OpusSdpPolicy? opusPolicy,
 
   /// Directory the degraded-mode fallback bundle log lives in. Injectable
   /// so tests control it (and the app can later supply its documents dir)
@@ -162,10 +207,109 @@ CallSessionHandle buildWebRtcCallSession({
   /// value explicitly to bypass the environment entirely (what the tests
   /// do).
   ResilientLaneEndpoints? fallbackLanes,
+
+  /// What the path is known to cost before a candidate pair exists.
+  ///
+  /// The first connect has no candidate pair to measure, so live RTC stats
+  /// cannot bootstrap the budget — something has to state the starting
+  /// assumption. A deployment that knows nothing leaves this at
+  /// [NetworkConditions.pristine] and gets the old tight deadlines; the shaped
+  /// test rig knows the profile exactly and passes it, so the harness and the
+  /// app run one formula instead of two constants that drift apart.
+  NetworkConditions initialConditions = NetworkConditions.pristine,
+
+  /// Optional intelligence tap: when present, the session's measured
+  /// call-end statistics feed the personal brains (RIG_GUIDE «هوشمندی v3»
+  /// wiring matrix). Absent (all current tests) = zero behavior change.
+  IntelligenceHub? hub,
+  int Function()? nowMs,
 }) {
+  final now = nowMs ?? () => DateTime.now().millisecondsSinceEpoch;
+  final startedUtcMs = now();
+  final connectionBudget =
+      AdaptiveConnectionBudget.fromConditions(initialConditions);
+  // What the AUDIO may cost on this link. Derived from the same conditions
+  // as the connect budget so the two survival models cannot drift; 30% of
+  // the link is reserved for the control plane (see OpusWireBudget).
+  // Duplex: both parties' audio shares every crossing of the same pipe,
+  // and DTX makes the silent side nearly free on the wire — without it a
+  // "fitting" config still queued the link to death on the 16 kbit/s row
+  // (measured 2026-08-08; the no-audio control run delivered clean).
+  // Admission is ONE decision. The link's capacity is priced by
+  // OpusWireBudget; whether the emitter's fixed tick has room under the
+  // interactive delay budget is a bound only call_core can compute, because
+  // it depends on the path's one-way delay. Injecting it here folds the two
+  // into a single verdict with named causes — the alternative was two
+  // components each holding a veto with no defined precedence, so a link
+  // with ample bandwidth was admitted here and refused downstream purely
+  // because the round trip was long.
+  final wireAdmission = OpusWireBudget.forBandwidth(
+    initialConditions.bandwidthBps,
+    concurrentStreams: 2,
+    tickProbe:
+        ({
+          required int wireRateBps,
+          required double perStreamBudgetBps,
+          required int frameBitsOnWire,
+        }) =>
+            connectionBudget.maxSchedulerStepFor(
+              initialConditions,
+              offeredRateBps: wireRateBps,
+              usableShareBps: perStreamBudgetBps.round(),
+              frameBits: frameBitsOnWire,
+            ) is SchedulerStepAdmissible,
+  );
+  // The refusal is binding. Placing the call at the cheapest configuration
+  // anyway is what the old code did, and it survived only because the codec
+  // suppressed output during silence: the real mean sat far below the
+  // nominal rate. With a fixed-tick emitter running, the nominal rate IS the
+  // sustained rate, so offering more than the pipe carries is an unbounded
+  // queue and the death of both directions. A refusal reaches the caller
+  // carrying its numbers instead.
+  final OpusWireBudget wireBudget = switch (wireAdmission) {
+    OpusWireFitted(:final budget) => budget,
+    OpusWireUnconstrained(:final budget) => budget,
+    OpusWireNoCandidateFits() => throw CallAdmissionRefused(wireAdmission),
+  };
+  final constrainedLink = initialConditions.bandwidthBps != null &&
+      initialConditions.bandwidthBps! > 0;
+  // Gate 1e: silence handling is derived from the shaping state, not set by
+  // hand. With the fixed-tick emitter off — the default everywhere today —
+  // this yields exactly the previous policy: DTX on, constant bitrate off.
+  final effectiveOpusPolicy = opusPolicy ??
+      (constrainedLink
+          ? OpusSdpPolicy.forShapingState(
+              fixedTickEmitterRunning: fixedTickEmitterRunning,
+              maxAverageBitrateBps: wireBudget.opusRateBps,
+              ptimeMs: wireBudget.ptimeMs,
+            )
+          : null);
+  // Keepalive timing from the same conditions model as the connect budget:
+  // the class defaults are the pristine floors (an unconstrained deployment
+  // is bit-for-bit unchanged); a known-hostile path gets the patience its
+  // physics demand. Measured 2026-08-06 (T2 loss60): a fixed liveness window
+  // on a 60%-loss link declared live sockets dead every window and the
+  // reconnect loop ate the whole connect budget.
+  final signalingDefaults = SignalingClientConfig();
+  final signalingTiming = connectionBudget.signalingTiming(
+    heartbeatFloor: signalingDefaults.heartbeatInterval,
+    livenessFloor: signalingDefaults.livenessTimeout,
+    connectTimeoutFloor: signalingDefaults.connectTimeout,
+    reconnectAttemptsFloor: signalingDefaults.maxReconnectAttempts,
+  );
   final client = SignalingClient(
     endpoint: endpoint,
     localKeyId: '${role.name}-key',
+    config: SignalingClientConfig(
+      heartbeatInterval: signalingTiming.heartbeatInterval,
+      livenessTimeout: signalingTiming.livenessTimeout,
+      initialReconnectDelay: signalingDefaults.initialReconnectDelay,
+      maxReconnectDelay: signalingDefaults.maxReconnectDelay,
+      maxReconnectAttempts: signalingTiming.maxReconnectAttempts,
+      maxEnvelopeAge: signalingDefaults.maxEnvelopeAge,
+      connectTimeout: signalingTiming.connectTimeout,
+      outboxMessageLifetime: signalingTiming.messageLifetime,
+    ),
     connector: (uri) async {
       final socket = await connectWebSocketWithCustomRules(
         uri,
@@ -181,7 +325,12 @@ CallSessionHandle buildWebRtcCallSession({
   FlutterWebRtcPeerConnectionPort? livePort;
   final media = WebRtcCallMediaSession(
     () async {
-      final port = await FlutterWebRtcPeerConnectionPort.create(audio: true);
+      final port = await FlutterWebRtcPeerConnectionPort.create(
+        audio: true,
+        iceServers: iceConfig?.iceServers ?? const [],
+        iceTransportPolicy: iceConfig?.iceTransportPolicy ?? 'all',
+        opusPolicy: effectiveOpusPolicy,
+      );
       livePort = port;
       return port;
     },
@@ -193,18 +342,50 @@ CallSessionHandle buildWebRtcCallSession({
       }
     },
   );
+  // Per-operation deadlines, same three classes the e2e harness proved on
+  // the T2 matrix (one 15 s constant used to bound all three):
+  //   class A — one signaling send-and-ack. Nominal 1 round trip, but the
+  //     bound absorbs the worst LEGITIMATE case: a liveness window to even
+  //     notice a dead socket, then TCP+TLS+WS re-establishment and the
+  //     resent frame's ack (5 round trips).
+  //   class B — the media (re)connection wait: one full 8-round-trip
+  //     ICE + DTLS + first-media attempt.
+  //   class C — local engine calls: zero network, so the bound stays FIXED;
+  //     a hung engine is a defect to detect fast, not weather to wait out.
+  // Floors are the shipped constants, so an unconstrained deployment is
+  // unchanged; a known-hostile path gets what its physics cost.
+  // No liveness detection floor: the outbox is at-least-once (a timed-out
+  // await abandons nothing) and the liveness timer handles dead sockets
+  // independently — wire-measured 2026-08-07, see the e2e harness's
+  // class-A dartdoc for the capture evidence.
+  final derivedOperationTimeout = connectionBudget.operationBudget(
+    roundTrips: 5,
+  );
+  const legacyOperationTimeout = Duration(seconds: 15);
+  const legacyConnectionTimeout = Duration(seconds: 20);
+  final derivedConnectionTimeout = connectionBudget.operationBudget(
+    roundTrips: AdaptiveConnectionBudget.handshakeRoundTrips,
+  );
   final controller = CallController(
     callId: callId,
     role: role,
     transport: AdapterCallTransport(gateway),
     signaling: AdapterCallSignaling(gateway),
     media: media,
-    reconnectPolicy: ExponentialBackoffReconnectPolicy(
-      maxAttempts: 5,
-      baseDelay: const Duration(milliseconds: 250),
-      maxDelay: const Duration(seconds: 2),
-      maxElapsed: const Duration(seconds: 15),
-    ),
+    // The deadline is derived from what the path costs, not from a constant.
+    // The constant it replaces (15s) was calibrated on a ~0.7s round-trip; one
+    // ICE+DTLS+first-media attempt costs roughly eight round trips, so at the
+    // 1.8s-RTT profile a single clean attempt already needs 18.4s and was being
+    // severed mid-handshake. On a healthy link the budget tightens back to its
+    // 30s floor, so this cannot quietly excuse a slow connect.
+    reconnectPolicy: connectionBudget.toReconnectPolicy(),
+    operationTimeout: derivedOperationTimeout >= legacyOperationTimeout
+        ? derivedOperationTimeout
+        : legacyOperationTimeout,
+    connectionTimeout: derivedConnectionTimeout >= legacyConnectionTimeout
+        ? derivedConnectionTimeout
+        : legacyConnectionTimeout,
+    engineOperationTimeout: legacyOperationTimeout,
   );
   // Path continuity: score the live media path from its RTC stats counters
   // (EWMA + circuit breaker via adaptive_transport); when the path set goes
@@ -218,7 +399,10 @@ CallSessionHandle buildWebRtcCallSession({
   // Adaptive quality: under rising loss/RTT the live session steps down
   // bitrate → frame rate → resolution → audio-only, and recovers when
   // conditions improve — applied via standard sender-parameter updates.
-  final adaptationDriver = MediaAdaptationDriver(port: () => livePort);
+  final adaptationDriver = MediaAdaptationDriver(
+    port: () => livePort,
+    audioCeilingBps: constrainedLink ? wireBudget.opusRateBps : null,
+  );
   // Survival mode: the ladder floor / a flapping path flips the call into
   // its first-class degraded phase instead of ever failing; voice-note
   // clips ride the chat outbox. The messenger is created lazily over this
@@ -302,7 +486,21 @@ CallSessionHandle buildWebRtcCallSession({
           messenger: storeAndForwardMessengerFactory,
           tap: audioFrameTap,
         );
+  // Call-end statistics for the intelligence brains. connectMs stays null
+  // until the first connected phase; a never-connected call is recorded
+  // nowhere (a required-int sentinel would poison the budget calibrator).
+  int? connectMs;
+  var recoveries = 0;
+  var dropsToFloor = 0;
+  String? terminalReason;
+  CallPhase? lastPhase;
   final phaseSubscription = controller.states.listen((state) {
+    if (connectMs == null && state.phase == CallPhase.connected) {
+      connectMs = now() - startedUtcMs;
+    }
+    if (state is TerminalCallState) {
+      terminalReason = state.endReason.name;
+    }
     // The two live-quality loops run in BOTH live phases — a degraded call
     // still needs path scoring (to escalate) and adaptation (to climb).
     final live =
@@ -313,15 +511,54 @@ CallSessionHandle buildWebRtcCallSession({
     } else {
       pathMonitor.stop();
       adaptationDriver.stop();
+      // Recovery starves on a constrained pipe if the still-flowing RTP
+      // keeps its rate: floor the sender NOW so the ICE-restart handshake
+      // owns the link (measured 2026-08-06 — every T2 bandwidth/narrow/
+      // extreme death was in this phase, never mid-call).
+      if (state.phase == CallPhase.reconnecting) {
+        // Edge-triggered on the phase transition: each retry emits a fresh
+        // ReconnectingCallState, so counting emissions would over-count.
+        if (lastPhase != CallPhase.reconnecting) {
+          recoveries += 1;
+          // Shipped definition: episodes that forced the survival floor
+          // (not per-emission floor calls, not adaptation-ladder floors).
+          dropsToFloor += 1;
+        }
+        unawaited(adaptationDriver.applySurvivalFloor());
+      }
     }
+    lastPhase = state.phase;
   });
   return CallSessionHandle(
+    connectionBudget: connectionBudget,
     controller: controller,
     dtnFallbackQueue: resolvedFallbackQueue,
     connectionFabric: fabric,
     openChatPort: () async =>
         MediaChannelDataPort(await media.openDataChannel()),
     dispose: () async {
+      // Record once, before the hub's savers could be disposed by the
+      // caller (a markDirty after saver disposal is a silent no-op and
+      // the record would exist in memory only). Never-connected calls
+      // are skipped: connectMs is the calibrator's training input.
+      final measuredConnectMs = connectMs;
+      if (hub != null && measuredConnectMs != null) {
+        hub.recordCallEnd(
+          CallHistoryRecord(
+            startedUtcMs: startedUtcMs,
+            connectMs: measuredConnectMs,
+            recoveries: recoveries,
+            dropsToFloor: dropsToFloor,
+            networkIdentityHash: NetworkAtlas.identityHash(
+              hub.resolver.lastKnownLabel,
+            ),
+            endReason: terminalReason ?? 'disposed',
+          ),
+          predictedConnectMs: connectionBudget.expectedConnectBy.inMilliseconds
+              .toDouble(),
+        );
+        connectMs = null; // idempotence: a second dispose records nothing
+      }
       await phaseSubscription.cancel();
       await callMemory?.dispose();
       await degradedModeDriver.dispose();

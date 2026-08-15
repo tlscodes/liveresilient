@@ -32,7 +32,19 @@ const int maxSignalingEndpoints = 16;
 const int maxConfigServiceUris = 16;
 
 /// Upper bound on `iceServers` entries.
-const int maxIceServers = 32;
+///
+/// Raised from 32 to 256 (2026-08-12). The single-document, single-signature
+/// shape is kept deliberately: pagination was considered and rejected, because
+/// it is not a schema change but a new compatibility protocol — either every
+/// page carries its own signature, which opens the door to mixing pages from
+/// different revisions and replaying an old one, or a signed index is needed
+/// first, which costs an extra round trip before anything is usable and makes
+/// page updates non-atomic.
+///
+/// The security load does not rest on this number. A byte cap on the whole
+/// document, applied before any parsing, is what bounds the cost — see
+/// `SignedManifestDocument.maxSignedDocumentBytes`.
+const int maxIceServers = 256;
 
 /// Upper bound on `relayRegions` entries.
 const int maxRelayRegions = 32;

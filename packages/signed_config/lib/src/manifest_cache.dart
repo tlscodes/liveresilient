@@ -30,6 +30,20 @@ abstract interface class ManifestStorage {
   Future<int> readAcceptedRevision();
 
   Future<void> writeAcceptedRevision(int revision);
+
+  /// The persisted time floor (`persistedTimeFloorUtc`): the latest
+  /// `issuedAt` of any document ever accepted on this device, in UTC, or
+  /// null when none has been recorded yet. Kept in the same storage as the
+  /// accepted revision because the two are always read together and must
+  /// advance together — splitting them across stores would permit a
+  /// half-write where one advances and the other does not.
+  Future<DateTime?> readTimeFloorUtc();
+
+  /// Advances the persisted time floor. Contract: [value] must be UTC
+  /// (implementations reject a non-UTC instant), and the floor is
+  /// monotonic — a write older than the stored floor is ignored, so the
+  /// floor never moves backwards.
+  Future<void> writeTimeFloorUtc(DateTime value);
 }
 
 /// Fetches the signed manifest document bytes over HTTPS from the given
@@ -138,10 +152,12 @@ class ManifestCache {
     try {
       final document = SignedManifestDocument.fromBytes(bytes);
       final accepted = await _storage.readAcceptedRevision();
+      final timeFloor = await _storage.readTimeFloorUtc();
       final result = await _verifier.verify(
         document,
         lastAcceptedRevision: accepted,
         now: _clock(),
+        persistedTimeFloorUtc: timeFloor,
       );
       switch (result) {
         case ManifestAccepted(:final manifest):
@@ -227,6 +243,7 @@ class ManifestCache {
     // a tampering/unreachable origin never blocks a healthy later one.
     final origins = _current?.configServiceUris ?? _bootstrapUris;
     final accepted = await _storage.readAcceptedRevision();
+    final timeFloor = await _storage.readTimeFloorUtc();
 
     final MultiOriginRefreshResult result;
     try {
@@ -236,6 +253,7 @@ class ManifestCache {
         verifier: _verifier,
         lastAcceptedRevision: accepted,
         now: now,
+        persistedTimeFloorUtc: timeFloor,
       );
     } on MultiOriginRefreshException catch (error) {
       throw ManifestUnavailable(error.toString());
@@ -245,6 +263,13 @@ class ManifestCache {
     await _storage.writeDocument(result.documentBytes);
     if (result.manifest.revision > accepted) {
       await _storage.writeAcceptedRevision(result.manifest.revision);
+    }
+    // The time floor advances with the accepted revision, in the same step:
+    // it becomes the greater of the current floor and the accepted
+    // document's issuedAt, and never moves backwards.
+    final issuedAtUtc = result.manifest.issuedAt.toUtc();
+    if (timeFloor == null || issuedAtUtc.isAfter(timeFloor)) {
+      await _storage.writeTimeFloorUtc(issuedAtUtc);
     }
   }
 }
