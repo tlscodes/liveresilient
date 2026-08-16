@@ -170,10 +170,21 @@ final class OpusWireNoCandidateFits extends OpusWireAdmission {
   /// least this link would have had to carry per stream.
   final int cheapestWireRateBps;
 
-  /// The smallest link bandwidth at which that cheapest candidate WOULD
+  /// NULL under [OpusWireRefusalCause.responsiveness], and that absence is
+  /// the honest answer rather than an omission.
+  ///
+  /// Under that cause the link's bandwidth was never the problem: no
+  /// bandwidth makes a tick interval exist on a path that long. A number
+  /// here would answer a question the caller did not ask and send them to
+  /// buy capacity that changes nothing. The field is nullable so the
+  /// absence has to be handled, instead of a plausible figure being read
+  /// and quoted.
+  ///
+  /// Under [OpusWireRefusalCause.capacity] it is the smallest link
+  /// bandwidth at which that cheapest candidate WOULD
   /// have been admitted, computed from the constants at call time: the
   /// exact threshold a caller can quote as "what this link needs".
-  final int minimumBandwidthBps;
+  final int? minimumBandwidthBps;
 }
 
 /// Thrown when a caller that must have a configuration is handed an
@@ -427,7 +438,10 @@ final class OpusWireBudget {
       bandwidthBps: bw,
       perStreamBudgetBps: budget,
       cheapestWireRateBps: cheapest,
-      minimumBandwidthBps: minimumBps,
+      // Null when the probe was the one that refused: no bandwidth makes a
+      // tick interval exist on a path that long, so any figure here would
+      // send the caller to buy capacity that changes nothing.
+      minimumBandwidthBps: probeRejectedFittingCandidate ? null : minimumBps,
     );
   }
 

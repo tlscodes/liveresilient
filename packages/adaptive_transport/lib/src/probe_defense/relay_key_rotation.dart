@@ -260,6 +260,22 @@ class RelayKeyRing {
     if (promoted == null) {
       throw const KeyRotationError('no next key staged; call stageNext first');
     }
+    // A second rotation inside the overlap is refused, and this guard is the
+    // one that keeps the class's central promise true. Rotating again while
+    // the previous epoch is still in grace demotes the CURRENT epoch into the
+    // `previous` slot and overwrites the one that was there — so material
+    // stamped with the epoch that was still being accepted a moment ago
+    // stops being accepted, and connections that the overlap exists to
+    // protect are cut anyway. The overlap would be documented, parameterised
+    // and enforced everywhere except the one path that can defeat it.
+    if (previousInGrace) {
+      throw KeyRotationError(
+        'a rotation is still inside its overlap window ($gracePeriod); '
+        'rotating again would strand material stamped with the epoch that '
+        'is still being accepted. Wait for the window to close, or call '
+        'retireExpired() once it has.',
+      );
+    }
     _previous = _current;
     _current = promoted;
     _next = RelayKeyEpoch(epoch: promoted.epoch + 1, keyPair: freshNext);

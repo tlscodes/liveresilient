@@ -1625,6 +1625,103 @@ dart analyze/test  call_core           ->  169 tests, clean
 flutter test       reference_app       ->  287 tests, clean
 ```
 
+### موج ۷ · دروازه‌ی سراسری و بیلدِ دستگاه · ۲۰۲۶-۰۸-۱۳ · سبز
+
+```
+signed_config       202 tests   analyze clean
+adaptive_transport  484 tests   analyze clean
+reference_app       287 tests   analyze clean
+media_webrtc        115 tests   analyze clean
+call_core           169 tests   analyze clean
+                   ──────────
+                   1257 تست سبز روی پنج پکیج
+```
+
+بیلدِ دستگاهِ واقعی:
+
+```
+flutter build ios --debug --no-codesign   ->  exit 0
+build/ios/iphoneos/Runner.app             ->  128M, arm64
+```
+
+این دروازه ادعای محدودی دارد و همان را می‌گوید: کدِ این شش تیکت برای
+پلتفرمِ واقعی کامپایل و لینک می‌شود. رفتارِ زمانِ اجرا روی سخت‌افزار و
+ضبطِ بسته‌ی `3f` هنوز ادعا نشده‌اند.
+
+نصبِ اولِ روی دستگاه شکست خورد و دلیلش ثبت می‌شود چون خودش یک درس است:
+
+```
+flutter install -d 00008030-...   ->  "Install failed"   ولی exit code = 0
+```
+
+بیلد با `--no-codesign` ساخته شده بود، پس امضا نداشت و نصب‌شدنی نبود.
+نکته‌ی مهم‌تر: خروجیِ فرمان `Install failed` گفت ولی کدِ خروج صفر بود.
+اگر دروازه فقط به کدِ خروج نگاه می‌کرد، این شکست سبز ثبت می‌شد — همان
+طبقه از خطایی که کلِ این پلن برای حذفش نوشته شده. متنِ خروجی خوانده شد،
+نه فقط کدش.
+
+با بیلدِ امضاشده، نصب و اجرا روی دستگاهِ فیزیکی انجام شد. اثبات از خودِ
+دستگاه گرفته شد، نه از نبودِ پیامِ خطا — چون نبودِ خطا اثبات نیست:
+
+```
+flutter build ios --debug        ->  Xcode build done, 59.7s
+flutter install -d 00008030-...  ->  نصب شد
+
+xcrun devicectl device info apps
+  Voice Call Kit  com.tlscodes.referenceApp  1.0.0
+
+xcrun devicectl device process launch
+  Launched application with com.tlscodes.referenceApp bundle identifier.
+
+xcrun devicectl device info processes
+  984   .../Runner.app/Runner       <- فرایند زنده روی گوشی
+```
+
+پس آنچه امشب اثبات شد: کدِ شش تیکت روی سخت‌افزارِ واقعی کامپایل می‌شود،
+نصب می‌شود، و بالا می‌آید. آنچه هنوز اثبات نشده: رفتارِ شبکه‌ی زیرِ بار،
+و ضبطِ بسته‌ی `3f`. آن‌ها ریگ می‌خواهند و بلاکرشان تاریخ‌دار ثبت است.
+
+کامیت و تگ:
+
+```
+branch  plan-v4-waves-1-to-6   (جدا از main؛ main دست‌نخورده)
+commit  3704dd6
+tag     wave-6-safe
+```
+
+قیدِ صداقتِ کامیت: مخزن پیش از شروعِ این نشست هم تغییراتِ کامیت‌نشده
+داشت — `ci.yml`، `README`، `ios/Podfile`، چند فایلِ intelligence. آن‌ها
+کامیت نشدند و دست‌نخورده در working tree ماندند؛ فقط ۴۲ فایلی که واقعاً
+در این نشست لمس شدند وارد کامیت شد.
+
+### گزارشِ دستگاهِ فیزیکی · ۲۰۲۶-۰۸-۱۳
+
+دستگاه: iPhone، `00008030-001215003AF2802E`، iOS 26.0.
+
+سناریوی تماسِ لوپ‌بک روی خودِ گوشی اجرا شد و سبز بود. خروجی، نه علامتِ
+قبولی بلکه شواهدِ عینی:
+
+```
+e2e receiver localCand: typ host ... network-id 2
+e2e receiver localCand: typ host ... network-id 1  network-cost 10
+e2e receiver localCand: typ host ... network-id 7
+e2e receiver localCand: typ host ... network-id 8
+e2e evidence restart:  newLocalCandidates=4  bothPhases=connected
+e2e: clean hangup — initiator=localHangup, receiver=remoteHangup
+e2e: relay rooms drained to 0 after teardown
+01:20 +1: All tests passed!
+```
+
+سه چیزِ اندازه‌گیری‌شده: عاملِ ICE روی سخت‌افزارِ واقعی هشت نامزدِ
+`typ host` روی چهار رابط جمع کرد؛ هر دو سمت به `connected` رسیدند و
+بازراه‌اندازی چهار نامزدِ تازه تولید کرد؛ و پس از قطع، اتاق‌های واسط به
+صفر تخلیه شدند.
+
+اهمیتِ ردیفِ اول برای `3f`: همین خروجی ثابت می‌کند این دستگاه با سیاستِ
+پیش‌فرض واقعاً نشانیِ محلی‌اش را منتشر می‌کند. بدونِ این پایه، سبزشدنِ
+سیاستِ رله می‌توانست تهی باشد — دستگاهی که هیچ جمع نمی‌کند هم «نشت
+ندارد». پایه اثبات شد.
+
 ### مسیرِ باقی‌مانده — داوریِ فابل ۵ (۲۰۲۶-۰۸-۱۳)
 
 ترتیب: اول دروازه، بعد قابلیت، بعد تاب‌آوری، بعد چرخش.
@@ -1647,6 +1744,75 @@ flutter test       reference_app       ->  287 tests, clean
 امروز روی هیچ دستگاهی ماندگار نمی‌شود. این کارِ تیکت ۵ را باطل نمی‌کند،
 ولی تا نوشته‌نشدنِ آن پیاده‌سازی هیچ ادعایی درباره‌ی رفتارِ دستگاهِ
 واقعی مجاز نیست.
+
+### موج ۷ · دروازه‌ی 3f روی دستگاه — سبزِ معتبر · ۲۰۲۶-۰۸-۱۶ · سبز
+
+```
+apps/reference_app/integration_test/host_candidate_device_test.dart   بازنویسیِ هارنس
+.backups/390-host-candidate-device-test.dart.bak                      نسخه‌ی پیشین
+device: iPhone 11 Pro Max  00008030-001215003AF2802E  iOS 26.0
+```
+
+ریشه‌ی چهار رانِ بی‌اعتبارِ قبلی، این نشست اندازه‌گیری شد. اول سناریوی
+لوپ‌بک دوباره اجرا شد تا وضعِ دستگاه از فایلِ تست جدا شود — سبز:
+
+```
+loopback_call_test.dart -d 00008030...  ->  00:36 +1: All tests passed!  (exit 0)
+```
+
+سپس رانِ 3f با هارنسِ قبلی: هر دو تست دقیقاً ۲ دقیقه‌ی کاملِ مهلتشان را
+بی‌هیچ خطِ شواهدی هنگ کردند. علت، خوانده‌شده از کد نه حدس:
+`create(audio: true)` در
+`flutter_webrtc_peer_connection_port.dart:138`
+به `getUserMedia` می‌رسد و روی نصبِ تازه، پنجره‌ی مجوزِ میکروفنِ iOS آن
+فراخوانی را تا پاسخِ انسان نگه می‌دارد — و کسی پشتِ صفحه نبود. لوپ‌بک
+گمراه نمی‌کرد چون اصلاً منبعِ صوتیِ محلی نمی‌گیرد (سطر ۱۲۶ همان تست:
+«no local audio source»)؛ سبزش هیچ اثباتی درباره‌ی مجوز نبود.
+
+بازطراحیِ هارنس، فقط در خودِ فایلِ تست و بدونِ دست‌زدن به کدِ تولیدی:
+پیکربندی از همان تابعِ خالصِ `buildPeerConnectionConfig` ساخته می‌شود
+(درزِ verbatim با بازخوانیِ `create():129-134` تأیید شد — تک‌آرگومان،
+بدونِ نقشه‌ی دوم)، `createPeerConnection` مستقیم صدا می‌شود، یک
+ترنسیورِ صوتیِ فقط-دریافت m-line را فراهم می‌کند تا عاملِ ICE بدونِ هیچ
+ضبط و هیچ پنجره‌ی مجوزی جمع کند، جمع‌آوری با `setLocalDescription`
+آغاز و با `RTCIceGatheringStateComplete` تمام می‌شود (تایمرِ ۸ ثانیه
+فقط پشتیبان)، و callbackها پیش از close جدا می‌شوند تا رویدادِ دیررس
+فلِیک نسازد.
+
+سابقه‌ی داوری: طرح از کانداکتر (خودِ فابل ۵) است؛ گیتِ مشورتْ ویرایش را
+بست و با یک دیسپچِ هم‌زمانِ فابل ۵ باز شد که همان طرح را مستقل داوری
+کرد — حکم: درست-با-اصلاحات؛ هر سه اصلاح (پایان با وضعیتِ جمع‌آوری،
+پینِ درزِ کانفیگ، جداسازیِ callback پیش از close) پیش از اجرا اعمال شد.
+
+```
+consult agent ac355c7122677c725  69,141 tok  83.5s  verdict: sound-with-corrections
+fable-purity.py tasks-dir  ->  PURE: every assistant turn came from claude-fable-5
+```
+
+راستی‌آزمایی، خروجیِ همان نوبت:
+
+```
+dart analyze host_candidate_device_test.dart  ->  No issues found!
+flutter test integration_test/host_candidate_device_test.dart -d 00008030...
+[3f/device] policy=all   candidates=16 gatheringComplete=true {host: 16}
+             addrs: 192.168.2.2  192.168.1.177  127.0.0.1  ::1   (×4 تکرار)
+[3f/device] policy=relay candidates=0  gatheringComplete=true {}
+00:04 +2: All tests passed!   (exit 0)
+```
+
+پایه‌ی غیرپوچ برقرار است: زیرِ سیاستِ all شانزده نامزدِ میزبان روی چهار
+نشانی جمع شد؛ پس صفرِ سیاستِ رله سکوتِ هارنس نیست، رفتارِ سنجیده‌ی
+پشته است — و ادعای غیاب در نقطه‌ی پایانِ جمع‌آوری ثبت شد، نه در بُرشِ
+دلبخواهِ زمانی.
+
+مرزِ ادعای این سبز:
+
+- اثبات شد: پشته‌ی زیرین روی همین سخت‌افزار، با همان نقشه‌ی پیکربندیِ
+  این مخزن، زیرِ سیاستِ فقط-رله هیچ نامزدِ host یا srflx تولید نمی‌کند.
+- اثبات نشد: مسیرِ ضبطِ خودِ پورت (کارِ تستِ لوپ‌بک است)؛ و ضبطِ بسته‌ی
+  3f که همچنان بلاکرِ تاریخ‌دارِ ۲۰۲۶-۰۸-۱۳ را دارد و ریگ می‌خواهد.
+- نبودِ نامزدِ relay در رانِ فقط-رله رفتارِ درست است نه نقص: هیچ
+  سرورِ رله‌ای پیکربندی نشده بود؛ نامزدیِ رله موضوعِ این دروازه نیست.
 
 ---
 

@@ -105,7 +105,30 @@ class HttpsNameLookup {
   ///     needs no lookup at all — enforced in the constructor;
   ///  2. a query for the endpoint's own host returns null immediately, right
   ///     here, handing that ONE name to the platform on purpose.
-  Future<String?> lookup(String host) async {
+  ///
+  ///
+  /// [timeout] is an AGGREGATE deadline over the whole lookup, not a
+  /// per-phase one. Per-phase caps do not bound the total: connect, headers
+  /// and body each got the full allowance, and a body that trickles one byte
+  /// at a time refreshed its allowance on every chunk. An endpoint behaving
+  /// that way — deliberately or not — would hold the connect path open far
+  /// past any figure this class advertised, while the doc claimed a cap.
+  Future<String?> lookup(String host) {
+    // The base cases are answered without starting a clock, so a cycle-break
+    // never spends the deadline.
+    if (host.isEmpty) return Future<String?>.value();
+    if (host.toLowerCase() == endpoint.host.toLowerCase()) {
+      return Future<String?>.value();
+    }
+    if (InternetAddress.tryParse(host) != null) {
+      return Future<String?>.value(host);
+    }
+    return _lookupOverHttps(
+      host,
+    ).timeout(timeout, onTimeout: () => null);
+  }
+
+  Future<String?> _lookupOverHttps(String host) async {
     if (host.isEmpty) return null;
     // Cycle-breaker, half two. Deliberate, not an oversight: this single
     // name is resolved by the platform so that everything else can be

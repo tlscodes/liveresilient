@@ -18,18 +18,18 @@ void main() {
   group('gate 1a — constant bitrate reaches the wire', () {
     test('cbr=1 is written only when asked for', () {
       expect(
-        applyOpusPolicy(_offer, const OpusSdpPolicy(constantBitrate: true)),
+        applyOpusPolicy(_offer, OpusSdpPolicy(silence: OpusSilenceHandling.constant)),
         contains('cbr=1'),
       );
       expect(
-        applyOpusPolicy(_offer, const OpusSdpPolicy()),
+        applyOpusPolicy(_offer, OpusSdpPolicy()),
         isNot(contains('cbr=')),
       );
     });
 
     test('applying it twice yields the same string', () {
-      const policy = OpusSdpPolicy(
-        constantBitrate: true,
+      final policy = OpusSdpPolicy(
+        silence: OpusSilenceHandling.constant,
         maxAverageBitrateBps: 16000,
         ptimeMs: 60,
       );
@@ -40,20 +40,20 @@ void main() {
     test('keys the policy does not own are preserved', () {
       final out = applyOpusPolicy(
         _offer,
-        const OpusSdpPolicy(constantBitrate: true),
+        OpusSdpPolicy(silence: OpusSilenceHandling.constant),
       );
       expect(out, contains('minptime=10'));
     });
 
     test('a policy that sets only cbr is not a no-op', () {
       expect(
-        const OpusSdpPolicy(
+        OpusSdpPolicy(
           inbandFec: false,
-          constantBitrate: true,
+          silence: OpusSilenceHandling.constant,
         ).isNoop,
         isFalse,
       );
-      expect(const OpusSdpPolicy(inbandFec: false).isNoop, isTrue);
+      expect(OpusSdpPolicy(inbandFec: false).isNoop, isTrue);
     });
   });
 
@@ -88,16 +88,44 @@ void main() {
     });
 
     test(
-      'the two are mutually exclusive by construction, not by convention',
+      'the impossible combination is not expressible, so no guard has to run',
       () {
-        expect(
-          () => OpusSdpPolicy(dtx: true, constantBitrate: true),
-          throwsA(isA<AssertionError>()),
-          reason: 'suppressing output during silence is exactly what makes '
-              'the rate content-dependent; asking for both is incoherent',
-        );
+        // There is no test here that constructs dtx AND cbr together and
+        // expects a throw, because that call no longer compiles. That is the
+        // point: the state went from "writable, then rejected at run time" to
+        // "unwritable". A runtime guard has to be reached to work — an
+        // `assert` is stripped from release builds, and even a throw only
+        // fires on a path someone executes. The compiler fires on every path,
+        // in every build, before anything ships.
+        expect(OpusSilenceHandling.values, hasLength(3));
+        for (final state in OpusSilenceHandling.values) {
+          final policy = OpusSdpPolicy(silence: state);
+          expect(
+            policy.dtx && policy.constantBitrate,
+            isFalse,
+            reason: 'no member of the type can report both: $state',
+          );
+        }
       },
     );
+
+    test('a non-positive number is refused where it would reach the wire', () {
+      // The numeric guard moved out of the constructor so the type could stay
+      // const — a policy that cannot be const cannot be a default parameter
+      // value, which is what broke when the constructor first started
+      // throwing. Checking here keeps it enforced in every build.
+      expect(
+        () => applyOpusPolicy(
+          _offer,
+          const OpusSdpPolicy(maxAverageBitrateBps: 0),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => applyOpusPolicy(_offer, const OpusSdpPolicy(ptimeMs: -1)),
+        throwsArgumentError,
+      );
+    });
   });
 
   group('the binding refusal', () {
@@ -144,6 +172,14 @@ void main() {
         );
         expect(error.refusal.cause, OpusWireRefusalCause.responsiveness);
         expect(error.toString(), contains('does not shorten a round trip'));
+        expect(
+          error.refusal.minimumBandwidthBps,
+          isNull,
+          reason: 'a bandwidth threshold under this cause would be false: no '
+              'bandwidth makes a tick interval exist on a path that long, so '
+              'quoting one sends the caller to buy capacity that changes '
+              'nothing. The absence is the honest answer.',
+        );
       },
     );
   });

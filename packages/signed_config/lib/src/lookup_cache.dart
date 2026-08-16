@@ -7,6 +7,8 @@
 /// (`cache.call`).
 library;
 
+import 'dart:async';
+
 /// One cached answer, together with when it was fetched and under which
 /// validity epoch it was stored.
 class _LookupEntry {
@@ -167,7 +169,19 @@ class LookupCache {
       return running;
     }
     final epochAtStart = _epoch;
-    final future = () async {
+    // The marker is installed BEFORE the body starts, and that order is the
+    // whole point. A Dart async body runs synchronously up to its first
+    // `await`, so an upstream that throws SYNCHRONOUSLY — an argument check,
+    // a bad URI, a null dereference before any I/O — would run try, catch and
+    // finally in one go. The `finally` would then remove a marker that had
+    // not been installed yet, and the line after would install an
+    // already-completed future that nothing ever clears. The key would be
+    // poisoned for the life of the process: every later lookup would receive
+    // that same completed future, `_refresh` would never run again, and the
+    // failure would look like a permanently unresolvable name.
+    final completer = Completer<String?>();
+    _inFlight[key] = completer.future;
+    unawaited(() async {
       try {
         final value = await _upstream(key);
         if (value != null) {
@@ -175,17 +189,16 @@ class LookupCache {
         }
         // value == null is "no answer" — normal, not cached, and it does
         // NOT remove an existing stale entry: only a positive signal does.
-        return value;
+        completer.complete(value);
       } catch (_) {
         // Upstream failure: the stale entry (if any) stays in service and
         // the caller falls back via null. Never rethrown.
-        return null;
+        completer.complete(null);
       } finally {
         _inFlight.remove(key);
       }
-    }();
-    _inFlight[key] = future;
-    return future;
+    }());
+    return completer.future;
   }
 
   /// Stores a successful answer, evicting the least recently used entry
