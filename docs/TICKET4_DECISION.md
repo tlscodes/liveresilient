@@ -134,6 +134,47 @@ a non-default one is unsettled, and those are different requirements.
 
 ---
 
+## 4-ter. VERDICT — PROVISIONAL — pending the measurement in step D
+
+2026-08-16, on `docs/TICKET4_EXTENSION_INVENTORY.md`, which read the
+library's own extension table and its client assembly function rather than
+its documentation.
+
+```
+STATUS     PROVISIONAL — pending the measurement in step D
+CHOICE     BoringSSL at a pinned commit, under CONDITION 1 of §7-bis
+BACKUP     wolfSSL, if the profile needs an extension outside the table
+```
+
+**The ground.** BoringSSL emits 26 extensions by default, and the list
+covers what a mainstream client profile carries — server_name,
+supported_groups, signature_algorithms, ALPN, supported_versions, key_share,
+psk_key_exchange_modes, session_ticket, extended_master_secret,
+status_request, certificate_timestamp, cert_compression, and the rest. If
+the target profile is composed only of these, the missing custom-extension
+API costs nothing, and the ordering and GREASE control that no other
+candidate has decide the choice.
+
+**Why it stays PROVISIONAL, and this is not hedging.** Two facts are
+missing, and neither can be produced by reading source:
+
+1. **The target profile has never been written down in this repository.**
+   The comparison above is one-sided: it says what the library offers, not
+   what the profile demands. Naming the profile's extension list is the
+   owner's input. Until it exists, "the profile fits" is an assumption
+   wearing a measurement's clothes.
+2. **Fixed order versus non-default order is unsettled.**
+   `SSL_CTX_set_permute_extensions` fills a permutation vector — it asks for
+   a different order, not for one specific order. A profile needing an exact
+   sequence is not served by it, and no other candidate offers even this
+   much.
+
+**What flips it.** Either fact resolving against BoringSSL moves the choice
+to wolfSSL and its licence cost, and loses ordering control in the trade.
+Step D is what settles the second; the first needs an answer from the owner.
+
+---
+
 ## 5. The one test that would reverse this
 
 A byte-for-byte comparison, on both architectures, of the first record
