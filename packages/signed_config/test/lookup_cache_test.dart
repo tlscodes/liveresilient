@@ -92,6 +92,37 @@ void main() {
       },
     );
 
+    test(
+      'an upstream that throws SYNCHRONOUSLY does not poison the key forever',
+      () async {
+        var calls = 0;
+        final cache = LookupCache(
+          (key) {
+            calls++;
+            // Not `async` — this throws before any Future is returned, which
+            // is what an argument check or a bad URI does. The async body
+            // then runs try/catch/finally synchronously, and if the in-flight
+            // marker were installed after the body started, the finally would
+            // clear a marker that did not exist yet and a completed future
+            // would be left behind that nothing ever removes.
+            if (calls == 1) throw ArgumentError('bad input');
+            return Future<String?>.value('recovered');
+          },
+          freshFor: const Duration(minutes: 10),
+          clock: clock,
+        );
+
+        expect(await cache.call('a.example'), isNull);
+        expect(
+          await cache.call('a.example'),
+          'recovered',
+          reason: 'the key must be usable again on the very next call; a '
+              'poisoned slot would return null forever and never re-ask',
+        );
+        expect(calls, 2);
+      },
+    );
+
     test('a null upstream answer is not cached and evicts nothing', () async {
       var answer = 'first';
       final cache = LookupCache(

@@ -17,45 +17,55 @@
 /// T2 `narrow`).
 library;
 
+/// How the encoder treats silence. Exactly three states exist, and they are
+/// one field rather than two booleans on purpose.
+///
+/// Discontinuous transmission and constant bitrate ask for opposite things:
+/// DTX makes the output rate follow the content, constant bitrate makes it
+/// not. Asking for both is incoherent. As two booleans that combination was
+/// WRITABLE, and the only thing standing between it and an outgoing offer
+/// was a runtime guard — first an `assert`, which release builds strip, then
+/// a throw. As one field the impossible state cannot be expressed at all, so
+/// the guard moves from run time to the compiler: it holds in every build,
+/// with no path around it, and nothing has to remember to check.
+enum OpusSilenceHandling {
+  /// Neither knob is asked for; the stack's own behaviour stands.
+  ///
+  /// The shipped default. DTX is the single largest bandwidth saving
+  /// available, but some middleboxes and some SFUs treat a silent flow as a
+  /// dead flow and tear the call down, so it is enabled per network once
+  /// there is field evidence — never globally by default.
+  stackDefault,
+
+  /// Send nothing during silence.
+  discontinuous,
+
+  /// Emit the same number of bits per frame regardless of content.
+  ///
+  /// Only admissible on a link measured to carry the nominal rate, because
+  /// this removes the saving that keeps the narrowest links alive: the
+  /// nominal rate becomes the sustained rate. See
+  /// `OpusWireBudget.forBandwidth`, which refuses rather than downgrade.
+  constant,
+}
+
 /// The knobs, with the defaults this project ships.
 final class OpusSdpPolicy {
   const OpusSdpPolicy({
     this.inbandFec = true,
-    this.dtx = false,
-    this.constantBitrate = false,
+    this.silence = OpusSilenceHandling.stackDefault,
     this.maxAverageBitrateBps,
     this.ptimeMs,
-  }) : assert(
-         !(constantBitrate && dtx),
-         'Constant bitrate and discontinuous transmission are mutually '
-         'exclusive: suppressing output during silence is exactly what makes '
-         'the output rate follow the content.',
-       );
+  });
 
   /// In-band forward error correction. Costs bitrate exactly when the link is
   /// worst, and is still worth it: a lost packet is reconstructed from the next
   /// one instead of becoming a gap in speech.
   final bool inbandFec;
 
-  /// Discontinuous transmission — send nothing during silence.
-  ///
-  /// Default OFF on purpose. It is the single largest bandwidth saving
-  /// available, but some middleboxes and some SFUs treat a silent flow as a
-  /// dead flow and tear the call down. It is enabled per-network behind a
-  /// feature flag once there is field evidence, never globally by default.
-  final bool dtx;
-
-  /// Constant bitrate — the encoder emits the same number of bits per frame
-  /// regardless of what the frame contains.
-  ///
-  /// Default OFF, and mutually exclusive with [dtx]: the two ask for opposite
-  /// things. DTX makes the output rate follow the content, which is the
-  /// single largest bandwidth saving available and the only reason the
-  /// narrowest measured links survive today. Constant bitrate removes that
-  /// saving, so the nominal rate becomes the sustained rate. It is therefore
-  /// only admissible on a link that was measured to carry the nominal rate —
-  /// see `OpusWireBudget.forBandwidth`, which refuses rather than downgrade.
-  final bool constantBitrate;
+  /// How silence is handled. See [OpusSilenceHandling] for why this is one
+  /// field and not two booleans.
+  final OpusSilenceHandling silence;
 
   /// Initial ceiling only. Mid-call changes go through
   /// `RTCRtpSender.setParameters`, not through this function.
@@ -65,10 +75,15 @@ final class OpusSdpPolicy {
   /// header overhead, at the cost of latency. Null leaves whatever the stack chose.
   final int? ptimeMs;
 
+  /// Discontinuous transmission is in force.
+  bool get dtx => silence == OpusSilenceHandling.discontinuous;
+
+  /// Constant bitrate is in force.
+  bool get constantBitrate => silence == OpusSilenceHandling.constant;
+
   bool get isNoop =>
       !inbandFec &&
-      !dtx &&
-      !constantBitrate &&
+      silence == OpusSilenceHandling.stackDefault &&
       maxAverageBitrateBps == null &&
       ptimeMs == null;
 
@@ -90,8 +105,9 @@ final class OpusSdpPolicy {
     bool inbandFec = true,
   }) => OpusSdpPolicy(
     inbandFec: inbandFec,
-    dtx: !fixedTickEmitterRunning,
-    constantBitrate: fixedTickEmitterRunning,
+    silence: fixedTickEmitterRunning
+        ? OpusSilenceHandling.constant
+        : OpusSilenceHandling.discontinuous,
     maxAverageBitrateBps: maxAverageBitrateBps,
     ptimeMs: ptimeMs,
   );
@@ -106,6 +122,30 @@ final class OpusSdpPolicy {
 /// The rewrite is key-by-key, so applying it twice yields the same string —
 /// which matters because renegotiation and ICE restart run it again.
 String applyOpusPolicy(String sdp, OpusSdpPolicy policy) {
+  // Numeric validation lives HERE rather than in the constructor, and the
+  // reason is the same one that turned the silence knobs into an enum: a
+  // constructor that throws cannot be `const`, and a policy that cannot be
+  // `const` cannot be a default parameter value. Checking at the point where
+  // the numbers are written to the wire keeps the guard in every build —
+  // including release, which is what an `assert` would not have done —
+  // without taking constness away from the type.
+  final rate = policy.maxAverageBitrateBps;
+  if (rate != null && rate <= 0) {
+    throw ArgumentError.value(
+      rate,
+      'maxAverageBitrateBps',
+      'Must be positive: a non-positive ceiling is not a quieter stream, '
+          'it is an offer no encoder can satisfy.',
+    );
+  }
+  final ptime = policy.ptimeMs;
+  if (ptime != null && ptime <= 0) {
+    throw ArgumentError.value(
+      ptime,
+      'ptimeMs',
+      'Must be positive: packetization time is a duration.',
+    );
+  }
   if (sdp.isEmpty) return sdp;
 
   final crlf = sdp.contains('\r\n');

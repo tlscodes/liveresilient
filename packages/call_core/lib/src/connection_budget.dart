@@ -52,12 +52,23 @@ sealed class SchedulerStepBound {
 /// keeps the emitter inside both the latency budget and the link's granted
 /// share.
 final class SchedulerStepAdmissible extends SchedulerStepBound {
-  SchedulerStepAdmissible({required this.minStep, required this.maxStep})
-      : assert(
-          minStep <= maxStep,
-          'empty interval is SchedulerStepImpossibleForResponsiveness, '
-          'not an admissible value',
-        );
+  /// Throws [ArgumentError] on an empty interval.
+  ///
+  /// A check, not an assertion. `assert` is removed in a release build, so
+  /// the state this guards — an "admissible" value whose floor sits above
+  /// its ceiling — would be constructible in exactly the build that ships,
+  /// and a caller would then pace an emitter to a step no bound allows. The
+  /// whole point of this sealed type is that an impossible interval is a
+  /// different value, not a number; a guard that holds only in debug leaves
+  /// that promise unkept where it matters.
+  SchedulerStepAdmissible({required this.minStep, required this.maxStep}) {
+    if (minStep > maxStep) {
+      throw ArgumentError(
+        'empty interval ($minStep > $maxStep) is '
+        'SchedulerStepImpossibleForResponsiveness, not an admissible value',
+      );
+    }
+  }
 
   /// Shortest admissible tick: the time the link's spare rate
   /// (usable share minus offered rate) needs to carry one frame's bits. A

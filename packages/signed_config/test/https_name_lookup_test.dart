@@ -101,6 +101,54 @@ void main() {
       expect(await lookup.lookup('somewhere.example'), isNull);
     });
 
+    test(
+      'the deadline is aggregate: a trickling body cannot hold the path open',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => server.close(force: true));
+        server.listen((req) async {
+          req.response.statusCode = HttpStatus.ok;
+          // One byte at a time, slower than the deadline but faster than any
+          // single per-phase cap. A per-chunk timeout refreshes on every
+          // byte, so only an aggregate deadline stops this.
+          for (var i = 0; i < 10000; i++) {
+            req.response.write('x');
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+          }
+          await req.response.close();
+        });
+
+        final started = DateTime.now();
+        final lookup = HttpsNameLookup(
+          endpoint: Uri.parse('https://lookup.example/resolve'),
+          endpointAddress: InternetAddress.loopbackIPv4.address,
+          timeout: const Duration(milliseconds: 400),
+        );
+        expect(await lookup.lookup('target.example'), isNull);
+        final elapsed = DateTime.now().difference(started);
+        expect(
+          elapsed,
+          lessThan(const Duration(seconds: 5)),
+          reason: 'the aggregate deadline must cut this; a per-phase cap '
+              'would let the trickle run for the full 200 seconds',
+        );
+      },
+    );
+
+    test('a base case is answered without spending the deadline', () async {
+      final lookup = lookupWith(
+        address: '203.0.113.199',
+        timeout: const Duration(seconds: 30),
+      );
+      final started = DateTime.now();
+      expect(await lookup.lookup('lookup.example'), isNull);
+      expect(
+        DateTime.now().difference(started),
+        lessThan(const Duration(seconds: 1)),
+        reason: 'the cycle-breaker must not start a clock it does not need',
+      );
+    });
+
     test('a lookup never throws, whatever the endpoint does', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() => server.close(force: true));

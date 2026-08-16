@@ -175,7 +175,7 @@ void main() {
               concurrentStreams: 2,
               carrier: carrier,
             );
-            return (refused as OpusWireNoCandidateFits).minimumBandwidthBps;
+            return (refused as OpusWireNoCandidateFits).minimumBandwidthBps!;
           }
 
           final light = floorFor(WireCarrier.rtpUdpIp);

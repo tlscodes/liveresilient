@@ -196,9 +196,24 @@ void main() {
     );
 
     test('the ring never holds more than three keys', () async {
-      final ring = await RelayKeyRing.generate();
+      // The clock advances past the overlap between rotations, because that
+      // is the only legitimate way to rotate repeatedly: rotating again while
+      // the previous epoch is still in grace would demote the current epoch
+      // over the one still being accepted, cutting exactly the connections
+      // the overlap exists to protect. The ring refuses it, so the test does
+      // what an operator would do rather than what the old loop did.
+      var at = DateTime.utc(2026, 7, 27);
+      late RelayKeyRing ring;
+      await pkg_clock.withClock(pkg_clock.Clock.fixed(at), () async {
+        ring = await RelayKeyRing.generate(origin: at);
+      });
       for (var i = 0; i < 5; i++) {
-        ring.rotate(freshNext: await _agreement.generateEphemeral());
+        at = at.add(const Duration(days: 7));
+        final fresh = await _agreement.generateEphemeral();
+        pkg_clock.withClock(
+          pkg_clock.Clock.fixed(at),
+          () => ring.rotate(freshNext: fresh),
+        );
         final held = [
           ring.current,
           ring.previous,
@@ -206,6 +221,29 @@ void main() {
         ].where((k) => k != null).length;
         expect(held, lessThanOrEqualTo(RelayKeyRing.maxKeys));
       }
+    });
+
+    test('a second rotation inside the overlap is refused', () async {
+      final at = DateTime.utc(2026, 7, 27);
+      late RelayKeyRing ring;
+      await pkg_clock.withClock(pkg_clock.Clock.fixed(at), () async {
+        ring = await RelayKeyRing.generate(origin: at);
+      });
+      final first = await _agreement.generateEphemeral();
+      final second = await _agreement.generateEphemeral();
+      pkg_clock.withClock(
+        pkg_clock.Clock.fixed(at),
+        () => ring.rotate(freshNext: first),
+      );
+      pkg_clock.withClock(pkg_clock.Clock.fixed(at), () {
+        expect(
+          () => ring.rotate(freshNext: second),
+          throwsA(isA<KeyRotationError>()),
+          reason: 'the overlap is documented, parameterised and enforced '
+              'everywhere; without this guard the one path that defeats it '
+              'is rotation itself',
+        );
+      });
     });
 
     test('rotationDue fires once the clock reaches the next epoch', () async {
