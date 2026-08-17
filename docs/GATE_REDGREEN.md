@@ -18,6 +18,7 @@ files stayed modified.
 | 6f | green | red | the redirect removed, so one hop and one name — the world where every name IS boundary-known |
 | 2b | green | red | `tickProbe:` removed from the admission call in `call_session.dart` |
 | 2b | green | red | `maxSchedulerStepFor` stubbed to always return `SchedulerStepAdmissible` |
+| 1f | green | red | the ptime dwell removed, so a disruption commits on the first disagreeing sample |
 
 Verbatim output of the three probe runs, this date:
 
@@ -36,6 +37,15 @@ PASS 2b  RED with the production wiring removed (rc=1)
 PASS 2b  RED when the bound is always admissible (rc=1)
 PASS 2b GREEN on the restored tree (rc=0)
 2B RED-GREEN DOUBLE RUN PASSED
+
+PASS 1f  RED with the hysteresis removed (rc=1)
+     failing tests it caught:
+       1f  a sustained collapse from 64000 to 16000 changes the policy ...
+       1f  flapping at a boundary never renegotiates, however long it goes on
+       1f  hysteresis is symmetric: flapping back up after a commit ...
+       1f  one recovering sample cancels a pending disruption outright
+PASS 1f  GREEN on the restored tree (rc=0)
+1F RED-GREEN DOUBLE RUN PASSED
 ```
 
 ## Why these mutations and not others

@@ -20,7 +20,6 @@
     "6d": "deferred by decision, recorded in the plan. Not attempted, not claimed. Slot: named in the plan, after the run."
   },
   "in_flight": {
-    "1f": "never built; feature plus test. Slot: run step 5.",
     "2c": "a measurement rather than a test: the replay harness and the corpus both exist, and the last recorded score is 1.0996 against a bar of 1.107 — so the evidence has yet to be produced and may come back red. Slot: the replay run.",
     "5e": "genuine feature in three parts (only `expired` is relaxed, only in initialize(), and no in-binary floor exists). Slot: run step 4's follow-on."
   }
