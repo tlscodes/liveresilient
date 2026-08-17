@@ -134,7 +134,55 @@ a non-default one is unsettled, and those are different requirements.
 
 ---
 
-## 4-ter. VERDICT — PROVISIONAL — pending the measurement in step D
+## 4-quater. VERDICT — CONFIRMED on x86_64 · 2026-08-17
+
+The measurement §4-ter was waiting for has been run. Full evidence, both
+captures and the list of what closed each gap:
+`docs/TICKET4_FIRST_RECORD/RESULT.md`.
+
+```
+STATUS     CONFIRMED on x86_64 — configuration alone reproduces the profile
+CHOICE     BoringSSL at a pinned commit
+OPEN       the arm64 capture; §5 asks for both architectures and only one ran
+```
+
+Both facts §4-ter named as missing are now settled, and the second one settled
+differently than expected:
+
+1. **The target profile IS written down in this repository.** It is
+   `UtlsClientProfile.chrome120`, with an explicit cipher list and an explicit
+   extension list. §4-ter's claim that it had never been written down was wrong
+   — the profile was in `probe_defense/utls_client_profile.dart` the whole time.
+   The comparison is no longer one-sided: the target came from that file, read
+   by the tool rather than transcribed.
+
+2. **Fixed order versus permuted order is settled, and the worry was
+   misdirected.** §4-ter feared that `SSL_CTX_set_permute_extensions` asks for
+   *a* different order rather than *one specific* order. That is true, and it
+   does not matter for this profile: chrome120 declares
+   `shufflesExtensions: true` because Chrome itself permutes per connection, so
+   an exact sequence is not what the profile wants — a client emitting one fixed
+   order would be the anomaly. Two captures produced two different orders with
+   identical sets, which is the shape the profile asks for.
+
+   A profile that DID need an exact sequence would still be unserved by this
+   API. That limit is real and unchanged; it simply is not this profile's limit.
+
+Measured, on this code, this date:
+
+```
+cipher suites   15 of 15, profile order, GREASE present
+extensions      15 of 15 as a set, GREASE present, permuted across captures
+record          1533 bytes
+library change  none — every call in the instrument is public API
+```
+
+What flips it back: an arm64 capture that differs, or a future profile whose
+extensions fall outside the library's table, or one needing a fixed order.
+
+---
+
+## 4-ter. VERDICT — PROVISIONAL — superseded 2026-08-17 by §4-quater, kept for the record
 
 2026-08-16, on `docs/TICKET4_EXTENSION_INVENTORY.md`, which read the
 library's own extension table and its client assembly function rather than
@@ -189,6 +237,11 @@ OpenSSL, mbedTLS and rustls do not come back in either branch: they were
 rejected on design and on licence, not on this test.
 
 **Until this test is run, §0's status stays PROPOSED.**
+
+RUN 2026-08-17 on x86_64: configuration alone reproduces the profile — the
+first branch. See §4-quater and `docs/TICKET4_FIRST_RECORD/RESULT.md`. The
+arm64 half of "on both architectures" has not been run, so this section is
+satisfied on one architecture, not two.
 
 ---
 

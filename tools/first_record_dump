@@ -313,8 +313,16 @@ capture() {
     return 2
   fi
   log 'compiling the capture program'
-  clang -O1 -I "$SRC/include" -o "$WORK/first_record" \
-    "$WORK/first_record.c" "$libssl" "$libcrypto" \
+  # clang++ as the DRIVER, with a C source. BoringSSL's ssl library is C++ —
+  # it uses std::optional, std::variant and virtual dispatch internally — so a
+  # plain `clang` link fails on ~30 undefined C++ runtime symbols. The driver
+  # choice only adds libc++ at link time; the file is still compiled as C,
+  # which is what a real embedder does through the public C headers.
+  # `-x none` after the source matters: -x applies to every file that FOLLOWS
+  # it, so without the reset clang tries to compile the .a archives as C and
+  # reports syntax errors inside `!<arch>`.
+  clang++ -O1 -I "$SRC/include" -o "$WORK/first_record" \
+    -x c "$WORK/first_record.c" -x none "$libssl" "$libcrypto" \
     > "$OUT/COMPILE.log" 2>&1 || {
       log "compile failed; see ${OUT#"$REPO"/}/COMPILE.log"; return 1; }
   log 'capturing'
