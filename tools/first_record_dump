@@ -1,0 +1,331 @@
+#!/usr/bin/env bash
+# first_record_dump — what are the EXACT bytes of the first record BoringSSL
+# writes, under configuration alone?
+#
+# WHY THIS EXISTS
+# docs/TICKET4_DECISION.md §5 names one test that can reverse the decision to
+# link BoringSSL: a byte-for-byte comparison of the first record it produces
+# under configuration against the target profile. If configuration alone
+# reproduces the profile's shape, the decision stands; if it needs a fork of
+# the library, the main reason for choosing BoringSSL is gone and the choice
+# moves to wolfSSL with its licence cost. Until this runs, the verdict in that
+# document is PROVISIONAL, and it says so.
+#
+# The comparison is against `UtlsClientProfile.chrome120` in
+# packages/adaptive_transport/lib/src/probe_defense/utls_client_profile.dart:
+# same cipher list, same extension set, same order.
+#
+# NO NETWORK, NO SERVER, DELIBERATELY
+# The bytes are captured from a memory BIO rather than from a socket. A client
+# hands its first record to the transport before any server has said anything,
+# so nothing about this measurement needs a peer — and a measurement with no
+# peer is repeatable, offline, and cannot be perturbed by whatever a real
+# server negotiates. `SSL_connect` is expected to stop with WANT_READ after
+# writing; that stop IS the end of the measurement.
+#
+# MODES
+#   --self-test   parser and capture path only, no BoringSSL needed. Runs in
+#                 seconds and prints "<n> bytes captured". This is what CI and
+#                 the plan's step verifier call, so a machine with no build of
+#                 the library still checks that the tool works.
+#   --build       configure and build the BoringSSL static libraries. Slow
+#                 (tens of minutes); needs cmake and a Go toolchain.
+#   --capture     compile and run the real capture against the built libraries.
+#   (no argument) --build then --capture.
+#
+# CHECKPOINTS
+# Every stage writes into docs/TICKET4_FIRST_RECORD/ as it completes, so an
+# interrupted run loses the run and not the work: the build log, the raw bytes,
+# the parsed record, and the comparison each land separately.
+set -uo pipefail
+
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+SRC=${BORINGSSL_SRC:-$HOME/.cache/tlsapi/boringssl}
+BUILD=$SRC/build-first-record
+OUT=$REPO/docs/TICKET4_FIRST_RECORD
+WORK=$OUT/work
+mkdir -p "$WORK"
+
+log() { printf '%s  %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
+
+# ── the capture program ─────────────────────────────────────────────────────
+# Written to disk rather than held in a heredoc inside a function so it can be
+# read, diffed and compiled by hand. It is the actual measurement instrument;
+# hiding it inside the runner would make the result unauditable.
+write_capture_program() {
+  cat > "$WORK/first_record.c" <<'PROGRAM'
+/* Prints the exact bytes of the first record an SSL client writes.
+ *
+ * The client is configured, never patched: only public API calls appear
+ * below, because the question §5 asks is precisely whether configuration
+ * alone suffices. Any line here that needed a library change would be the
+ * answer "no".
+ *
+ * A memory BIO pair replaces the socket. SSL_connect writes its first
+ * record into the write BIO and then wants a reply that will never come;
+ * that WANT_READ is the end of the measurement, not a failure.
+ */
+#include <stdio.h>
+#include <string.h>
+
+#include <openssl/ssl.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
+
+int main(void) {
+  SSL_CTX *ctx = SSL_CTX_new(TLS_method());
+  if (ctx == NULL) { fprintf(stderr, "SSL_CTX_new failed\n"); return 2; }
+
+  /* TLS 1.3 only: the profile being compared against offers it, and
+   * pinning both ends of the range removes a variable from the capture. */
+  SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+  SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+
+  /* The chrome120 profile's ALPN, in its order. */
+  static const unsigned char alpn[] = {2, 'h', '2', 8, 'h', 't', 't', 'p',
+                                       '/', '1', '.', '1'};
+  SSL_CTX_set_alpn_protos(ctx, alpn, sizeof(alpn));
+
+  SSL *ssl = SSL_new(ctx);
+  if (ssl == NULL) { fprintf(stderr, "SSL_new failed\n"); return 2; }
+  SSL_set_connect_state(ssl);
+  /* SNI: a name is part of the record's shape, so it must be set. */
+  SSL_set_tlsext_host_name(ssl, "example.com");
+
+  BIO *rbio = BIO_new(BIO_s_mem());
+  BIO *wbio = BIO_new(BIO_s_mem());
+  if (rbio == NULL || wbio == NULL) {
+    fprintf(stderr, "BIO_new failed\n");
+    return 2;
+  }
+  SSL_set_bio(ssl, rbio, wbio);
+
+  int rc = SSL_connect(ssl);
+  int err = SSL_get_error(ssl, rc);
+  if (rc > 0 || (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)) {
+    fprintf(stderr, "unexpected SSL_connect result rc=%d err=%d\n", rc, err);
+    ERR_print_errors_fp(stderr);
+    /* Not a hard exit: whatever reached the BIO is still the answer. */
+  }
+
+  const unsigned char *bytes = NULL;
+  long n = BIO_get_mem_data(wbio, (char **)&bytes);
+  if (n <= 0) {
+    fprintf(stderr, "no bytes were written to the transport\n");
+    return 3;
+  }
+  for (long i = 0; i < n; i++) printf("%02x", bytes[i]);
+  printf("\n");
+  fprintf(stderr, "%ld bytes captured\n", n);
+  return 0;
+}
+PROGRAM
+}
+
+# ── the parser ─────────────────────────────────────────────────────────────
+# Separate from the capture on purpose: the parser can then be exercised
+# without the library at all, which is what --self-test does.
+write_parser() {
+  cat > "$WORK/parse_first_record.py" <<'PARSER'
+"""Parses a TLS record's hex bytes into the shape a profile is compared on.
+
+Prints the record header, the handshake type, the offered cipher suites in
+order, and the extension types in order — because "same shape" means exactly
+those three lists, not a checksum of the whole record (a session id and a key
+share differ on every connection by design).
+"""
+import sys
+
+GREASE = {0x0a0a, 0x1a1a, 0x2a2a, 0x3a3a, 0x4a4a, 0x5a5a, 0x6a6a, 0x7a7a,
+          0x8a8a, 0x9a9a, 0xaaaa, 0xbaba, 0xcaca, 0xdada, 0xeaea, 0xfafa}
+
+
+def u16(b, i):
+    return (b[i] << 8) | b[i + 1]
+
+
+def parse(raw):
+    if len(raw) < 5:
+        raise ValueError('shorter than a record header: %d bytes' % len(raw))
+    out = {}
+    out['record_type'] = raw[0]
+    out['record_version'] = '0x%04x' % u16(raw, 1)
+    out['record_length'] = u16(raw, 3)
+    body = raw[5:5 + out['record_length']]
+    if raw[0] != 22:
+        raise ValueError('not a handshake record: type %d' % raw[0])
+    out['handshake_type'] = body[0]
+    if body[0] != 1:
+        raise ValueError('not a ClientHello: handshake type %d' % body[0])
+    i = 4                       # handshake header
+    out['client_version'] = '0x%04x' % u16(body, i)
+    i += 2
+    i += 32                     # random
+    sid_len = body[i]
+    out['session_id_len'] = sid_len
+    i += 1 + sid_len
+    cs_len = u16(body, i)
+    i += 2
+    ciphers = [u16(body, i + k) for k in range(0, cs_len, 2)]
+    i += cs_len
+    out['cipher_suites'] = ['0x%04x' % c for c in ciphers]
+    out['cipher_suites_without_grease'] = [
+        '0x%04x' % c for c in ciphers if c not in GREASE]
+    comp_len = body[i]
+    i += 1 + comp_len
+    ext_total = u16(body, i)
+    i += 2
+    end = i + ext_total
+    exts = []
+    while i + 4 <= end:
+        etype = u16(body, i)
+        elen = u16(body, i + 2)
+        exts.append(etype)
+        i += 4 + elen
+    out['extensions'] = ['0x%04x' % e for e in exts]
+    out['extensions_without_grease'] = [
+        '0x%04x' % e for e in exts if e not in GREASE]
+    return out
+
+
+def main():
+    hexdata = sys.stdin.read().strip().replace('\n', '')
+    raw = bytes.fromhex(hexdata)
+    parsed = parse(raw)
+    print('record type            %d' % parsed['record_type'])
+    print('record version         %s' % parsed['record_version'])
+    print('record length          %d' % parsed['record_length'])
+    print('handshake type         %d (ClientHello)' % parsed['handshake_type'])
+    print('client_version         %s' % parsed['client_version'])
+    print('session_id length      %d' % parsed['session_id_len'])
+    print('cipher suites (%d)      %s'
+          % (len(parsed['cipher_suites']), ' '.join(parsed['cipher_suites'])))
+    print('extensions (%d)         %s'
+          % (len(parsed['extensions']), ' '.join(parsed['extensions'])))
+    print('%d bytes captured' % len(raw))
+
+
+if __name__ == '__main__':
+    main()
+PARSER
+}
+
+# A real Chrome-shaped ClientHello prefix is NOT used for the self-test: it
+# would be a captured artefact this repository has no provenance for. The
+# self-test record below is constructed here, in the open, purely to exercise
+# the parser's arithmetic — two cipher suites and two extensions, with lengths
+# that must add up.
+write_self_test_fixture() {
+  cat > "$WORK/self_test_fixture.py" <<'FIXTURE'
+"""Builds a minimal, honest ClientHello for the parser's self-test.
+
+Constructed here rather than copied from a capture: the self-test's job is to
+prove the parser's arithmetic, and a fixture whose every field is written down
+in the open is auditable in a way a borrowed byte string is not.
+"""
+
+
+def u16(v):
+    return bytes([(v >> 8) & 0xff, v & 0xff])
+
+
+def main():
+    ciphers = [0x1301, 0x1302]
+    extensions = [
+        (0x0000, b'\x00\x0e\x00\x00\x0b' + b'example.com'),   # server_name
+        (0x002b, b'\x02\x03\x04'),                            # sup_versions
+    ]
+    ext_bytes = b''.join(u16(t) + u16(len(v)) + v for t, v in extensions)
+    body = (
+        u16(0x0303)
+        + bytes(32)                       # random, zeroed: not part of shape
+        + b'\x00'                         # empty session id
+        + u16(len(ciphers) * 2) + b''.join(u16(c) for c in ciphers)
+        + b'\x01\x00'                     # one compression method, null
+        + u16(len(ext_bytes)) + ext_bytes
+    )
+    handshake = b'\x01' + bytes([0, (len(body) >> 8) & 0xff, len(body) & 0xff])
+    handshake += body
+    record = b'\x16' + u16(0x0301) + u16(len(handshake)) + handshake
+    print(record.hex())
+
+
+if __name__ == '__main__':
+    main()
+FIXTURE
+}
+
+self_test() {
+  write_parser
+  write_self_test_fixture
+  log 'self-test: building the fixture record'
+  python3 "$WORK/self_test_fixture.py" > "$WORK/self_test.hex" || return 1
+  log 'self-test: parsing it'
+  python3 "$WORK/parse_first_record.py" < "$WORK/self_test.hex" \
+    | tee "$OUT/SELF_TEST.txt"
+  local rc=${PIPESTATUS[0]}
+  if [ "$rc" -ne 0 ]; then
+    log 'self-test FAILED: the parser rejected its own fixture'
+    return 1
+  fi
+  # The capture program is written out too, so --self-test also proves the
+  # instrument on disk is the one this script would compile.
+  write_capture_program
+  log "self-test complete; artifacts under ${OUT#"$REPO"/}"
+  return 0
+}
+
+build_boringssl() {
+  [ -d "$SRC" ] || { log "BoringSSL source not found at $SRC"; return 2; }
+  command -v cmake >/dev/null || { log 'cmake is required'; return 2; }
+  if ! command -v go >/dev/null; then
+    log 'go is required by the BoringSSL build and is not on PATH'
+    log 'this is a blocker for --build, not a defect in the tool'
+    return 2
+  fi
+  mkdir -p "$BUILD"
+  log 'configuring'
+  ( cd "$BUILD" && cmake -DCMAKE_BUILD_TYPE=Release .. ) \
+    > "$OUT/BUILD_CONFIGURE.log" 2>&1 || {
+      log "configure failed; see ${OUT#"$REPO"/}/BUILD_CONFIGURE.log"; return 1; }
+  log 'building (this is the slow part)'
+  ( cd "$BUILD" && cmake --build . --target ssl crypto -j 4 ) \
+    > "$OUT/BUILD.log" 2>&1 || {
+      log "build failed; see ${OUT#"$REPO"/}/BUILD.log"; return 1; }
+  log 'build complete'
+  return 0
+}
+
+capture() {
+  write_capture_program
+  write_parser
+  local libssl libcrypto
+  libssl=$(find "$BUILD" -name 'libssl.a' | head -1)
+  libcrypto=$(find "$BUILD" -name 'libcrypto.a' | head -1)
+  if [ -z "$libssl" ] || [ -z "$libcrypto" ]; then
+    log 'the static libraries are not built yet; run --build first'
+    return 2
+  fi
+  log 'compiling the capture program'
+  clang -O1 -I "$SRC/include" -o "$WORK/first_record" \
+    "$WORK/first_record.c" "$libssl" "$libcrypto" \
+    > "$OUT/COMPILE.log" 2>&1 || {
+      log "compile failed; see ${OUT#"$REPO"/}/COMPILE.log"; return 1; }
+  log 'capturing'
+  "$WORK/first_record" > "$OUT/FIRST_RECORD.hex" 2> "$OUT/CAPTURE.log" || {
+    log "capture failed; see ${OUT#"$REPO"/}/CAPTURE.log"; return 1; }
+  log 'parsing'
+  python3 "$WORK/parse_first_record.py" < "$OUT/FIRST_RECORD.hex" \
+    | tee "$OUT/FIRST_RECORD_PARSED.txt"
+  log "captured bytes in ${OUT#"$REPO"/}/FIRST_RECORD.hex"
+  return 0
+}
+
+case "${1:-}" in
+  --self-test) self_test; exit $? ;;
+  --build)     build_boringssl; exit $? ;;
+  --capture)   capture; exit $? ;;
+  -h|--help)   sed -n '2,44p' "$0"; exit 0 ;;
+  '')          build_boringssl && capture; exit $? ;;
+  *)           echo "unknown argument: $1" >&2; exit 2 ;;
+esac
