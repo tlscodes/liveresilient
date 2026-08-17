@@ -278,10 +278,16 @@ self_test() {
 build_boringssl() {
   [ -d "$SRC" ] || { log "BoringSSL source not found at $SRC"; return 2; }
   command -v cmake >/dev/null || { log 'cmake is required'; return 2; }
+  # Go is NOT required for the two targets this tool needs, and the first
+  # version of this script wrongly refused to build without it. Reading
+  # CMakeLists.txt settles it: GO_EXECUTABLE appears in the FIPS_SHARED
+  # post-build hash injection (off by default) and in test targets guarded by
+  # `if(GO_EXECUTABLE)`. The `ssl` and `crypto` library targets use none of it.
+  # A precondition that blocks work it does not actually gate is the same class
+  # of error as a missing precondition — it just fails in the safe direction.
   if ! command -v go >/dev/null; then
-    log 'go is required by the BoringSSL build and is not on PATH'
-    log 'this is a blocker for --build, not a defect in the tool'
-    return 2
+    log 'note: go is not on PATH; the ssl and crypto targets do not need it'
+    log '      (it gates FIPS_SHARED and the Go test targets only)'
   fi
   mkdir -p "$BUILD"
   log 'configuring'
