@@ -1,0 +1,349 @@
+{
+ "generatedBy": "connection_orchestrator/tool/intelligence_replay.dart",
+ "epochs": [
+  {
+   "epoch": 0,
+   "trendLeadTime": {
+    "raw": 0.573529411764706,
+    "normalized": 1.0
+   },
+   "laneChoiceRegret": {
+    "raw": 0.9191176470588235,
+    "normalized": 1.0
+   },
+   "calibrator": {
+    "raw": 0.6939868767772558,
+    "normalized": 1.0
+   },
+   "atlas": {
+    "raw": 0.4423922991668416,
+    "normalized": 1.0
+   },
+   "score": 1.0,
+   "whatChanged": [
+    "laneChoice cell 'l0|r0' arq->fountain after row 4 [m1]",
+    "laneChoice cell 'l0|r2' arq->fountain after row 59 [m2]",
+    "laneChoice cell 'l0|r2' fountain->arq after row 104 [m3]",
+    "laneChoice cell 'l0|r2' arq->fountain after row 117 [m4]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 119 [m5]",
+    "laneChoice cell 'l1|r2' arq->fountain after row 122 [m6]",
+    "laneChoice cell 'l0|r2' fountain->arq after row 123 [m7]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 139 [m8]",
+    "laneChoice cell 'l0|r2' arq->fountain after row 145 [m9]",
+    "calibrator cell 'l0|r0' correction 1.00->0.84 after row 13 [m10]",
+    "calibrator cell 'l0|r0' correction 0.84->0.42 after row 30 [m11]",
+    "calibrator cell 'l0|r0' correction 0.42->0.84 after row 32 [m12]",
+    "calibrator cell 'l1|r0' correction 0.84->1.00 after row 57 [m13]",
+    "calibrator cell 'l0|r0' correction 0.84->1.00 after row 70 [m14]",
+    "calibrator cell 'l0|r0' correction 1.00->0.84 after row 74 [m15]",
+    "calibrator cell 'l0|r0' correction 0.84->1.00 after row 77 [m16]",
+    "calibrator cell 'l0|r0' correction 1.00->0.84 after row 78 [m17]",
+    "calibrator cell 'l3|r0' correction 1.00->0.71 after row 107 [m18]",
+    "calibrator cell 'l1|r2' correction 1.00->0.84 after row 134 [m19]",
+    "calibrator cell 'l3|r0' correction 0.71->1.00 after row 257 [m20]",
+    "atlas 'rig-clean|h6' loss 0.0->0.0pp rtt 0.0->11.0ms over this epoch [m21]",
+    "atlas 'rig-clean|h7' loss 0.0->0.0pp rtt 0.0->0.7ms over this epoch [m22]",
+    "atlas 'rig-normal|h7' loss 0.0->0.0pp rtt 0.0->81.2ms over this epoch [m23]",
+    "atlas 'rig-latency|h7' loss 0.0->0.0pp rtt 0.0->1801.3ms over this epoch [m24]",
+    "atlas 'rig-clean|h8' loss 0.0->0.3pp rtt 0.0->2.3ms over this epoch [m25]",
+    "atlas 'rig-bandwidth|h8' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m26]",
+    "atlas 'rig-clean|h22' loss 0.0->0.0pp rtt 0.0->0.8ms over this epoch [m27]",
+    "atlas 'rig-clean|h23' loss 0.0->0.0pp rtt 0.0->0.8ms over this epoch [m28]",
+    "atlas 'rig-clean|h0' loss 0.0->0.0pp rtt 0.0->0.7ms over this epoch [m29]",
+    "atlas 'rig-normal|h8' loss 0.0->0.0pp rtt 0.0->81.2ms over this epoch [m30]",
+    "atlas 'rig-latency|h12' loss 0.0->0.0pp rtt 0.0->1801.3ms over this epoch [m31]",
+    "atlas 'rig-latency|h13' loss 0.0->0.0pp rtt 0.0->1801.4ms over this epoch [m32]",
+    "atlas 'rig-narrow|h23' loss 0.0->2.0pp rtt 0.0->77.4ms over this epoch [m33]",
+    "atlas 'rig-loss10|h23' loss 0.0->25.0pp rtt 0.0->0.7ms over this epoch [m34]",
+    "atlas 'rig-loss60|h23' loss 0.0->73.8pp rtt 0.0->0.9ms over this epoch [m35]",
+    "atlas 'rig-extreme|h23' loss 0.0->20.0pp rtt 0.0->2057.4ms over this epoch [m36]",
+    "atlas 'rig-narrow|h4' loss 0.0->7.2pp rtt 0.0->156.0ms over this epoch [m37]",
+    "atlas 'rig-loss60|h4' loss 0.0->87.5pp rtt 0.0->1.0ms over this epoch [m38]",
+    "atlas 'rig-extreme|h4' loss 0.0->40.0pp rtt 0.0->2051.6ms over this epoch [m39]",
+    "atlas 'rig-loss60|h5' loss 0.0->76.7pp rtt 0.0->0.8ms over this epoch [m40]",
+    "atlas 'rig-extreme|h5' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m41]",
+    "atlas 'rig-loss60|h6' loss 0.0->78.3pp rtt 0.0->1.1ms over this epoch [m42]",
+    "atlas 'rig-extreme|h7' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m43]",
+    "atlas 'rig-clean|h9' loss 0.0->0.3pp rtt 0.0->2.3ms over this epoch [m44]",
+    "atlas 'rig-normal|h9' loss 0.0->0.0pp rtt 0.0->81.2ms over this epoch [m45]",
+    "atlas 'rig-latency|h9' loss 0.0->0.0pp rtt 0.0->1801.3ms over this epoch [m46]",
+    "atlas 'rig-bandwidth|h9' loss 0.0->0.0pp rtt 0.0->30.1ms over this epoch [m47]",
+    "atlas 'rig-narrow|h10' loss 0.0->7.2pp rtt 0.0->156.0ms over this epoch [m48]",
+    "atlas 'rig-loss10|h10' loss 0.0->34.0pp rtt 0.0->1.0ms over this epoch [m49]",
+    "atlas 'rig-loss60|h11' loss 0.0->72.1pp rtt 0.0->1.3ms over this epoch [m50]",
+    "atlas 'rig-bandwidth|h17' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m51]",
+    "atlas 'rig-narrow|h18' loss 0.0->22.5pp rtt 0.0->767.0ms over this epoch [m52]",
+    "atlas 'rig-loss10|h18' loss 0.0->34.0pp rtt 0.0->1.0ms over this epoch [m53]",
+    "atlas 'rig-loss60|h18' loss 0.0->90.0pp rtt 0.0->1.3ms over this epoch [m54]",
+    "atlas 'rig-extreme|h18' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m55]",
+    "atlas 'rig-bandwidth|h18' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m56]",
+    "atlas 'rig-extreme|h19' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m57]",
+    "atlas 'rig-bandwidth|h19' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m58]",
+    "atlas 'rig-narrow|h19' loss 0.0->7.2pp rtt 0.0->156.0ms over this epoch [m59]",
+    "atlas 'rig-loss60|h19' loss 0.0->78.3pp rtt 0.0->1.1ms over this epoch [m60]",
+    "atlas 'rig-bandwidth|h20' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m61]",
+    "atlas 'rig-narrow|h20' loss 0.0->7.2pp rtt 0.0->156.0ms over this epoch [m62]",
+    "atlas 'rig-loss60|h20' loss 0.0->80.0pp rtt 0.0->1.0ms over this epoch [m63]",
+    "atlas 'rig-loss60|h21' loss 0.0->78.0pp rtt 0.0->1.2ms over this epoch [m64]",
+    "atlas 'rig-extreme|h21' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m65]",
+    "atlas 'rig-narrow|h22' loss 0.0->7.2pp rtt 0.0->156.0ms over this epoch [m66]",
+    "atlas 'rig-loss60|h22' loss 0.0->85.6pp rtt 0.0->1.1ms over this epoch [m67]",
+    "atlas 'rig-loss60|h0' loss 0.0->82.0pp rtt 0.0->1.1ms over this epoch [m68]",
+    "atlas 'rig-loss60|h7' loss 0.0->80.0pp rtt 0.0->1.0ms over this epoch [m69]",
+    "atlas 'rig-loss60|h8' loss 0.0->70.0pp rtt 0.0->1.3ms over this epoch [m70]",
+    "atlas 'rig-loss60|h9' loss 0.0->82.9pp rtt 0.0->1.3ms over this epoch [m71]",
+    "atlas 'rig-loss60|h10' loss 0.0->83.8pp rtt 0.0->1.0ms over this epoch [m72]",
+    "atlas 'rig-clean|h12' loss 0.0->0.3pp rtt 0.0->2.3ms over this epoch [m73]",
+    "atlas 'rig-normal|h12' loss 0.0->0.0pp rtt 0.0->81.2ms over this epoch [m74]",
+    "atlas 'rig-bandwidth|h12' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m75]",
+    "atlas 'rig-narrow|h12' loss 0.0->7.2pp rtt 0.0->156.0ms over this epoch [m76]",
+    "atlas 'rig-loss10|h12' loss 0.0->34.0pp rtt 0.0->1.0ms over this epoch [m77]",
+    "atlas 'rig-loss60|h12' loss 0.0->74.3pp rtt 0.0->1.3ms over this epoch [m78]",
+    "atlas 'rig-extreme|h13' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m79]",
+    "atlas 'rig-loss60|h13' loss 0.0->57.5pp rtt 0.0->1.0ms over this epoch [m80]",
+    "atlas 'rig-clean|h13' loss 0.0->0.0pp rtt 0.0->1.2ms over this epoch [m81]",
+    "atlas 'rig-normal|h13' loss 0.0->0.0pp rtt 0.0->81.2ms over this epoch [m82]",
+    "atlas 'rig-bandwidth|h14' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m83]",
+    "atlas 'rig-narrow|h14' loss 0.0->3.3pp rtt 0.0->43.5ms over this epoch [m84]",
+    "atlas 'rig-loss10|h14' loss 0.0->34.0pp rtt 0.0->1.0ms over this epoch [m85]",
+    "atlas 'rig-loss60|h14' loss 0.0->78.3pp rtt 0.0->1.1ms over this epoch [m86]",
+    "atlas 'rig-extreme|h14' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m87]",
+    "atlas 'rig-latency|h14' loss 0.0->0.0pp rtt 0.0->1801.2ms over this epoch [m88]",
+    "atlas 'rig-extreme|h15' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m89]",
+    "atlas 'rig-narrow|h15' loss 0.0->0.0pp rtt 0.0->43.5ms over this epoch [m90]",
+    "atlas 'rig-narrow|h17' loss 0.0->0.0pp rtt 0.0->44.6ms over this epoch [m91]",
+    "atlas 'rig-loss60|h17' loss 0.0->78.3pp rtt 0.0->1.1ms over this epoch [m92]",
+    "atlas 'rig-loss60|h2' loss 0.0->81.0pp rtt 0.0->1.0ms over this epoch [m93]",
+    "atlas 'rig-extreme|h2' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m94]",
+    "atlas 'rig-clean|h2' loss 0.0->0.3pp rtt 0.0->2.3ms over this epoch [m95]",
+    "atlas 'rig-normal|h2' loss 0.0->0.0pp rtt 0.0->81.2ms over this epoch [m96]",
+    "atlas 'rig-bandwidth|h3' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m97]",
+    "atlas 'rig-loss10|h3' loss 0.0->34.0pp rtt 0.0->1.0ms over this epoch [m98]",
+    "atlas 'rig-loss60|h3' loss 0.0->78.6pp rtt 0.0->1.1ms over this epoch [m99]",
+    "atlas 'rig-bandwidth|h4' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m100]",
+    "atlas 'rig-latency|h4' loss 0.0->0.0pp rtt 0.0->1801.3ms over this epoch [m101]",
+    "atlas 'rig-latency|h5' loss 0.0->0.0pp rtt 0.0->1801.3ms over this epoch [m102]",
+    "atlas 'rig-bandwidth|h5' loss 0.0->0.6pp rtt 0.0->56.5ms over this epoch [m103]",
+    "atlas 'rig-bandwidth|h6' loss 0.0->3.3pp rtt 0.0->179.9ms over this epoch [m104]",
+    "atlas 'rig-latency|h8' loss 0.0->0.0pp rtt 0.0->1801.1ms over this epoch [m105]",
+    "atlas 'rig-narrow|h16' loss 0.0->7.2pp rtt 0.0->156.0ms over this epoch [m106]",
+    "atlas 'rig-clean|h19' loss 0.0->0.3pp rtt 0.0->2.3ms over this epoch [m107]",
+    "atlas 'rig-normal|h19' loss 0.0->0.0pp rtt 0.0->81.2ms over this epoch [m108]",
+    "atlas 'rig-loss10|h19' loss 0.0->34.0pp rtt 0.0->1.0ms over this epoch [m109]",
+    "atlas 'rig-normal|h20' loss 0.0->0.0pp rtt 0.0->81.2ms over this epoch [m110]",
+    "atlas 'rig-loss60|h1' loss 0.0->80.0pp rtt 0.0->1.0ms over this epoch [m111]",
+    "atlas 'rig-extreme|h22' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m112]",
+    "atlas 'rig-extreme|h0' loss 0.0->25.9pp rtt 0.0->2376.9ms over this epoch [m113]"
+   ],
+   "notes": [
+    "trendLeadTime measures the fresh-per-run detector; it has no persistent brain, so it is epoch-constant by design.",
+    "laneChoiceRegret best-choice map uses the package Laplace (s+1)/(n+2) success estimate; an untried scheme keeps its 0.5 prior (LaneChoicePolicy convention)."
+   ]
+  },
+  {
+   "epoch": 1,
+   "trendLeadTime": {
+    "raw": 0.573529411764706,
+    "normalized": 1.0
+   },
+   "laneChoiceRegret": {
+    "raw": 0.9779411764705882,
+    "normalized": 1.064
+   },
+   "calibrator": {
+    "raw": 0.7205242177744353,
+    "normalized": 1.0382389665931637
+   },
+   "atlas": {
+    "raw": 0.4985412755343207,
+    "normalized": 1.126921233649918
+   },
+   "score": 1.0572900500607703,
+   "whatChanged": [
+    "laneChoice cell 'l1|r0' arq->fountain after row 39 [m114]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 40 [m115]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 42 [m116]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 57 [m117]",
+    "laneChoice cell 'l2|r2' arq->fountain after row 72 [m118]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 119 [m119]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 139 [m120]",
+    "calibrator cell 'l1|r0' correction 0.84->1.00 after row 40 [m121]",
+    "calibrator cell 'l3|r0' correction 1.00->0.71 after row 66 [m122]",
+    "calibrator cell 'l3|r2' correction 0.84->1.00 after row 85 [m123]",
+    "calibrator cell 'l3|r0' correction 0.84->1.00 after row 257 [m124]",
+    "atlas 'rig-normal|h7' loss 0.0->0.0pp rtt 81.2->81.0ms over this epoch [m125]",
+    "atlas 'rig-latency|h7' loss 0.0->0.0pp rtt 1801.3->1801.1ms over this epoch [m126]",
+    "atlas 'rig-clean|h8' loss 0.3->0.0pp rtt 2.3->0.8ms over this epoch [m127]",
+    "atlas 'rig-normal|h8' loss 0.0->0.0pp rtt 81.2->81.0ms over this epoch [m128]",
+    "atlas 'rig-latency|h12' loss 0.0->0.0pp rtt 1801.3->1801.4ms over this epoch [m129]",
+    "atlas 'rig-narrow|h4' loss 7.2->0.0pp rtt 156.0->85.0ms over this epoch [m130]",
+    "atlas 'rig-extreme|h5' loss 25.9->25.0pp rtt 2376.9->2085.4ms over this epoch [m131]",
+    "atlas 'rig-latency|h9' loss 0.0->0.0pp rtt 1801.3->1801.5ms over this epoch [m132]",
+    "atlas 'rig-extreme|h19' loss 25.9->15.0pp rtt 2376.9->2064.6ms over this epoch [m133]",
+    "atlas 'rig-loss60|h19' loss 78.3->65.0pp rtt 1.1->1.2ms over this epoch [m134]",
+    "atlas 'rig-bandwidth|h20' loss 0.6->0.0pp rtt 56.5->23.4ms over this epoch [m135]",
+    "atlas 'rig-narrow|h20' loss 7.2->0.0pp rtt 156.0->43.3ms over this epoch [m136]",
+    "atlas 'rig-extreme|h13' loss 25.9->15.0pp rtt 2376.9->2043.7ms over this epoch [m137]",
+    "atlas 'rig-loss60|h14' loss 78.3->95.0pp rtt 1.1->1.4ms over this epoch [m138]",
+    "atlas 'rig-bandwidth|h3' loss 0.6->0.0pp rtt 56.5->23.3ms over this epoch [m139]",
+    "atlas 'rig-latency|h5' loss 0.0->0.0pp rtt 1801.3->1801.5ms over this epoch [m140]",
+    "atlas 'rig-narrow|h16' loss 7.2->0.0pp rtt 156.0->43.5ms over this epoch [m141]",
+    "atlas 'rig-clean|h19' loss 0.3->0.0pp rtt 2.3->1.1ms over this epoch [m142]"
+   ],
+   "notes": [
+    "trendLeadTime measures the fresh-per-run detector; it has no persistent brain, so it is epoch-constant by design.",
+    "laneChoiceRegret best-choice map uses the package Laplace (s+1)/(n+2) success estimate; an untried scheme keeps its 0.5 prior (LaneChoicePolicy convention)."
+   ]
+  },
+  {
+   "epoch": 2,
+   "trendLeadTime": {
+    "raw": 0.573529411764706,
+    "normalized": 1.0
+   },
+   "laneChoiceRegret": {
+    "raw": 0.9852941176470589,
+    "normalized": 1.072
+   },
+   "calibrator": {
+    "raw": 0.7227905752156912,
+    "normalized": 1.0415046730742148
+   },
+   "atlas": {
+    "raw": 0.508989153521391,
+    "normalized": 1.1505380054760703
+   },
+   "score": 1.0660106696375713,
+   "whatChanged": [
+    "laneChoice cell 'l1|r0' arq->fountain after row 39 [m143]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 40 [m144]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 42 [m145]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 57 [m146]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 119 [m147]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 139 [m148]",
+    "calibrator cell 'l3|r0' correction 1.00->0.71 after row 66 [m149]",
+    "calibrator cell 'l3|r2' correction 0.84->1.19 after row 85 [m150]",
+    "calibrator cell 'l3|r0' correction 0.71->0.84 after row 107 [m151]",
+    "calibrator cell 'l3|r0' correction 0.84->1.00 after row 257 [m152]",
+    "atlas 'rig-bandwidth|h8' loss 0.6->0.0pp rtt 56.5->89.6ms over this epoch [m153]",
+    "atlas 'rig-loss60|h6' loss 78.3->90.0pp rtt 1.1->1.0ms over this epoch [m154]",
+    "atlas 'rig-extreme|h7' loss 25.9->70.0pp rtt 2376.9->2084.7ms over this epoch [m155]",
+    "atlas 'rig-clean|h9' loss 0.3->10.0pp rtt 2.3->0.9ms over this epoch [m156]",
+    "atlas 'rig-normal|h9' loss 0.0->0.0pp rtt 81.2->81.0ms over this epoch [m157]",
+    "atlas 'rig-narrow|h10' loss 7.2->100.0pp rtt 156.0->0.0ms over this epoch [m158]",
+    "atlas 'rig-loss10|h10' loss 34.0->100.0pp rtt 1.0->0.0ms over this epoch [m159]",
+    "atlas 'rig-bandwidth|h17' loss 0.6->0.0pp rtt 56.5->43.8ms over this epoch [m160]",
+    "atlas 'rig-loss10|h18' loss 34.0->30.0pp rtt 1.0->1.2ms over this epoch [m161]",
+    "atlas 'rig-extreme|h18' loss 25.9->30.0pp rtt 2376.9->9074.4ms over this epoch [m162]",
+    "atlas 'rig-bandwidth|h18' loss 0.6->0.0pp rtt 56.5->43.4ms over this epoch [m163]",
+    "atlas 'rig-bandwidth|h19' loss 0.6->0.0pp rtt 56.5->23.3ms over this epoch [m164]",
+    "atlas 'rig-narrow|h19' loss 7.2->0.0pp rtt 156.0->43.3ms over this epoch [m165]",
+    "atlas 'rig-extreme|h21' loss 25.9->10.0pp rtt 2376.9->2043.6ms over this epoch [m166]",
+    "atlas 'rig-narrow|h22' loss 7.2->0.0pp rtt 156.0->43.5ms over this epoch [m167]",
+    "atlas 'rig-clean|h12' loss 0.3->0.0pp rtt 2.3->1.1ms over this epoch [m168]",
+    "atlas 'rig-normal|h12' loss 0.0->0.0pp rtt 81.2->81.3ms over this epoch [m169]",
+    "atlas 'rig-bandwidth|h12' loss 0.6->0.0pp rtt 56.5->23.5ms over this epoch [m170]",
+    "atlas 'rig-narrow|h12' loss 7.2->0.0pp rtt 156.0->43.5ms over this epoch [m171]",
+    "atlas 'rig-loss10|h12' loss 34.0->30.0pp rtt 1.0->1.2ms over this epoch [m172]",
+    "atlas 'rig-normal|h13' loss 0.0->0.0pp rtt 81.2->81.3ms over this epoch [m173]",
+    "atlas 'rig-bandwidth|h14' loss 0.6->0.0pp rtt 56.5->23.4ms over this epoch [m174]",
+    "atlas 'rig-loss10|h14' loss 34.0->20.0pp rtt 1.0->1.3ms over this epoch [m175]",
+    "atlas 'rig-extreme|h14' loss 25.9->10.0pp rtt 2376.9->2043.6ms over this epoch [m176]",
+    "atlas 'rig-extreme|h15' loss 25.9->30.0pp rtt 2376.9->2049.8ms over this epoch [m177]",
+    "atlas 'rig-loss60|h17' loss 78.3->100.0pp rtt 1.1->0.0ms over this epoch [m178]",
+    "atlas 'rig-extreme|h2' loss 25.9->10.0pp rtt 2376.9->2043.3ms over this epoch [m179]",
+    "atlas 'rig-clean|h2' loss 0.3->0.0pp rtt 2.3->1.1ms over this epoch [m180]",
+    "atlas 'rig-normal|h2' loss 0.0->0.0pp rtt 81.2->81.8ms over this epoch [m181]",
+    "atlas 'rig-loss10|h3' loss 34.0->10.0pp rtt 1.0->1.4ms over this epoch [m182]",
+    "atlas 'rig-bandwidth|h4' loss 0.6->0.0pp rtt 56.5->23.5ms over this epoch [m183]",
+    "atlas 'rig-latency|h4' loss 0.0->0.0pp rtt 1801.3->1801.6ms over this epoch [m184]",
+    "atlas 'rig-bandwidth|h5' loss 0.6->0.0pp rtt 56.5->23.5ms over this epoch [m185]",
+    "atlas 'rig-normal|h19' loss 0.0->0.0pp rtt 81.2->81.5ms over this epoch [m186]",
+    "atlas 'rig-loss10|h19' loss 34.0->50.0pp rtt 1.0->1.1ms over this epoch [m187]",
+    "atlas 'rig-normal|h20' loss 0.0->0.0pp rtt 81.2->80.9ms over this epoch [m188]",
+    "atlas 'rig-extreme|h22' loss 25.9->10.0pp rtt 2376.9->2091.7ms over this epoch [m189]",
+    "atlas 'rig-extreme|h0' loss 25.9->30.0pp rtt 2376.9->2042.9ms over this epoch [m190]"
+   ],
+   "notes": [
+    "trendLeadTime measures the fresh-per-run detector; it has no persistent brain, so it is epoch-constant by design.",
+    "laneChoiceRegret best-choice map uses the package Laplace (s+1)/(n+2) success estimate; an untried scheme keeps its 0.5 prior (LaneChoicePolicy convention)."
+   ]
+  },
+  {
+   "epoch": 3,
+   "trendLeadTime": {
+    "raw": 0.573529411764706,
+    "normalized": 1.0
+   },
+   "laneChoiceRegret": {
+    "raw": 0.9852941176470589,
+    "normalized": 1.072
+   },
+   "calibrator": {
+    "raw": 0.7266764414813627,
+    "normalized": 1.0471040098854767
+   },
+   "atlas": {
+    "raw": 0.580062085088305,
+    "normalized": 1.3111939022915573
+   },
+   "score": 1.1075744780442585,
+   "whatChanged": [
+    "laneChoice cell 'l1|r0' arq->fountain after row 39 [m191]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 40 [m192]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 42 [m193]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 57 [m194]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 119 [m195]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 139 [m196]",
+    "calibrator cell 'l3|r0' correction 1.00->0.71 after row 66 [m197]",
+    "calibrator cell 'l3|r0' correction 0.71->0.84 after row 107 [m198]",
+    "calibrator cell 'l3|r0' correction 0.84->1.00 after row 257 [m199]",
+    "atlas 'rig-loss60|h10' loss 83.8->83.7pp rtt 1.0->1.0ms over this epoch [m200]"
+   ],
+   "notes": [
+    "trendLeadTime measures the fresh-per-run detector; it has no persistent brain, so it is epoch-constant by design.",
+    "laneChoiceRegret best-choice map uses the package Laplace (s+1)/(n+2) success estimate; an untried scheme keeps its 0.5 prior (LaneChoicePolicy convention)."
+   ]
+  },
+  {
+   "epoch": 4,
+   "trendLeadTime": {
+    "raw": 0.573529411764706,
+    "normalized": 1.0
+   },
+   "laneChoiceRegret": {
+    "raw": 0.9852941176470589,
+    "normalized": 1.072
+   },
+   "calibrator": {
+    "raw": 0.7266764414813627,
+    "normalized": 1.0471040098854767
+   },
+   "atlas": {
+    "raw": 0.5814784616422626,
+    "normalized": 1.3143955325112175
+   },
+   "score": 1.1083748855991735,
+   "whatChanged": [
+    "laneChoice cell 'l1|r0' arq->fountain after row 39 [m201]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 40 [m202]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 42 [m203]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 57 [m204]",
+    "laneChoice cell 'l1|r0' arq->fountain after row 119 [m205]",
+    "laneChoice cell 'l1|r0' fountain->arq after row 139 [m206]",
+    "laneChoice cell 'l1|r1' arq->fountain after row 149 [m207]",
+    "calibrator cell 'l3|r0' correction 1.00->0.71 after row 66 [m208]",
+    "calibrator cell 'l3|r0' correction 0.71->0.84 after row 107 [m209]",
+    "calibrator cell 'l3|r0' correction 0.84->1.00 after row 257 [m210]"
+   ],
+   "notes": [
+    "trendLeadTime measures the fresh-per-run detector; it has no persistent brain, so it is epoch-constant by design.",
+    "laneChoiceRegret best-choice map uses the package Laplace (s+1)/(n+2) success estimate; an untried scheme keeps its 0.5 prior (LaneChoicePolicy convention)."
+   ]
+  }
+ ],
+ "corpus": {
+  "runs": 23,
+  "outcomes": 272
+ }
+}

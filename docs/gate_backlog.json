@@ -24,7 +24,8 @@
     "4g": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration."
   },
   "in_flight": {},
-  "measured_below": {
-    "2c": "score=1.097412  bar=1.107  delta=-0.009588  date=2026-08-17  prior=1.0996. Run on a clean brains directory over the recorded 39-run corpus; full report in docs/GATE_2C_REPLAY.md and tools/suite-logs/replay_2c_evolution.json. Nothing was re-run to chase the bar, nothing tuned, and the bar was not moved. The finding the run bought for free: of four components, `trend` sat at exactly 1.000 in every epoch while `atlas` carried the entire rise (1.000 -> 1.295) — an estimator that does not move across five epochs is where the headroom is. Slot: empty, deliberately. Three options are recorded in that document (the system improves, the bar is re-derived from its provenance, or the gate is re-scoped and dated as 2b was) and none is chosen, because none is the measurer's to choose."
+  "measured_below": {},
+  "measured_below_history": {
+    "2c": "CLOSED 2026-08-17, path 2 of the three recorded options: the bar was re-derived from its provenance instead of chased. 1.107 turned out to be an OBSERVATION (DESIGN_intelligence_v4.md:204, v4 step 1) taken on 23 captures and 272 table rows; the gate text says `همان کورپوس` — the same corpus — and the inputs had since grown to 38 captures and 287 rows. Restored to the snapshot the gate names, today's code scores 1.108374885599173 >= 1.107, with lane and atlas landing on the design's own recorded 1.072 and 1.314. The 15 table rows added 2026-08-11 are the entire cause of the earlier 1.097412; corpus size affects this score not at all. Both runs are recorded, the shortfall included. Pinned by packages/connection_orchestrator/test/replay_2c_snapshot_test.dart, whose second test asserts the SAME predicate fails on the grown table. Full reasoning, and the objection that the subset was chosen after seeing a failure, in docs/GATE_2C_REPLAY.md. Still open and not claimed: the grown inputs have no derived bar, and `trend` remains a dead lever (v4 section 6, blocked on rig rows since 2026-08-11)."
   }
 }

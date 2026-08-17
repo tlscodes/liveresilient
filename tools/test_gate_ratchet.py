@@ -77,15 +77,27 @@ def says(out, needle, what):
 
 # Pick the probes from the lists themselves rather than hardcoding ids, so this
 # file does not go stale the moment a gate closes and its line is deleted.
-in_flight_probe = sorted(lg.IN_FLIGHT)[0] if lg.IN_FLIGHT else None
+#
+# BORROW FROM EITHER LIST (2026-08-17). The probe used to come from IN_FLIGHT
+# only, and the day that list emptied — gate 2c closed — the probe silently
+# turned into a SKIP. A proof that skips its own failure direction when the data
+# happens to be shaped a certain way is the thing this file exists to prevent,
+# so it now falls back to BLOCKED, which is non-empty whenever anything is
+# unproven at all. It can only skip when every gate is proven, and then there is
+# genuinely no gap to borrow.
+if lg.IN_FLIGHT:
+    probe_list, probe_name = lg.IN_FLIGHT, 'in_flight'
+else:
+    probe_list, probe_name = lg.BLOCKED, 'blocked'
+unlisted_probe = sorted(probe_list)[0] if probe_list else None
 proven_probe = '3a'  # labelled by name in a test file; asserted below
 
-if in_flight_probe:
-    out = run('unlisted gap fails', 1,
-              lambda: lg.IN_FLIGHT.pop(in_flight_probe))
+if unlisted_probe:
+    out = run('unlisted gap fails (borrowed from %s)' % probe_name, 1,
+              lambda: probe_list.pop(unlisted_probe))
     says(out, 'unaccounted for', 'the failure names the unaccounted gate')
 else:
-    print('SKIP unlisted gap probe (no in-flight gates left to borrow)')
+    print('SKIP unlisted gap probe (every gate is proven — no gap to borrow)')
 
 out = run('stale entry fails', 1,
           lambda: lg.IN_FLIGHT.update(

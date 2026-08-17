@@ -13,15 +13,14 @@ applies it:
 
     python3 tools/gate_ratchet.py          # what CI and the goal check run
 
-TRANSITIONAL, AND SAID OUT LOUD: tools/label_gates.py still contains the
-original hardcoded dicts. They are SUPERSEDED and unused whenever the check is
-invoked through this file; they are left in place only because the churn guard
-blocks editing that file right now, and they must be deleted the next time it is
-opened. Until then this tool prints what it overrode, so nobody reads the stale
-copy and believes it.
+RESOLVED 2026-08-17: label_gates.py no longer carries its own copy of the
+backlog. It calls load_backlog() below at import time, so both entry points read
+the same data and neither can go stale against the other:
 
-    python3 tools/label_gates.py --check   # uses the stale in-code copy
-    python3 tools/gate_ratchet.py          # uses the authority
+    python3 tools/label_gates.py --check   # same data, plain printout
+    python3 tools/gate_ratchet.py          # same data, plus the category lines
+
+The duplicate-detection note this file used to print is gone with the duplicate.
 
 Exit: 0 when every unproven gate is accounted for and no listed gate has quietly
 acquired a proof. 1 otherwise.
@@ -92,10 +91,10 @@ def main():
     blocked, in_flight, measured_below = load_backlog()
     checker = load_checker()
 
-    stale_in_code = sorted(
-        (set(checker.BLOCKED) | set(checker.IN_FLIGHT))
-        ^ (set(blocked) | set(in_flight))
-    )
+    # Assignment kept although the checker now loads the same backlog itself:
+    # it is what makes this file the entry point rather than a wrapper, and it
+    # is the seam tools/test_gate_ratchet.py mutates to prove both failure
+    # directions.
     checker.BLOCKED = blocked
     checker.IN_FLIGHT = in_flight
 
@@ -108,10 +107,6 @@ def main():
         # cut inside the number, which is how a record starts lying quietly.
         print('  measured and SHORT — neither pending nor blocked: %s  %s'
               % (gate, entry.split('  ')[0]))
-    if stale_in_code:
-        print('note: the copy still inside label_gates.py disagrees on %s — '
-              'that copy is superseded and is ignored here; delete it the next '
-              'time the file is opened.' % ' '.join(stale_in_code))
     print()
     return checker.do_check()
 

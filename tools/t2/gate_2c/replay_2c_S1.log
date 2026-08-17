@@ -1,0 +1,5 @@
+epoch 0 score 1.000 (trend 1.000, lane 1.000, calib 1.000, atlas 1.000)
+epoch 1 score 1.048 (trend 1.000, lane 1.060, calib 1.018, atlas 1.115)
+epoch 2 score 1.058 (trend 1.000, lane 1.068, calib 1.021, atlas 1.145)
+epoch 3 score 1.097 (trend 1.000, lane 1.068, calib 1.027, atlas 1.292)
+epoch 4 score 1.097 (trend 1.000, lane 1.068, calib 1.027, atlas 1.295)
