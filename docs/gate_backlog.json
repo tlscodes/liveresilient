@@ -10,13 +10,13 @@
   ],
   "recorded": "2026-08-17",
   "blocked": {
-    "4a": "ticket 4 — no native TLS library is linked yet; the verdict in docs/TICKET4_DECISION.md is PROVISIONAL. Slot: run step 8.",
-    "4b": "ticket 4 — same blocker. Slot: run step 8.",
-    "4c": "ticket 4 — same blocker. Slot: run step 8.",
-    "4d": "ticket 4 — same blocker. Slot: run step 8.",
-    "4e": "ticket 4 — same blocker. Slot: run step 8.",
-    "4f": "ticket 4 — same blocker. Slot: run step 8.",
-    "4g": "ticket 4 — same blocker. Slot: run step 8.",
+    "4a": "ticket 4 — the library is not linked into the app yet. The CHOICE is no longer provisional: the §5 falsification test ran on 2026-08-17 and configuration alone reproduces the profile (docs/TICKET4_FIRST_RECORD/RESULT.md), so what remains is the integration work plus an arm64 capture. Slot: the ticket 4 integration.",
+    "4b": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
+    "4c": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
+    "4d": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
+    "4e": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
+    "4f": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
+    "4g": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
     "6d": "deferred by decision, recorded in the plan. Not attempted, not claimed. Slot: named in the plan, after the run."
   },
   "in_flight": {
