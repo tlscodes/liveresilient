@@ -37,7 +37,7 @@ ratchet_spec = importlib.util.spec_from_file_location(
     'gate_ratchet', os.path.join(ROOT, 'tools', 'gate_ratchet.py'))
 gate_ratchet = importlib.util.module_from_spec(ratchet_spec)
 ratchet_spec.loader.exec_module(gate_ratchet)
-lg.BLOCKED, lg.IN_FLIGHT = gate_ratchet.load_backlog()
+lg.BLOCKED, lg.IN_FLIGHT, _measured_below = gate_ratchet.load_backlog()
 
 fails = 0
 

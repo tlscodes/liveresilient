@@ -148,6 +148,68 @@ void main() {
     });
   });
 
+  /// Ticket 6 gate 6d — expired cache with the network down.
+  ///
+  /// This gate is about the FAILURE path, not about retention: when the
+  /// entry is past its lifetime AND the refresh genuinely fails, the
+  /// caller must still be handed the stale record to attempt with. A
+  /// test whose refresh never fails would prove nothing here, so the
+  /// upstream below really throws, and the test asserts that it did.
+  group('gate 6d — expired cache, network down', () {
+    test('6d  the attempt is made with the stale record, '
+        'not an immediate failure', () async {
+        var upstreamCalls = 0;
+        var refreshThrew = false;
+        final cache = LookupCache(
+          (key) async {
+            upstreamCalls++;
+            if (upstreamCalls == 1) return '203.0.113.7';
+            // Network down: every refresh from here on genuinely fails.
+            refreshThrew = true;
+            throw StateError('network is down');
+          },
+          freshFor: const Duration(minutes: 10),
+          clock: clock,
+        );
+
+        expect(await cache.call('relay.example'), '203.0.113.7');
+        now = now.add(const Duration(hours: 1)); // entry is now expired
+
+        // The observable attempt: with the entry expired and the network
+        // down, the caller receives the stale record to attempt with —
+        // not null, not a thrown error, and not an answer held hostage
+        // behind the failing refresh.
+        expect(
+          await cache.call('relay.example'),
+          '203.0.113.7',
+          reason: 'expired + network down must hand the caller the stale '
+              'record to attempt with; an immediate failure here is the '
+              'defect this gate exists to catch',
+        );
+        expect(cache.staleHits, 1);
+
+        // Prove the failure was real: the background refresh was started
+        // and it threw. Without this the test would pass against a cache
+        // that never refreshes at all.
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          upstreamCalls,
+          2,
+          reason: 'the refresh must actually have been attempted',
+        );
+        expect(
+          refreshThrew,
+          isTrue,
+          reason: 'and it must actually have failed',
+        );
+
+        // The failed refresh is not a positive signal, so the NEXT
+        // attempt while the network is still down gets the stale record
+        // again — still not an immediate failure.
+        expect(await cache.call('relay.example'), '203.0.113.7');
+    });
+  });
+
   group('the three positive signals', () {
     test('6e  a successful refresh replaces the entry', () async {
       var value = 'first';

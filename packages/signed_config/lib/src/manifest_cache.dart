@@ -8,7 +8,16 @@
 /// - when refresh fails and the cached manifest has expired, the cache can
 ///   still serve it as **last-known-good** for a bounded grace period, so a
 ///   temporary config-service outage does not brick calling — while a
-///   permanently stale manifest eventually forces an app update path.
+///   permanently stale manifest eventually forces an app update path;
+/// - validity is always evaluated at an instant no earlier than the two
+///   time floors ([embeddedTimeFloorUtc] baked into the binary, and the
+///   persisted floor advanced by every acceptance), so a wound-back device
+///   clock cannot resurrect documents from before those floors;
+/// - a document whose ONLY defect is a time fact a wrong clock can
+///   manufacture goes through one relaxation point,
+///   [ManifestVerifier.verifyLenient] — on the persisted path and the
+///   freshly-fetched path alike — and is then admitted only under the
+///   bounded [_shouldAdoptStale] policy, never as fresh.
 ///
 /// Designed from the v2 blueprint role (no v1 equivalent).
 library;
@@ -18,6 +27,36 @@ import 'dart:async';
 import 'endpoint_manifest.dart';
 import 'manifest_verifier.dart';
 import 'multi_origin_refresh.dart';
+
+/// The in-binary time floor: the UTC instant this build was cut, written
+/// as a source literal compiled into the binary.
+///
+/// HOW IT IS SET: updated in source at each release cut (by the release
+/// checklist, or a release script stamping this line). It is data about
+/// the BUILD, so it must never be read from the filesystem or a clock at
+/// runtime — anything a device can influence after install is not a
+/// floor. This value is the cut date of this package's v2.0.0 line. It
+/// MUST never be set ahead of the true build instant: a future value
+/// would expire genuinely valid documents on every device.
+///
+/// WHY IT EXISTS: a fresh install has no persisted time floor, so before
+/// the first accepted document its only defense against a wound-back
+/// device clock would be that same clock. This constant is the one time
+/// fact a fresh binary already carries — real time is at least the moment
+/// the build was cut. The cache evaluates validity at an instant never
+/// earlier than this, so a document whose whole life (validity window
+/// plus last-known-good grace) ended before the build existed is rejected
+/// even when the device clock sits inside the document's window.
+///
+/// WHAT IT COSTS WHEN STALE: the replay window on fresh installs grows by
+/// exactly this constant's age — a build cut N days ago cannot tell a
+/// wound-back clock from a genuine one for documents newer than the cut.
+/// Staleness never rejects a current document (the floor only moves the
+/// evaluated instant forward, and it lies in the real past), so the cost
+/// of neglect is weaker protection, not an outage. What it cannot detect:
+/// a wrong clock AFTER the cut date; that is what the persisted floor,
+/// advanced by every accepted document, is for.
+final DateTime embeddedTimeFloorUtc = DateTime.utc(2026, 1, 1);
 
 /// Durable storage for the last accepted manifest document and revision.
 abstract interface class ManifestStorage {
@@ -98,6 +137,14 @@ class ManifestCache {
   DateTime? _lastRefreshAttempt;
   Future<void>? _inflightRefresh;
 
+  // In-memory copy of the persisted time floor, loaded by [initialize]
+  // and advanced by every acceptance, so [get] can derive the effective
+  // instant synchronously. Null only means "not read yet / none
+  // recorded"; the embedded floor applies regardless via
+  // [_effectiveFloorUtc], so a fresh install is floored from the first
+  // call.
+  DateTime? _persistedFloorUtc;
+
   ManifestCache({
     required ManifestVerifier verifier,
     required ManifestStorage storage,
@@ -146,36 +193,41 @@ class ManifestCache {
 
   /// Loads the persisted manifest (if any) into memory. Call once on
   /// startup before [get].
+  ///
+  /// A persisted document whose only defect is a time fact goes through
+  /// [ManifestVerifier.verifyLenient] — the same single relaxation point
+  /// the freshly-fetched path uses — and is admitted only under
+  /// [_shouldAdoptStale], so startup cannot resurrect a document the
+  /// refresh path would refuse.
   Future<void> initialize() async {
+    _persistedFloorUtc = await _storage.readTimeFloorUtc();
     final bytes = await _storage.readDocument();
     if (bytes == null) return;
     try {
       final document = SignedManifestDocument.fromBytes(bytes);
       final accepted = await _storage.readAcceptedRevision();
-      final timeFloor = await _storage.readTimeFloorUtc();
-      final result = await _verifier.verify(
+      final result = await _verifier.verifyLenient(
         document,
         lastAcceptedRevision: accepted,
         now: _clock(),
-        persistedTimeFloorUtc: timeFloor,
+        persistedTimeFloorUtc: _effectiveFloorUtc(),
       );
       switch (result) {
-        case ManifestAccepted(:final manifest):
+        case LenientAccepted(:final manifest):
           _current = manifest;
-        case ManifestRejected(:final reason):
-          // An expired-but-authentic persisted manifest is still eligible
-          // for last-known-good service; anything else is discarded.
-          if (reason == ManifestRejection.expired) {
-            final relaxed = await _verifier.verify(
-              document,
-              lastAcceptedRevision: accepted,
-              // Verify authenticity as of its own issue time.
-              now: EndpointManifest.fromJson(document.manifestJson).issuedAt,
-            );
-            if (relaxed is ManifestAccepted) {
-              _current = relaxed.manifest;
-            }
+        case LenientAcceptedStale(:final manifest, :final fault):
+          final effectiveNow = _laterOf(
+            _clock().toUtc(),
+            _effectiveFloorUtc(),
+          );
+          if (_shouldAdoptStale(manifest, fault, effectiveNow)) {
+            _current = manifest;
           }
+        case LenientRejected():
+          // Not authentic here and now (bad key or signature, malformed,
+          // unsupported algorithm, or rollback): discarded; a network
+          // refresh will replace it.
+          break;
       }
     } on FormatException {
       // Corrupt persisted state: ignore; a network refresh will replace it.
@@ -184,19 +236,32 @@ class ManifestCache {
 
   /// Returns the best available manifest, refreshing over the network when
   /// needed. Throws [ManifestUnavailable] when nothing trustworthy exists.
+  ///
+  /// Validity and grace are measured at the FLOORED instant (never earlier
+  /// than the embedded and persisted time floors), so a wound-back device
+  /// clock cannot make an old document look servable. The refresh
+  /// cooldown, by contrast, is measured on the raw device clock: while
+  /// the clock is behind the floor the floored instant stands still, and
+  /// a standing clock would measure every interval as zero and disable
+  /// refresh on exactly the devices that need it most.
   Future<CachedManifest> get({bool forceRefresh = false}) async {
-    final now = _clock().toUtc();
+    final deviceNow = _clock().toUtc();
+    var now = _laterOf(deviceNow, _effectiveFloorUtc());
     final current = _current;
 
     final needsRefresh =
         forceRefresh || current == null || current.isExpiredAt(now);
 
-    if (needsRefresh && _cooldownElapsed(now)) {
+    if (needsRefresh && _cooldownElapsed(deviceNow)) {
       try {
-        await _refresh(now);
+        await _refresh(deviceNow);
       } on Exception {
         // Swallowed: fallback logic below decides what we can still serve.
       }
+      // A refresh can advance the persisted floor (an accepted document's
+      // issuedAt may lie ahead of the device clock), so re-derive the
+      // effective instant before judging freshness.
+      now = _laterOf(deviceNow, _effectiveFloorUtc());
     }
 
     final effective = _current;
@@ -210,8 +275,7 @@ class ManifestCache {
       return CachedManifest(effective, ManifestFreshness.fresh);
     }
 
-    final graceEnd = effective.expiresAt.add(config.lastKnownGoodGrace);
-    if (now.isBefore(graceEnd)) {
+    if (now.isBefore(effective.expiresAt.add(config.lastKnownGoodGrace))) {
       return CachedManifest(effective, ManifestFreshness.lastKnownGood);
     }
 
@@ -243,33 +307,171 @@ class ManifestCache {
     // a tampering/unreachable origin never blocks a healthy later one.
     final origins = _current?.configServiceUris ?? _bootstrapUris;
     final accepted = await _storage.readAcceptedRevision();
-    final timeFloor = await _storage.readTimeFloorUtc();
+    _persistedFloorUtc = await _storage.readTimeFloorUtc();
+    final floor = _effectiveFloorUtc();
 
-    final MultiOriginRefreshResult result;
+    // Capture the bytes each origin served during the strict race, so the
+    // lenient second pass can re-judge the SAME evidence without a second
+    // network round (and without a stale origin ever outrunning a strictly
+    // valid one — the strict race always gets the first claim).
+    final fetchedBytes = <Uri, List<int>>{};
+    Future<List<int>> capturingFetch(Uri uri) async {
+      final bytes = await _fetch(uri);
+      fetchedBytes[uri] = bytes;
+      return bytes;
+    }
+
+    final MultiOriginRefreshException strictFailure;
     try {
-      result = await fetchVerifiedManifest(
+      final result = await fetchVerifiedManifest(
         origins: origins,
-        fetch: _fetch,
+        fetch: capturingFetch,
         verifier: _verifier,
         lastAcceptedRevision: accepted,
         now: now,
-        persistedTimeFloorUtc: timeFloor,
+        persistedTimeFloorUtc: floor,
       );
+      await _accept(
+        result.manifest,
+        result.documentBytes,
+        lastAcceptedRevision: accepted,
+      );
+      return;
     } on MultiOriginRefreshException catch (error) {
-      throw ManifestUnavailable(error.toString());
+      strictFailure = error;
     }
 
-    _current = result.manifest;
-    await _storage.writeDocument(result.documentBytes);
-    if (result.manifest.revision > accepted) {
-      await _storage.writeAcceptedRevision(result.manifest.revision);
+    await _lenientFallback(
+      origins: origins,
+      fetchedBytes: fetchedBytes,
+      lastAcceptedRevision: accepted,
+      now: now,
+      floor: floor,
+      strictFailure: strictFailure,
+    );
+  }
+
+  /// The lenient second pass of a refresh: runs only after EVERY origin
+  /// failed strict verification, and re-judges the bytes captured during
+  /// the strict race through [ManifestVerifier.verifyLenient] — the same
+  /// single relaxation point the persisted path uses.
+  ///
+  /// Origins are visited in list order; the first document that is
+  /// authentic and admissible under [_shouldAdoptStale] is accepted.
+  /// Origins whose fetch failed left no bytes and are skipped — their
+  /// failure is already recorded in [strictFailure]. Throws
+  /// [ManifestUnavailable] when nothing is admissible.
+  Future<void> _lenientFallback({
+    required List<Uri> origins,
+    required Map<Uri, List<int>> fetchedBytes,
+    required int lastAcceptedRevision,
+    required DateTime now,
+    required DateTime floor,
+    required MultiOriginRefreshException strictFailure,
+  }) async {
+    final effectiveNow = _laterOf(now.toUtc(), floor);
+    for (final origin in origins) {
+      final bytes = fetchedBytes[origin];
+      if (bytes == null) continue;
+      final SignedManifestDocument document;
+      try {
+        document = SignedManifestDocument.fromBytes(bytes);
+      } on FormatException {
+        // Malformed bytes were already reported by the strict pass.
+        continue;
+      }
+      final result = await _verifier.verifyLenient(
+        document,
+        lastAcceptedRevision: lastAcceptedRevision,
+        now: now,
+        persistedTimeFloorUtc: floor,
+      );
+      switch (result) {
+        case LenientAccepted(:final manifest):
+          // An origin can heal between the race and this pass only in
+          // clock terms; a strict acceptance here is still a win.
+          await _accept(
+            manifest,
+            bytes,
+            lastAcceptedRevision: lastAcceptedRevision,
+          );
+          return;
+        case LenientAcceptedStale(:final manifest, :final fault):
+          if (_shouldAdoptStale(manifest, fault, effectiveNow)) {
+            await _accept(
+              manifest,
+              bytes,
+              lastAcceptedRevision: lastAcceptedRevision,
+            );
+            return;
+          }
+        case LenientRejected():
+          // Not authentic (or a rollback): never admitted; next origin.
+          break;
+      }
     }
-    // The time floor advances with the accepted revision, in the same step:
-    // it becomes the greater of the current floor and the accepted
-    // document's issuedAt, and never moves backwards.
-    final issuedAtUtc = result.manifest.issuedAt.toUtc();
-    if (timeFloor == null || issuedAtUtc.isAfter(timeFloor)) {
+    throw ManifestUnavailable(
+      'All origins failed strict verification and the lenient re-check '
+      'admitted none: $strictFailure',
+    );
+  }
+
+  /// Adoption policy for an authentic-but-time-faulted document — the ONE
+  /// place it exists, shared by the persisted path ([initialize]) and the
+  /// freshly-fetched path ([_lenientFallback]).
+  ///
+  /// notYetValid is adopted unconditionally: the document's window lies
+  /// ahead of the evaluated instant, so [get]'s expiry checks bound its
+  /// service naturally. expired is adopted only while inside the
+  /// last-known-good grace measured at the FLOORED instant — which is
+  /// what makes the embedded floor a real rejection on fresh installs: a
+  /// document whose window plus grace ended before this build was cut is
+  /// refused here, wound-back device clock or not.
+  bool _shouldAdoptStale(
+    EndpointManifest manifest,
+    ManifestTimeFault fault,
+    DateTime effectiveNow,
+  ) => switch (fault) {
+    ManifestTimeFault.notYetValid => true,
+    ManifestTimeFault.expired => effectiveNow.isBefore(
+      manifest.expiresAt.add(config.lastKnownGoodGrace),
+    ),
+  };
+
+  /// Adopts a verified manifest: caches it in memory, then persists the
+  /// document, the accepted revision (monotonic) and the time floor
+  /// (monotonic). One function so the strict and lenient acceptance paths
+  /// cannot diverge on what "accepted" persists.
+  Future<void> _accept(
+    EndpointManifest manifest,
+    List<int> documentBytes, {
+    required int lastAcceptedRevision,
+  }) async {
+    _current = manifest;
+    await _storage.writeDocument(documentBytes);
+    if (manifest.revision > lastAcceptedRevision) {
+      await _storage.writeAcceptedRevision(manifest.revision);
+    }
+    // The time floor advances with acceptance, in the same step: it
+    // becomes the greater of the current floor and the accepted
+    // document's issuedAt (an authentic, signed statement that this
+    // instant has existed), and never moves backwards.
+    final issuedAtUtc = manifest.issuedAt.toUtc();
+    final persisted = _persistedFloorUtc;
+    if (persisted == null || issuedAtUtc.isAfter(persisted)) {
       await _storage.writeTimeFloorUtc(issuedAtUtc);
+      _persistedFloorUtc = issuedAtUtc;
     }
   }
+
+  /// The floor actually applied to validity: the later of the in-binary
+  /// [embeddedTimeFloorUtc] and the persisted floor (when one has been
+  /// recorded). Derived, never stored, so the two sources cannot drift.
+  DateTime _effectiveFloorUtc() {
+    final persisted = _persistedFloorUtc;
+    if (persisted == null) return embeddedTimeFloorUtc;
+    return _laterOf(embeddedTimeFloorUtc, persisted);
+  }
+
+  static DateTime _laterOf(DateTime a, DateTime b) => b.isAfter(a) ? b : a;
 }
