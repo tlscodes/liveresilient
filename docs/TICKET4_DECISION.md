@@ -365,3 +365,95 @@ re-openable here:
 
 Order: build config → FFI bindings → seam → runtime probe → second member
 of the status type. Each verified before the next.
+
+---
+
+## 9. Gate 4c — the 2 ms figure, and the two options it rejected · 2026-08-17
+
+Gate 4c asks for exactly three things in a decision note: the 2 ms number, and
+the reason each of the two other options was rejected. This section is that
+note. Nothing here is new engineering; it is the arithmetic and the two
+rejections stated in one place with their sources, because a number quoted
+without its provenance is the thing this repository keeps getting wrong.
+
+### Where 2 ms comes from — measured, not estimated
+
+```
+packages/adaptive_transport/lib/src/probe_defense/reality_handshake.dart:37-39
+    pure-Dart X25519 scalar multiply  ~1876 us
+    HKDF + HMAC for comparison        ~77 us
+```
+
+One scalar multiply is ~1.9 ms on the measured device. The seal needed for this
+capability is **a second scalar multiply**, so doing it in Dart adds on the
+order of 2 ms to every handshake — and it lands on the connection-setup path,
+where this project's own routing budget is under 2 ms
+(`docs/PLAN_five_tickets_v1.md:392-394`, where the trade was first recorded).
+The figure is therefore not a preference. One arithmetic step wipes out the
+whole budget the rest of the transport work was built to protect.
+
+Honest limits on the number, stated because §6 of this document demands it of
+every figure here: it is one measurement, on one device, of the Dart
+implementation in this repository. It is the right order of magnitude for a
+decision and it is not a benchmark. What it rules out is not "2.0 ms exactly"
+but "a second scalar multiply is affordable on the setup path".
+
+### Option A — get the capability through the standard library. REJECTED.
+
+```
+packages/adaptive_transport/lib/src/probe_defense/utls_client_profile.dart:9-12
+    dart:io's SecureSocket owns its own handshake and gives no hook to author a
+    Client Hello
+```
+
+Rejected because it is not implementable today, at any cost we control. It
+needs a public API that does not exist: the standard socket composes the first
+record itself and exposes no seam for the application to supply its bytes. So
+the option is not "expensive", it is "blocked on an upstream change we do not
+own and cannot schedule" — and it carries the 2 ms cost as well, since the
+sealing arithmetic still has to happen somewhere
+(`docs/PLAN_five_tickets_v1.md:352-353`).
+
+### Option B — implement it in Dart on this repository's own builder. REJECTED.
+
+The pieces that exist are real and are not enough:
+
+```
+packages/adaptive_transport/lib/src/probe_defense/reality_handshake.dart:6-17   X25519 ephemeral + key_share
+packages/adaptive_transport/lib/src/hkdf_key_schedule.dart:10                   generic HKDF (RFC 5869), appendix-A vectors
+packages/adaptive_transport/lib/src/probe_defense/tls_client_hello.dart          439 lines of extension encoding
+```
+
+Rejected for two independent reasons, either of which is sufficient.
+
+1. **The 2 ms.** Above. The sealing step is a second scalar multiply on the
+   setup path.
+2. **What is missing is not the sealing step.** `hkdf_key_schedule.dart:10` is
+   generic HKDF, not the TLS 1.3 key schedule; the record layer, the traffic-key
+   derivation and certificate verification are not written. Writing them by hand
+   is refused by the ticket and by the architecture constraint recorded at
+   `docs/PLAN_five_tickets_v4.md:723-726`: *no version of this ticket that
+   hand-writes a TLS client is acceptable.* That refusal is not about effort. A
+   hand-rolled record layer and certificate check is a security-critical
+   surface with no external review, and shipping one to protect a hostname
+   would trade a small exposure for a large one.
+
+### What was chosen instead, and its evidence
+
+The third path: link an established stack and configure it, which is §4 of this
+document (BoringSSL, with wolfSSL as the recorded backup). The single hard
+criterion in §3 is that the application supplies the first record's bytes rather
+than the library composing them; §4-quater records the falsification test that
+confirmed configuration alone reaches the target shape on x86_64 on 2026-08-17,
+with the capture and the comparison in `docs/TICKET4_FIRST_RECORD/`.
+
+The cost the chosen path does NOT pay is the one measured above: the sealing
+arithmetic runs in the native library's own code, on the same path it already
+does its other arithmetic, rather than as an extra ~2 ms of Dart per handshake.
+
+### What this section does not claim
+
+It does not claim the integration is done — gates 4a and 4b need a server with
+the extension and a packet capture, and both are recorded as dated blockers in
+`docs/TICKET4_INTEGRATION.md`. It closes 4c and only 4c: the note exists, the
+number has its provenance, and the two rejections have their reasons.
