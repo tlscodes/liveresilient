@@ -26,7 +26,7 @@ void main() {
   );
 
   group('gate 3b — strict relay with no relay servers', () {
-    test('a STUN-only manifest under strict is an explicit failure', () {
+    test('3b  a STUN-only manifest under strict is an explicit failure', () {
       final manifest = manifestWith([stun('a.example'), stun('b.example')]);
       expect(
         () => buildRtcIceConfig(manifest, profile: IceProfile.strictRelay),
@@ -36,7 +36,7 @@ void main() {
       );
     });
 
-    test('the failure reports how many entries the filter removed', () {
+    test('3b  the failure reports how many entries the filter removed', () {
       final manifest = manifestWith([
         stun('a.example'),
         stun('b.example'),
@@ -51,7 +51,7 @@ void main() {
       }
     });
 
-    test('strict with at least one relay is unchanged', () {
+    test('3b  strict with at least one relay is unchanged', () {
       final manifest = manifestWith([stun('a.example'), turns('r.example')]);
       final config = buildRtcIceConfig(
         manifest,
@@ -65,7 +65,7 @@ void main() {
       );
     });
 
-    test('the non-strict path is untouched: every server is still offered',
+    test('3b  the non-strict path is untouched: every server is still offered',
         () {
       final manifest = manifestWith([stun('a.example'), turns('r.example')]);
       final config = buildRtcIceConfig(manifest);
@@ -83,7 +83,7 @@ void main() {
       );
     });
 
-    test('a STUN-only manifest is fine when the profile is not strict', () {
+    test('3b  a STUN-only manifest is fine when the profile is not strict', () {
       final manifest = manifestWith([stun('a.example')]);
       final config = buildRtcIceConfig(manifest);
       expect(config.iceServers, hasLength(1));

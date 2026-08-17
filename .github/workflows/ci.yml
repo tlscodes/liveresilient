@@ -126,6 +126,32 @@ jobs:
       - name: Architecture guard
         run: dart run tool/architecture_guard.dart
 
+      # A green suite says a gate's TESTS pass. It says nothing about whether
+      # the gate the plan declares has a test at all, because that link lives
+      # only in a test's name. Measured 2026-08-17: 11 of 40 declared gates
+      # were traceable, so the ledger's status could be remembered but not
+      # recomputed. This step rebuilds the table from the repository and fails
+      # when a declared gate has no proof — the permanent half of the fix, the
+      # renaming being the one-time half.
+      #
+      # It prints the "no proof found" row even when that row is zero: the
+      # absence of a section is indistinguishable from a broken tool.
+      - name: Gate traceability (every declared gate reaches a test)
+        run: python3 tools/label_gates.py --check
+
+      # The ledger claims each wave closed with its verifier output in the
+      # same row. A row without a command in it is a claim without evidence,
+      # which is the failure mode this project spent the most effort on.
+      - name: Ledger rows carry their verifier output
+        run: |
+          rows=$(grep -cE '^### موج|^### wave' docs/PLAN_five_tickets_v4.md || true)
+          proofs=$(grep -cE 'All tests passed|No issues found' docs/PLAN_five_tickets_v4.md || true)
+          echo "ledger rows: $rows   rows citing a command result: $proofs"
+          if [ "$rows" -gt 0 ] && [ "$proofs" -lt "$rows" ]; then
+            echo "::error::a ledger row claims a wave closed without quoting the command that proved it"
+            exit 1
+          fi
+
       - name: Gate summary
         if: always()
         run: |
@@ -150,6 +176,43 @@ jobs:
             echo "::error::possible secret committed"; exit 1
           fi
           echo "no obvious secrets found"
+
+  # A green test suite says nothing about what got packaged: on 2026-08-01 the
+  # macOS core shipped linked against /usr/local/opt/openssl@3, a path that
+  # exists on no user's device, and every test passed. So the Apple bundles are
+  # built and then inspected. macOS runners only — otool/nm/lipo are Darwin tools.
+  packaging:
+    name: Packaging — embedded native framework
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter (pinned, cached)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: apps/reference_app/pubspec.yaml
+          cache: true
+
+      - name: Build the macOS release bundle
+        working-directory: apps/reference_app
+        run: flutter build macos --release
+
+      # The gate itself: no build-machine paths in the embedded framework, the
+      # exported-symbol count unchanged, and the macOS bundle versioned rather
+      # than shallow. It reports SKIP (exit 0) if the framework is absent
+      # because the engine artifacts were not available to this checkout — a
+      # skip is not a pass, and the summary says so.
+      # The Android APK carries the core too, and AGP strips it. The gate checks
+      # that the 12 exported symbols survive that strip — .dynsym is what dlopen
+      # uses, and stripping is not supposed to touch it, so this proves it.
+      - name: Build the Android release APK
+        working-directory: apps/reference_app
+        run: flutter build apk --release
+        continue-on-error: true
+
+      - name: Inspect what was packaged
+        run: bash tools/check_embedded_framework.sh
 
   relay:
     name: Border relay — worker bundle
@@ -224,3 +287,44 @@ jobs:
         with:
           scan-args: --lockfile=pubspec.lock
         continue-on-error: false
+
+  leak-gate:
+    # Option (a): the engine repo is NOT checked out by this CI, so the gate's
+    # honest state here is NOT RUN (exit 3) — surfaced as a warning annotation
+    # and a loud step summary, never silently green, never blocking merges.
+    name: Leak gate — on-wire trace regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run leak gate
+        run: |
+          set +e
+          bash tools/leak_gate.sh | tee /tmp/leak_gate.log
+          code=${PIPESTATUS[0]}
+          set -e
+          case "$code" in
+            0)
+              {
+                echo "## Leak gate — PASS"
+                grep -E 'kl|threshold' /tmp/leak_gate.log | head -5 || true
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            3)
+              echo "::warning title=Leak gate NOT RUN::engine repo is not available in this CI (LEAK_GATE_ENGINE_DIR unset); the gate did not execute."
+              {
+                echo "## Leak gate — NOT RUN (engine repo not checked out)"
+                echo "- \`tools/leak_gate.sh\` exited 3: the trace-gate evaluator lives in a separate repo not available to this workflow."
+                echo "- This is NOT a pass. Run locally:"
+                echo '  `LEAK_GATE_ENGINE_DIR=<engine checkout> bash tools/leak_gate.sh`'
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              {
+                echo "## Leak gate — FAIL (exit $code)"
+                tail -20 /tmp/leak_gate.log
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit "$code"
+              ;;
+          esac

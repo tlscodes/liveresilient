@@ -11,7 +11,7 @@ import 'package:test/test.dart';
 /// nothing would say so.
 void main() {
   group('TrafficShapingPolicy.fromLengthHistogram', () {
-    test('a uniform sample yields evenly spread rungs', () {
+    test('1c  a uniform sample yields evenly spread rungs', () {
       final policy = TrafficShapingPolicy.fromLengthHistogram(
         {100: 10, 200: 10, 300: 10, 400: 10, 500: 10, 600: 10},
         buckets: 6,
@@ -20,7 +20,7 @@ void main() {
       expect(policy.distribution, LengthDistribution.bucketed);
     });
 
-    test('rungs follow the observed mass, not the observed variety', () {
+    test('1c  rungs follow the observed mass, not the observed variety', () {
       // Almost everything lands at 1200; the ladder must reflect that rather
       // than give the two rare lengths equal footing.
       final policy = TrafficShapingPolicy.fromLengthHistogram(
@@ -36,7 +36,7 @@ void main() {
       );
     });
 
-    test('duplicate quantile edges collapse instead of repeating', () {
+    test('1c  duplicate quantile edges collapse instead of repeating', () {
       final policy = TrafficShapingPolicy.fromLengthHistogram(
         {512: 1000},
         buckets: 8,
@@ -44,7 +44,7 @@ void main() {
       expect(policy.lengthBuckets, [512]);
     });
 
-    test('the ladder always ascends strictly', () {
+    test('1c  the ladder always ascends strictly', () {
       final policy = TrafficShapingPolicy.fromLengthHistogram(
         {64: 3, 128: 40, 256: 200, 512: 90, 1024: 5, 1350: 2},
         buckets: 5,
@@ -57,7 +57,7 @@ void main() {
       }
     });
 
-    test('a sample that proves nothing is refused, not silently accepted', () {
+    test('1c  a sample that proves nothing is refused, not silently accepted', () {
       expect(
         () => TrafficShapingPolicy.fromLengthHistogram(const {}),
         throwsArgumentError,
@@ -85,7 +85,7 @@ void main() {
       );
     });
 
-    test('the derived ladder actually drives padding', () {
+    test('1c  the derived ladder actually drives padding', () {
       final policy = TrafficShapingPolicy.fromLengthHistogram(
         {200: 10, 400: 10},
         buckets: 2,
@@ -103,7 +103,7 @@ void main() {
     ProbeDefenseConfig parse(Map<String, Object?> shaping) =>
         ProbeDefenseConfig.fromJson({'shaping': shaping});
 
-    test('a histogram in configuration reaches the ladder', () {
+    test('1c  a histogram in configuration reaches the ladder', () {
       final config = parse({
         'distribution': 'bucketed',
         'lengthHistogram': {'300': 10, '600': 10},
@@ -111,7 +111,7 @@ void main() {
       expect(config.shaping.lengthBuckets, [300, 600]);
     });
 
-    test('an explicit ascending ladder is accepted as given', () {
+    test('1c  an explicit ascending ladder is accepted as given', () {
       final config = parse({
         'distribution': 'bucketed',
         'lengthBuckets': [128, 256, 1024],
@@ -119,7 +119,7 @@ void main() {
       expect(config.shaping.lengthBuckets, [128, 256, 1024]);
     });
 
-    test('two ladders for one distribution is refused, not merged', () {
+    test('1c  two ladders for one distribution is refused, not merged', () {
       expect(
         () => parse({
           'lengthHistogram': {'300': 1},
@@ -129,7 +129,7 @@ void main() {
       );
     });
 
-    test('a non-ascending ladder is refused', () {
+    test('1c  a non-ascending ladder is refused', () {
       expect(
         () => parse({
           'lengthBuckets': [256, 128],
@@ -150,7 +150,7 @@ void main() {
       );
     });
 
-    test('a bad sample fails when the config is read, naming the field', () {
+    test('1c  a bad sample fails when the config is read, naming the field', () {
       expect(
         () => parse({
           'lengthHistogram': {'1200': 0},
@@ -165,7 +165,7 @@ void main() {
       );
     });
 
-    test('omitting both keeps the previous default, so nothing changes', () {
+    test('1c  omitting both keeps the previous default, so nothing changes', () {
       final config = parse({'distribution': 'bucketed'});
       expect(
         config.shaping.lengthBuckets,

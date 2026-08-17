@@ -16,7 +16,7 @@ void main() {
   setUp(() => now = DateTime.utc(2026, 1, 1, 12));
 
   group('serving', () {
-    test('a fresh entry is served without asking again', () async {
+    test('6e  a fresh entry is served without asking again', () async {
       var calls = 0;
       final cache = LookupCache(
         (key) async {
@@ -36,7 +36,7 @@ void main() {
     });
 
     test(
-      'a stale entry is served IMMEDIATELY, and the refresh happens behind it',
+      '6e  a stale entry is served IMMEDIATELY, and the refresh happens behind it',
       () async {
         var calls = 0;
         final cache = LookupCache(
@@ -66,7 +66,7 @@ void main() {
     );
 
     test(
-      'a refresh that fails leaves the stale answer in service',
+      '6e  a refresh that fails leaves the stale answer in service',
       () async {
         var calls = 0;
         final cache = LookupCache(
@@ -93,7 +93,7 @@ void main() {
     );
 
     test(
-      'an upstream that throws SYNCHRONOUSLY does not poison the key forever',
+      '6e  an upstream that throws SYNCHRONOUSLY does not poison the key forever',
       () async {
         var calls = 0;
         final cache = LookupCache(
@@ -123,7 +123,7 @@ void main() {
       },
     );
 
-    test('a null upstream answer is not cached and evicts nothing', () async {
+    test('6e  a null upstream answer is not cached and evicts nothing', () async {
       var answer = 'first';
       final cache = LookupCache(
         (key) async => answer,
@@ -149,7 +149,7 @@ void main() {
   });
 
   group('the three positive signals', () {
-    test('a successful refresh replaces the entry', () async {
+    test('6e  a successful refresh replaces the entry', () async {
       var value = 'first';
       final cache = LookupCache(
         (key) async => value,
@@ -164,7 +164,7 @@ void main() {
       expect(await cache.call('a.example'), 'second');
     });
 
-    test('a caller reporting the answer did not work drops it', () async {
+    test('6e  a caller reporting the answer did not work drops it', () async {
       var calls = 0;
       final cache = LookupCache(
         (key) async {
@@ -184,7 +184,7 @@ void main() {
       );
     });
 
-    test('an epoch advance drops entries from the previous epoch', () async {
+    test('6e  an epoch advance drops entries from the previous epoch', () async {
       var calls = 0;
       final cache = LookupCache(
         (key) async {
@@ -206,7 +206,7 @@ void main() {
   });
 
   group('bounds', () {
-    test('only one refresh is in flight per key', () async {
+    test('6e  only one refresh is in flight per key', () async {
       var calls = 0;
       final cache = LookupCache(
         (key) async {
@@ -232,7 +232,7 @@ void main() {
       );
     });
 
-    test('memory is bounded: the least recently used entry is evicted',
+    test('6e  memory is bounded: the least recently used entry is evicted',
         () async {
       var calls = 0;
       final cache = LookupCache(
@@ -256,7 +256,7 @@ void main() {
       expect(calls, before + 1, reason: 'b was evicted and had to be re-asked');
     });
 
-    test('the counters separate the three outcomes', () async {
+    test('6e  the counters separate the three outcomes', () async {
       final cache = LookupCache(
         (key) async => 'x',
         freshFor: const Duration(minutes: 10),

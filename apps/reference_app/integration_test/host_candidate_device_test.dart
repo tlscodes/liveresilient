@@ -131,7 +131,7 @@ void main() {
 
   group('gate 3f on the device', () {
     testWidgets(
-      "policy 'all' DOES offer the device's own address — the baseline that "
+      "3f  policy 'all' DOES offer the device's own address — the baseline that "
       'makes the relay-only result meaningful',
       (tester) async {
         final got = await gather('all');
@@ -150,7 +150,7 @@ void main() {
     );
 
     testWidgets(
-      "policy 'relay' offers NO host candidate: the local address does not "
+      "3f  policy 'relay' offers NO host candidate: the local address does not "
       'leave the device',
       (tester) async {
         final got = await gather('relay');
