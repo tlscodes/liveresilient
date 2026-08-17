@@ -136,8 +136,12 @@ jobs:
       #
       # It prints the "no proof found" row even when that row is zero: the
       # absence of a section is indistinguishable from a broken tool.
+      # Runs through tools/gate_ratchet.py, which applies the backlog in
+      # docs/gate_backlog.json. The logic lives in label_gates.py and does not
+      # change; the list of unproven gates changes whenever one closes, so it is
+      # data with one authority rather than a recurring edit to the checker.
       - name: Gate traceability (every declared gate reaches a test)
-        run: python3 tools/label_gates.py --check
+        run: python3 tools/gate_ratchet.py
 
       # The step above fails on CHANGE, not on the standing backlog: 15 gates
       # are unproven and each is listed with a reason and the slot that closes

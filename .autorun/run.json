@@ -3,7 +3,7 @@
   "armed_at": "2026-08-17",
   "approved_irreversible": [],
   "route_source": "Fable 5 sequencing consult 2026-08-17. Three corrections adopted: repair the truncated log FIRST so every later suite run is a free reproduction attempt; classify the unknown-scope gates before planning them, because a plan containing 'unknown' is not a plan; and commit the measurement tool before its multi-hour run so a cut loses the run, not the tool.",
-  "goal_verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && python3 tools/label_gates.py --check > tools/suite-logs/goal_gates.log 2>&1 && grep -qE \"no proof found at all +8 \" tools/suite-logs/goal_gates.log && python3 tools/label_gates.py --check > /dev/null 2>&1 && python3 tools/test_gate_ratchet.py > tools/suite-logs/goal_ratchet.log 2>&1 && bash tools/run_suites.sh --only signed_config --only media_webrtc --only call_core --only adaptive_transport",
+  "goal_verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && python3 tools/gate_ratchet.py > tools/suite-logs/goal_gates.log 2>&1 && grep -qE \"no proof found at all +8 \" tools/suite-logs/goal_gates.log && python3 tools/gate_ratchet.py > /dev/null 2>&1 && python3 tools/test_gate_ratchet.py > tools/suite-logs/goal_ratchet.log 2>&1 && bash tools/run_suites.sh --only signed_config --only media_webrtc --only call_core --only adaptive_transport",
   "goal_verify_note": "Exactly eight gates may remain unproven: the seven of blocked ticket 4, plus 6d which an adjudicated decision defers to ticket 4's own trigger. Nine means the goal was not met, whatever the steps say.",
   "steps": [
     {
