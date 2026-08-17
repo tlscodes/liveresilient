@@ -130,7 +130,6 @@ IN_FLIGHT = {
     '2c': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
     '5e': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
     '5f': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
-    '6f': 'test to be written, re-deriving the finding. Slot: run step 3.',
 }
 
 TESTCALL = re.compile(r"\btest(?:Widgets)?\(\s*\n?\s*(['\"])")
