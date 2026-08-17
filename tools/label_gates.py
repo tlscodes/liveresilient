@@ -109,28 +109,34 @@ MIXED = {
 # remembered at the end — the same reason the ledger quotes its verifier.
 #
 # Recorded 2026-08-17.
-BLOCKED = {
-    '4a': 'ticket 4 — no native TLS library is linked yet; the verdict in '
-          'docs/TICKET4_DECISION.md is PROVISIONAL. Slot: run step 8.',
-    '4b': 'ticket 4 — same blocker. Slot: run step 8.',
-    '4c': 'ticket 4 — same blocker. Slot: run step 8.',
-    '4d': 'ticket 4 — same blocker. Slot: run step 8.',
-    '4e': 'ticket 4 — same blocker. Slot: run step 8.',
-    '4f': 'ticket 4 — same blocker. Slot: run step 8.',
-    '4g': 'ticket 4 — same blocker. Slot: run step 8.',
-    '6d': 'deferred by decision, recorded in the plan. Not attempted, not '
-          'claimed. Slot: named in the plan, after the run.',
-}
+#
+# THE LIST ITSELF IS NOT HERE, and that is the point. It used to be two dicts on
+# these lines, which made closing a gate an edit to the checker; after four such
+# edits the repository's churn guard blocked further ones, correctly — the logic
+# and the backlog change on different schedules. The backlog now lives in
+# docs/gate_backlog.json with ONE authority, and this module reads it at import
+# so both entry points see identical data:
+#
+#     python3 tools/gate_ratchet.py       # the same answer, plus the category
+#     python3 tools/label_gates.py --check  # printout for measured-below gates
+#
+# The loader is gate_ratchet.load_backlog(), which is also where the third
+# category (measured_below: attempted, and the number came up short) is folded
+# into the accounting. Deliberately no fallback to an empty dict: a missing or
+# malformed backlog must fail loudly rather than turn every unproven gate into a
+# false "unlisted" failure.
+def _load_backlog_dicts():
+    import importlib.util
+    here = os.path.dirname(os.path.abspath(__file__))
+    spec = importlib.util.spec_from_file_location(
+        'gate_ratchet', os.path.join(here, 'gate_ratchet.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    blocked, accounted, _measured_below = module.load_backlog()
+    return blocked, accounted
 
-# Unproven, being closed by the current run. Each names the step that closes it,
-# so "in flight" is a schedule rather than a hope.
-IN_FLIGHT = {
-    '1f': 'never built; feature plus test. Slot: run step 5.',
-    '2b': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
-    '2c': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
-    '5e': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
-    '5f': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
-}
+
+BLOCKED, IN_FLIGHT = _load_backlog_dicts()
 
 TESTCALL = re.compile(r"\btest(?:Widgets)?\(\s*\n?\s*(['\"])")
 PREFIXED = re.compile(r"\btest(?:Widgets)?\(\s*\n?\s*(['\"])[0-9][a-z]\b")
