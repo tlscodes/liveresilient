@@ -28,6 +28,17 @@ spec = importlib.util.spec_from_file_location('label_gates', SRC)
 lg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lg)
 
+# Probe the SAME data the check actually runs on. The backlog moved out of
+# label_gates.py into docs/gate_backlog.json (see tools/gate_ratchet.py for why),
+# so a proof that exercised the module's own stale dicts would be measuring
+# something no longer in use — a subtler version of the adjacent-proof mistake
+# this whole exercise is about.
+ratchet_spec = importlib.util.spec_from_file_location(
+    'gate_ratchet', os.path.join(ROOT, 'tools', 'gate_ratchet.py'))
+gate_ratchet = importlib.util.module_from_spec(ratchet_spec)
+ratchet_spec.loader.exec_module(gate_ratchet)
+lg.BLOCKED, lg.IN_FLIGHT = gate_ratchet.load_backlog()
+
 fails = 0
 
 
