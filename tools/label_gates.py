@@ -94,6 +94,46 @@ MIXED = {
         ([], 'proves the bootstrap rule, which has no numbered gate'),
 }
 
+# ── THE RATCHET ─────────────────────────────────────────────────────────────
+#
+# --check found 15 gates with no proof. Failing on all 15 makes the CI step red
+# on every commit, and a step that is always red teaches everyone to ignore it —
+# which is worse than not having it, because it also hides the day a NEW gap
+# appears. So the check fails on CHANGE, not on the standing backlog: every
+# unproven gate must be listed below with a reason and a way out, and anything
+# unproven that is NOT listed is a hard failure.
+#
+# The list is also not allowed to rot. A gate here that has since acquired a
+# proof fails the check too, with an instruction to delete its line. That is one
+# line of bookkeeping per closed gate, enforced on the day it closes rather than
+# remembered at the end — the same reason the ledger quotes its verifier.
+#
+# Recorded 2026-08-17.
+BLOCKED = {
+    '4a': 'ticket 4 — no native TLS library is linked yet; the verdict in '
+          'docs/TICKET4_DECISION.md is PROVISIONAL. Slot: run step 8.',
+    '4b': 'ticket 4 — same blocker. Slot: run step 8.',
+    '4c': 'ticket 4 — same blocker. Slot: run step 8.',
+    '4d': 'ticket 4 — same blocker. Slot: run step 8.',
+    '4e': 'ticket 4 — same blocker. Slot: run step 8.',
+    '4f': 'ticket 4 — same blocker. Slot: run step 8.',
+    '4g': 'ticket 4 — same blocker. Slot: run step 8.',
+    '6d': 'deferred by decision, recorded in the plan. Not attempted, not '
+          'claimed. Slot: named in the plan, after the run.',
+}
+
+# Unproven, being closed by the current run. Each names the step that closes it,
+# so "in flight" is a schedule rather than a hope.
+IN_FLIGHT = {
+    '1f': 'never built; feature plus test. Slot: run step 5.',
+    '2b': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
+    '2c': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
+    '3c': 'test to be written. Slot: run step 2.',
+    '5e': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
+    '5f': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
+    '6f': 'test to be written, re-deriving the finding. Slot: run step 3.',
+}
+
 TESTCALL = re.compile(r"\btest(?:Widgets)?\(\s*\n?\s*(['\"])")
 PREFIXED = re.compile(r"\btest(?:Widgets)?\(\s*\n?\s*(['\"])[0-9][a-z]\b")
 
@@ -196,7 +236,52 @@ def do_check():
         print('\n  These are real gaps, not naming gaps. Do not close one by')
         print('  renaming an unrelated test — that manufactures the false')
         print('  link this tool exists to prevent.')
+
+    # ── the ratchet ────────────────────────────────────────────────────────
+    proven = labelled | from_mixed
+    accounted = dict(BLOCKED)
+    accounted.update(IN_FLIGHT)
+
+    unlisted = [g for g in missing if g not in accounted]
+    stale = [g for g in sorted(accounted) if g in proven]
+
+    print()
+    print('  ratchet — unproven gates must be listed with a reason')
+    print('    blocked (external / deferred)      %d  %s'
+          % (len(BLOCKED), ' '.join(sorted(BLOCKED))))
+    print('    in flight (this run closes them)   %d  %s'
+          % (len(IN_FLIGHT), ' '.join(sorted(IN_FLIGHT))))
+    print('    unproven and UNLISTED              %d  %s'
+          % (len(unlisted), ' '.join(unlisted) or '-'))
+    print('    listed but now PROVEN (stale)      %d  %s'
+          % (len(stale), ' '.join(stale) or '-'))
+
+    if unlisted:
+        print()
+        print('  RATCHET FAILED — a gate lost its proof, or a new gate arrived')
+        print('  without one. Either write the test, or add the id to BLOCKED /')
+        print('  IN_FLIGHT in this file with a reason and the slot that closes it.')
+        for g in unlisted:
+            print('    %s  unaccounted for' % g)
         return 1
+
+    if stale:
+        print()
+        print('  RATCHET FAILED — the record is behind the repository. These')
+        print('  gates now have proofs, so delete their lines here; the list is')
+        print('  what makes the backlog honest, and a stale entry hides progress')
+        print('  exactly as a missing entry hides a regression.')
+        for g in stale:
+            print('    %s  proven now: %s' % (g, accounted[g]))
+        return 1
+
+    if missing:
+        print()
+        print('  RATCHET PASSED — %d gate(s) unproven, every one listed with a'
+              % len(missing))
+        print('  reason and a slot. No new gap, no stale entry.')
+        return 0
+
     print('\n  no gaps: every declared gate traces to a test.')
     return 0
 

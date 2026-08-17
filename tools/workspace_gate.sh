@@ -4,6 +4,12 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
+# Where the full analyze/test output is kept. Inside the repo tree and dated,
+# not in a mktemp directory: an intermittent failure is only useful if its log
+# still exists the next time it happens.
+GATE_LOGS="$(pwd)/tools/suite-logs/gate-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$GATE_LOGS" || exit 1
+
 fail=0
 total=0
 
@@ -13,7 +19,11 @@ run_target() {
   [ -f "$dir/pubspec.yaml" ] || return 0
 
   local analyze
-  analyze="$(cd "$dir" && $runner analyze 2>&1)"
+  # The output goes to a log on the way into the variable. A variable does not
+  # survive an interrupt or a crash, and every line this function does not
+  # print is gone with it — which is how an intermittent failure loses its
+  # name. `tee` costs one token and keeps the whole run readable afterwards.
+  analyze="$(cd "$dir" && $runner analyze 2>&1 | tee "$GATE_LOGS/$name.analyze.log")"
   if ! grep -q "No issues found" <<<"$analyze"; then
     echo "ANALYZE FAIL  $name"
     grep -E "error|warning" <<<"$analyze" | head -20
@@ -21,7 +31,7 @@ run_target() {
   fi
 
   local out passed
-  out="$(cd "$dir" && $runner test 2>&1)"
+  out="$(cd "$dir" && $runner test 2>&1 | tee "$GATE_LOGS/$name.test.log")"
   # Read the count off the runner's own summary line, not off any +N in
   # the stream. A test's stdout can print something matching +N, and the
   # progress line the runner rewrites in place is not reliably last —
@@ -80,6 +90,23 @@ if dart run tool/architecture_guard.dart > /tmp/gate-guard.log 2>&1; then
 else
   echo "FAIL architecture guard"
   tail -10 /tmp/gate-guard.log
+  fail=1
+fi
+
+# On-wire leak no-regression gate. The evaluator lives in a separate engine
+# repo (LEAK_GATE_ENGINE_DIR). Contrast with the node section below: a
+# missing node SKIPS silently because the Dart workspace does not need it —
+# a missing engine is REPORTED as NOT RUN so it can never read as a pass,
+# but it does not fail the local gate (only a real regression, exit 1, does).
+bash tools/leak_gate.sh > /tmp/gate-leak.log 2>&1
+leak_rc=$?
+if [ "$leak_rc" -eq 0 ]; then
+  echo "OK   leak gate         $(grep -oE 'kl=[0-9.]+' /tmp/gate-leak.log | head -1)"
+elif [ "$leak_rc" -eq 3 ]; then
+  echo "NOT RUN leak gate      engine dir unset/unbuildable (reported, not a skip; set LEAK_GATE_ENGINE_DIR)"
+else
+  echo "FAIL leak gate         (exit $leak_rc)"
+  tail -10 /tmp/gate-leak.log
   fail=1
 fi
 
