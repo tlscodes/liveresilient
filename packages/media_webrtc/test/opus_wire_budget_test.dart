@@ -134,10 +134,97 @@ void main() {
     });
 
     group('gate 1b — per-packet overhead follows the carrier', () {
-      test('the assumed carrier is the heavier one', () {
+      test('the assumed carrier is a heavy one, and is NOT the heaviest — '
+          'a recorded decision, pinned here so it cannot drift silently', () {
         expect(WireCarrier.assumed, WireCarrier.heavyFramed);
         expect(WireCarrier.rtpUdpIp.headerBitsPerPacket, 320);
         expect(WireCarrier.heavyFramed.headerBitsPerPacket, 528);
+        // Added 2026-08-17 with the under-count finding. The default was
+        // deliberately NOT promoted: doing so changes which configurations
+        // are admitted everywhere and invalidates rows measured under the
+        // current default, so it needs a re-run of the shaped matrix.
+        expect(WireCarrier.srtpOverIpv6.headerBitsPerPacket, 688);
+        expect(
+          WireCarrier.srtpOverIpv6.headerBytes -
+              WireCarrier.heavyFramed.headerBytes,
+          20,
+          reason: 'the difference is exactly the IPv6 header minus the IPv4 '
+              'one, which is the whole content of the third case',
+        );
+        expect(
+          WireCarrier.values
+              .map((c) => c.headerBytes)
+              .reduce((a, b) => a > b ? a : b),
+          WireCarrier.srtpOverIpv6.headerBytes,
+          reason: 'if a heavier case is ever added, this assertion fails and '
+              'the default has to be reconsidered deliberately',
+        );
+      });
+
+      test('the floor case is the cheapest, so an unannotated call can never '
+          'be priced below it', () {
+        // The measured rows were captured under the floor. Pinning the
+        // ordering means a later edit to any headerBytes value that would
+        // make the floor no longer the floor shows up as a failing test
+        // rather than as a quietly different admission table.
+        final cheapest = WireCarrier.values
+            .map((c) => c.headerBytes)
+            .reduce((a, b) => a < b ? a : b);
+        expect(cheapest, WireCarrier.rtpUdpIp.headerBytes);
+        expect(
+          WireCarrier.assumed.headerBytes,
+          greaterThan(cheapest),
+          reason: 'the default must never be the optimistic case',
+        );
+      });
+
+      test('the third case changes admission, which is why it was added '
+          'rather than substituted', () {
+        // A carrier case that changed no decision would be documentation,
+        // not a model term. Both numbers below were MEASURED with
+        // example/probe_admission.dart on this code, not predicted: the
+        // first draft of this test asserted a refusal at 24000 and was
+        // wrong, which is exactly why the tool exists.
+        //
+        //   heavyFramed   bw=24000 -> rate=12000 ptime=120
+        //   srtpOverIpv6  bw=24000 -> rate=10000 ptime=120
+        //   heavyFramed   bw=16000 -> rate=6000  ptime=120
+        //   srtpOverIpv6  bw=16000 -> refused, capacity, min=16762
+        final ipv4At24k = OpusWireBudget.forBandwidth(
+          24000,
+          carrier: WireCarrier.heavyFramed,
+        );
+        final ipv6At24k = OpusWireBudget.forBandwidth(
+          24000,
+          carrier: WireCarrier.srtpOverIpv6,
+        );
+        expect((ipv4At24k as OpusWireFitted).budget.opusRateBps, 12000);
+        expect(
+          (ipv6At24k as OpusWireFitted).budget.opusRateBps,
+          10000,
+          reason: 'the same link buys a lower codec rate once the heavier '
+              'framing is priced — the cost lands on quality first',
+        );
+
+        // And there is a band where the difference is admission itself.
+        expect(
+          OpusWireBudget.forBandwidth(
+            16000,
+            carrier: WireCarrier.heavyFramed,
+          ),
+          isA<OpusWireFitted>(),
+        );
+        final refused = OpusWireBudget.forBandwidth(
+          16000,
+          carrier: WireCarrier.srtpOverIpv6,
+        );
+        expect(refused, isA<OpusWireNoCandidateFits>());
+        expect(
+          (refused as OpusWireNoCandidateFits).minimumBandwidthBps,
+          16762,
+          reason: 'the refusal names the bandwidth that would fix it, from '
+              'the same formula the search used',
+        );
       });
 
       test('an unannotated call is priced pessimistically, never optimistically',
