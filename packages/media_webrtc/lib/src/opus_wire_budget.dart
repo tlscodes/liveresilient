@@ -40,11 +40,59 @@ library;
 /// (rate, ptime) pair costs more on a path that wraps every packet in
 /// heavier framing.
 enum WireCarrier {
-  /// Plain RTP over UDP over IP: 12 + 8 + 20 = 40 bytes per packet.
+  /// Plain RTP over UDP over IPv4: 12 + 8 + 20 = 40 bytes per packet.
+  ///
+  /// This is the FLOOR of the model, not a description of a WebRTC audio
+  /// packet. It omits the SRTP authentication tag, every negotiated header
+  /// extension, and the extra 20 bytes an IPv6 header costs — see
+  /// [srtpOverIpv6] for the terms. Naming it accurately matters because the
+  /// measured T2 rows in `tools/t2/h2_results.tsv` were captured while this
+  /// figure was the only one the code had, which means those rows priced
+  /// the wire optimistically. Their provenance is recorded, and the reason
+  /// no per-row correction is possible, in `tools/t2/CARRIER_PROVENANCE.md`.
   rtpUdpIp(headerBytes: 40),
 
-  /// The heavier per-packet framing some paths impose: 66 bytes per packet.
-  heavyFramed(headerBytes: 66);
+  /// SRTP with negotiated header extensions over IPv4: 66 bytes per packet.
+  ///
+  /// ESTIMATE, derived from specifications rather than from a capture on
+  /// this stack — the same terms as [srtpOverIpv6] with a 20-byte IPv4
+  /// header in place of the 40-byte IPv6 one. That the arithmetic lands
+  /// exactly on the 66 this enum already carried is corroboration, not
+  /// proof: the figure predates the derivation.
+  heavyFramed(headerBytes: 66),
+
+  /// SRTP with negotiated header extensions over IPv6: 86 bytes per packet.
+  ///
+  /// ADDED 2026-08-17, and added rather than substituted on purpose. The
+  /// open finding was that 40 bytes may under-count auth tags, negotiated
+  /// extensions and IPv6. Editing [rtpUdpIp] in place would have silently
+  /// invalidated every measured row captured under it while those rows
+  /// still read as measurements, so the correction arrives as a third case
+  /// and the rows keep pointing at the case they actually used.
+  ///
+  /// Term by term, each from its specification — so the whole figure is an
+  /// ESTIMATE until a packet capture on this stack confirms it:
+  ///
+  /// ```
+  /// RTP fixed header                     12   RFC 3550 §5.1
+  /// one-byte header extensions           16   RFC 8285: 4 profile+length,
+  ///                                           plus transport-wide-cc (3),
+  ///                                           abs-send-time (4) and mid (4)
+  ///                                           as WebRTC negotiates them for
+  ///                                           audio, padded to 4 bytes
+  /// SRTP auth tag, HMAC-SHA1-80          10   RFC 3711 §3.4
+  /// UDP header                            8   RFC 768
+  /// IPv6 fixed header                    40   RFC 8200 §3
+  ///                                      --
+  ///                                      86
+  /// ```
+  ///
+  /// What would replace this estimate: a capture of one call's audio
+  /// packets, taking the median on-wire size minus the payload size the
+  /// encoder reported. Until then a caller that KNOWS its path is IPv6
+  /// should name this case; nothing selects it automatically, because
+  /// nothing in this package can observe the address family.
+  srtpOverIpv6(headerBytes: 86);
 
   const WireCarrier({required this.headerBytes});
 
@@ -55,13 +103,24 @@ enum WireCarrier {
   int get headerBitsPerPacket => headerBytes * 8;
 
   /// The carrier assumed whenever the network layer has not yet reported
-  /// one. Deliberately the HEAVIER case — never null, never zero.
+  /// one — never null, never zero.
   ///
   /// Under-estimating overhead over-subscribes the link, which is a silent
   /// failure: the queue builds unseen and kills both directions.
   /// Over-estimating only refuses a call that might have fitted, and the
   /// admission result reports the numbers behind the refusal, so that
-  /// error is visible and correctable.
+  /// error is visible and correctable. That asymmetry is why the default
+  /// is a heavy case rather than the floor.
+  ///
+  /// IT IS NO LONGER THE HEAVIEST CASE IN THIS ENUM, and that is a recorded
+  /// decision rather than an oversight. [srtpOverIpv6] is heavier by 20
+  /// bytes. Promoting it to the default would change which configurations
+  /// are admitted on every existing deployment and would invalidate the
+  /// green rows that were measured under this default — so it is a separate,
+  /// dated decision that requires a re-run of the shaped-network matrix, not
+  /// a one-word edit here. Until that run happens the default stays put and
+  /// this paragraph is the honest statement of what it does and does not
+  /// bound.
   static const WireCarrier assumed = heavyFramed;
 }
 

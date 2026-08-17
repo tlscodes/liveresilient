@@ -8,11 +8,20 @@
 import 'package:media_webrtc/media_webrtc.dart';
 
 void main() {
+  for (final carrier in WireCarrier.values) {
+    print('── carrier ${carrier.name} (${carrier.headerBytes} bytes) ──');
+    _table(carrier);
+    print('');
+  }
+}
+
+void _table(WireCarrier carrier) {
   for (final streams in [1, 2]) {
     for (final bw in [64000, 32000, 24000, 16000, 12000, 8000]) {
       final admission = OpusWireBudget.forBandwidth(
         bw,
         concurrentStreams: streams,
+        carrier: carrier,
       );
       final text = switch (admission) {
         OpusWireFitted(budget: final b) =>
