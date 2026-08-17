@@ -108,6 +108,37 @@ def read_profile():
 
     start = src.index('chrome120 = UtlsClientProfile(')
 
+    def record_text():
+        """The chrome120 constructor call, and nothing after it.
+
+        Scalar fields have to be read inside these bounds: three profiles in
+        this file declare the same field names, so an unbounded search would
+        happily return a different profile's value and the mismatch would look
+        like a captured-bytes problem.
+        """
+        at = src.index('(', start)
+        depth = 0
+        for j in range(at, len(src)):
+            if src[j] == '(':
+                depth += 1
+            elif src[j] == ')':
+                depth -= 1
+                if depth == 0:
+                    return src[at:j]
+        raise SystemExit('unterminated chrome120 record in the profile source')
+
+    def flag(field):
+        match = re.search(r'\b%s:\s*(true|false)\b' % field, record_text())
+        if match is None:
+            # Loud, exactly as an unresolved extension name is. Defaulting a
+            # missing flag to false would turn a parser break into a STRICTER
+            # comparison, which is the kind of failure that looks like success.
+            raise SystemExit(
+                'could not read `%s` from the chrome120 record; the '
+                'comparison depends on it, so this is a hard error rather '
+                'than a default' % field)
+        return match.group(1) == 'true'
+
     def block(field):
         at = src.index('%s: [' % field, start)
         depth = 0
@@ -161,29 +192,24 @@ def read_profile():
                 % ', '.join(unresolved))
         return out
 
-    return values('cipherSuites'), extension_values()
+    return values('cipherSuites'), extension_values(), flag('shufflesExtensions')
 
 
 def hexlist(values):
     return ' '.join('0x%04x' % v for v in values)
 
 
-def main():
-    path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_HEX
-    if not os.path.exists(path):
-        print('no capture at %s' % path)
-        print('A MISSING CAPTURE IS NOT A NEGATIVE RESULT. Run '
-              '`tools/first_record_dump` first; until it produces bytes the '
-              'verdict in docs/TICKET4_DECISION.md stays PROVISIONAL.')
-        return 1
-    raw = bytes.fromhex(open(path, encoding='utf-8').read().strip())
-    try:
-        ciphers, extensions = parse_client_hello(raw)
-    except ValueError as err:
-        print('the capture could not be parsed: %s' % err)
-        return 1
+def compare_one(path, raw, ciphers, extensions,
+                want_ciphers, want_extensions, shuffles):
+    """Prints one capture's comparison and returns whether it matched.
 
-    want_ciphers, want_extensions = read_profile()
+    ORDER IS PART OF THE SHAPE ONLY WHEN THE PROFILE PROMISES ONE. The cipher
+    list is always ordered. The extension list is ordered only when the profile
+    says so; when the profile declares that it permutes them, a differing order
+    is the profile working, and demanding an identical order would fail a
+    capture for doing exactly what the target does. What must still hold in both
+    cases is the membership: nothing missing, nothing extra.
+    """
     got_ciphers = [c for c in ciphers if c not in GREASE]
     got_extensions = [e for e in extensions if e not in GREASE]
 
@@ -196,7 +222,7 @@ def main():
           % (hexlist([c for c in want_ciphers if c not in got_ciphers]) or '-'))
     print('  extra        %s'
           % (hexlist([c for c in got_ciphers if c not in want_ciphers]) or '-'))
-    print('  order        %s'
+    print('  order        %s   (always part of the shape)'
           % ('identical' if got_ciphers == want_ciphers else 'DIFFERENT'))
     print()
     print('extensions')
@@ -204,25 +230,91 @@ def main():
                                   hexlist(want_extensions)))
     print('  captured(%2d)  %s' % (len(got_extensions),
                                    hexlist(got_extensions)))
-    print('  missing      %s'
-          % (hexlist([e for e in want_extensions
-                      if e not in got_extensions]) or '-'))
-    print('  extra        %s'
-          % (hexlist([e for e in got_extensions
-                      if e not in want_extensions]) or '-'))
-    print('  order        %s'
-          % ('identical' if got_extensions == want_extensions else 'DIFFERENT'))
+    missing = [e for e in want_extensions if e not in got_extensions]
+    extra = [e for e in got_extensions if e not in want_extensions]
+    print('  missing      %s' % (hexlist(missing) or '-'))
+    print('  extra        %s' % (hexlist(extra) or '-'))
+    print('  order        %s   (%s)'
+          % ('identical' if got_extensions == want_extensions else 'DIFFERENT',
+             'not part of the shape: the profile permutes them' if shuffles
+             else 'part of the shape: the profile promises this order'))
     print()
     print('grease present: ciphers=%s extensions=%s'
           % (any(c in GREASE for c in ciphers),
              any(e in GREASE for e in extensions)))
     print()
 
-    reproduced = (got_ciphers == want_ciphers
-                  and got_extensions == want_extensions)
-    if reproduced:
+    extensions_ok = (not missing and not extra) if shuffles \
+        else got_extensions == want_extensions
+    return got_ciphers == want_ciphers and extensions_ok, got_extensions
+
+
+def main():
+    paths = sys.argv[1:] or [DEFAULT_HEX]
+    if len(paths) > 2:
+        print('at most two captures: one to compare against the profile, and '
+              'optionally a second so the extension order can be shown to '
+              'differ between connections')
+        return 1
+
+    absent = [p for p in paths if not os.path.exists(p)]
+    if absent:
+        for path in absent:
+            print('no capture at %s' % path)
+        print('A MISSING CAPTURE IS NOT A NEGATIVE RESULT. Run '
+              '`tools/first_record_dump` first; until it produces bytes the '
+              'verdict in docs/TICKET4_DECISION.md stays PROVISIONAL.')
+        return 1
+
+    want_ciphers, want_extensions, shuffles = read_profile()
+    print('profile chrome120: extension order is %s'
+          % ('permuted per connection, so the extension list is compared as a '
+             'SET' if shuffles else
+             'fixed, so the extension list is compared in order'))
+    print()
+
+    matched = True
+    orders = []
+    for path in paths:
+        raw = bytes.fromhex(open(path, encoding='utf-8').read().strip())
+        try:
+            ciphers, extensions = parse_client_hello(raw)
+        except ValueError as err:
+            print('%s could not be parsed: %s' % (path, err))
+            return 1
+        ok, order = compare_one(path, raw, ciphers, extensions,
+                                want_ciphers, want_extensions, shuffles)
+        matched = matched and ok
+        orders.append(order)
+
+    # PERMUTATION IS A SEPARATE QUESTION FROM MEMBERSHIP, and it needs two
+    # captures to ask. One capture says nothing about it either way — reporting
+    # that as passed would be the same error as calling a differing order a
+    # mismatch, in the other direction.
+    permutation = None
+    if shuffles:
+        if len(orders) < 2:
+            permutation = ('NOT MEASURED — one capture cannot show a '
+                           'permutation. Pass a second capture from a separate '
+                           'connection to measure it.')
+        elif orders[0] == orders[1]:
+            permutation = ('NOT PERMUTED — both captures share one identical '
+                           'extension order, so the library is not doing what '
+                           'the profile declares.')
+            matched = False
+        else:
+            permutation = ('permuted — the two captures differ in extension '
+                           'order, as the profile declares.')
+        print('extension permutation: %s' % permutation)
+        print()
+
+    if matched:
         print('VERDICT: configuration alone reproduces the profile shape. '
               'Section 5 of the decision resolves in favour of BoringSSL.')
+        if shuffles and len(orders) < 2:
+            print('  Scope of that verdict: membership only. The permutation '
+                  'is NOT MEASURED here, and the shape is not fully proven '
+                  'until it is.')
     else:
         print('VERDICT: configuration alone does NOT reproduce the profile '
               'shape. Per section 5 that removes the main reason for choosing '

@@ -93,19 +93,16 @@ different TLS 1.3 set or order would hit a real wall here.
   the measurement repeatable. What a middlebox sees on a real path is a
   different measurement.
 
-## A defect in the comparison tool, named rather than left to be discovered
+## The comparison tool's verdict line — the named defect, fixed 2026-08-17
 
-`tools/compare_first_record.py` prints the three lists correctly — those are the
-facts above — but its closing VERDICT line judges extension order as if order
-were always part of the shape, and it is not for a profile that declares
-`shufflesExtensions`. Read against a shuffling profile that line says "does not
-reproduce" while its own lists show a complete set.
+The defect recorded here was that the closing VERDICT line judged extension
+order as if order were always part of the shape, which is wrong for a profile
+declaring `shufflesExtensions` and made the tool contradict its own lists.
 
-The fix is to read `shufflesExtensions` from the profile and compare the set in
-that case, plus require two captures to differ. It is not applied here because
-the file hit this repository's churn guard at four edits in one session, and
-routing around that guard would be worse than carrying a named defect for a day.
-Until it is applied, quote the LISTS from this document, never that tool's last
-line.
-
-Slot: the next session that opens `tools/compare_first_record.py`.
+It now reads that flag from the profile source and compares the extension list
+as a SET when it is set — membership still failing on anything missing or extra —
+and treats permutation as a separate question that needs two captures: with two
+it requires the orders to DIFFER, and with one it reports the permutation as not
+measured rather than as passed. On both captures from 2026-08-17 the verdict is
+favourable and the permutation line reads "permuted"; passing the same capture
+twice makes it unfavourable, which is the check that the new clause can fail.
