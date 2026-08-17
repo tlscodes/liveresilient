@@ -54,17 +54,31 @@ def load_backlog():
         raise SystemExit('%s is not valid JSON: %s' % (BACKLOG, err))
     blocked = data.get('blocked')
     in_flight = data.get('in_flight')
+    # A third category, added 2026-08-17: a gate that WAS attempted and whose
+    # number came up short. Neither existing category can hold it honestly —
+    # `in_flight` implies pending work nobody owns, `blocked` implies the
+    # attempt could not be made. It is folded into the same accounting as
+    # `in_flight` for the checker's purposes (listed with a reason), and the
+    # printout below names it separately so it is never read as either.
+    measured_below = data.get('measured_below') or {}
     if not isinstance(blocked, dict) or not isinstance(in_flight, dict):
         raise SystemExit(
             '%s must contain object fields "blocked" and "in_flight"' % BACKLOG
         )
-    overlap = sorted(set(blocked) & set(in_flight))
-    if overlap:
-        raise SystemExit(
-            'a gate cannot be both blocked and in flight: %s'
-            % ', '.join(overlap)
-        )
-    return blocked, in_flight
+    if not isinstance(measured_below, dict):
+        raise SystemExit('%s: "measured_below" must be an object' % BACKLOG)
+    pairs = (('blocked', blocked), ('in_flight', in_flight),
+             ('measured_below', measured_below))
+    for i, (name_a, a) in enumerate(pairs):
+        for name_b, b in pairs[i + 1:]:
+            overlap = sorted(set(a) & set(b))
+            if overlap:
+                raise SystemExit(
+                    'a gate cannot be both %s and %s: %s'
+                    % (name_a, name_b, ', '.join(overlap)))
+    accounted = dict(in_flight)
+    accounted.update(measured_below)
+    return blocked, accounted, measured_below
 
 
 def load_checker():
@@ -75,7 +89,7 @@ def load_checker():
 
 
 def main():
-    blocked, in_flight = load_backlog()
+    blocked, in_flight, measured_below = load_backlog()
     checker = load_checker()
 
     stale_in_code = sorted(
@@ -85,8 +99,15 @@ def main():
     checker.BLOCKED = blocked
     checker.IN_FLIGHT = in_flight
 
-    print('backlog: %s  (%d blocked, %d in flight)'
-          % (os.path.relpath(BACKLOG, ROOT), len(blocked), len(in_flight)))
+    print('backlog: %s  (%d blocked, %d in flight, %d measured-below)'
+          % (os.path.relpath(BACKLOG, ROOT), len(blocked),
+             len(in_flight) - len(measured_below), len(measured_below)))
+    for gate, entry in sorted(measured_below.items()):
+        # The first clause of the entry, up to the first double space, is the
+        # measurement itself: `score=… bar=… delta=…`. Splitting on '.' would
+        # cut inside the number, which is how a record starts lying quietly.
+        print('  measured and SHORT — neither pending nor blocked: %s  %s'
+              % (gate, entry.split('  ')[0]))
     if stale_in_code:
         print('note: the copy still inside label_gates.py disagrees on %s — '
               'that copy is superseded and is ignored here; delete it the next '

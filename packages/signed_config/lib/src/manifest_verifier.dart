@@ -151,6 +151,81 @@ final class ManifestRejected extends ManifestVerification {
   const ManifestRejected(this.reason, this.detail);
 }
 
+/// The two rejection reasons a wrong device clock can manufacture on an
+/// otherwise authentic document.
+///
+/// A clock set behind real time makes a genuine document look
+/// [notYetValid]; a clock set ahead makes it look [expired]. No clock
+/// setting can manufacture a bad signature, an unknown or revoked key, an
+/// unsupported algorithm, a malformed document, or a rollback — so those
+/// reasons are never eligible for the lenient re-check, and this enum
+/// deliberately cannot name them. Widening it would turn a wrong-clock
+/// workaround into an authentication hole.
+enum ManifestTimeFault {
+  /// The document's validity window had ended at the evaluated instant.
+  expired,
+
+  /// The evaluated instant was before the document's `issuedAt`.
+  notYetValid,
+}
+
+/// Outcome of [ManifestVerifier.verifyLenient].
+///
+/// Sealed with three named states so every caller must branch: a stale
+/// acceptance can never be mistaken for a strict one, and no outcome is
+/// inferred from a null or a sentinel.
+sealed class LenientManifestVerification {
+  const LenientManifestVerification();
+}
+
+/// The document passed the strict [ManifestVerifier.verify] unchanged; no
+/// relaxation was involved.
+final class LenientAccepted extends LenientManifestVerification {
+  /// The verified manifest, valid at the evaluated instant.
+  final EndpointManifest manifest;
+
+  const LenientAccepted(this.manifest);
+}
+
+/// The document is authentic — signature, key, algorithm and rollback all
+/// pass — but its validity window fails at the evaluated instant for a
+/// reason a wrong clock can manufacture ([fault]).
+///
+/// This type states a fact; it grants no serving rights. The caller owns
+/// the policy for what a stale acceptance is good for (the manifest cache,
+/// for example, bounds it with its last-known-good grace). What the
+/// re-check cannot detect is WHICH party is wrong — the device clock or
+/// the document — which is exactly why it never upgrades the result to a
+/// plain acceptance.
+final class LenientAcceptedStale extends LenientManifestVerification {
+  /// The manifest, re-verified as of its own `issuedAt`.
+  final EndpointManifest manifest;
+
+  /// Which time fact the strict check failed on.
+  final ManifestTimeFault fault;
+
+  const LenientAcceptedStale(this.manifest, this.fault);
+}
+
+/// The document failed for a reason the lenient re-check refuses to
+/// relax: any authenticity failure, a malformed document, or a rollback.
+///
+/// [reason] is never [ManifestRejection.expired] or
+/// [ManifestRejection.notYetValid]: at its own `issuedAt` a well-formed
+/// document is always inside its window (`expiresAt > issuedAt` is
+/// enforced at parse), so a time-faulted document either comes back
+/// [LenientAcceptedStale] or fails the relaxed pass on a non-time reason
+/// reported here.
+final class LenientRejected extends LenientManifestVerification {
+  /// The rejection reason the relaxation refused to override.
+  final ManifestRejection reason;
+
+  /// Diagnostic message safe for logs (never includes key material).
+  final String detail;
+
+  const LenientRejected(this.reason, this.detail);
+}
+
 /// The signed document as fetched: manifest JSON plus detached signature.
 class SignedManifestDocument {
   /// Longest `"alg"` value accepted structurally. Real algorithm names are
@@ -379,5 +454,78 @@ class ManifestVerifier {
     }
 
     return ManifestAccepted(manifest);
+  }
+
+  /// Strict [verify], then — only when the sole failure is a time fact a
+  /// wrong device clock can manufacture ([ManifestRejection.expired] or
+  /// [ManifestRejection.notYetValid]) — a second verification of the same
+  /// document as of its own `issuedAt`.
+  ///
+  /// WHY THIS EXISTS: the manifest cache has two ways to meet a document
+  /// whose only defect is its time window — reading one back from storage
+  /// and fetching one from the network. This method is the single
+  /// relaxation point both paths call, so the two paths cannot drift into
+  /// different security policies.
+  ///
+  /// The relaxed pass changes ONLY the evaluated instant. Signature, key,
+  /// algorithm, structure and rollback checks all run again unchanged, so
+  /// nothing that fails authenticity can ever come back
+  /// [LenientAcceptedStale]. Any rejection reason other than the two time
+  /// facts — including reasons added in the future — stays strict by
+  /// construction: the relaxation names its two eligible reasons and
+  /// treats everything else as final.
+  ///
+  /// The relaxed pass deliberately drops [persistedTimeFloorUtc]: the
+  /// floor (or the clock) is precisely what manufactured the time fault,
+  /// and at its own `issuedAt` every well-formed document is inside its
+  /// window, so the pass measures authenticity and rollback only. This
+  /// does not bypass the floor's guarantees — the strict result, with the
+  /// floor applied, is what decides fresh validity; a stale acceptance
+  /// only ever reaches the caller as [LenientAcceptedStale], for the
+  /// caller's bounded stale-serving policy to judge.
+  Future<LenientManifestVerification> verifyLenient(
+    SignedManifestDocument document, {
+    required int lastAcceptedRevision,
+    DateTime? now,
+    DateTime? persistedTimeFloorUtc,
+  }) async {
+    final strict = await verify(
+      document,
+      lastAcceptedRevision: lastAcceptedRevision,
+      now: now,
+      persistedTimeFloorUtc: persistedTimeFloorUtc,
+    );
+    switch (strict) {
+      case ManifestAccepted(:final manifest):
+        return LenientAccepted(manifest);
+      case ManifestRejected(:final reason, :final detail):
+        final ManifestTimeFault fault;
+        switch (reason) {
+          case ManifestRejection.expired:
+            fault = ManifestTimeFault.expired;
+          case ManifestRejection.notYetValid:
+            fault = ManifestTimeFault.notYetValid;
+          default:
+            // Every non-time reason — present or future — is final. The
+            // default keeps unknown future reasons on the safe (strict)
+            // side rather than silently relaxing them.
+            return LenientRejected(reason, detail);
+        }
+        // Parse cannot fail here: a time rejection means the strict pass
+        // already parsed this exact JSON successfully.
+        final issuedAt =
+            EndpointManifest.fromJson(document.manifestJson).issuedAt;
+        final relaxed = await verify(
+          document,
+          lastAcceptedRevision: lastAcceptedRevision,
+          now: issuedAt,
+        );
+        return switch (relaxed) {
+          ManifestAccepted(:final manifest) =>
+            LenientAcceptedStale(manifest, fault),
+          ManifestRejected(:final reason, :final detail) =>
+            LenientRejected(reason, detail),
+        };
+    }
   }
 }

@@ -5,7 +5,9 @@ import 'package:test/test.dart';
 
 import 'support/fakes.dart';
 
-/// Ticket 5 acceptance gates 5a-5d.
+/// Ticket 5 acceptance gates 5a-5e (5e's cache-level gates live in
+/// embedded_floor_test.dart; the verifier-level relaxation gates are
+/// here).
 ///
 /// The defect these pin down: the validity window was evaluated against the
 /// device clock alone, so a device running one day behind an authentic newer
@@ -199,5 +201,128 @@ void main() {
         );
       },
     );
+
+    group('5e verifyLenient — the single relaxation point', () {
+      test(
+        '5e a strictly valid document comes back LenientAccepted, '
+        'not stale',
+        () async {
+          final result = await verifier.verifyLenient(
+            doc(),
+            lastAcceptedRevision: 41,
+            now: issuedAt.add(const Duration(days: 1)),
+          );
+          expect(result, isA<LenientAccepted>());
+          expect((result as LenientAccepted).manifest.revision, 42);
+        },
+      );
+
+      test(
+        '5e an authentic document failing only as expired is accepted '
+        'stale with its cause named',
+        () async {
+          final result = await verifier.verifyLenient(
+            doc(),
+            lastAcceptedRevision: 41,
+            now: expiresAt.add(const Duration(days: 1)),
+          );
+          expect(result, isA<LenientAcceptedStale>());
+          final stale = result as LenientAcceptedStale;
+          expect(stale.fault, ManifestTimeFault.expired);
+          expect(stale.manifest.revision, 42);
+        },
+      );
+
+      test(
+        '5e an authentic document failing only as notYetValid is accepted '
+        'stale with its cause named',
+        () async {
+          final result = await verifier.verifyLenient(
+            doc(),
+            lastAcceptedRevision: 41,
+            now: issuedAt.subtract(const Duration(days: 1)),
+          );
+          expect(result, isA<LenientAcceptedStale>());
+          expect(
+            (result as LenientAcceptedStale).fault,
+            ManifestTimeFault.notYetValid,
+          );
+        },
+      );
+
+      test(
+        '5e a tampered signature is never relaxed, even when the document '
+        'is also expired',
+        () async {
+          final tampered = signManifest(
+            buildManifest(
+              revision: 42,
+              issuedAt: issuedAt,
+              expiresAt: expiresAt,
+            ),
+            key1,
+            signatureOverride: List.filled(64, 7),
+          );
+          final result = await verifier.verifyLenient(
+            tampered,
+            lastAcceptedRevision: 41,
+            now: expiresAt.add(const Duration(days: 1)),
+          );
+          expect(result, isA<LenientRejected>());
+          expect(
+            (result as LenientRejected).reason,
+            ManifestRejection.badSignature,
+            reason: 'relaxation may only touch the two time facts; '
+                'authenticity failures are final',
+          );
+        },
+      );
+
+      test(
+        '5e an unknown signing key is never relaxed',
+        () async {
+          final unknownKey = signManifest(
+            buildManifest(
+              revision: 42,
+              signingKeyId: 'key-9',
+              issuedAt: issuedAt,
+              expiresAt: expiresAt,
+            ),
+            key1,
+          );
+          final result = await verifier.verifyLenient(
+            unknownKey,
+            lastAcceptedRevision: 41,
+            now: expiresAt.add(const Duration(days: 1)),
+          );
+          expect(result, isA<LenientRejected>());
+          expect(
+            (result as LenientRejected).reason,
+            ManifestRejection.unknownSigningKey,
+          );
+        },
+      );
+
+      test(
+        '5e a rollback is never relaxed: the relaxed pass re-checks the '
+        'revision and reports it',
+        () async {
+          // Expired AND older than accepted: the strict pass reports the
+          // time fact first (window checks precede the revision check),
+          // so only the relaxed pass can surface the rollback — and it
+          // must, rather than admitting the document as stale.
+          final result = await verifier.verifyLenient(
+            doc(revision: 40),
+            lastAcceptedRevision: 41,
+            now: expiresAt.add(const Duration(days: 1)),
+          );
+          expect(result, isA<LenientRejected>());
+          expect(
+            (result as LenientRejected).reason,
+            ManifestRejection.rollback,
+          );
+        },
+      );
+    });
   });
 }
