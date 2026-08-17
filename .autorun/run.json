@@ -97,6 +97,24 @@
       "status": "pending"
     },
     {
+      "id": "5e-time-floor-feature",
+      "desc": "Gate 5e, the genuine feature step 1 found, in three parts: the lenient re-check covers only ManifestRejection.expired and not notYetValid; it exists only in initialize() and not on the freshly-fetched path; and no in-binary floor constant exists at all, which is what a fresh install needs to reject a document older than the build. Fable 5 authors the code; tests, debugging and verification are the conductor's. Red-green required: each test must fail with its own subject disabled.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq \"test('5e\" packages/signed_config/test && bash tools/run_suites.sh --only signed_config",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 5400,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "2c-replay-measurement",
+      "desc": "Gate 2c is a MEASUREMENT, not a test: the replay harness (packages/connection_orchestrator/tool/intelligence_replay.dart) and the 39-run corpus both exist, and the last recorded score is 1.0996 against a bar of 1.107. Run the replay on today's code and record the number it produces. A result below the bar is a real finding about the system and is recorded as such — never retried until it passes, and never reported as anything other than what it printed.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test -f docs/GATE_2C_REPLAY.md && grep -qE \"score[^0-9]*1\\.[0-9]{3,4}\" docs/GATE_2C_REPLAY.md",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 5400,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
       "id": "10-final-gate-handoff",
       "desc": "Whole-repository gate, then the handoff: what closed with its command output, what stayed open with its dated blocker and what would unblock it, and the exact next action. Commit with an explicit file list — never a directory, which twice in this project swallowed ~200 pre-existing files belonging to someone else's unfinished work.",
       "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -q 'first_record_dump' docs/HANDOFF_plan_v4_session.md && test $(git status --short | grep -c '^ M\\|^??') -gt 150 && git log --oneline -1 | grep -q .",
