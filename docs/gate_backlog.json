@@ -15,13 +15,9 @@
     "measured_below": "it WAS attempted and the number came up short. Added 2026-08-17, on Fable 5's adjudication, because the other two categories both lie about this state: in_flight implies pending work nobody owns, and blocked implies the attempt could not be made. The name is self-refuting against both misreadings — 'measured' rules out 'never attempted', 'below' rules out 'passed'. An empty slot is honest here; a fabricated owner is not."
   },
   "blocked": {
-    "4a": "ticket 4 — the library is not linked into the app yet. The CHOICE is no longer provisional: the §5 falsification test ran on 2026-08-17 and configuration alone reproduces the profile (docs/TICKET4_FIRST_RECORD/RESULT.md), so what remains is the integration work plus an arm64 capture. Slot: the ticket 4 integration.",
+    "4a": "ticket 4 — needs two things this repository cannot manufacture: the native module built for the target and linked in, and a reachable test server offering the extension. The CHOICE is no longer provisional — the section 5 falsification test ran 2026-08-17 and configuration alone reproduces the profile (docs/TICKET4_FIRST_RECORD/RESULT.md) — so what remains is integration plus a rig. Dated blocker 2026-08-17, slot 2026-09-12, in docs/TICKET4_INTEGRATION.md.",
     "4b": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
-    "4c": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
-    "4d": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
-    "4e": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
-    "4f": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration.",
-    "4g": "ticket 4 — same blocker as 4a: the choice is confirmed, the integration is not done. Slot: the ticket 4 integration."
+    "4b": "ticket 4 — strictly downstream of 4a: nothing to capture until a connection exists. Dated blocker 2026-08-17, slot 2026-09-12, in docs/TICKET4_INTEGRATION.md."
   },
   "in_flight": {},
   "measured_below": {},
