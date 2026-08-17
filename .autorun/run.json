@@ -1,96 +1,120 @@
 {
-  "goal": "Finish every remaining item of PLAN_five_tickets_v4 and ticket 4, mechanically, so the whole result can be handed to Fable 5 for review and debugging at the end",
-  "armed_at": "2026-08-16",
+  "goal": "Close every remaining open item of PLAN_five_tickets_v4 and ticket 4, including the hard ones, leaving open only what genuinely needs the owner or the rig",
+  "armed_at": "2026-08-17",
   "approved_irreversible": [],
-  "route_source": "Fable 5 sequencing consult 2026-08-16: A-B-C-D-E, verdict written provisionally BEFORE the long measurement so a mid-run cut never loses both, and two verify commands named as liars.",
-  "note_on_scope": "The parallel Fable session was stopped by the review pass, so its six items move here. Anything built here is meant to be REVIEWED by Fable at the end — reviewing existing code passes where designing it stops.",
+  "route_source": "Fable 5 sequencing consult 2026-08-17. Three corrections adopted: repair the truncated log FIRST so every later suite run is a free reproduction attempt; classify the unknown-scope gates before planning them, because a plan containing 'unknown' is not a plan; and commit the measurement tool before its multi-hour run so a cut loses the run, not the tool.",
+  "goal_verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && python3 tools/label_gates.py --check 2>&1 | grep -qE 'no proof found at all +8 ' && for p in packages/signed_config packages/media_webrtc packages/call_core packages/adaptive_transport; do (cd $p && dart analyze 2>&1 | grep -q 'No issues found' && dart test 2>&1 | grep -q 'All tests passed') || exit 1; done",
+  "goal_verify_note": "Exactly eight gates may remain unproven: the seven of blocked ticket 4, plus 6d which an adjudicated decision defers to ticket 4's own trigger. Nine means the goal was not met, whatever the steps say.",
   "steps": [
     {
-      "id": "A-commit-green",
-      "desc": "Commit the verified work uncommitted since fd21ede, and tag it. ONLY files this session touched. ~210 files were already dirty before this work began and belong to someone else — they must still be dirty afterwards.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && n=$(git show --stat --name-only --format= HEAD | grep -c .) && test \"$n\" -lt 30 && test \"$n\" -gt 0 && git describe --exact-match --tags HEAD >/dev/null 2>&1 && test $(git status --short | grep -c '^ M\\|^??') -gt 150",
-      "timeout_s": 600,
+      "id": "0-log-repair",
+      "desc": "Minutes, and it comes first for a reason. Replace every truncating verification command in this project's tooling with one that captures FULL output to a file. The signed_config flake lost its test name to a tail -1. Once the log is intact, every full suite run in the steps below is a free reproduction attempt that names the test by itself — which is why chasing the flake actively is deferred to step 9 rather than started now.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test -f tools/run_suites.sh && bash tools/run_suites.sh --check-only && ! grep -qE 'tail -1' tools/run_suites.sh",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 1800,
       "irreversible": false,
-      "status": "pending",
-      "verify_note": "Three things, because a green commit is the classic false pass: the new commit holds a SMALL named set not hundreds; the tag points at THIS commit; and the pre-existing dirt is still there. A clean working tree here would mean the disaster happened."
+      "status": "pending"
     },
     {
-      "id": "B-extension-inventory",
-      "desc": "From BoringSSL's source, list the extensions it emits by default, and compare against what the target profile requires. This is the single open question the library decision turns on.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test -f docs/TICKET4_EXTENSION_INVENTORY.md && test $(grep -cE '^\\| *0x[0-9a-fA-F]+' docs/TICKET4_EXTENSION_INVENTORY.md) -ge 8",
+      "id": "1-classify-unknowns",
+      "desc": "Read the plan's sections for gates 2b, 2c, 5e, 5f and classify each as MISSING TEST or MISSING FEATURE. Write the classification into the ledger with the anchor that decided it. No code yet. A runner cannot plan around 'unknown', and if the run dies early the handoff should at least know the real scope.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test -f docs/GATE_CLASSIFICATION.md && test $(grep -cE '^\\| *(2b|2c|5e|5f)' docs/GATE_CLASSIFICATION.md) -eq 4",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
       "timeout_s": 2400,
       "irreversible": false,
-      "status": "pending",
-      "verify_note": "Counts actual extension rows, not the file's existence. An empty template would otherwise pass."
+      "status": "pending"
     },
     {
-      "id": "C-provisional-verdict",
-      "desc": "Write the verdict into docs/TICKET4_DECISION.md, marked PROVISIONAL and explicitly pending step D. If the inventory is inconclusive, say so and keep PROPOSED — an unlocked decision is a fact, not a failure.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -q 'PROVISIONAL — pending the measurement in step D' docs/TICKET4_DECISION.md && grep -q 'TICKET4_EXTENSION_INVENTORY' docs/TICKET4_DECISION.md",
-      "timeout_s": 900,
-      "irreversible": false,
-      "status": "pending",
-      "verify_note": "A generic phrase like 'decided' would match text already in the file. This requires the provisional marker AND a reference to the inventory that justifies it."
-    },
-    {
-      "id": "D-first-record-dump",
-      "desc": "The falsification test: a standalone program that opens a connection with the chosen library under configuration alone, captures the exact bytes of the first record it writes, and prints them. Scratch target, not wired into the app.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test -x tools/first_record_dump && tools/first_record_dump --self-test | grep -q 'bytes captured'",
-      "timeout_s": 7200,
+      "id": "2-gate-3c",
+      "desc": "Gate 3c — the rig row that goes through the production decision path. The code exists; nothing named 3c proves it. Cheap and certain, so it lands before anything long.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq \"test('3c\" apps/reference_app && cd apps/reference_app && dart analyze 2>&1 | grep -q 'No issues found' && flutter test 2>&1 | grep -q 'All tests passed'",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 2400,
       "irreversible": false,
       "status": "pending"
     },
     {
-      "id": "E1-gate-labels",
-      "desc": "Put the gate id at the front of every test name that proves a gate. Change ONLY test names — no assertions, no logic. Then report which gate ids still have no test at all; those are real gaps and must not be papered over by renaming an unrelated test.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test $(grep -rhoE \"test\\('[0-9][a-z]\" --include='*_test.dart' packages apps | sort -u | wc -l | tr -d ' ') -ge 30",
-      "timeout_s": 3600,
+      "id": "3-gate-6f",
+      "desc": "Gate 6f. The finding is already recorded — names are not all known at the boundary, the seam stays per-attempt, a redirect can introduce up to five more. The test must RE-DERIVE that finding from the code, not assert the recorded sentence. A test that quotes a document proves the document exists.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq \"test('6f\" packages/signed_config/test apps/reference_app/test && cd packages/signed_config && dart test 2>&1 | grep -q 'All tests passed'",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 2400,
       "irreversible": false,
-      "status": "pending",
-      "verify_note": "21 distinct gate ids are labelled today. The floor of 30 proves work happened rather than the command merely running."
+      "status": "pending"
     },
     {
-      "id": "E2-gate-1f",
-      "desc": "Gate 1f, the one gate in the plan never built: mid-call re-evaluation with hysteresis. Rate may move freely; packetization time needs a larger hysteresis band because changing it mid-call means renegotiating the session description.",
+      "id": "4-close-test-halves",
+      "desc": "Close whichever of 2b, 2c, 5e, 5f step 1 classified as MISSING TEST. Each test must pass a RED-GREEN double run: green on the healthy code, and RED when the gate's subject is reverted or disabled. A test that stays green with the subject reverted is not measuring the gate — it is the adjacent-proof failure this whole exercise exists to prevent, and it would be greppable and wrong.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test -f docs/GATE_REDGREEN.md && test $(grep -cE '^\\| *[0-9][a-z] +\\| *(green|GREEN) +\\| *(red|RED)' docs/GATE_REDGREEN.md) -ge 1 && bash tools/run_suites.sh --check-only",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 5400,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "5-gate-1f",
+      "desc": "Gate 1f, plus any feature halves step 1 found. 1f is the one gate whose CODE was never written: mid-call re-evaluation with hysteresis, where the rate may move freely but the packetization time needs a wider band, because changing it mid-call means renegotiating the session description.",
       "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3/packages/media_webrtc && dart analyze 2>&1 | grep -q 'No issues found' && dart test 2>&1 | grep -q 'All tests passed' && grep -rq \"test('1f\" test/",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 5400,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "6-carrier-constant",
+      "desc": "The unresolved finding that the 40-byte figure may under-count auth tags, negotiated header extensions and IPv6. NEVER edit it in place: the measured T2 rows were captured under it, and changing it silently invalidates them while they still read as measurements. Add a versioned third case and re-annotate the measured rows to name which case they used, or record why no correction is possible without a capture. The verifier checks the PAIRING, not the edit.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -qiE 'ESTIMATE|not measured' packages/media_webrtc/lib/src/opus_wire_budget.dart && grep -qE 'rtpUdpIp|carrier' packages/media_webrtc/test/opus_wire_budget_test.dart && cd packages/media_webrtc && dart test 2>&1 | grep -q 'All tests passed'",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
       "timeout_s": 3600,
       "irreversible": false,
       "status": "pending"
     },
     {
-      "id": "E3-pin-policy-files",
-      "desc": "The four pin-policy pieces the parallel session could not do: docs/TICKET4_PIN_RECORD.md, the weekly monitor workflow, the six verify gates as required checks, and the 180-day pin-age ceiling as a FAILING check.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test -f docs/TICKET4_PIN_RECORD.md && ls .github/workflows/ | grep -q 'pin' && grep -q '180' docs/TICKET4_PIN_RECORD.md",
+      "id": "7-first-record-dump",
+      "desc": "THE HARD ONE, 2-4 hours. The falsification test of TICKET4_DECISION.md section 5: a standalone program built against the BoringSSL clone already on disk that opens a connection under configuration alone and prints the exact bytes of the first record it writes. COMMIT THE TOOL BEFORE RUNNING IT, and checkpoint the captured data incrementally — then a cut loses the run rather than the tool.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && test -x tools/first_record_dump && tools/first_record_dump --self-test 2>&1 | grep -q 'bytes captured' && git log --oneline -6 | grep -q first_record_dump",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 14400,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "8-t4-verdict",
+      "desc": "Immediately after step 7, because this is cheap and losing it is expensive. Turn the provisional verdict into a decision from the dump's bytes, or move the choice to the backup. If the dump is inconclusive the correct outcome is that the status STAYS provisional with the reason recorded — forcing it would be the one dishonest move available here.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -qE 'STATUS +(DECIDED|PROVISIONAL — the dump was inconclusive)' docs/TICKET4_DECISION.md",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
+      "timeout_s": 2400,
+      "irreversible": false,
+      "status": "pending"
+    },
+    {
+      "id": "9-flake-timeboxed",
+      "desc": "The ONLY time-boxed item: 45 minutes or ten full suite runs, whichever comes first. By now the intact logs from every earlier step may already name the test. If it has not reproduced by the cap, the honest status is OPEN WITH THE LOG ARMED, recorded with the run count — not solved, and not quietly dropped.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -qiE 'FLAKE.*(identified|unreproduced after)' docs/PLAN_five_tickets_v4.md",
+      "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
       "timeout_s": 3600,
       "irreversible": false,
       "status": "pending"
     },
     {
-      "id": "F-repo-green",
-      "desc": "Whole-repository gate after everything above.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && t=0; for p in packages/signed_config packages/media_webrtc packages/call_core packages/adaptive_transport; do (cd $p && dart analyze 2>&1 | grep -q 'No issues found') || exit 1; n=$(cd $p && dart test 2>&1 | grep -oE '\\+[0-9]+' | tail -1 | tr -d '+'); t=$((t+n)); done; test \"$t\" -ge 975",
+      "id": "10-final-gate-handoff",
+      "desc": "Whole-repository gate, then the handoff: what closed with its command output, what stayed open with its dated blocker and what would unblock it, and the exact next action. Commit with an explicit file list — never a directory, which twice in this project swallowed ~200 pre-existing files belonging to someone else's unfinished work.",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -q 'first_record_dump' docs/HANDOFF_plan_v4_session.md && test $(git status --short | grep -c '^ M\\|^??') -gt 150 && git log --oneline -1 | grep -q .",
+      "arm_next_note": "deliberately absent. The plan lint refuses arm_next on the final step, because it would demand a continuation that cannot exist — the run ends here by design, not by forgetting.",
       "timeout_s": 3600,
       "irreversible": false,
-      "status": "pending",
-      "verify_note": "Sums the actual test count across packages and requires it to meet the floor already measured (205+116+169+485=975). A grep that matched nothing would otherwise report success with zero tests run."
-    },
-    {
-      "id": "G-handoff",
-      "desc": "Update docs/HANDOFF_plan_v4_session.md with what closed, what stayed open with its dated blocker, and the exact next action. Then the whole result is ready to hand to Fable 5 for review and debugging.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -q 'TICKET4_EXTENSION_INVENTORY' docs/HANDOFF_plan_v4_session.md && git describe --tags --abbrev=0 | grep -q .",
-      "timeout_s": 900,
-      "irreversible": false,
-      "status": "pending",
-      "verify_note": "Requires the handoff to name the artefact this run produced, not merely to have been touched."
+      "status": "pending"
     }
   ],
   "rules": [
     "A step passes only when its verify_cmd exits 0. Status is never written from prose.",
-    "Read command OUTPUT, not exit codes alone: flutter install printed 'Install failed' and exited 0 earlier in this project.",
-    "Commit after B, C, D and E with an explicit path list, never `git add -A`, so an abrupt end loses nothing.",
+    "A step does not close until arm_next exits 0 — the continuation must already be running before the turn ends. The absence of this mechanism produced a 6h40m silence on 2026-08-17, after the rule had been written in a document by the person who then broke it.",
+    "No verification command truncates its output. The flake lost its test name to a tail -1, which is the same class of error as reading an exit code instead of the message.",
+    "Read command OUTPUT, not exit codes alone: flutter install printed 'Install failed' and exited 0 here.",
+    "git add takes an explicit file list, never a directory.",
+    "A gate whose gap is the FEATURE is recorded as such. Closing a gate by naming an unrelated test after it is the worst available outcome, because it is greppable and wrong — hence the red-green double run in step 4.",
     "A measurement that cannot be taken is recorded as not-measured with its reason, never estimated into a cell that reads measured.",
-    "The ~210 pre-existing dirty files are never staged. A clean tree at the end means they were swallowed.",
-    "Write the ledger row in the same turn as the verifier output, or the row is not written.",
-    "If an external adjudication is stopped on a dense subject, do not soften the wording. Measure it, or record the scope UNCHECKED with the count of stops."
+    "A constant that measured results depend on is versioned, never edited in place.",
+    "Eight gates stay open by design. Nine means the goal was not met."
   ]
 }

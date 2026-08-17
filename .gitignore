@@ -26,5 +26,9 @@ pubspec.lock
 # conversation transcripts / logs — never in the technical repo
 chats.md
 *.log
+# Retained verification output (tools/run_suites.sh, cold_check.sh,
+# workspace_gate.sh). Kept on disk so an intermittent failure still has its log
+# tomorrow; not committed, because it is evidence of a run, not source.
+tools/suite-logs/
 models/
 __pycache__/

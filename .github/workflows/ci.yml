@@ -139,6 +139,14 @@ jobs:
       - name: Gate traceability (every declared gate reaches a test)
         run: python3 tools/label_gates.py --check
 
+      # The step above fails on CHANGE, not on the standing backlog: 15 gates
+      # are unproven and each is listed with a reason and the slot that closes
+      # it. That design has two failure directions — a new gap, and a listed
+      # gate that has quietly acquired a proof — and a guard only ever seen
+      # passing proves neither. This drives both.
+      - name: Gate ratchet fails on a new gap and on a stale entry
+        run: python3 tools/test_gate_ratchet.py
+
       # The ledger claims each wave closed with its verifier output in the
       # same row. A row without a command in it is a claim without evidence,
       # which is the failure mode this project spent the most effort on.
@@ -151,6 +159,16 @@ jobs:
             echo "::error::a ledger row claims a wave closed without quoting the command that proved it"
             exit 1
           fi
+
+      # A verification command whose output is piped into head/tail, or captured
+      # only into a shell variable, destroys the evidence it just produced. That
+      # is not hypothetical here: a `signed_config` test failed once in five
+      # runs and its NAME was lost to a `tail -1`, so the failure was seen and
+      # could not be investigated. The audit runs in under a second and needs no
+      # SDK, so it guards every future script rather than the two that were
+      # repaired by hand.
+      - name: Verification evidence survives its run (no truncating commands)
+        run: bash tools/run_suites.sh --check-only
 
       - name: Gate summary
         if: always()
