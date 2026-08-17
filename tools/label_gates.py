@@ -128,7 +128,6 @@ IN_FLIGHT = {
     '1f': 'never built; feature plus test. Slot: run step 5.',
     '2b': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
     '2c': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
-    '3c': 'test to be written. Slot: run step 2.',
     '5e': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
     '5f': 'classify missing-test vs missing-feature. Slot: run steps 1 and 4.',
     '6f': 'test to be written, re-deriving the finding. Slot: run step 3.',

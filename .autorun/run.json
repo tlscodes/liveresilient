@@ -3,7 +3,7 @@
   "armed_at": "2026-08-17",
   "approved_irreversible": [],
   "route_source": "Fable 5 sequencing consult 2026-08-17. Three corrections adopted: repair the truncated log FIRST so every later suite run is a free reproduction attempt; classify the unknown-scope gates before planning them, because a plan containing 'unknown' is not a plan; and commit the measurement tool before its multi-hour run so a cut loses the run, not the tool.",
-  "goal_verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && python3 tools/label_gates.py --check 2>&1 | grep -qE 'no proof found at all +8 ' && for p in packages/signed_config packages/media_webrtc packages/call_core packages/adaptive_transport; do (cd $p && dart analyze 2>&1 | grep -q 'No issues found' && dart test 2>&1 | grep -q 'All tests passed') || exit 1; done",
+  "goal_verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && python3 tools/label_gates.py --check > tools/suite-logs/goal_gates.log 2>&1 && grep -qE \"no proof found at all +8 \" tools/suite-logs/goal_gates.log && python3 tools/label_gates.py --check > /dev/null 2>&1 && python3 tools/test_gate_ratchet.py > tools/suite-logs/goal_ratchet.log 2>&1 && bash tools/run_suites.sh --only signed_config --only media_webrtc --only call_core --only adaptive_transport",
   "goal_verify_note": "Exactly eight gates may remain unproven: the seven of blocked ticket 4, plus 6d which an adjudicated decision defers to ticket 4's own trigger. Nine means the goal was not met, whatever the steps say.",
   "steps": [
     {
@@ -27,7 +27,7 @@
     {
       "id": "2-gate-3c",
       "desc": "Gate 3c — the rig row that goes through the production decision path. The code exists; nothing named 3c proves it. Cheap and certain, so it lands before anything long.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq \"test('3c\" apps/reference_app && cd apps/reference_app && dart analyze 2>&1 | grep -q 'No issues found' && flutter test 2>&1 | grep -q 'All tests passed'",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq \"test('3c\" apps/reference_app && bash tools/run_suites.sh --only reference_app",
       "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
       "timeout_s": 2400,
       "irreversible": false,
@@ -36,7 +36,7 @@
     {
       "id": "3-gate-6f",
       "desc": "Gate 6f. The finding is already recorded — names are not all known at the boundary, the seam stays per-attempt, a redirect can introduce up to five more. The test must RE-DERIVE that finding from the code, not assert the recorded sentence. A test that quotes a document proves the document exists.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq \"test('6f\" packages/signed_config/test apps/reference_app/test && cd packages/signed_config && dart test 2>&1 | grep -q 'All tests passed'",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq \"test('6f\" packages/signed_config/test apps/reference_app/test && bash tools/run_suites.sh --only signed_config",
       "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
       "timeout_s": 2400,
       "irreversible": false,
@@ -54,7 +54,7 @@
     {
       "id": "5-gate-1f",
       "desc": "Gate 1f, plus any feature halves step 1 found. 1f is the one gate whose CODE was never written: mid-call re-evaluation with hysteresis, where the rate may move freely but the packetization time needs a wider band, because changing it mid-call means renegotiating the session description.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3/packages/media_webrtc && dart analyze 2>&1 | grep -q 'No issues found' && dart test 2>&1 | grep -q 'All tests passed' && grep -rq \"test('1f\" test/",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq \"test('1f\" packages/media_webrtc/test && bash tools/run_suites.sh --only media_webrtc",
       "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
       "timeout_s": 5400,
       "irreversible": false,
@@ -63,7 +63,7 @@
     {
       "id": "6-carrier-constant",
       "desc": "The unresolved finding that the 40-byte figure may under-count auth tags, negotiated header extensions and IPv6. NEVER edit it in place: the measured T2 rows were captured under it, and changing it silently invalidates them while they still read as measurements. Add a versioned third case and re-annotate the measured rows to name which case they used, or record why no correction is possible without a capture. The verifier checks the PAIRING, not the edit.",
-      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -qiE 'ESTIMATE|not measured' packages/media_webrtc/lib/src/opus_wire_budget.dart && grep -qE 'rtpUdpIp|carrier' packages/media_webrtc/test/opus_wire_budget_test.dart && cd packages/media_webrtc && dart test 2>&1 | grep -q 'All tests passed'",
+      "verify_cmd": "cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -qiE 'ESTIMATE|not measured' packages/media_webrtc/lib/src/opus_wire_budget.dart && grep -qE 'rtpUdpIp|carrier' packages/media_webrtc/test/opus_wire_budget_test.dart && bash tools/run_suites.sh --only media_webrtc",
       "arm_next": "cd /Users/behnam/Downloads/voice_call_kit_v3 && (bash tools/run_suites.sh > /tmp/autorun_next.log 2>&1 &) && sleep 1 && pgrep -f run_suites >/dev/null",
       "timeout_s": 3600,
       "irreversible": false,

@@ -176,7 +176,11 @@ wanted() {
   return 1
 }
 
-for d in packages/*/; do
+# Packages AND apps. The app carries the gates that only exist at the wiring
+# level (the resolver seam, the ICE ledger, the startup rule), so a runner that
+# skips it cannot verify them — and those are exactly the gates whose tests the
+# plan's remaining steps add.
+for d in packages/*/ apps/*/; do
   p=$(basename "$d")
   wanted "$p" || continue
   [ -f "$d/pubspec.yaml" ] || continue
