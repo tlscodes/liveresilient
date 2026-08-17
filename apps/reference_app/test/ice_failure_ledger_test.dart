@@ -13,12 +13,12 @@ import 'package:reference_app/main.dart';
 /// code read as though the rule was live.
 void main() {
   group('IceFailureLedger', () {
-    test('an unknown call starts at zero', () {
+    test('3a  an unknown call starts at zero', () {
       final ledger = IceFailureLedger();
       expect(ledger.failureCountFor('call-a'), 0);
     });
 
-    test('failures accumulate per call and the rule can actually fire', () {
+    test('3a  failures accumulate per call and the rule can actually fire', () {
       final ledger = IceFailureLedger();
       expect(ledger.recordFailure('call-a'), 1);
       expect(ledger.failureCountFor('call-a'), 1);
@@ -31,14 +31,14 @@ void main() {
       );
     });
 
-    test('the count is per call, never shared', () {
+    test('3a  the count is per call, never shared', () {
       final ledger = IceFailureLedger();
       ledger.recordFailure('call-a');
       ledger.recordFailure('call-a');
       expect(ledger.failureCountFor('call-b'), 0);
     });
 
-    test('a call that ends is forgotten, so a new call starts clean', () {
+    test('3a  a call that ends is forgotten, so a new call starts clean', () {
       final ledger = IceFailureLedger();
       ledger.recordFailure('call-a');
       ledger.recordFailure('call-a');
@@ -46,7 +46,7 @@ void main() {
       expect(ledger.failureCountFor('call-a'), 0);
     });
 
-    test('memory is bounded: abandoned ids cannot accumulate forever', () {
+    test('3a  memory is bounded: abandoned ids cannot accumulate forever', () {
       final ledger = IceFailureLedger(maxEntries: 4);
       for (var i = 0; i < 40; i++) {
         ledger.recordFailure('call-$i');
@@ -56,7 +56,7 @@ void main() {
       expect(ledger.failureCountFor('call-39'), 1);
     });
 
-    test('touching a call keeps it from being evicted', () {
+    test('3a  touching a call keeps it from being evicted', () {
       final ledger = IceFailureLedger(maxEntries: 3);
       ledger.recordFailure('keep');
       ledger.recordFailure('a');
@@ -70,7 +70,7 @@ void main() {
       );
     });
 
-    test('the process-wide ledger exists and is usable by name', () {
+    test('3a  the process-wide ledger exists and is usable by name', () {
       // The point of naming it is that a caller cannot satisfy the API by
       // omission the way it could when the count was a defaulted parameter.
       final before = devIceFailureLedger.failureCountFor('probe-call');

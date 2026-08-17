@@ -28,7 +28,7 @@ void main() {
   );
 
   group('construction', () {
-    test('the endpoint must be https', () {
+    test('6c  the endpoint must be https', () {
       expect(
         () => HttpsNameLookup(
           endpoint: Uri.parse('http://lookup.example/resolve'),
@@ -39,7 +39,7 @@ void main() {
     });
 
     test(
-      'the endpoint address must be a numeric literal, never a name — a name '
+      '6c  the endpoint address must be a numeric literal, never a name — a name '
       'here would reintroduce the cycle',
       () {
         expect(
@@ -56,7 +56,7 @@ void main() {
       },
     );
 
-    test('bounds must be positive', () {
+    test('6c  bounds must be positive', () {
       expect(
         () => lookupWith(timeout: Duration.zero),
         throwsArgumentError,
@@ -67,7 +67,7 @@ void main() {
 
   group('the cycle-breaker', () {
     test(
-      "the endpoint's own host resolves to null, handing that one name to "
+      "6c  the endpoint's own host resolves to null, handing that one name to "
       'the platform on purpose',
       () async {
         final lookup = lookupWith();
@@ -80,19 +80,19 @@ void main() {
       },
     );
 
-    test('a numeric host needs no lookup and is returned as given', () async {
+    test('6c  a numeric host needs no lookup and is returned as given', () async {
       final lookup = lookupWith();
       expect(await lookup.lookup('198.51.100.7'), '198.51.100.7');
       expect(await lookup.lookup('::1'), '::1');
     });
 
-    test('an empty host is null, not a query', () async {
+    test('6c  an empty host is null, not a query', () async {
       expect(await lookupWith().lookup(''), isNull);
     });
   });
 
   group('failure degrades to the platform, never to an exception', () {
-    test('an unreachable endpoint returns null', () async {
+    test('6c  an unreachable endpoint returns null', () async {
       // 203.0.113.0/24 is reserved for documentation and routes nowhere.
       final lookup = lookupWith(
         address: '203.0.113.199',
@@ -102,7 +102,7 @@ void main() {
     });
 
     test(
-      'the deadline is aggregate: a trickling body cannot hold the path open',
+      '6c  the deadline is aggregate: a trickling body cannot hold the path open',
       () async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         addTearDown(() => server.close(force: true));
@@ -135,7 +135,7 @@ void main() {
       },
     );
 
-    test('a base case is answered without spending the deadline', () async {
+    test('6c  a base case is answered without spending the deadline', () async {
       final lookup = lookupWith(
         address: '203.0.113.199',
         timeout: const Duration(seconds: 30),
@@ -149,7 +149,7 @@ void main() {
       );
     });
 
-    test('a lookup never throws, whatever the endpoint does', () async {
+    test('6c  a lookup never throws, whatever the endpoint does', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() => server.close(force: true));
       server.listen((req) async {
@@ -186,15 +186,15 @@ void main() {
       return lookup.lookup('target.example');
     }
 
-    test('a non-object body is null', () async {
+    test('6c  a non-object body is null', () async {
       expect(await answerWith('not json at all'), isNull);
     });
 
-    test('a missing answer list is null', () async {
+    test('6c  a missing answer list is null', () async {
       expect(await answerWith(<String, Object?>{'Status': 0}), isNull);
     });
 
-    test('a record that is not an address record is not returned', () async {
+    test('6c  a record that is not an address record is not returned', () async {
       expect(
         await answerWith(<String, Object?>{
           'Answer': [
@@ -207,7 +207,7 @@ void main() {
       );
     });
 
-    test('a record whose data is not an address is not returned', () async {
+    test('6c  a record whose data is not an address is not returned', () async {
       expect(
         await answerWith(<String, Object?>{
           'Answer': [

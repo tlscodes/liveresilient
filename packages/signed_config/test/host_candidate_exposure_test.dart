@@ -37,7 +37,7 @@ void main() {
   );
 
   group('gate 3f — which inputs actually reach a relay-only policy', () {
-    test('the default profile offers host candidates, by design', () {
+    test('3f  the default profile offers host candidates, by design', () {
       final config = buildRtcIceConfig(
         manifestWith([turns('r.example'), stun('s.example')]),
       );
@@ -49,7 +49,7 @@ void main() {
       );
     });
 
-    test('the strict profile is relay-only', () {
+    test('3f  the strict profile is relay-only', () {
       final config = buildRtcIceConfig(
         manifestWith([turns('r.example'), stun('s.example')]),
         profile: IceProfile.strictRelay,
@@ -67,7 +67,7 @@ void main() {
       );
     });
 
-    test('a manifest flag reaches the strict profile', () {
+    test('3f  a manifest flag reaches the strict profile', () {
       final profile = iceProfileFor(
         iceFailureCount: 0,
         featureFlags: const {'strict_relay': true},
@@ -76,7 +76,7 @@ void main() {
     });
 
     test(
-      'the failure count reaches the strict profile at two, and only at two',
+      '3f  the failure count reaches the strict profile at two, and only at two',
       () {
         for (final (count, expected) in <(int, IceProfile)>[
           (0, IceProfile.normal),
@@ -94,7 +94,7 @@ void main() {
     );
 
     test(
-      'no input produces a relay-only policy with nothing to relay through',
+      '3f  no input produces a relay-only policy with nothing to relay through',
       () {
         // The one way to reach that state is a strict profile over a manifest
         // holding no relay entry, and it is refused rather than emitted.

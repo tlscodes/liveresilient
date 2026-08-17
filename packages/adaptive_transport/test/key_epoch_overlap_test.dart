@@ -39,7 +39,7 @@ void main() {
 
   group('the overlap', () {
     test(
-      'right after a rotation both epochs are accepted, but only the new one '
+      '3e  right after a rotation both epochs are accepted, but only the new one '
       'is emitted',
       () {
         final ring = ringAt(t0);
@@ -62,7 +62,7 @@ void main() {
       },
     );
 
-    test('once the overlap closes the outgoing epoch stops being accepted', () {
+    test('3e  once the overlap closes the outgoing epoch stops being accepted', () {
       final ring = ringAt(t0);
       withClock(Clock.fixed(t0), () => ring.rotate(freshNext: keyPair(3)));
 
@@ -76,7 +76,7 @@ void main() {
     });
 
     test(
-      'a zero overlap is exactly the failure the parameter exists to prevent',
+      '3e  a zero overlap is exactly the failure the parameter exists to prevent',
       () {
         final ring = ringAt(t0, grace: Duration.zero);
         withClock(Clock.fixed(t0), () => ring.rotate(freshNext: keyPair(3)));
@@ -91,7 +91,7 @@ void main() {
       },
     );
 
-    test('an overlap longer than an epoch is refused at construction', () {
+    test('3e  an overlap longer than an epoch is refused at construction', () {
       expect(
         () => RelayKeyRing(
           current: RelayKeyEpoch(epoch: 1, keyPair: keyPair(1)),
@@ -104,7 +104,7 @@ void main() {
   });
 
   group('one authority', () {
-    test('an unknown epoch is never accepted', () {
+    test('3e  an unknown epoch is never accepted', () {
       final ring = ringAt(t0);
       withClock(Clock.fixed(t0), () {
         expect(ring.acceptsEpoch(99), isFalse);
@@ -118,7 +118,7 @@ void main() {
       });
     });
 
-    test('validity is answered from ring state, never from the record', () {
+    test('3e  validity is answered from ring state, never from the record', () {
       final ring = ringAt(t0);
       withClock(Clock.fixed(t0), () => ring.rotate(freshNext: keyPair(3)));
       // The same epoch id answers differently at two instants, which is only
@@ -136,7 +136,7 @@ void main() {
   });
 
   group('bounded history and distribution', () {
-    test('history never grows past one past epoch', () {
+    test('3e  history never grows past one past epoch', () {
       final ring = ringAt(t0);
       var at = t0;
       for (var i = 0; i < 5; i++) {
@@ -154,7 +154,7 @@ void main() {
       });
     });
 
-    test('a peer learns a new epoch from public material only', () {
+    test('3e  a peer learns a new epoch from public material only', () {
       final ring = ringAt(t0);
       final announcement = withClock(Clock.fixed(t0), () => ring.announcement);
       expect(announcement.currentEpoch, 1);

@@ -62,7 +62,7 @@ void main() {
   }
 
   group('gate 6b — resolver wiring', () {
-    test('every session construction site names the resolver', () {
+    test('6b  every session construction site names the resolver', () {
       final offenders = <String>[];
       for (final file in libSources()) {
         final source = file.readAsStringSync();
@@ -82,7 +82,7 @@ void main() {
       );
     });
 
-    test('every socket construction site names the resolver', () {
+    test('6b  every socket construction site names the resolver', () {
       final offenders = <String>[];
       for (final file in libSources()) {
         if (file.path.endsWith('ws_connector.dart')) continue;
@@ -100,7 +100,7 @@ void main() {
     });
 
     test(
-      'a wrapper may not bake in the platform default, which would rebuild '
+      '6b  a wrapper may not bake in the platform default, which would rebuild '
       'the same defect one layer up',
       () {
         // A wrapper that hardcodes the choice satisfies the argument check
@@ -130,7 +130,7 @@ void main() {
       },
     );
 
-    test('the deliberate opt-out is a named, greppable value', () {
+    test('6b  the deliberate opt-out is a named, greppable value', () {
       final connector = File(
         '$root/lib/src/ws_connector.dart',
       ).readAsStringSync();

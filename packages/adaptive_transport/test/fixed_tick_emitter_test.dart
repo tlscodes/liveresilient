@@ -18,7 +18,7 @@ void main() {
   );
 
   group('FixedTickEmitter', () {
-    test('the mode is a required named choice, not an absent argument', () {
+    test('1d  the mode is a required named choice, not an absent argument', () {
       // Both states exist by name, so either can be grepped for and neither
       // can be reached by forgetting to pass an argument.
       expect(TickEmissionMode.values, hasLength(2));
@@ -26,7 +26,7 @@ void main() {
       expect(TickEmissionMode.values, contains(TickEmissionMode.fixedTick));
     });
 
-    test('off emits nothing at all', () async {
+    test('1d  off emits nothing at all', () async {
       var pulls = 0;
       final emitter = FixedTickEmitter(
         mode: TickEmissionMode.off,
@@ -44,7 +44,7 @@ void main() {
       expect(emitter.framesEmitted, 0);
     });
 
-    test('a non-positive tick is refused', () {
+    test('1d  a non-positive tick is refused', () {
       for (final bad in [Duration.zero, const Duration(milliseconds: -1)]) {
         expect(
           () => FixedTickEmitter(
@@ -59,7 +59,7 @@ void main() {
     });
 
     test(
-      'an empty queue still emits: the output rate is the tick, not the '
+      '1d  an empty queue still emits: the output rate is the tick, not the '
       'application rate',
       () {
         final emitter = FixedTickEmitter(
@@ -77,7 +77,7 @@ void main() {
       },
     );
 
-    test('a filler frame is identified and refuses to yield a payload', () {
+    test('1d  a filler frame is identified and refuses to yield a payload', () {
       final shaper = shaperWithSeed(3);
       final emitter = FixedTickEmitter(
         mode: TickEmissionMode.fixedTick,
@@ -96,7 +96,7 @@ void main() {
       );
     });
 
-    test('a real frame round-trips through shape, unshape and unwrap', () {
+    test('1d  a real frame round-trips through shape, unshape and unwrap', () {
       final payload = List<int>.generate(37, (i) => i * 3 % 251);
       final emitter = FixedTickEmitter(
         mode: TickEmissionMode.fixedTick,
@@ -111,7 +111,7 @@ void main() {
     });
 
     test(
-      'both kinds draw their length from the same distribution, so the two '
+      '1d  both kinds draw their length from the same distribution, so the two '
       'are not separable by size',
       () {
         // Same seed for both runs: identical draws, so any length difference
@@ -134,7 +134,7 @@ void main() {
       },
     );
 
-    test('counters separate the two kinds, which is what a shadow run reads',
+    test('1d  counters separate the two kinds, which is what a shadow run reads',
         () {
       var queued = 3;
       final emitter = FixedTickEmitter(
@@ -152,7 +152,7 @@ void main() {
       expect(emitter.framesEmitted, 10);
     });
 
-    test('run emits one frame per tick and stops on request', () async {
+    test('1d  run emits one frame per tick and stops on request', () async {
       var ticks = 0;
       final emitter = FixedTickEmitter(
         mode: TickEmissionMode.fixedTick,
@@ -175,7 +175,7 @@ void main() {
       expect(emitter.isRunning, isFalse);
     });
 
-    test('an unknown discriminator is refused rather than guessed', () {
+    test('1d  an unknown discriminator is refused rather than guessed', () {
       expect(
         () => FixedTickEmitter.unwrap(Uint8List.fromList([0x7F, 1, 2])),
         throwsFormatException,
