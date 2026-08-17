@@ -1,0 +1,9 @@
+record type            22
+record version         0x0301
+record length          76
+handshake type         1 (ClientHello)
+client_version         0x0303
+session_id length      0
+cipher suites (2)      0x1301 0x1302
+extensions (2)         0x0000 0x002b
+81 bytes captured
