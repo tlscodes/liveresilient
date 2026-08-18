@@ -1,0 +1,7 @@
+artifact: the workspace suite immediately BEFORE the second member was added
+date: 2026-08-18T01:00:00Z
+commit: 1693dd33341555c453e95cb19fdf0b6e6de00896 (the branch point of ticket4-second-member)
+reason: the migration invalidates the green that preceded it, so the baseline
+reason: we left is recorded as a committed fact rather than a recollection
+SUITES GREEN — 74 steps passed
+log: tools/suite-logs (kept by the runner)

@@ -54,8 +54,30 @@ import 'package:media_webrtc/media_webrtc.dart';
 
 import 'flutter_webrtc_data_channel.dart';
 
+/// [rtc.RTCDataChannelInit] whose [toMap] can express `maxRetransmits: 0`.
+///
+/// Upstream (webrtc_interface 1.5.1, rtc_data_channel.dart:20) emits the key
+/// only `if (maxRetransmits > 0)`, so ZERO — the fully-unreliable setting the
+/// fountain video lane's hard precondition requires — is silently dropped and
+/// the platform builds a RELIABLE channel: SCTP then retransmits underneath
+/// and rebuilds the exact loss-collapse that lane exists to escape. The
+/// darwin plugin reads the `maxRetransmits` map key verbatim when present.
+/// This override re-adds the key whenever the field was set (>= 0); it also
+/// still sets the base field, so platforms that read the field rather than
+/// the map stay correct. If upstream ever fixes the `> 0` filter this
+/// becomes a harmless duplicate assignment, not a double emit.
+final class RetransmitCapDataChannelInit extends rtc.RTCDataChannelInit {
+  @override
+  Map<String, dynamic> toMap() {
+    final map = super.toMap();
+    if (maxRetransmits >= 0) map['maxRetransmits'] = maxRetransmits;
+    return map;
+  }
+}
+
 final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
-  FlutterWebRtcPeerConnectionPort._(this._pc, this._localStream) {
+  FlutterWebRtcPeerConnectionPort._(this._pc, this._localStream,
+      [this._opusPolicy]) {
     _pc.onConnectionState = (rtc.RTCPeerConnectionState state) {
       final mapped = mapConnectionState(state);
       if (mapped != null && !_statusController.isClosed) {
@@ -78,20 +100,38 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
     };
   }
 
+  /// The config handed to `createPeerConnection`, as a pure function so it can
+  /// be asserted in a unit test — `createPeerConnection` itself needs a device.
+  static Map<String, dynamic> buildPeerConnectionConfig({
+    List<Map<String, Object>> iceServers = const [],
+    String iceTransportPolicy = 'all',
+  }) => <String, dynamic>{
+    'iceServers': iceServers,
+    'sdpSemantics': 'unified-plan',
+    'iceTransportPolicy': iceTransportPolicy,
+  };
+
   /// Creates the underlying [rtc.RTCPeerConnection], captures local media
   /// via `getUserMedia`, and adds the tracks as senders.
   ///
   /// The reference app is audio-first ([video] defaults to false); when no
   /// video sender exists, [setVideoSenderParameters] degrades to a no-op.
+  ///
+  /// [opusPolicy] applies the Opus fmtp knobs to every local description; null
+  /// keeps the stack's own defaults.
   static Future<FlutterWebRtcPeerConnectionPort> create({
     List<Map<String, Object>> iceServers = const [],
+    String iceTransportPolicy = 'all',
+    OpusSdpPolicy? opusPolicy,
     bool audio = true,
     bool video = false,
   }) async {
-    final pc = await rtc.createPeerConnection(<String, dynamic>{
-      'iceServers': iceServers,
-      'sdpSemantics': 'unified-plan',
-    });
+    final pc = await rtc.createPeerConnection(
+      buildPeerConnectionConfig(
+        iceServers: iceServers,
+        iceTransportPolicy: iceTransportPolicy,
+      ),
+    );
     rtc.MediaStream? stream;
     if (audio || video) {
       try {
@@ -123,11 +163,15 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
         rethrow;
       }
     }
-    return FlutterWebRtcPeerConnectionPort._(pc, stream);
+    return FlutterWebRtcPeerConnectionPort._(pc, stream, opusPolicy);
   }
 
   final rtc.RTCPeerConnection _pc;
   final rtc.MediaStream? _localStream;
+
+  /// Opus fmtp knobs applied to every local description. Null means the stack's
+  /// own defaults, which is what every existing caller gets.
+  final OpusSdpPolicy? _opusPolicy;
 
   final _statusController = StreamController<PeerConnectionStatus>.broadcast();
   final _candidatesController = StreamController<IceCandidate>.broadcast();
@@ -168,8 +212,18 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
   @override
   Future<void> setLocalDescription(SdpDescription description) async {
     _ensureOpen();
+    // Safety net: descriptions normally arrive here already transformed by
+    // _toSdpDescription (createOffer/createAnswer), and the transform is a
+    // fixpoint, so re-application is a no-op. This catches descriptions a
+    // caller constructed some other way. Remote descriptions are never
+    // touched — what the far end sent is what the far end wants. A rollback
+    // carries no SDP to edit.
+    final policy = _opusPolicy;
+    final sdp = (policy == null || policy.isNoop || description.type == 'rollback')
+        ? description.sdp
+        : applyOpusPolicy(description.sdp, policy);
     await _pc.setLocalDescription(
-      rtc.RTCSessionDescription(description.sdp, description.type),
+      rtc.RTCSessionDescription(sdp, description.type),
     );
   }
 
@@ -260,14 +314,14 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
   Future<MediaDataChannel> createDataChannel(DataChannelConfig config) async {
     _ensureOpen();
     config.validate();
-    final channel = await _pc.createDataChannel(
-      config.label,
-      rtc.RTCDataChannelInit()
-        ..negotiated = true
-        ..id = config.negotiatedId
-        ..ordered = config.ordered
-        ..binaryType = 'binary',
-    );
+    final init = RetransmitCapDataChannelInit()
+      ..negotiated = true
+      ..id = config.negotiatedId
+      ..ordered = config.ordered
+      ..binaryType = 'binary';
+    final cap = config.maxRetransmits;
+    if (cap != null) init.maxRetransmits = cap;
+    final channel = await _pc.createDataChannel(config.label, init);
     return FlutterWebRtcDataChannel(channel, config.label);
   }
 
@@ -413,7 +467,20 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
     if (sdp == null || sdp.isEmpty) {
       throw StateError('Platform returned an empty $expectedType SDP.');
     }
-    return SdpDescription(type: type, sdp: sdp);
+    // The Opus knobs are RECEIVE preferences: an encoder obeys the SDP it was
+    // SENT, so the knobs only act if they travel inside the offer or answer
+    // this port hands back for transmission. Applying them only at
+    // setLocalDescription reaches no encoder on either side. Measured
+    // 2026-08-06 (T2 `narrow`, 16 kbit/s): the transmitted offer carried no
+    // ptime, both senders kept 20 ms packets, and header overhead alone
+    // (320 bits x 50 pkt/s x 4 bridge crossings via the TURN hairpin) put
+    // 47-89 kbit/s on a 16 kbit/s pipe — the adaptation ladder lowered the
+    // PAYLOAD bitrate and the flood continued, because the flood was headers.
+    final policy = _opusPolicy;
+    final effective = (policy == null || policy.isNoop)
+        ? sdp
+        : applyOpusPolicy(sdp, policy);
+    return SdpDescription(type: type, sdp: effective);
   }
 
   void _ensureOpen() {

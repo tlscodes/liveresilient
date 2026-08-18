@@ -219,6 +219,12 @@ void main() {
           'signaling.send(description:answer)',
         ]);
         expect(h.media.signalingState, MediaSignalingState.stable);
+        // The scenario ends mid-negotiation, where a pending
+        // initial-connect watchdog is CORRECT (it is what turns a silent
+        // no-media stall into recovery). Close the call before asserting
+        // timer hygiene.
+        h.run(async, h.controller.dispose);
+        async.flushMicrotasks();
         expectNoPendingTimers(async);
       });
     });
@@ -243,6 +249,10 @@ void main() {
         );
         expect(rollbackIndex, greaterThanOrEqualTo(0));
         expect(answerIndex, greaterThan(rollbackIndex));
+        // Mid-negotiation end: the armed initial-connect watchdog is
+        // correct here; close the call before asserting timer hygiene.
+        h.run(async, h.controller.dispose);
+        async.flushMicrotasks();
         expectNoPendingTimers(async);
       });
     });
@@ -293,6 +303,10 @@ void main() {
         expect(h.media.remoteCandidates, isEmpty);
         expect(h.log.entries.last, 'signaling.send(description:offer)');
         expect(h.media.signalingState, MediaSignalingState.haveLocalOffer);
+        // Mid-negotiation end: the armed initial-connect watchdog is
+        // correct here; close the call before asserting timer hygiene.
+        h.run(async, h.controller.dispose);
+        async.flushMicrotasks();
         expectNoPendingTimers(async);
       });
     });
@@ -1419,7 +1433,9 @@ void main() {
       },
     );
 
-    test('operation timeout surfaces as a recovery cause', () {
+    test(
+        'operation timeout during initial connect is SOFT: the watchdog '
+        'alone declares stagnation (raised 2026-08-08, loss60)', () {
       fakeAsync((async) {
         final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
           ReconnectDecision.retry(const Duration(milliseconds: 50)),
@@ -1427,6 +1443,7 @@ void main() {
         final h = Harness(
           reconnectPolicy: policy,
           operationTimeout: const Duration(milliseconds: 10),
+          connectionTimeout: const Duration(seconds: 1),
         );
         h.transport.connectImpl = () => Completer<void>().future;
 
@@ -1434,6 +1451,15 @@ void main() {
         async.flushMicrotasks();
         async.elapse(const Duration(milliseconds: 10));
 
+        // The send-await timeout alone must NOT cycle the socket — under
+        // heavy loss the outbox is still retransmitting (measured
+        // 2026-08-08: 73s send timeouts cycled three ~150s draws and ate
+        // the whole connect budget).
+        expect(h.states.last.phase, CallPhase.connecting);
+
+        // True stagnation is still detected — by the ONE judge: the
+        // progress-aware watchdog, one modeled attempt cost later.
+        async.elapse(const Duration(seconds: 1));
         expect(h.states.last.phase, CallPhase.reconnecting);
       });
     });
@@ -1591,6 +1617,35 @@ void main() {
               'signaling.send(restart)',
               'media.createOffer(iceRestart:true)',
             ]),
+          );
+        });
+      },
+    );
+
+    test(
+      'receiver-role INITIAL-connect recovery only requests a restart — '
+      'the initiator owns every generation until first connected '
+      '(raised 2026-08-09)',
+      () {
+        fakeAsync((async) {
+          final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+            ReconnectDecision.retry(const Duration(milliseconds: 100)),
+          ]);
+          final h = Harness(role: CallRole.receiver, reconnectPolicy: policy);
+          h.run(async, h.controller.start);
+          async.flushMicrotasks();
+
+          h.log.entries.clear();
+          h.transport.emit(const TransportEvent(TransportStatus.disconnected));
+          async.flushMicrotasks();
+          async.elapse(const Duration(milliseconds: 100));
+
+          expect(h.log.entries, contains('signaling.send(restart)'));
+          expect(
+            h.log.entries,
+            isNot(contains('media.createOffer(iceRestart:true)')),
+            reason: 'a never-connected receiver must answer, never race '
+                'its own generation against the initiator',
           );
         });
       },
@@ -1854,13 +1909,14 @@ void main() {
       });
     });
 
-    test('a generic exception while applying a remote ICE candidate routes '
-        'to recovery (not protocol failure)', () {
+    test('an exception while applying a remote ICE candidate is DROPPED — '
+        'the call stays up (raised 2026-08-07: at-least-once delivery with '
+        'a budget-spanning outbox lifetime means a pre-restart candidate '
+        'can legitimately arrive after the restart rotated the ufrag, and '
+        'a spec-conforming engine rejects it; recovering on that rejection '
+        'restarts a healthy negotiation)', () {
       fakeAsync((async) {
-        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
-          ReconnectDecision.retry(const Duration(milliseconds: 50)),
-        ]);
-        final h = Harness(reconnectPolicy: policy);
+        final h = Harness();
         h.media.addRemoteIceCandidateImpl = (_) async {
           throw StateError('ICE agent rejected the candidate');
         };
@@ -1881,7 +1937,10 @@ void main() {
         );
         async.flushMicrotasks();
 
-        expect(h.states.last.phase, CallPhase.reconnecting);
+        expect(h.states.last.phase, CallPhase.connected);
+        h.run(async, h.controller.dispose);
+        async.flushMicrotasks();
+        expectNoPendingTimers(async);
       });
     });
 
@@ -1934,6 +1993,11 @@ void main() {
         h.media.emit(
           const MediaConnectionChangedEvent(MediaConnectionState.disconnected),
         );
+        async.flushMicrotasks();
+        // Squall grace (raised 2026-08-08): `disconnected` enters
+        // recovery only after connectionTimeout/4 (5s here) without a
+        // healing `connected`.
+        async.elapse(const Duration(milliseconds: 5001));
         async.flushMicrotasks();
         expect(h.states.last.phase, CallPhase.reconnecting);
 
@@ -2014,5 +2078,65 @@ void main() {
       expect(h.states.last.phase, CallPhase.ended);
       expect(h.states.last.endReason, CallEndReason.remoteHangup);
     });
+  });
+
+  group('12. Media start bound vs engine bound', () {
+    test(
+      'start hung 20 s still succeeds: getUserMedia latency is human '
+      '(permission prompt), bounded by mediaStartTimeout, not the 15 s '
+      'engine bound',
+      () {
+        fakeAsync((async) {
+          final h = Harness();
+          h.media.startImpl = () =>
+              Future<void>.delayed(const Duration(seconds: 20));
+          h.run(async, h.controller.start);
+          async.elapse(const Duration(seconds: 21));
+          async.flushMicrotasks();
+          expect(
+            h.states.any((s) => s.phase == CallPhase.negotiating),
+            true,
+            reason: 'a 20 s start must not be classified as a hung engine',
+          );
+          h.run(async, h.controller.dispose);
+          async.flushMicrotasks();
+          expectNoPendingTimers(async);
+        });
+      },
+    );
+
+    test(
+      'setLocalDescription hung 15 s fails fast: compute calls keep the '
+      'fixed engine bound',
+      () {
+        fakeAsync((async) {
+          final h = Harness();
+          h.media.setLocalDescriptionImpl = (description) =>
+              Completer<void>().future;
+          h.run(async, h.controller.start);
+          async.flushMicrotasks();
+          async.elapse(const Duration(seconds: 14));
+          async.flushMicrotasks();
+          expect(
+            h.states.last.phase,
+            isNot(CallPhase.failed),
+            reason: 'must not fail before the 15 s engine bound',
+          );
+          async.elapse(const Duration(seconds: 2));
+          async.flushMicrotasks();
+          expect(
+            h.states.last.phase,
+            CallPhase.failed,
+            reason:
+                'the hung compute call must fail at the fixed 15 s engine '
+                'bound (the Harness policy retries nothing), not wait out '
+                'the 30 s media-start bound',
+          );
+          h.run(async, h.controller.dispose);
+          async.flushMicrotasks();
+          expectNoPendingTimers(async);
+        });
+      },
+    );
   });
 }

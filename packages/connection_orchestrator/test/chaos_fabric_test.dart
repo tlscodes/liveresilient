@@ -6,6 +6,8 @@
 /// kind of check that catches what nobody thought of.
 library;
 
+import 'dart:convert';
+
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:device_link/device_link.dart';
 import 'package:test/test.dart';
@@ -43,11 +45,37 @@ void main() {
       },
     );
 
-    test('the same seed produces the same world twice', () async {
-      // Without this, a green run proves nothing about the next one.
-      final first = chaosScript(31337, laneCount: 4);
-      final second = chaosScript(31337, laneCount: 4);
-      expect(first.map((e) => e.toString()), second.map((e) => e.toString()));
+    // Reproducibility, checked two ways.
+    //
+    // Comparing one in-process script to another in-process script is a
+    // tautology: same binary, same SDK, same machine, same second. It
+    // passes by construction and cannot see the failure it claims to
+    // guard — the script changing between builds, which would silently
+    // turn "seed 42 is green" into a statement about a different world.
+    //
+    // Run 1 vs run 2 is kept (it catches hidden global state leaking
+    // between calls); the actual guard is the frozen digest, an oracle
+    // that does not come from this run.
+    test('two independent runs of the same seed are byte-for-byte equal', () {
+      final first = _canonicalScriptBytes(chaosScript(31337, laneCount: 4));
+      final second = _canonicalScriptBytes(chaosScript(31337, laneCount: 4));
+      expect(first, isNotEmpty);
+      expect(first, orderedEquals(second));
+    });
+
+    test('the seeded world matches its frozen golden digest', () {
+      // Measured once (2026-07-31, Dart 3.12.2) and pinned. A failure here
+      // means the generated world moved: the generator, the event
+      // rendering, or dart:math Random changed. All three are real
+      // findings — record why before re-measuring the constant.
+      final script = chaosScript(31337, laneCount: 4);
+      expect(script.length, _chaosGoldenEventCount);
+      expect(
+        _fnv1a64Hex(_canonicalScriptBytes(script)),
+        equals(_chaosScriptGoldenDigest),
+        reason:
+            'chaosScript(31337, laneCount: 4) drifted from the frozen world',
+      );
     });
   });
 
@@ -191,4 +219,31 @@ void main() {
       expect(pending, contains('urgent'));
     });
   });
+}
+
+/// Number of events in the frozen world below.
+const _chaosGoldenEventCount = 120;
+
+/// FNV-1a/64 over the canonical rendering of chaosScript(31337, laneCount: 4).
+/// Measured 2026-07-31 on Dart 3.12.2 (stable), macos_x64.
+const _chaosScriptGoldenDigest = '66e6264667ec9e61';
+
+/// Canonical wire form of a chaos script: each event rendered by its own
+/// toString(), newline-separated, UTF-8 encoded. Fixed separator and fixed
+/// encoding so the digest cannot move because of platform string handling.
+List<int> _canonicalScriptBytes(List<ChaosEvent> script) =>
+    utf8.encode(script.map((e) => e.toString()).join('\n'));
+
+/// FNV-1a 64-bit in [BigInt] so the result is identical on the VM and on
+/// web (53-bit ints). Dependency-free on purpose: the oracle must not move
+/// when a package version moves.
+String _fnv1a64Hex(List<int> bytes) {
+  final mask = (BigInt.one << 64) - BigInt.one;
+  final prime = BigInt.parse('1099511628211');
+  var hash = BigInt.parse('14695981039346656037');
+  for (final b in bytes) {
+    hash = (hash ^ BigInt.from(b)) & mask;
+    hash = (hash * prime) & mask;
+  }
+  return hash.toRadixString(16).padLeft(16, '0');
 }

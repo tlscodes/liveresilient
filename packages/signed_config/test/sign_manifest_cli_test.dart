@@ -6,14 +6,41 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:signed_config/signed_config.dart';
 import 'package:test/test.dart';
 
-/// The `signed_config` package root — tests run with cwd set to it by
-/// `dart test`, and the CLIs are invoked relative to that root exactly as
-/// documented in their usage strings.
-final String _packageRoot = Directory.current.path;
+/// The `signed_config` package root, resolved from the PACKAGE URI rather than
+/// from the current directory.
+///
+/// It was `Directory.current.path`, on the assumption that `dart test` always
+/// runs with cwd at the package root. It does not: `dart test packages/foo`
+/// from the repository root is a perfectly ordinary invocation — it is the one
+/// `tools/verify_all.sh` used — and under it every `bin/...` path resolved
+/// against the WORKSPACE root instead. The result was two red tests reporting
+/// `Could not find file bin/manifest_keygen.dart` while nothing whatsoever was
+/// wrong with the CLIs.
+///
+/// That failure mode is worth naming: a test whose result depends on where it
+/// was invoked from reports on the invocation, not on the code. A red that
+/// means "you ran me from the wrong directory" costs exactly as much attention
+/// as a real one and buys nothing.
+///
+/// `Isolate.resolvePackageUri` answers the question the test actually has —
+/// "where is this package on disk" — and gives the same answer from any cwd.
+late final String _packageRoot;
+
+Future<String> _resolvePackageRoot() async {
+  final libUri = await Isolate.resolvePackageUri(
+    Uri.parse('package:signed_config/signed_config.dart'),
+  );
+  if (libUri == null) {
+    throw StateError('cannot resolve package:signed_config on this platform');
+  }
+  // .../signed_config/lib/signed_config.dart -> .../signed_config
+  return File(libUri.toFilePath()).parent.parent.path;
+}
 
 Future<ProcessResult> _run(List<String> args) {
   return Process.run('dart', ['run', ...args], workingDirectory: _packageRoot);
@@ -21,6 +48,10 @@ Future<ProcessResult> _run(List<String> args) {
 
 void main() {
   late Directory tempDir;
+
+  setUpAll(() async {
+    _packageRoot = await _resolvePackageRoot();
+  });
 
   setUp(() {
     tempDir = Directory.systemTemp.createTempSync('sign_manifest_cli_test_');

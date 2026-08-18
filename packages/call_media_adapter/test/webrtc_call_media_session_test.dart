@@ -14,8 +14,16 @@ class _FakeMediaDataChannel implements mw.MediaDataChannel {
   @override
   Stream<List<int>> get inbound => const Stream.empty();
 
+  // In-memory fake: nothing ever queues.
+  @override
+  int? get bufferedAmount => null;
+
   @override
   Stream<mw.MediaDataChannelState> get state => const Stream.empty();
+
+  @override
+  mw.MediaDataChannelState get currentState =>
+      mw.MediaDataChannelState.connecting;
 
   @override
   Future<void> send(List<int> frame) async {}

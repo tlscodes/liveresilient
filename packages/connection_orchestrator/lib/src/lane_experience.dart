@@ -20,6 +20,8 @@ class DeliveryContext {
     required this.timeBucket,
     this.place = 'unknown',
     this.priority = LinkMessagePriority.bulk,
+    this.lossFraction,
+    this.rttMs,
   });
 
   /// Derives the context from a wall-clock ms timestamp: four six-hour
@@ -28,12 +30,16 @@ class DeliveryContext {
     int nowMs, {
     String place = 'unknown',
     LinkMessagePriority priority = LinkMessagePriority.bulk,
+    double? lossFraction,
+    double? rttMs,
   }) {
     final hour = DateTime.fromMillisecondsSinceEpoch(nowMs).hour;
     return DeliveryContext(
       timeBucket: hour ~/ 6,
       place: place,
       priority: priority,
+      lossFraction: lossFraction,
+      rttMs: rttMs,
     );
   }
 
@@ -46,7 +52,52 @@ class DeliveryContext {
 
   final LinkMessagePriority priority;
 
-  String get key => '$timeBucket|$place';
+  /// Measured packet-loss fraction (0..1) when the caller has one; null
+  /// keeps the legacy two-part [key], so stats persisted before condition
+  /// bands existed stay live.
+  final double? lossFraction;
+
+  /// Measured round-trip time in milliseconds; null = unmeasured.
+  final double? rttMs;
+
+  /// Coarse loss-rate band label used in [key].
+  ///
+  /// Edges 0.05 / 0.15 / 0.30: 0.30 is the proven arq-to-fountain switch
+  /// threshold from the network rig (RIG_GUIDE loss 0.2/0.3 sections), so
+  /// the historic switch point sits exactly on the l2/l3 band edge; 0.05
+  /// and 0.15 separate the rig's mild profile families (the loss10
+  /// profile, 0.10, lands inside 'l1').
+  static String lossBand(double lossFraction) {
+    // 0.05: upper edge of the near-lossless band (rig clean profiles).
+    if (lossFraction < 0.05) return 'l0';
+    // 0.15: upper edge of the mild-loss band (rig loss10 = 0.10 is here).
+    if (lossFraction < 0.15) return 'l1';
+    // 0.30: the rig-proven arq-to-fountain switch threshold.
+    if (lossFraction < 0.30) return 'l2';
+    return 'l3';
+  }
+
+  /// Coarse round-trip-time band label used in [key].
+  static String rttBand(double rttMs) {
+    // 150 ms: the interactive-latency threshold.
+    if (rttMs < 150) return 'r0';
+    // 600 ms: the rig's extreme-profile p95 round-trip class.
+    if (rttMs < 600) return 'r1';
+    return 'r2';
+  }
+
+  /// Learning key. Both conditions null → the original two-part
+  /// 'timeBucket|place' shape, so stats persisted under the old key stay
+  /// live. Any condition present → four parts, with 'x' standing in for a
+  /// missing one.
+  String get key {
+    final loss = lossFraction;
+    final rtt = rttMs;
+    if (loss == null && rtt == null) return '$timeBucket|$place';
+    final lossPart = loss == null ? 'x' : lossBand(loss);
+    final rttPart = rtt == null ? 'x' : rttBand(rtt);
+    return '$timeBucket|$place|$lossPart|$rttPart';
+  }
 }
 
 class _Stats {
@@ -135,7 +186,9 @@ class LaneExperience {
       explorationWeight: explorationWeight,
     );
     final total = json['totalAttempts'];
-    if (total is num) exp._totalAttempts = total.toDouble();
+    if (total is num && total.toDouble().isFinite) {
+      exp._totalAttempts = total.toDouble();
+    }
     final stats = json['stats'];
     if (stats is Map) {
       for (final entry in stats.entries) {
@@ -143,7 +196,10 @@ class LaneExperience {
         if (entry.key is! String || v is! Map) continue;
         final s = v['s'];
         final f = v['f'];
-        if (s is! num || f is! num || s < 0 || f < 0) continue;
+        // isFinite also rejects NaN, which passes a bare `< 0` check.
+        if (s is! num || f is! num) continue;
+        if (!s.toDouble().isFinite || !f.toDouble().isFinite) continue;
+        if (s < 0 || f < 0) continue;
         exp._stats[entry.key as String] = _Stats()
           ..successes = s.toDouble()
           ..failures = f.toDouble();

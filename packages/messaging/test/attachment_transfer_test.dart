@@ -221,6 +221,11 @@ void main() {
       a.peer = b;
       b.peer = a;
       final alice = ReliableMessenger(a, peerId: 'alice');
+      // Ack-paced streaming (2026-08-07) completes `done` on DELIVERY, so
+      // the far end must actually ack — a real messenger does (auto-ack on
+      // receipt), exactly like production.
+      final bob = ReliableMessenger(b, peerId: 'bob');
+      addTearDown(bob.close);
 
       final handle = startAttachmentSend(
         alice,

@@ -17,6 +17,9 @@ class _InMemoryChannel implements MediaDataChannel {
   @override
   final String label;
 
+  @override
+  int? get bufferedAmount => null; // in-memory: nothing ever queues
+
   _InMemoryChannel? _peer;
   var _closed = false;
   final _inbound = StreamController<List<int>>.broadcast();
@@ -30,7 +33,13 @@ class _InMemoryChannel implements MediaDataChannel {
     return (a, b);
   }
 
-  void open() => _state.add(MediaDataChannelState.open);
+  @override
+  var currentState = MediaDataChannelState.connecting;
+
+  void open() {
+    currentState = MediaDataChannelState.open;
+    _state.add(MediaDataChannelState.open);
+  }
 
   @override
   Stream<List<int>> get inbound => _inbound.stream;
@@ -49,6 +58,7 @@ class _InMemoryChannel implements MediaDataChannel {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    currentState = MediaDataChannelState.closed;
     _state.add(MediaDataChannelState.closed);
     await _inbound.close();
     await _state.close();
@@ -87,6 +97,23 @@ void main() {
         throwsArgumentError,
       );
       const DataChannelConfig(negotiatedId: 65534).validate(); // boundary OK
+    });
+
+    test('maxRetransmits: null (reliable default) and 0..65535 valid, '
+        'out-of-range rejected', () {
+      const DataChannelConfig().validate(); // null = reliable, valid
+      expect(const DataChannelConfig().maxRetransmits, isNull);
+      // 0 is the fountain lane's hard precondition — must be expressible.
+      const DataChannelConfig(maxRetransmits: 0).validate();
+      const DataChannelConfig(maxRetransmits: 65535).validate();
+      expect(
+        () => const DataChannelConfig(maxRetransmits: -1).validate(),
+        throwsArgumentError,
+      );
+      expect(
+        () => const DataChannelConfig(maxRetransmits: 65536).validate(),
+        throwsArgumentError,
+      );
     });
   });
 

@@ -119,6 +119,7 @@ final class ExponentialBackoffReconnectPolicy implements ReconnectPolicy {
     this.baseDelay = const Duration(milliseconds: 500),
     this.maxDelay = const Duration(seconds: 20),
     this.maxElapsed = const Duration(minutes: 2),
+    this.provenance,
     Random? random,
   }) : _random = random ?? Random() {
     if (maxAttempts < 1) {
@@ -151,12 +152,35 @@ final class ExponentialBackoffReconnectPolicy implements ReconnectPolicy {
   /// regardless of [maxAttempts].
   final Duration maxElapsed;
 
+  /// Where this policy's numbers came from (e.g. the derived budget's
+  /// conditions and attempt cost), stamped into the give-up reason so the
+  /// terminal error carries its own evidence. Filled by
+  /// `AdaptiveConnectionBudget.toReconnectPolicy`; null adds nothing.
+  final String? provenance;
+
   final Random _random;
 
   @override
   ReconnectDecision evaluate(ReconnectContext context) {
     if (context.attempt > maxAttempts || context.elapsed >= maxElapsed) {
-      return ReconnectDecision.giveUp('Reconnect budget exhausted');
+      // A give-up that names no numbers sends the next debugging session
+      // into the logs to reconstruct what this line already knew: which cap
+      // bound, how far the episode got, and what budget it was judged
+      // against (measured 2026-08-06: every hostile-profile row ended in a
+      // bare "Reconnect budget exhausted").
+      final bound = context.attempt > maxAttempts
+          ? 'attempts ${context.attempt} > max $maxAttempts'
+          : 'elapsed ${context.elapsed.inSeconds}s >= '
+              'max ${maxElapsed.inSeconds}s';
+      var reason =
+          'Reconnect budget exhausted ($bound; '
+          'attempt ${context.attempt}/$maxAttempts, '
+          'elapsed ${context.elapsed.inSeconds}s/${maxElapsed.inSeconds}s'
+          '${provenance == null ? '' : '; $provenance'})';
+      if (reason.length > 256) {
+        reason = '${reason.substring(0, 253)}...';
+      }
+      return ReconnectDecision.giveUp(reason);
     }
 
     var capMilliseconds = baseDelay.inMilliseconds;

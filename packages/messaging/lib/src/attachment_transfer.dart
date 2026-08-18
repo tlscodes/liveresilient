@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'attachment.dart';
+import 'attachment_route_decision.dart';
 import 'reliable_messenger.dart';
 
 /// One slice of an [Attachment]. Chunks are sent as ordinary reliable text
@@ -190,9 +191,21 @@ class AttachmentSendProgress {
 /// [startAttachmentSend]: a [progress] stream plus current-state getters
 /// ([bytesSent]/[totalBytes]) so late subscribers can still render.
 class AttachmentSendHandle {
-  AttachmentSendHandle._(this.totalBytes);
+  AttachmentSendHandle._(this.totalBytes, this.routeDecision);
 
   final int totalBytes;
+
+  /// What the media router said about this transfer, or null when no advisor
+  /// was supplied.
+  ///
+  /// Exposed rather than merely logged because the eventual switch changes what
+  /// [progress] MEANS: on the acknowledged path "bytes sent" is very nearly
+  /// "bytes delivered", and on a rateless path it is not — a rateless sender
+  /// deliberately emits more bytes than the object contains. A UI that shows a
+  /// percentage has to know which regime it is in, and this is where it will
+  /// find out.
+  final AttachmentRouteDecision? routeDecision;
+
   int _bytesSent = 0;
   int get bytesSent => _bytesSent;
 
@@ -214,29 +227,102 @@ AttachmentSendHandle startAttachmentSend(
   ReliableMessenger messenger,
   Attachment attachment, {
   int maxChunkBytes = 12 * 1024,
+  AttachmentRouteAdvisor? routeAdvisor,
 }) {
   final chunks = AttachmentChunker.split(
     attachment,
     maxChunkBytes: maxChunkBytes,
   );
-  final handle = AttachmentSendHandle._(attachment.sizeBytes);
+  // Shadow mode: ask, record, and keep sending the old way. Obeying the answer
+  // needs the receive-side transferId -> layer router, which does not exist in
+  // the app yet; emitting rateless symbols nobody reassembles would turn a slow
+  // photo into a lost one. See attachment_route_decision.dart for why the
+  // question is asked anyway.
+  final decision = routeAdvisor?.call(
+    byteLength: attachment.sizeBytes,
+    isImage: attachment.kind == MediaKind.image,
+  );
+  final handle = AttachmentSendHandle._(attachment.sizeBytes, decision);
   handle.done = () async {
     // Yield one microtask so a caller subscribing synchronously after this
     // returns still sees the initial (0, totalBytes) snapshot.
     await null;
+    // ACK-PACED STREAMING: one chunk in flight, the next handed over only
+    // after this one's delivery is confirmed. The channel underneath is
+    // already reliable-ordered, so blasting every chunk at once only fills
+    // the transport's send buffer — measured 2026-08-07 (T2 narrow,
+    // 16 kbit/s): a 48 KB photo parked 100 KB+ of chunks plus app-layer
+    // retransmit duplicates in the SCTP buffer and the voice note queued
+    // behind minutes of backlog, missing every window while the photo's
+    // "delivered" chunks were still draining. One in flight keeps the pipe
+    // busy without bloating it, and a failed chunk surfaces here instead
+    // of as a silent stall.
+    //
+    // The deliveries subscription is opened BEFORE the first send and
+    // events are buffered by id: `deliveries` is a broadcast stream, and
+    // an ack that lands between send() resuming and a later listen() would
+    // otherwise be DROPPED — the id leaves the messenger's pending map
+    // before the event is emitted, so no later event ever comes and the
+    // transfer would hang forever (adversarial review finding,
+    // 2026-08-07).
+    final unclaimed = <String, DeliveryState>{};
+    final waiters = <String, Completer<DeliveryState>>{};
+    final deliverySub = messenger.deliveries.listen((d) {
+      final waiter = waiters.remove(d.$1);
+      if (waiter != null) {
+        waiter.complete(d.$2);
+      } else {
+        unclaimed[d.$1] = d.$2;
+      }
+    });
+    Future<DeliveryState> deliveryOf(String messageId) {
+      final buffered = unclaimed.remove(messageId);
+      if (buffered != null) return Future.value(buffered);
+      return (waiters[messageId] = Completer<DeliveryState>()).future;
+    }
+
     try {
       handle._progress.add(AttachmentSendProgress(0, handle.totalBytes));
       for (final chunk in chunks) {
-        await messenger.send(chunk.encode());
+        final message = await messenger.send(chunk.encode());
+        final state = await deliveryOf(message.id);
+        if (state != DeliveryState.delivered) {
+          throw StateError(
+            'attachment ${attachment.id} chunk ${chunk.index} failed '
+            'delivery (${state.name})',
+          );
+        }
         handle._bytesSent += chunk.data.length;
         handle._progress.add(
           AttachmentSendProgress(handle._bytesSent, handle.totalBytes),
         );
       }
+    } catch (error, stack) {
+      // THE PROGRESS STREAM MUST CARRY THE FAILURE.
+      //
+      // It used to close cleanly on error, so a subscriber watching only
+      // `progress` — the natural thing for a progress bar — saw `onDone` at
+      // whatever fraction the failure reached and rendered a stalled bar
+      // vanishing as if the send had succeeded. The doc promised "closes on
+      // error" and delivered exactly that, which was the problem: closing is
+      // indistinguishable from finishing.
+      handle._progress.addError(error, stack);
+      rethrow;
     } finally {
+      // Detached, not awaited: cancel() of a listener on a broadcast
+      // controller returns the SDK's root-zone _nullFuture; awaiting it
+      // parks the continuation outside any fake_async zone (same trap as
+      // call_core's teardown, measured 2026-08-07).
+      unawaited(deliverySub.cancel());
       await handle._progress.close();
     }
   }();
+  // The future is created eagerly, so a caller that never awaits `done` would
+  // otherwise get an unhandled zone error from a method named "start" —
+  // exactly the shape that invites fire-and-forget. The error is preserved on
+  // `done` for whoever does await it, and swallowed here only so that not
+  // awaiting is a lost report rather than a crashed isolate.
+  unawaited(handle.done.catchError((Object _) {}));
   return handle;
 }
 

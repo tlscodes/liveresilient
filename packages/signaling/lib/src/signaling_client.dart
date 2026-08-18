@@ -66,6 +66,29 @@ class SignalingClientConfig {
   /// never sits in `connecting` indefinitely.
   final Duration connectTimeout;
 
+  /// Extra concurrent sockets for HEDGED transmission (raised 2026-08-09,
+  /// loss60): one TCP stream under heavy loss stalls for tens of seconds
+  /// on retransmission, and a stalled stream serialized the whole
+  /// negotiation. Each outbound frame fans out over every open socket
+  /// (first delivery wins — the relay's multi-socket seat fans inbound
+  /// frames back to all of them, and the client deduplicator drops the
+  /// copies). 0 = classic single-socket behavior.
+  final int hedgeSockets;
+
+  /// How long an enqueued outbound message keeps being retried before the
+  /// outbox gives up with `OutboxOutcome.expired`.
+  ///
+  /// Was a fixed 2 minutes inside `OutboxConfig` with no path to change it.
+  /// Measured 2026-08-07 (T2 loss60, 60% per-direction loss): a signaling
+  /// send legitimately outlived 2 minutes across socket flaps and
+  /// retransmit ladders, the expiry fired, the caller treated it as a
+  /// recovery trigger, and the recovery it triggered restarted the very
+  /// negotiation the message belonged to. The invariant this field exists
+  /// to carry: the outbox never gives up before the reconnect budget does
+  /// (`AdaptiveConnectionBudget.signalingTiming` derives it as
+  /// `max(floor, maxElapsed)`).
+  final Duration outboxMessageLifetime;
+
   // Not a `const` constructor: validation below must run eagerly and
   // unconditionally (an `assert` in a const-constructor initializer list
   // must be a compile-time-constant expression, and `Duration` getters/
@@ -80,7 +103,16 @@ class SignalingClientConfig {
     this.maxReconnectAttempts = 10,
     this.maxEnvelopeAge = const Duration(minutes: 5),
     this.connectTimeout = const Duration(seconds: 10),
+    this.outboxMessageLifetime = const Duration(minutes: 2),
+    this.hedgeSockets = 0,
   }) {
+    if (outboxMessageLifetime <= Duration.zero) {
+      throw ArgumentError.value(
+        outboxMessageLifetime,
+        'outboxMessageLifetime',
+        'Must be positive.',
+      );
+    }
     if (heartbeatInterval <= Duration.zero) {
       throw ArgumentError.value(
         heartbeatInterval,
@@ -158,6 +190,10 @@ class SignalingClient {
 
   SignalingSocket? _socket;
   StreamSubscription<List<int>>? _frameSubscription;
+  final List<SignalingSocket> _hedges = <SignalingSocket>[];
+  final List<StreamSubscription<List<int>>> _hedgeSubscriptions =
+      <StreamSubscription<List<int>>>[];
+  bool _hedgeDialInFlight = false;
   Timer? _heartbeatTimer;
   Timer? _livenessTimer;
   Timer? _reconnectTimer;
@@ -165,6 +201,11 @@ class SignalingClient {
   SignalingConnectionState _state = SignalingConnectionState.disconnected;
   int _reconnectAttempts = 0;
   int _outgoingSequence = 0;
+
+  /// The room id of the most recent APP envelope through [send] or
+  /// [_onFrame] — heartbeats carry it so every socket's first frame pins
+  /// the socket to the call room on the relay (see _startHeartbeat).
+  String? _appRoomId;
   bool _disposed = false;
   bool _connectInFlight = false;
   final math.Random _random = math.Random.secure();
@@ -188,7 +229,11 @@ class SignalingClient {
         'Signaling requires a wss:// endpoint.',
       );
     }
-    _outbox = ReliableOutbox(transmit: _transmitFrame, store: outboxStore);
+    _outbox = ReliableOutbox(
+      transmit: _transmitFrame,
+      store: outboxStore,
+      config: OutboxConfig(messageLifetime: this.config.outboxMessageLifetime),
+    );
   }
 
   /// Application-facing inbound envelopes (acks and heartbeats are consumed
@@ -223,6 +268,7 @@ class SignalingClient {
     required Map<String, Object?> payload,
   }) {
     if (_disposed) throw StateError('Client has been disposed.');
+    _appRoomId = callId;
     _outgoingSequence++;
     final envelope = SignalEnvelope(
       messageId: generateSignalMessageId(),
@@ -275,6 +321,7 @@ class SignalingClient {
       _setState(SignalingConnectionState.connected);
       _startHeartbeat();
       _armLivenessTimer();
+      unawaited(_topUpHedges());
       _outbox.flush();
     } catch (_) {
       if (!_disposed) {
@@ -287,8 +334,44 @@ class SignalingClient {
 
   void _onSocketLost() {
     if (_disposed) return;
+    if (_promoteHedge()) return;
     _teardownSocket();
     _scheduleReconnect();
+  }
+
+  /// HEDGE PROMOTION (raised 2026-08-09, loss60): losing the primary used
+  /// to tear down every healthy hedge with it — the redundancy bought for
+  /// heavy loss had a single point of failure, so one server-side seat
+  /// eviction or one liveness lapse cost the whole transport plus three
+  /// fresh dial lotteries at 60% loss. Now the oldest hedge takes over as
+  /// primary: the dead primary is closed, the hedge's existing
+  /// subscription is retargeted to the primary handlers (frames are
+  /// single-subscription — never cancel + re-listen), timers restart, the
+  /// hedge pool re-fills lazily, and pending envelopes flush immediately.
+  /// Returns false when no hedge remains — only then does the full
+  /// teardown + reconnect lottery run.
+  bool _promoteHedge() {
+    _heartbeatTimer?.cancel();
+    _livenessTimer?.cancel();
+    _frameSubscription?.cancel();
+    final dead = _socket;
+    _socket = null;
+    dead?.close().catchError((Object _) {});
+    if (_hedges.isEmpty) {
+      return false;
+    }
+    final promoted = _hedges.removeAt(0);
+    final subscription = _hedgeSubscriptions.removeAt(0);
+    subscription
+      ..onError((Object _) => _onSocketLost())
+      ..onDone(_onSocketLost);
+    _socket = promoted;
+    _frameSubscription = subscription;
+    _startHeartbeat();
+    _armLivenessTimer();
+    unawaited(_topUpHedges());
+    _outbox.flush();
+    return true;
   }
 
   void _scheduleReconnect() {
@@ -315,6 +398,14 @@ class SignalingClient {
     final socket = _socket;
     _socket = null;
     socket?.close().catchError((Object _) {});
+    for (final subscription in _hedgeSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _hedgeSubscriptions.clear();
+    for (final hedge in _hedges) {
+      unawaited(hedge.close().catchError((Object _) {}));
+    }
+    _hedges.clear();
   }
 
   // ---------------------------------------------------------------------
@@ -326,8 +417,68 @@ class SignalingClient {
     if (socket == null || _state != SignalingConnectionState.connected) {
       return false;
     }
-    await socket.sendFrame(envelope.toBytes());
+    final bytes = envelope.toBytes();
+    // HEDGED FAN-OUT: the same frame races over every open socket; a
+    // stalled stream can no longer serialize the negotiation. Hedge
+    // failures are absorbed (the primary's await below is the truth the
+    // outbox acts on) and trigger a lazy top-up.
+    for (final hedge in List<SignalingSocket>.of(_hedges)) {
+      unawaited(
+        hedge.sendFrame(bytes).catchError((Object _) {
+          _dropHedge(hedge);
+        }),
+      );
+    }
+    unawaited(_topUpHedges());
+    await socket.sendFrame(bytes);
     return true;
+  }
+
+  Future<void> _topUpHedges() async {
+    if (_disposed ||
+        _hedgeDialInFlight ||
+        config.hedgeSockets <= 0 ||
+        _state != SignalingConnectionState.connected ||
+        _hedges.length >= config.hedgeSockets) {
+      return;
+    }
+    _hedgeDialInFlight = true;
+    try {
+      while (!_disposed &&
+          _state == SignalingConnectionState.connected &&
+          _hedges.length < config.hedgeSockets) {
+        final SignalingSocket hedge;
+        try {
+          hedge = await _connector(endpoint).timeout(config.connectTimeout);
+        } catch (_) {
+          return; // Lazy: the next transmit tops up again.
+        }
+        if (_disposed || _state != SignalingConnectionState.connected) {
+          unawaited(hedge.close().catchError((Object _) {}));
+          return;
+        }
+        _hedges.add(hedge);
+        _hedgeSubscriptions.add(
+          hedge.frames.listen(
+            _onFrame,
+            onError: (Object _) => _dropHedge(hedge),
+            onDone: () => _dropHedge(hedge),
+            cancelOnError: true,
+          ),
+        );
+      }
+    } finally {
+      _hedgeDialInFlight = false;
+    }
+  }
+
+  void _dropHedge(SignalingSocket hedge) {
+    final index = _hedges.indexWhere((s) => identical(s, hedge));
+    if (index < 0) return;
+    _hedges.removeAt(index);
+    final subscription = _hedgeSubscriptions.removeAt(index);
+    unawaited(subscription.cancel());
+    unawaited(hedge.close().catchError((Object _) {}));
   }
 
   Future<void> _onFrame(List<int> frame) async {
@@ -358,6 +509,7 @@ class SignalingClient {
       case SignalType.answer:
       case SignalType.iceCandidate:
       case SignalType.callControl:
+        _appRoomId = envelope.callId;
         await _acknowledge(envelope);
         if (_deduplicator.markIfNew(envelope.messageId)) {
           if (!_inboundController.isClosed) {
@@ -387,10 +539,19 @@ class SignalingClient {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(config.heartbeatInterval, (_) {
       _outgoingSequence++;
+      // ROOM-TRUE HEARTBEATS (raised 2026-08-09, loss60): the relay pins a
+      // socket to the room of its FIRST frame. A hedge socket whose first
+      // fanned frame was a heartbeat used to join a room literally named
+      // 'session'; after a hedge promotion the whole transport could end
+      // up there while the peer stayed in the call room — two stranded
+      // rooms, offers/candidates buffering forever, zero CreatePermission
+      // in a 500 s verbose TURN log. Heartbeats now carry the last app
+      // envelope's room id so every socket pins to the CALL room;
+      // 'session' remains only before the first-ever send().
       final heartbeat = SignalEnvelope(
         messageId: generateSignalMessageId(),
         sequence: _outgoingSequence,
-        callId: 'session',
+        callId: _appRoomId ?? 'session',
         senderKeyId: localKeyId,
         type: SignalType.heartbeat,
         createdAtMs: clock.now().millisecondsSinceEpoch,

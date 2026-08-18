@@ -63,6 +63,9 @@ void main() {
                 MediaConnectionState.disconnected,
               ),
             );
+            // Squall grace (raised 2026-08-08): let the disconnected
+            // grace window lapse so this cycle enters recovery.
+            async.elapse(const Duration(milliseconds: 5001));
           default:
             media.emit(
               const MediaConnectionChangedEvent(MediaConnectionState.failed),

@@ -13,6 +13,10 @@
 ///  - [DeliveryStrategy.replicate]: critical traffic (call signaling) goes
 ///    out on every credible lane simultaneously; receivers dedupe.
 ///  - [DeliveryStrategy.queueOnly]: nothing credible is up; park it.
+///
+/// Every plan carries a [PlanExplanation]: the per-lane score arithmetic
+/// and a literal sentence naming the numbers that decided the strategy,
+/// so a log line can show exactly why the planner did what it did.
 library;
 
 import 'package:device_link/device_link.dart' show LinkMessagePriority;
@@ -46,12 +50,74 @@ class PlannerLaneView {
   final int energyRank;
 }
 
+/// Every term of one lane's blended score, already weighted, so the sum
+/// [blendedScore] is reproducible from the parts.
+class LaneScoreBreakdown {
+  const LaneScoreBreakdown({
+    required this.laneId,
+    required this.healthScore,
+    required this.learnedScore,
+    required this.costPenalty,
+    required this.energyPenalty,
+    required this.blendedScore,
+  });
+
+  final String laneId;
+
+  /// Raw live health input (before the health weight is applied).
+  final double healthScore;
+
+  /// Raw learned-context input (before the learned weight is applied).
+  final double learnedScore;
+
+  /// Applied cost deduction: planner costPenalty × the lane's costRank.
+  final double costPenalty;
+
+  /// Applied low-battery deduction; 0 when the battery is fine.
+  final double energyPenalty;
+
+  /// healthWeight·health + learnedWeight·learned − costPenalty −
+  /// energyPenalty: the number the ranking sorted by.
+  final double blendedScore;
+}
+
+/// Why the planner chose what it chose: the strategy name, the context
+/// key the learned scores were read under, per-lane score arithmetic
+/// (ranked best first), and a literal sentence with the deciding numbers.
+class PlanExplanation {
+  const PlanExplanation({
+    required this.strategy,
+    required this.contextKey,
+    required this.lanes,
+    required this.grounds,
+  });
+
+  final String strategy;
+  final String contextKey;
+  final List<LaneScoreBreakdown> lanes;
+
+  /// e.g. 'raceFanout: top-two gap 0.09 <= raceMargin 0.15'.
+  final String grounds;
+
+  @override
+  String toString() => 'PlanExplanation($grounds)';
+}
+
 /// The plan: strategy plus the lane ids to use, best first.
 class DeliveryPlan {
-  const DeliveryPlan({required this.strategy, required this.laneIds});
+  const DeliveryPlan({
+    required this.strategy,
+    required this.laneIds,
+    this.explanation,
+  });
 
   final DeliveryStrategy strategy;
   final List<String> laneIds;
+
+  /// Always filled by [DeliveryPlanner.plan]; null only on hand-built
+  /// plans (the parameter is optional so existing construction sites keep
+  /// compiling).
+  final PlanExplanation? explanation;
 
   @override
   String toString() => 'DeliveryPlan($strategy, $laneIds)';
@@ -106,38 +172,92 @@ class DeliveryPlanner {
     bool bestLaneSliding = false,
     bool lowBattery = false,
   }) {
+    String two(double v) => v.toStringAsFixed(2);
     if (lanes.isEmpty) {
-      return const DeliveryPlan(
+      return DeliveryPlan(
         strategy: DeliveryStrategy.queueOnly,
-        laneIds: [],
+        laneIds: const [],
+        explanation: PlanExplanation(
+          strategy: DeliveryStrategy.queueOnly.name,
+          contextKey: context.key,
+          lanes: const [],
+          grounds: 'queueOnly: 0 lanes registered',
+        ),
       );
     }
     double score(PlannerLaneView l) => blendedScore(l, lowBattery: lowBattery);
     final ranked = [...lanes]..sort((a, b) => score(b).compareTo(score(a)));
     final ids = [for (final l in ranked) l.id];
+    // Built from the same score() the ranking used, so the breakdown can
+    // never disagree with the decision.
+    final breakdowns = [
+      for (final l in ranked)
+        LaneScoreBreakdown(
+          laneId: l.id,
+          healthScore: l.healthScore,
+          learnedScore: l.learnedScore,
+          costPenalty: costPenalty * l.costRank,
+          energyPenalty: lowBattery
+              ? energyPenaltyLowBattery * l.energyRank
+              : 0,
+          blendedScore: score(l),
+        ),
+    ];
+    PlanExplanation explain(DeliveryStrategy strategy, String grounds) =>
+        PlanExplanation(
+          strategy: strategy.name,
+          contextKey: context.key,
+          lanes: breakdowns,
+          grounds: grounds,
+        );
 
     if (urgent) {
       final credible = [
         for (final l in ranked)
           if (score(l) >= credibleFloor) l.id,
       ];
+      final grounds =
+          'replicate: urgent; ${credible.length} of ${ranked.length} lanes '
+          'at or above credibleFloor ${two(credibleFloor)}'
+          '${credible.isEmpty ? '; using best lane anyway' : ''}';
       return DeliveryPlan(
         strategy: DeliveryStrategy.replicate,
         laneIds: credible.isEmpty ? [ids.first] : credible,
+        explanation: explain(DeliveryStrategy.replicate, grounds),
       );
     }
     // Racing spends redundant bytes; routine bulk traffic never does.
     // Two triggers: a statistical near-tie, or foresight — the best lane
     // is predicted to slide, so pay the redundancy before it breaks.
-    if (context.priority != LinkMessagePriority.bulk &&
-        ranked.length >= 2 &&
-        (bestLaneSliding ||
-            score(ranked[0]) - score(ranked[1]) <= raceMargin)) {
-      return DeliveryPlan(
-        strategy: DeliveryStrategy.raceFanout,
-        laneIds: ids.take(2).toList(),
-      );
+    if (context.priority != LinkMessagePriority.bulk && ranked.length >= 2) {
+      final gap = score(ranked[0]) - score(ranked[1]);
+      if (bestLaneSliding || gap <= raceMargin) {
+        final grounds = gap <= raceMargin
+            ? 'raceFanout: top-two gap ${two(gap)} <= '
+                  'raceMargin ${two(raceMargin)}'
+            : 'raceFanout: best lane predicted to slide; '
+                  'top-two gap ${two(gap)}';
+        return DeliveryPlan(
+          strategy: DeliveryStrategy.raceFanout,
+          laneIds: ids.take(2).toList(),
+          explanation: explain(DeliveryStrategy.raceFanout, grounds),
+        );
+      }
     }
-    return DeliveryPlan(strategy: DeliveryStrategy.singleBest, laneIds: ids);
+    final String grounds;
+    if (ranked.length < 2) {
+      grounds = 'singleBest: 1 lane available';
+    } else {
+      final gap = score(ranked[0]) - score(ranked[1]);
+      grounds = context.priority == LinkMessagePriority.bulk
+          ? 'singleBest: bulk priority never races; top-two gap ${two(gap)}'
+          : 'singleBest: top-two gap ${two(gap)} > '
+                'raceMargin ${two(raceMargin)}';
+    }
+    return DeliveryPlan(
+      strategy: DeliveryStrategy.singleBest,
+      laneIds: ids,
+      explanation: explain(DeliveryStrategy.singleBest, grounds),
+    );
   }
 }
