@@ -16,11 +16,23 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Call'), findsOneWidget);
   });
 
-  testWidgets('NavigationBar switches to the Chat tab', (tester) async {
+  // AMENDED with the 2026-08-10 UI/UX phase (declared, not silent): the Chat
+  // tab now lands on the conversations LIST (one of the approved five
+  // screens); the compose field lives in the thread pushed from a
+  // conversation. The smoke journey still ends at the same truth — a
+  // reachable composer — via the new information architecture.
+  testWidgets('NavigationBar switches to Chat: list, then thread', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MyApp());
     await tester.pump();
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Chat'));
+    await tester.pumpAndSettle();
+
+    // Conversations list first: the live loopback thread is anchored there.
+    expect(find.text('Loopback peer'), findsOneWidget);
+    await tester.tap(find.text('Loopback peer'));
     await tester.pumpAndSettle();
 
     expect(find.byType(TextField), findsOneWidget);

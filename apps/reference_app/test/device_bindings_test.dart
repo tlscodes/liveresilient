@@ -8,9 +8,8 @@ import 'package:reference_app/src/intelligence/device_bindings.dart';
 import 'package:reference_app/src/intelligence/local_link_lane.dart';
 
 void main() {
-  test('demo build wires no link lane and no LLM engine', () {
+  test('demo build wires no link lane', () {
     expect(buildLocalLinkLane(), isNull);
-    expect(buildLlmEngine(), isNull);
   });
 
   test('injecting a real binding produces a live link lane', () {

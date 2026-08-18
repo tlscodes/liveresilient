@@ -67,6 +67,13 @@ class CachingNetworkResolver implements NetworkNameResolver {
   final int Function() _nowMs;
   final int ttlMs;
 
+  /// Fired when a resolve lands on a DIFFERENT label than the previous
+  /// one — the network-transition seam («هوشمندی v4» pillar 4): the hub
+  /// wires this to NetworkAtlas.recordTransition so lane pre-warming can
+  /// know where this network usually goes next. Never fired for the
+  /// first-ever resolve (no from-side yet) or a same-label refresh.
+  void Function(String from, String to)? onLabelChange;
+
   String? _cached;
   int _cachedAtMs = -1;
 
@@ -85,8 +92,12 @@ class CachingNetworkResolver implements NetworkNameResolver {
       return _cached!;
     }
     final label = await _inner.resolveNetworkLabel();
+    final previous = _cached;
     _cached = label;
     _cachedAtMs = now;
+    if (previous != null && previous != label) {
+      onLabelChange?.call(previous, label);
+    }
     return label;
   }
 }

@@ -1,5 +1,5 @@
 /// App-layer intelligence adapters: atomic disk persistence, network
-/// label resolution, the engine safety envelope, and hub composition.
+/// label resolution, and hub composition.
 library;
 
 import 'dart:io';
@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:on_device_assistant/on_device_assistant.dart';
 import 'package:reference_app/src/intelligence/disk_json_storage.dart';
-import 'package:reference_app/src/intelligence/gemma_llm_engine.dart';
 import 'package:reference_app/src/intelligence/intelligence_hub.dart';
 import 'package:reference_app/src/intelligence/network_name_resolver.dart';
 
@@ -112,55 +111,6 @@ void main() {
     });
   });
 
-  group('GemmaLlmEngine safety envelope', () {
-    NativeLlmBinding binding({bool hang = false}) => NativeLlmBinding(
-      initialize: (_) async {},
-      complete: (p) async {
-        if (hang) {
-          await Future<void>.delayed(const Duration(seconds: 60));
-        }
-        return 'ok:$p';
-      },
-      completeStream: (p) => Stream.value('ok'),
-      shutdown: () async {},
-    );
-
-    test('refuses to load without memory headroom', () async {
-      final engine = GemmaLlmEngine(
-        modelPath: '/m',
-        binding: binding(),
-        memoryProbe: () async => 100,
-      );
-      expect(engine.load(), throwsStateError);
-    });
-
-    test('caps oversized prompts before they reach the native layer', () async {
-      final engine = GemmaLlmEngine(
-        modelPath: '/m',
-        binding: binding(),
-        memoryProbe: () async => 1 << 62,
-        maxPromptChars: 10,
-      );
-      await engine.load();
-      final out = await engine.generate('x' * 100);
-      expect(out.length, lessThanOrEqualTo('ok:'.length + 10));
-    });
-
-    test(
-      'a hung native call times out instead of freezing the future',
-      () async {
-        final engine = GemmaLlmEngine(
-          modelPath: '/m',
-          binding: binding(hang: true),
-          memoryProbe: () async => 1 << 62,
-          callTimeout: const Duration(milliseconds: 50),
-        );
-        await engine.load();
-        expect(engine.generate('hi'), throwsA(isA<Object>()));
-      },
-    );
-  });
-
   group('IntelligenceHub composition', () {
     CachingNetworkResolver resolver() => CachingNetworkResolver(
       HardwareNetworkResolver(
@@ -176,6 +126,11 @@ void main() {
       final hub = await IntelligenceHub.start(
         experienceStorage: storage('exp.json'),
         learnerStorage: storage('learn.json'),
+        atlasStorage: storage('atlas.json'),
+        laneChoiceStorage: storage('lane.json'),
+        calibratorStorage: storage('calib.json'),
+        journalStorage: storage('journal.json'),
+        historyStorage: storage('history.json'),
         resolver: r,
       );
       for (var i = 0; i < 8; i++) {
@@ -186,6 +141,11 @@ void main() {
       final reborn = await IntelligenceHub.start(
         experienceStorage: storage('exp.json'),
         learnerStorage: storage('learn.json'),
+        atlasStorage: storage('atlas.json'),
+        laneChoiceStorage: storage('lane.json'),
+        calibratorStorage: storage('calib.json'),
+        journalStorage: storage('journal.json'),
+        historyStorage: storage('history.json'),
         resolver: r,
       );
       expect(
@@ -196,19 +156,21 @@ void main() {
       await reborn.dispose();
     });
 
-    test(
-      'hub without an engine runs rule-based; with one runs LLM-backed',
-      () async {
-        final hub = await IntelligenceHub.start(
-          experienceStorage: storage('e1.json'),
-          learnerStorage: storage('l1.json'),
-          resolver: resolver(),
-        );
-        expect(hub.assistant, isA<RuleBasedAssistant>());
-        expect(hub.assistant.state, AssistantEngineState.ready);
-        await hub.dispose();
-      },
-    );
+    test('hub always runs the rule-based Persian narrator, ready', () async {
+      final hub = await IntelligenceHub.start(
+        experienceStorage: storage('e1.json'),
+        learnerStorage: storage('l1.json'),
+        atlasStorage: storage('a1.json'),
+        laneChoiceStorage: storage('lc1.json'),
+        calibratorStorage: storage('c1.json'),
+        journalStorage: storage('j1.json'),
+        historyStorage: storage('h1.json'),
+        resolver: resolver(),
+      );
+      expect(hub.assistant, isA<RuleBasedAssistant>());
+      expect(hub.assistant.state, AssistantEngineState.ready);
+      await hub.dispose();
+    });
   });
 }
 

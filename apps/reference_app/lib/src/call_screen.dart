@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import 'theme.dart';
+import 'ui/network_truth.dart';
+import 'ui/quality_gauge.dart';
 
 /// Human label for [phase], distinct per phase so tests can assert each
 /// state renders its own text.
@@ -83,6 +85,8 @@ class CallScreen extends StatelessWidget {
     this.callId,
     this.onCall,
     this.onHangUp,
+    this.quality,
+    this.rung,
   });
 
   /// Current lifecycle phase.
@@ -118,6 +122,15 @@ class CallScreen extends StatelessWidget {
   /// Invoked when the user taps the hang-up button. Null hides/disables it.
   final VoidCallback? onHangUp;
 
+  /// Live per-reading quality stats for the active call, sourced from the
+  /// real path stats. Null (or a non-active [phase]) hides the gauge card;
+  /// the screen never invents readings.
+  final Stream<CallQualityReading>? quality;
+
+  /// The adaptive ladder's current [OperatingRung]; null renders the ladder
+  /// display in its no-signal state.
+  final OperatingRung? rung;
+
   bool get _isActive =>
       phase == CallPhase.connecting ||
       phase == CallPhase.negotiating ||
@@ -129,19 +142,16 @@ class CallScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final liveQuality = quality;
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(Spacing.s16),
+        padding: const EdgeInsetsDirectional.all(Spacing.s16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(height: Spacing.s24),
-            Icon(
-              _isActive ? Icons.call : Icons.call_end,
-              size: 72,
-              color: theme.colorScheme.primary,
-            ),
+            _PhaseHero(phase: phase, isActive: _isActive, callId: callId),
             const SizedBox(height: Spacing.s16),
             Semantics(
               liveRegion: true,
@@ -158,6 +168,12 @@ class CallScreen extends StatelessWidget {
                 label: Text(degradedModeLabel(degradedMode!)),
               ),
             ],
+            // Mirrors the real degraded mode — active exactly when the call
+            // is running on voice notes; zero height otherwise.
+            VoiceNoteModeBanner(
+              active: phase == CallPhase.degraded &&
+                  degradedMode == DegradedMode.voiceNotes,
+            ),
             if (phase == CallPhase.reconnecting) ...[
               const SizedBox(height: Spacing.s8),
               Text(
@@ -174,6 +190,13 @@ class CallScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ],
+            // Real-stats instruments: only while a call is actually running
+            // AND a stats stream exists — the gauge never renders without a
+            // call to measure.
+            if (liveQuality != null && _isActive) ...[
+              const SizedBox(height: AppSpacing.s16),
+              _QualityCard(quality: liveQuality, rung: rung),
+            ],
             if (_isActive && callId != null) ...[
               const SizedBox(height: Spacing.s12),
               _CallIdCard(callId: callId!),
@@ -183,13 +206,23 @@ class CallScreen extends StatelessWidget {
               Chip(
                 avatar: const Icon(Icons.mic, size: 18),
                 label: const Text('Audio only'),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.r12),
+                  side: BorderSide(color: tokensOrDefault(context).outlineSoft),
+                ),
               ),
             ],
             const SizedBox(height: Spacing.s24),
-            _ActionButtons(
-              isActive: _isActive,
-              onCall: onCall,
-              onHangUp: onHangUp,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: SizedBox(
+                width: double.infinity,
+                child: _ActionButtons(
+                  isActive: _isActive,
+                  onCall: onCall,
+                  onHangUp: onHangUp,
+                ),
+              ),
             ),
             const SizedBox(height: Spacing.s24),
             Text(
@@ -198,6 +231,123 @@ class CallScreen extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The 96dp phase hero circle. Its color is stable for the whole call —
+/// derived from the call id when one exists (see [heroColorFor]), falling
+/// back to the scheme primary — and each phase CHANGE plays a one-shot
+/// scale-in ([AnimatedSwitcher] keyed by phase, settle-safe).
+class _PhaseHero extends StatelessWidget {
+  const _PhaseHero({
+    required this.phase,
+    required this.isActive,
+    required this.callId,
+  });
+
+  final CallPhase phase;
+  final bool isActive;
+  final String? callId;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final id = callId;
+    final color = id == null || id.isEmpty
+        ? scheme.primary
+        : heroColorFor(id, scheme.brightness);
+    return AnimatedSwitcher(
+      duration: AppMotion.base,
+      switchInCurve: AppMotion.enter,
+      switchOutCurve: AppMotion.standard,
+      transitionBuilder: (child, animation) => ScaleTransition(
+        scale: animation,
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+      child: Container(
+        key: ValueKey<CallPhase>(phase),
+        width: 96,
+        height: 96,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        child: Icon(
+          isActive ? Icons.call : Icons.call_end,
+          size: 44,
+          color: id == null || id.isEmpty ? scheme.onPrimary : Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+/// Deterministic per-call hero color: an FNV-1a hash of [callId] picks the
+/// hue (stable across runs and platforms, unlike `String.hashCode`), with
+/// lightness capped per [brightness] so white ink always reads on it.
+/// A derived color by design — the call's visual identity — not a palette
+/// literal.
+Color heroColorFor(String callId, Brightness brightness) {
+  var hash = 0x811c9dc5;
+  for (final unit in callId.codeUnits) {
+    hash ^= unit;
+    hash = (hash * 0x01000193) & 0xFFFFFFFF;
+  }
+  final hue = (hash % 360).toDouble();
+  final lightness = brightness == Brightness.dark ? 0.46 : 0.40;
+  return HSLColor.fromAHSL(1, hue, 0.45, lightness).toColor();
+}
+
+/// The quality instruments card. The [StreamBuilder] is scoped to exactly
+/// this leaf — one reading repaints the gauge/ladder pair and nothing else
+/// on the screen; no `setState` exists anywhere in this flow.
+class _QualityCard extends StatelessWidget {
+  const _QualityCard({required this.quality, required this.rung});
+
+  final Stream<CallQualityReading> quality;
+  final OperatingRung? rung;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = tokensOrDefault(context);
+    return Card(
+      margin: EdgeInsetsDirectional.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.r16),
+        side: BorderSide(color: tokens.outlineSoft),
+      ),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.all(AppSpacing.s16),
+        child: StreamBuilder<CallQualityReading>(
+          stream: quality,
+          builder: (context, snapshot) {
+            final gauge = QualityGauge(reading: snapshot.data);
+            final ladder = LadderRungIndicator(rung: rung);
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth >= 420) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      gauge,
+                      const SizedBox(width: AppSpacing.s24),
+                      ladder,
+                    ],
+                  );
+                }
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    gauge,
+                    const SizedBox(height: AppSpacing.s16),
+                    ladder,
+                  ],
+                );
+              },
+            );
+          },
         ),
       ),
     );
@@ -214,9 +364,14 @@ class _CallIdCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      margin: EdgeInsets.zero,
+      margin: EdgeInsetsDirectional.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.r16),
+        side: BorderSide(color: tokensOrDefault(context).outlineSoft),
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
+        padding: const EdgeInsetsDirectional.symmetric(
           horizontal: Spacing.s16,
           vertical: Spacing.s12,
         ),

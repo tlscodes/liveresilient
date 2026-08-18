@@ -3,11 +3,14 @@ PODS:
     - FlutterMacOS
     - WebRTC-SDK (= 144.7559.09)
   - FlutterMacOS (1.0.0)
+  - pt_transport_darwin (1.0.0):
+    - FlutterMacOS
   - WebRTC-SDK (144.7559.09)
 
 DEPENDENCIES:
   - flutter_webrtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
+  - pt_transport_darwin (from `Flutter/ephemeral/.symlinks/plugins/pt_transport_darwin/macos`)
 
 SPEC REPOS:
   trunk:
@@ -18,10 +21,13 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
+  pt_transport_darwin:
+    :path: Flutter/ephemeral/.symlinks/plugins/pt_transport_darwin/macos
 
 SPEC CHECKSUMS:
   flutter_webrtc: ef4699d44f5db5303e3686fc7a88db733417ff4e
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  pt_transport_darwin: 59fd417f811662731c392edf0a034f9e346f90db
   WebRTC-SDK: e6006119cd730d6315d875e4a421b6cc8bb88833
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009

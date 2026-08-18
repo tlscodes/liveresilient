@@ -41,5 +41,16 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      # PtTransport.xcframework's simulator slice is x86_64-only, and the
+      # CocoaPods slice selector requires ONE slice covering EVERY arch in
+      # ARCHS ("arm64 x86_64" by default on Xcode 12+), so simulator links
+      # failed with "Framework 'PtTransport' not found". This host is an
+      # Intel Mac — an arm64 simulator cannot run here, so excluding it
+      # discards nothing real. Durable fix when the engine is rebuilt:
+      # regenerate the xcframework with an arm64_x86_64 simulator slice
+      # (engine/pt/tools/make_xcframework.sh) and drop this exclusion.
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
   end
 end

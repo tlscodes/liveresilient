@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,7 @@ import 'package:messaging/messaging.dart';
 import 'package:reference_app/main.dart';
 import 'package:reference_app/src/chat_screen.dart';
 import 'package:reference_app/src/loopback_port.dart';
+import 'package:reference_app/src/photo_source.dart';
 
 ChatMessage _msg(String senderId, int seq, String text) => ChatMessage(
   id: '$senderId-$seq',
@@ -43,7 +45,196 @@ class _HoldingPort implements DataChannelPort {
   Future<void> close() => _inner.close();
 }
 
+
+/// A tiny hand-built 2x2 24-bit BMP — real decodable bytes so Image.memory
+/// never fails, with content that differs per color (distinct sha).
+Uint8List _tinyBmp(int r, int g, int b) {
+  const w = 2, h = 2, rowBytes = 8, dataSize = rowBytes * h;
+  const fileSize = 54 + dataSize;
+  final bytes = Uint8List(fileSize);
+  final d = ByteData.view(bytes.buffer);
+  bytes[0] = 0x42;
+  bytes[1] = 0x4D;
+  d.setUint32(2, fileSize, Endian.little);
+  d.setUint32(10, 54, Endian.little);
+  d.setUint32(14, 40, Endian.little);
+  d.setInt32(18, w, Endian.little);
+  d.setInt32(22, h, Endian.little);
+  d.setUint16(26, 1, Endian.little);
+  d.setUint16(28, 24, Endian.little);
+  d.setUint32(34, dataSize, Endian.little);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      final o = 54 + y * rowBytes + x * 3;
+      bytes[o] = b;
+      bytes[o + 1] = g;
+      bytes[o + 2] = r;
+    }
+  }
+  return bytes;
+}
+
+Uint8List _testThumbHash() {
+  final rgba = Uint8List(16 * 16 * 4);
+  for (var i = 0; i < 16 * 16; i++) {
+    rgba[i * 4] = (i * 255) ~/ 256;
+    rgba[i * 4 + 1] = 90;
+    rgba[i * 4 + 2] = 160;
+    rgba[i * 4 + 3] = 255;
+  }
+  return ThumbHash.encodeRgba(16, 16, rgba);
+}
+
+void stagedPhotoTests() {
+  testWidgets('staged photo bubble climbs thumbhash -> preview -> verified '
+      'original', (tester) async {
+    final announcement = PhotoAnnouncement(
+      photoId: 'a' * 32,
+      sha256Hex: 'b' * 64,
+      previewId: 'c' * 32,
+      sizeBytes: 70,
+      previewBytes: 70,
+      width: 640,
+      height: 480,
+      contentType: 'image/bmp',
+      thumbHash: _testThumbHash(),
+    );
+    final state = StagedPhotoState(announcement);
+    final entries = [
+      ChatEntry(message: _msg('peer', 0, '[photo]'), photoId: announcement.photoId),
+    ];
+    Widget build() => MaterialApp(
+      home: Scaffold(
+        body: ChatScreen(
+          entries: entries,
+          localSenderId: 'me',
+          onSend: (_) {},
+          incomingPhotos: {announcement.photoId: state},
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(build());
+    await tester.pump(); // thumbhash rasterization callback
+    expect(find.byType(ThumbHashPlaceholder), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(RegExp('blurred preview')),
+      findsOneWidget,
+    );
+
+    state
+      ..preview = _tinyBmp(20, 200, 20)
+      ..stage = PhotoStage.previewReady;
+    await tester.pumpWidget(build());
+    await tester.pump();
+    expect(find.byType(ThumbHashPlaceholder), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(RegExp('receiving original')),
+      findsOneWidget,
+    );
+
+    state
+      ..original = _tinyBmp(200, 20, 20)
+      ..sha256Verified = true
+      ..stage = PhotoStage.originalVerified;
+    await tester.pumpWidget(build());
+    await tester.pump();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.byIcon(Icons.verified_outlined), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('sha verified')), findsOneWidget);
+  });
+
+  testWidgets('photo button opens the gallery/camera sheet and reports the '
+      'chosen source', (tester) async {
+    PhotoSource? chosen;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatScreen(
+            entries: const [],
+            localSenderId: 'me',
+            onSend: (_) {},
+            onSendPhoto: (source) async => chosen = source,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel('Send photo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Photo library'), findsOneWidget);
+    expect(find.text('Camera'), findsOneWidget);
+
+    await tester.tap(find.text('Photo library'));
+    await tester.pumpAndSettle();
+    expect(chosen, PhotoSource.gallery);
+  });
+
+  testWidgets('loopback demo delivers a staged photo end to end: sender '
+      'done + receiver sha-verified, one bubble each side', (tester) async {
+    final artifacts = StagedPhotoArtifacts(
+      thumbHash: _testThumbHash(),
+      preview: _tinyBmp(20, 200, 20),
+      original: _tinyBmp(200, 20, 20),
+      width: 2,
+      height: 2,
+      contentType: 'image/bmp',
+    );
+    final photoId = PhotoAnnouncement.fromArtifacts(artifacts).photoId;
+    final controller = ChatDemoController(
+      photoPicker: (_) async => Uint8List.fromList(const [0]),
+      photoIngest: (_) async => artifacts,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: controller,
+            builder: (_, _) => ChatScreen(
+              entries: controller.entries,
+              localSenderId: controller.localSenderId,
+              onSend: controller.sendText,
+              onSendPhoto: controller.pickAndSendPhoto,
+              outgoingPhotos: controller.outgoingPhotos,
+              incomingPhotos: controller.incomingPhotos,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    unawaited(controller.pickAndSendPhoto(PhotoSource.gallery));
+    var settled = false;
+    for (var i = 0; i < 100 && !settled; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      final out = controller.outgoingPhotos[photoId];
+      final inc = controller.incomingPhotos[photoId];
+      settled = (out?.done ?? false) && (inc?.sha256Verified ?? false);
+    }
+    expect(settled, isTrue,
+        reason: 'staged delivery must complete on a clean loopback');
+    expect(
+      find.bySemanticsLabel(RegExp('Photo from You — delivered')),
+      findsOneWidget,
+    );
+    // The incoming bubble is the newest transcript row; ListView.builder
+    // only builds visible rows, so bring the tail into view first.
+    await tester.drag(find.byType(ListView), const Offset(0, -600));
+    await tester.pump();
+    expect(
+      find.bySemanticsLabel(RegExp('Photo from peer — sha verified')),
+      findsOneWidget,
+    );
+
+    controller.dispose();
+    await tester.pump();
+  });
+}
+
 void main() {
+  stagedPhotoTests();
   testWidgets('renders a plain text bubble', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -368,7 +559,11 @@ void main() {
       'lands as an attachment bubble and its transfer completes', (
     tester,
   ) async {
-    final (callPort, _) = pairLoopbackPorts();
+    // The attachment sender is ACK-PACED (2026-08-07): each chunk waits for
+    // its delivery ack, so the peer end must be a live acking messenger —
+    // a discarded peer port would leave progress stuck at 0.0 forever.
+    final (callPort, peerPort) = pairLoopbackPorts();
+    final peerMessenger = ReliableMessenger(peerPort, peerId: 'peer');
     final controller = ChatDemoController(
       callChannelPort: callPort,
       attachmentPicker: () async => Attachment(
@@ -399,7 +594,9 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('Attach file'));
     await tester.pump(); // picker resolves, bubble added
-    await tester.pump(); // chunk handed to the messenger, progress -> 1.0
+    await tester.pump(); // chunk reaches the peer messenger
+    await tester.pump(); // peer ack returns
+    await tester.pump(); // sender marks delivered, progress -> 1.0
 
     expect(find.byIcon(Icons.insert_drive_file), findsOneWidget);
     expect(find.textContaining('text/plain'), findsOneWidget);
@@ -407,6 +604,7 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNothing);
 
     controller.dispose();
+    unawaited(peerMessenger.close());
     await tester.pump();
   });
 

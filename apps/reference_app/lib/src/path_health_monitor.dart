@@ -42,6 +42,17 @@ class WebRtcPathChannel implements TransportChannel {
   int? _lastPacketsReceived;
   int? _lastPacketsLost;
 
+  /// EWMA of the path's own measured loss — the monitor's job is spotting
+  /// DEGRADATION (a departure from this path's normal), not judging
+  /// absolute quality. Measured 2026-08-10 (msg extreme row): the flat
+  /// 0.15 gate scored a profile whose designed loss IS 15% as permanently
+  /// unhealthy, tripped the breaker seconds after connect, and the
+  /// recovery cycle it triggered — not the network — is what killed
+  /// message delivery. Now an interval is degraded only when its loss
+  /// clearly exceeds the path's own baseline (2x + 5pt margin) or the
+  /// absolute blackout floor (50%).
+  double? _lossBaseline;
+
   @override
   Future<bool> probe() async {
     try {
@@ -88,12 +99,30 @@ class WebRtcPathChannel implements TransportChannel {
     }
 
     final lossFraction = lostDelta / total;
-    if (lossFraction >= _lossDegradedFraction) {
+    final baseline = _lossBaseline;
+    // Degradation gate: the FIRST sub-blackout interval defines this
+    // path's normal (a 15%-by-design profile is normal at 15%); after
+    // that, degraded means loss exceeding the baseline by the configured
+    // margin — which on a clean link (baseline ~0) reduces exactly to
+    // the original flat gate. 50% stays the unconditional blackout floor.
+    final degraded = lossFraction >= 0.5 ||
+        (baseline != null &&
+            lossFraction >=
+                (baseline + _lossDegradedFraction).clamp(0.0, 0.5));
+    // Baseline learns AFTER judgment, and only from intervals that were
+    // not themselves ruled degraded — a blackout must not teach the
+    // monitor that blackouts are normal.
+    if (!degraded) {
+      _lossBaseline =
+          baseline == null ? lossFraction : baseline * 0.8 + lossFraction * 0.2;
+    }
+    if (degraded) {
       return SendResult(
         SendStatus.transient,
         rttMs: rttMs,
         error: StateError(
-          'packet loss ${(lossFraction * 100).toStringAsFixed(0)}%',
+          'packet loss ${(lossFraction * 100).toStringAsFixed(0)}%'
+          '${baseline == null ? '' : ' (baseline ${(baseline * 100).toStringAsFixed(0)}%)'}',
         ),
       );
     }
