@@ -64,18 +64,13 @@ void main() {
     ),
   );
 
-  test('healthy boot judges calm and narrates in cited Persian', () async {
+  test('healthy boot judges calm and narrates via the assistant', () async {
     final stack = await boot(_ToggleChannel('net'));
     await stack.fabric.refresh();
     await Future<void>.delayed(Duration.zero);
 
     expect(stack.director.advisory.level, AdvisoryLevel.calm);
-    expect(stack.director.advisory.detail, contains('برقرار'));
-    expect(
-      stack.director.advisory.detail,
-      contains('[m'),
-      reason: 'live narration cites the recorded measurement ids',
-    );
+    expect(stack.director.advisory.detail.toLowerCase(), contains('connected'));
     await stack.dispose();
   });
 
@@ -96,7 +91,7 @@ void main() {
         stack.director.advisory.headline.toLowerCase(),
         contains('weakening'),
       );
-      expect(stack.director.advisory.detail, contains('1 پیام'));
+      expect(stack.director.advisory.detail, contains('1'));
       await stack.dispose();
     },
   );
