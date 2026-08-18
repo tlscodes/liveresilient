@@ -211,18 +211,49 @@ void main() {
       expect(await channel.probe(), isTrue);
     });
 
-    test('loss above the threshold reports transient', () async {
-      var read = 0;
+    test(
+        'loss is judged against the path baseline: the first measured '
+        'interval defines normal, a +margin departure is transient, and '
+        '>=50% is always a blackout (raised 2026-08-10 — the flat gate '
+        'scored the 15%-by-design extreme profile permanently unhealthy '
+        'and its recovery cycle, not the network, killed delivery)',
+        () async {
+      var received = 0;
+      var lost = 0;
       final channel = WebRtcPathChannel(
-        readCounters: () async {
-          read++;
-          // 100 received / 50 newly lost each interval = 33% loss.
-          return counters(received: read * 100, lost: read * 50);
-        },
+        readCounters: () async => counters(received: received, lost: lost),
       );
-      await channel.send(const <int>[0]);
-      final result = await channel.send(const <int>[0]);
-      expect(result.status, SendStatus.transient);
+      await channel.send(const <int>[0]); // delta baseline
+      // First measured interval at 33% loss: this path's NORMAL — seeds
+      // the baseline instead of tripping the gate.
+      received += 100;
+      lost += 50;
+      expect((await channel.send(const <int>[0])).status, SendStatus.ok);
+      // Same-as-baseline interval stays ok.
+      received += 100;
+      lost += 50;
+      expect((await channel.send(const <int>[0])).status, SendStatus.ok);
+      // A clear departure (+>15pt over baseline) is degraded.
+      received += 100;
+      lost += 400;
+      expect(
+        (await channel.send(const <int>[0])).status,
+        SendStatus.transient,
+      );
+      // Blackout floor: >=50% is degraded even on the FIRST measured
+      // interval — a blackout must never seed the baseline.
+      var r2 = 0;
+      var l2 = 0;
+      final blackoutChannel = WebRtcPathChannel(
+        readCounters: () async => counters(received: r2, lost: l2),
+      );
+      await blackoutChannel.send(const <int>[0]); // delta baseline
+      r2 += 100;
+      l2 += 200;
+      expect(
+        (await blackoutChannel.send(const <int>[0])).status,
+        SendStatus.transient,
+      );
     });
 
     test('missing counters report unavailable; a silent interval is only '

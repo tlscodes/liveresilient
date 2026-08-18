@@ -1,9 +1,8 @@
 /// Boot wiring: composes the whole intelligence circuit at app start.
 ///
-/// Every hardware/plugin probe and the LLM engine are injectable with
-/// safe defaults, so the same boot path serves the standalone demo, unit
-/// tests, and a real device build (where main.dart passes the plugin
-/// closures and a [GemmaLlmEngine]).
+/// Every hardware/plugin probe is injectable with safe defaults, so the
+/// same boot path serves the standalone demo, unit tests, and a real
+/// device build (where main.dart passes the plugin closures).
 library;
 
 import 'dart:io';
@@ -11,12 +10,12 @@ import 'dart:io';
 import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:device_link/device_link.dart' show DtnBundleQueue;
-import 'package:on_device_assistant/on_device_assistant.dart';
 
 import 'disk_json_storage.dart';
 import 'intelligence_director.dart';
 import 'intelligence_hub.dart';
 import 'network_name_resolver.dart';
+import 'nightly_evolution.dart';
 
 /// The demo's always-available local lane: represents in-process loopback
 /// delivery so the standalone app has one honest live lane.
@@ -50,6 +49,13 @@ class IntelligenceStack {
   final ConnectionFabric fabric;
   final IntelligenceDirector director;
 
+  /// The five persisted brains, surfaced for wiring and tests.
+  NetworkAtlas get atlas => hub.atlas;
+  LaneChoicePolicy get laneChoice => hub.laneChoice;
+  BudgetCalibrator get calibrator => hub.calibrator;
+  MeasurementJournal get journal => hub.journal;
+  CallHistoryStore get history => hub.history;
+
   Future<void> dispose() async {
     director.dispose();
     await fabric.dispose();
@@ -63,12 +69,15 @@ class IntelligenceStack {
 Future<IntelligenceStack> bootIntelligence({
   Directory Function()? storageDirFactory,
   CachingNetworkResolver? resolver,
-  LlmEngine? llmEngine,
   TransportChannel? primaryLane,
   TransportChannel? localLinkLane,
   int Function()? nowMs,
 }) async {
   final dirFactory = storageDirFactory ?? _defaultIntelligenceDir;
+  // A nightly round may have staged a promoted brain generation
+  // (v4 pillar 3): install it BEFORE the hub loads its files, so the
+  // promoted brains are what wake up. No candidate -> no-op.
+  await applyStagedGeneration(dirFactory());
   final resolvedResolver =
       resolver ??
       CachingNetworkResolver(
@@ -88,9 +97,33 @@ Future<IntelligenceStack> bootIntelligence({
       directoryFactory: dirFactory,
       fileName: 'place_map.json',
     ),
+    atlasStorage: DiskJsonStorage(
+      directoryFactory: dirFactory,
+      fileName: 'network_atlas.json',
+    ),
+    laneChoiceStorage: DiskJsonStorage(
+      directoryFactory: dirFactory,
+      fileName: 'lane_choice.json',
+    ),
+    calibratorStorage: DiskJsonStorage(
+      directoryFactory: dirFactory,
+      fileName: 'budget_calibrator.json',
+    ),
+    journalStorage: DiskJsonStorage(
+      directoryFactory: dirFactory,
+      fileName: 'measurement_journal.json',
+    ),
+    historyStorage: DiskJsonStorage(
+      directoryFactory: dirFactory,
+      fileName: 'call_history.json',
+    ),
     resolver: resolvedResolver,
-    llmEngine: llmEngine,
+    nowMs: nowMs ?? () => DateTime.now().millisecondsSinceEpoch,
   );
+  // Network hops become pre-warm knowledge (v4 pillar 4): every label
+  // change the resolver observes trains the atlas's transition model.
+  resolvedResolver.onLabelChange = (from, to) =>
+      hub.noteNetworkChange(fromLabel: from, toLabel: to);
 
   final fabric = ConnectionFabric(
     fallbackQueue: DtnBundleQueue(),

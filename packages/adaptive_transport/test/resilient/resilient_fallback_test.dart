@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:test/test.dart';
@@ -368,12 +369,80 @@ void main() {
       }
     });
 
-    test('same seed produces the same sequence (deterministic)', () {
+    // Reproducibility, checked two ways.
+    //
+    // The old single test here compared one in-process run to another
+    // in-process run of the same code. That is a tautology: the same
+    // binary, the same SDK, the same machine, in the same second. It
+    // passes by construction and can never see the thing it claims to
+    // guard — drift of the generated sequence between builds.
+    //
+    // So: run 1 vs run 2 stays (it catches hidden global state), but the
+    // real check is the frozen digest below, which is an oracle that does
+    // not come from this run.
+    test('two independent runs of the same seed are byte-for-byte equal', () {
       final a = PoissonPacer(meanIntervalMs: 50, random: Random(1));
       final b = PoissonPacer(meanIntervalMs: 50, random: Random(1));
-      final seqA = List.generate(10, (_) => a.nextIntervalMs());
-      final seqB = List.generate(10, (_) => b.nextIntervalMs());
-      expect(seqA, equals(seqB));
+      final bytesA = _canonicalIntervalBytes(
+        List.generate(_pacerGoldenSamples, (_) => a.nextIntervalMs()),
+      );
+      final bytesB = _canonicalIntervalBytes(
+        List.generate(_pacerGoldenSamples, (_) => b.nextIntervalMs()),
+      );
+      expect(bytesA.length, _pacerGoldenSamples * 8);
+      expect(bytesA, orderedEquals(bytesB));
+    });
+
+    test('the seeded sequence matches its frozen golden digest', () {
+      // Measured once (2026-07-31, Dart 3.12.2) and pinned. If this fails,
+      // the pacer's output changed: either the algorithm moved, or
+      // dart:math Random / the double math under it did. Both are real
+      // findings — do not "fix" this by re-measuring the constant without
+      // recording why it moved.
+      final pacer = PoissonPacer(meanIntervalMs: 50, random: Random(1));
+      final seq = List.generate(
+        _pacerGoldenSamples,
+        (_) => pacer.nextIntervalMs(),
+      );
+      expect(
+        _fnv1a64Hex(_canonicalIntervalBytes(seq)),
+        equals(_poissonPacerGoldenDigest),
+        reason: 'seeded PoissonPacer sequence drifted from the frozen vector',
+      );
     });
   });
+}
+
+/// Number of intervals the frozen vector below covers.
+const _pacerGoldenSamples = 64;
+
+/// FNV-1a/64 of [_canonicalIntervalBytes] over 64 intervals drawn from
+/// `PoissonPacer(meanIntervalMs: 50, random: Random(1))`.
+/// Measured 2026-07-31 on Dart 3.12.2 (stable), macos_x64.
+const _poissonPacerGoldenDigest = 'e342084bc67cb384';
+
+/// Canonical wire form of an interval sequence: each value as a big-endian
+/// signed 64-bit integer, concatenated. Fixed width and fixed byte order so
+/// the digest cannot change because of platform int formatting.
+Uint8List _canonicalIntervalBytes(List<int> intervals) {
+  final out = Uint8List(intervals.length * 8);
+  final view = ByteData.view(out.buffer);
+  for (var i = 0; i < intervals.length; i++) {
+    view.setInt64(i * 8, intervals[i], Endian.big);
+  }
+  return out;
+}
+
+/// FNV-1a 64-bit, computed in [BigInt] so the result is identical on the
+/// VM and on web (where native ints are 53-bit doubles). Dependency-free on
+/// purpose: the oracle must not move when a package version moves.
+String _fnv1a64Hex(List<int> bytes) {
+  final mask = (BigInt.one << 64) - BigInt.one;
+  final prime = BigInt.parse('1099511628211');
+  var hash = BigInt.parse('14695981039346656037');
+  for (final b in bytes) {
+    hash = (hash ^ BigInt.from(b)) & mask;
+    hash = (hash * prime) & mask;
+  }
+  return hash.toRadixString(16).padLeft(16, '0');
 }

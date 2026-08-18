@@ -3,11 +3,15 @@
 /// Two transports, same messaging stack either way:
 /// - Default (no `callChannelPort`): an in-process [LoopbackPort] pair with
 ///   an auto-replying peer — genuine reliable delivery/ack/de-dup, zero
-///   network, so the demo works standalone.
+///   network, so the demo works standalone. Staged photos ride a SECOND
+///   loopback pair as their binary lane; the visible incoming ladder is the
+///   peer end's receiver, so sending a photo demonstrates the real
+///   three-rung arrival (thumbhash → preview → sha-verified original).
 /// - Call mode (`callChannelPort` from `CallSessionHandle.openChatPort`):
 ///   the messenger rides the live call's own data channel; the remote human
-///   is the peer, so there is no local echo side and incoming attachments
-///   are reassembled off the wire.
+///   is the peer. Staged photos additionally need a `photoLanePort` (a
+///   second data channel); without one the photo button stays hidden — no
+///   half-wired sends.
 library;
 
 import 'dart:async';
@@ -18,24 +22,44 @@ import 'package:flutter/foundation.dart';
 import 'package:live_captions/live_captions.dart';
 import 'package:messaging/messaging.dart';
 
+import 'attachment_route_wiring.dart';
 import 'chat_screen.dart';
+import 'intelligence/intelligence_hub.dart';
 import 'loopback_port.dart';
+import 'photo_source.dart';
 
 class ChatDemoController extends ChangeNotifier {
   ChatDemoController({
     DataChannelPort? callChannelPort,
+    DataChannelPort? photoLanePort,
     ConnectionFabric? intelligenceFabric,
+    this._hub,
+    this._photoPicker,
+    this._photoIngest,
     this._attachmentPicker,
     this._audioPlayer,
   }) : _fabric = intelligenceFabric {
     final DataChannelPort localPort;
     if (callChannelPort != null) {
       localPort = callChannelPort;
+      if (photoLanePort != null) {
+        // The lane frames (magic-discriminated) and the messenger's JSON
+        // frames partition cleanly, so sender and receiver share the port.
+        _photoSender = StagedPhotoSender.arq(
+          photoLanePort,
+          announce: _announcePhoto,
+          retransmitAfter: const Duration(milliseconds: 700),
+        );
+        _photoReceiver = StagedPhotoReceiver.arq(photoLanePort);
+      }
     } else {
       final (loopLocal, loopPeer) = pairLoopbackPorts();
       localPort = loopLocal;
       final peer = _peer = ReliableMessenger(loopPeer, peerId: 'peer');
       _peerSub = peer.incoming.listen((message) {
+        if (_photoReceiver?.offerText(message.text) ?? false) {
+          return; // a photo announcement — the staged ladder consumes it
+        }
         if (_peerAttachments.offer(message.text)) {
           return; // an attachment chunk, not chat text — already consumed
         }
@@ -44,8 +68,20 @@ class ChatDemoController extends ChangeNotifier {
         }
         unawaited(peer.send('echo: ${message.text}'));
       });
+      // The photo binary lane: local end sends, peer end receives — the
+      // incoming ladder shown in the transcript is the peer's genuine
+      // receive experience, not a local shortcut.
+      final (photoLaneLocal, photoLanePeerEnd) = pairLoopbackPorts();
+      _photoSender = StagedPhotoSender.arq(
+        photoLaneLocal,
+        announce: _announcePhoto,
+        retransmitAfter: const Duration(milliseconds: 300),
+      );
+      _photoReceiver = StagedPhotoReceiver.arq(photoLanePeerEnd);
     }
     _local = ReliableMessenger(localPort, peerId: localSenderId);
+
+    _photoUpdatesSub = _photoReceiver?.updates.listen(_onIncomingPhotoUpdate);
 
     _deliverySub = _local.deliveries.listen((event) {
       final (id, state) = event;
@@ -59,6 +95,11 @@ class ChatDemoController extends ChangeNotifier {
     });
 
     _localSub = _local.incoming.listen((message) {
+      if (_photoReceiver != null &&
+          _peer == null &&
+          _photoReceiver!.offerText(message.text)) {
+        return; // call mode: the announcement arrived from the remote human
+      }
       if (_localAttachments.offer(message.text)) {
         return; // reassembling; the completed stream emits the bubble
       }
@@ -169,13 +210,103 @@ class ChatDemoController extends ChangeNotifier {
   final AttachmentReceiver _localAttachments = AttachmentReceiver();
   int _localSeq = 0;
 
-  ChatMessage _peerPlaceholder(String text) => ChatMessage(
-    id: 'peer-recv-${_localSeq++}',
-    senderId: 'peer',
-    seq: _localSeq,
-    sentAtMs: DateTime.now().millisecondsSinceEpoch,
-    text: text,
-  );
+  // ── Staged photo pipeline (RIG_GUIDE §0.2 item 1) ──────────────────────
+
+  final Future<Uint8List?> Function(PhotoSource source)? _photoPicker;
+  final Future<StagedPhotoArtifacts> Function(Uint8List raw)? _photoIngest;
+  StagedPhotoSender? _photoSender;
+  StagedPhotoReceiver? _photoReceiver;
+  StreamSubscription<StagedPhotoUpdate>? _photoUpdatesSub;
+  final Set<String> _incomingPhotoBubbles = {};
+
+  /// Sender-side staged photo status by photoId (my bubbles' data source).
+  final Map<String, OutgoingPhotoStatus> outgoingPhotos = {};
+
+  /// Receiver-side staged photo ladders by photoId (peer bubbles).
+  Map<String, StagedPhotoState> get incomingPhotos =>
+      _photoReceiver?.photos ?? const {};
+
+  /// Whether [pickAndSendPhoto] can do anything (drives button visibility).
+  bool get canPickPhoto =>
+      _photoPicker != null && _photoIngest != null && _photoSender != null;
+
+  Future<void> _announcePhoto(String text) async {
+    await _local.send(text);
+  }
+
+  void _onIncomingPhotoUpdate(StagedPhotoUpdate update) {
+    if (_incomingPhotoBubbles.add(update.photoId)) {
+      entries.add(
+        ChatEntry(
+          message: _peerPlaceholder('[photo]'),
+          photoId: update.photoId,
+        ),
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Runs the photo picker for [source], encodes the three staged
+  /// artifacts, and delivers them: announcement (thumbhash inside) on the
+  /// reliable text path, then preview, then sha-verified original on the
+  /// binary lane. Re-picking the same photo is answered from the far
+  /// side's held bytes — the content-addressing dividend.
+  Future<void> pickAndSendPhoto(PhotoSource source) async {
+    final picker = _photoPicker;
+    if (picker == null || !canPickPhoto) return;
+    final raw = await picker(source);
+    if (raw == null) return; // canceled
+    await _sendStagedFromRaw(raw);
+  }
+
+  /// Encodes raw image bytes and delivers them over the staged pipeline —
+  /// the ONLY photo send path (§0.2 law: photos never ride base64 text).
+  Future<void> _sendStagedFromRaw(Uint8List raw) async {
+    final ingest = _photoIngest;
+    final sender = _photoSender;
+    if (ingest == null || sender == null) return;
+    final artifacts = await ingest(raw);
+    final announcement = PhotoAnnouncement.fromArtifacts(artifacts);
+    final status = outgoingPhotos.putIfAbsent(
+      announcement.photoId,
+      () => OutgoingPhotoStatus(announcement.photoId, artifacts.original),
+    );
+    status
+      ..done = false
+      ..failed = false;
+    final alreadyBubbled = entries.any(
+      (e) =>
+          e.photoId == announcement.photoId &&
+          e.message.senderId == localSenderId,
+    );
+    if (!alreadyBubbled) {
+      entries.add(
+        ChatEntry(
+          message: _localPlaceholder('[photo]'),
+          photoId: announcement.photoId,
+        ),
+      );
+    }
+    notifyListeners();
+    sender.onStage = (id, stage) {
+      outgoingPhotos[id]?.stage = stage;
+      notifyListeners();
+    };
+    try {
+      final result = await sender.deliver(artifacts);
+      status
+        ..done = true
+        ..deduplicated = result.deduplicated;
+      // sender.lane names the lane that actually carried the photo — today
+      // always 'arq' here (the fountain switch lives with rig callers);
+      // recorded honestly rather than inventing a switch at this site.
+      _hub?.recordDelivery(success: true, choice: sender.lane.name);
+    } catch (_) {
+      status.failed = true;
+      _hub?.recordDelivery(success: false, choice: sender.lane.name);
+    }
+    notifyListeners();
+  }
 
   /// The app's live connectivity brain. When present, every real user send
   /// is also offered to the fabric so the intelligence observes actual
@@ -184,6 +315,11 @@ class ChatDemoController extends ChangeNotifier {
   /// than only on the boot probe. Reliable delivery/ack stays owned by
   /// [ReliableMessenger]; the fabric is an intelligence tap, not the wire.
   final ConnectionFabric? _fabric;
+
+  /// Personal-learning tap: real delivery outcomes train the lane-choice
+  /// brain and are journaled for the narrator. Optional; absent in most
+  /// widget tests — zero behavior change without it.
+  final IntelligenceHub? _hub;
 
   /// Receive-side dedup: dual-send, replicate, and relay paths may hand
   /// the same message id over more than once — the user sees one bubble.
@@ -197,9 +333,17 @@ class ChatDemoController extends ChangeNotifier {
     if (fabric != null) {
       // Best-effort intelligence tap: never let a fabric hiccup break the
       // user's chat send.
+      // .then (not await): chat_fabric_tap_test pins the send's ordering.
       unawaited(
         fabric
             .deliver(utf8.encode(text), bundleId: message.id)
+            .then((outcome) {
+              _hub?.recordDelivery(
+                success: outcome == DeliveryOutcome.sentLive,
+                choice: 'arq',
+              );
+              return outcome;
+            })
             .catchError((Object _) => DeliveryOutcome.queuedForLater),
       );
     }
@@ -238,6 +382,13 @@ class ChatDemoController extends ChangeNotifier {
     if (picker == null) return;
     final attachment = await picker();
     if (attachment == null) return; // canceled
+    if (attachment.kind == MediaKind.image) {
+      // §0.2 law: a photo NEVER rides the base64 text path. An image picked
+      // through the generic attach dialog re-routes onto the staged
+      // pipeline; without a photo lane it is refused, not downgraded.
+      await _sendStagedFromRaw(Uint8List.fromList(attachment.bytes));
+      return;
+    }
     entries.add(
       ChatEntry(
         message: _localPlaceholder('[${attachment.kind.name}]'),
@@ -248,10 +399,31 @@ class ChatDemoController extends ChangeNotifier {
     await sendAttachmentWithProgress(attachment);
   }
 
+  /// The routing question, asked on every real attachment send.
+  ///
+  /// SHADOW MODE, ON PURPOSE — for the OLD base64 attachment path.
+  /// `MediaSendRouter` decides whether this payload belongs on the
+  /// cliff-free path; the answer is recorded and the transfer still goes
+  /// the acknowledged way. The staged PHOTO pipeline above is the first
+  /// consumer that actually rides the binary lane end-to-end (the
+  /// receive-side content-address router now exists there); generic file
+  /// attachments will follow once their receive side is wired the same way.
+  late final AttachmentRouteAdvisor _routeAdvisor = buildAttachmentRouteAdvisor(
+    onDecision: (decision) => lastRouteDecision = decision,
+  );
+
+  /// What the router said about the most recent attachment. Surfaced so the
+  /// decision is observable in a running app rather than only in a log.
+  AttachmentRouteDecision? lastRouteDecision;
+
   /// Sends [attachment] over the live messenger, mirroring per-chunk
   /// progress into [attachmentProgress] for the bubble's progress bar.
   Future<void> sendAttachmentWithProgress(Attachment attachment) async {
-    final handle = startAttachmentSend(_local, attachment);
+    final handle = startAttachmentSend(
+      _local,
+      attachment,
+      routeAdvisor: _routeAdvisor,
+    );
     final sub = handle.progress.listen((p) {
       attachmentProgress[attachment.id] = p.fraction;
       notifyListeners();
@@ -284,19 +456,34 @@ class ChatDemoController extends ChangeNotifier {
   /// reassembler path, so the running app shows both bubble kinds without
   /// requiring a UI attach button. Errors are swallowed — this is
   /// demo-only seeding, never allowed to crash the app.
+  /// Sends a voice note recorded for [length] through the REAL attachment
+  /// pipeline (chunker, live loopback channel, per-chunk progress, ack) —
+  /// the transfer truth in the bubble is genuine. The AUDIO CONTENT is a
+  /// demo placeholder sized to the recording length: real microphone
+  /// capture is a dated blocker (no recorder dependency this phase), same
+  /// honesty pattern as the seeded demo attachments below.
+  Future<void> sendVoiceNote(Duration length) async {
+    final seconds = length.inMilliseconds / 1000.0;
+    final voice = Attachment(
+      id: 'voice-${DateTime.now().millisecondsSinceEpoch}',
+      kind: MediaKind.file,
+      contentType: 'audio/demo-placeholder',
+      bytes: List<int>.filled((4000 * seconds).round().clamp(800, 240000), 0),
+    );
+    entries.add(
+      ChatEntry(message: _localPlaceholder('[voice]'), attachment: voice),
+    );
+    notifyListeners();
+    await sendAttachmentWithProgress(voice);
+  }
+
   Future<void> _seedDemoAttachments() async {
     try {
-      final photo = Attachment(
-        id: 'demo-photo',
-        kind: MediaKind.image,
-        contentType: 'image/png',
-        bytes: demoTinyPngBytes,
-      );
-      entries.add(
-        ChatEntry(message: _localPlaceholder('[photo]'), attachment: photo),
-      );
-      notifyListeners();
-      await sendAttachmentWithProgress(photo);
+      // The photo seed rides the STAGED pipeline (never base64 — §0.2 law);
+      // bare test controllers without an injected ingest simply skip it.
+      if (canPickPhoto) {
+        await _sendStagedFromRaw(Uint8List.fromList(demoTinyPngBytes));
+      }
 
       final file = Attachment(
         id: 'demo-file',
@@ -322,6 +509,14 @@ class ChatDemoController extends ChangeNotifier {
     text: text,
   );
 
+  ChatMessage _peerPlaceholder(String text) => ChatMessage(
+    id: 'peer-recv-${_localSeq++}',
+    senderId: 'peer',
+    seq: _localSeq,
+    sentAtMs: DateTime.now().millisecondsSinceEpoch,
+    text: text,
+  );
+
   @override
   void dispose() {
     _ticker?.cancel();
@@ -333,6 +528,8 @@ class ChatDemoController extends ChangeNotifier {
     unawaited(_localSub.cancel());
     unawaited(_peerSub?.cancel());
     unawaited(_localAttachmentsSub.cancel());
+    unawaited(_photoUpdatesSub?.cancel());
+    unawaited(_photoReceiver?.close());
     unawaited(_local.close());
     unawaited(_peer?.close());
     super.dispose();

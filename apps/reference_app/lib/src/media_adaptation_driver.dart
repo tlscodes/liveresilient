@@ -23,6 +23,7 @@ class MediaAdaptationDriver {
     AdaptiveMediaPolicy? policy,
     Duration statsInterval = const Duration(seconds: 2),
     int Function()? nowMs,
+    this.audioCeilingBps,
   }) : _policy = policy ?? AdaptiveMediaPolicy() {
     _sampler = RtcStatsSampler(
       reader: () async => _port()?.readStatsCounters(),
@@ -33,6 +34,11 @@ class MediaAdaptationDriver {
   }
 
   final PeerConnectionPort? Function() _port;
+
+  /// Link-derived audio ceiling (`OpusWireBudget.opusRateBps`): every rung's
+  /// audio bitrate is capped here so the ladder can never re-saturate a
+  /// link whose capacity is known. Null = unknown link, rungs apply as-is.
+  final int? audioCeilingBps;
   final AdaptiveMediaPolicy _policy;
   late final RtcStatsSampler _sampler;
   late final StreamSubscription<RtcStatsSample> _subscription;
@@ -55,12 +61,60 @@ class MediaAdaptationDriver {
   void start() {
     if (_disposed) return;
     _policy.reset();
+    // Apply the link-derived ceiling BEFORE damage is measured: the lesson
+    // of the 32 kbit/s row was that waiting for loss/RTT evidence means the
+    // control plane is already starving. Fire-and-forget with the same
+    // swallow rule as decisions — a transient failure must not kill start.
+    final ceiling = audioCeilingBps;
+    final port = _port();
+    if (ceiling != null && port != null) {
+      // ignore: discarded_futures
+      port.setAudioMaxBitrate(ceiling).catchError((_) {});
+    }
     _sampler.start();
   }
 
   /// Stops sampling (keeps the current profile for the next [start]).
   void stop() {
     _sampler.stop();
+  }
+
+  /// Immediately drops the sender to the survival floor — video off, audio
+  /// at the lowRateVoice budget (capped by [audioCeilingBps]) — WITHOUT
+  /// waiting for stats evidence.
+  ///
+  /// Called when the call enters recovery: the ICE-restart handshake must
+  /// cross the same constrained pipe the still-flowing RTP occupies, and
+  /// measured 2026-08-06 (T2 bandwidth/narrow/extreme rows) that contention
+  /// starved the restart until the call died — connect and mid-call were
+  /// already healthy, every death was in the recovery phase. The profile is
+  /// deliberately kept low afterwards: a recovered call re-joins at the
+  /// floor and earns its way back up through the ladder's own hysteresis.
+  Future<void> applySurvivalFloor() async {
+    if (_disposed) return;
+    _policy.reset(profile: MediaProfile.lowRateVoice);
+    final port = _port();
+    if (port == null) return;
+    final p = MediaProfileParameters.of(MediaProfile.lowRateVoice);
+    try {
+      await port.setVideoSenderParameters(
+        VideoSenderParameters(
+          enabled: p.videoEnabled,
+          maxBitrateBps: p.videoMaxBitrateBps,
+          maxFramerate: p.videoMaxFramerate,
+          scaleResolutionDownBy: p.videoScaleResolutionDownBy,
+        ),
+      );
+      final ceiling = audioCeilingBps;
+      await port.setAudioMaxBitrate(
+        ceiling != null && ceiling < p.audioMaxBitrateBps
+            ? ceiling
+            : p.audioMaxBitrateBps,
+      );
+    } catch (_) {
+      // Same swallow rule as decisions: a transient port failure mid-
+      // renegotiation must not kill recovery — the floor is best-effort.
+    }
   }
 
   Future<void> _onSample(RtcStatsSample sample) async {
@@ -99,7 +153,12 @@ class MediaAdaptationDriver {
           scaleResolutionDownBy: p.videoScaleResolutionDownBy,
         ),
       );
-      await port.setAudioMaxBitrate(p.audioMaxBitrateBps);
+      final ceiling = audioCeilingBps;
+      await port.setAudioMaxBitrate(
+        ceiling != null && ceiling < p.audioMaxBitrateBps
+            ? ceiling
+            : p.audioMaxBitrateBps,
+      );
       if (!_decisions.isClosed) {
         _decisions.add(decision);
       }

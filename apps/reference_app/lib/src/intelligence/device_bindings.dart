@@ -3,15 +3,16 @@
 /// into the CI gate.
 ///
 /// Every factory here returns `null` (or a safe default) when no real
-/// platform radio/model is wired, so the standalone demo and the test gate
+/// platform radio is wired, so the standalone demo and the test gate
 /// build unchanged. On a real device build, replace the `null` returns with
 /// the plugin call sites documented inline — one closure each — and the
-/// fabric picks up the new lane / engine automatically.
+/// fabric picks up the new lane automatically.
 library;
+
+import 'dart:io';
 
 import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:device_link/device_link.dart' show DeviceLinkConsent;
-import 'package:on_device_assistant/on_device_assistant.dart' show LlmEngine;
 
 import 'local_link_lane.dart';
 
@@ -50,13 +51,19 @@ TransportChannel? buildLocalLinkLane({
   );
 }
 
-/// Builds the on-device language-model engine if a model is present.
+/// Where the intelligence brains persist their JSON files.
 ///
-/// Returns `null` in the demo / test build, so the assistant falls back to
-/// the deterministic rule-based engine. On a real device, construct a
-/// [GemmaLlmEngine] over the downloaded model path and the flutter_gemma
-/// native binding here.
-LlmEngine? buildLlmEngine() {
-  // No bundled model in the demo/gate build.
-  return null;
+/// On iOS/Android the app sandbox exposes its own home; `Documents` under
+/// it is the OS-backed persistent store (survives relaunches and, on iOS,
+/// is not purgeable the way tmp is) — reachable from pure Dart via
+/// `Platform.environment['HOME']`, zero plugin dependencies, so the gate
+/// build stays plugin-free (the brief's CI-safety rule). Everywhere else
+/// (tests, desktop dev) returns `null` and `bootIntelligence` keeps its
+/// system-temp default.
+Directory Function()? buildStorageDirectory() {
+  if (!Platform.isIOS && !Platform.isAndroid) return null;
+  final home = Platform.environment['HOME'];
+  if (home == null || home.isEmpty) return null;
+  final docs = Directory('$home/Documents/voice_call_kit_intelligence');
+  return () => docs..createSync(recursive: true);
 }

@@ -30,6 +30,118 @@ Future<HttpServer> _startEchoServer() async {
 }
 
 void main() {
+  group('ticket 6 — the resolution seam', () {
+    test(
+      '6a  the seam is asynchronous and is awaited, not called for its '
+      'side effect',
+      () async {
+        // The migration this gate covers moved the call out of the
+        // synchronous prologue and into the async body that already
+        // existed. If the connector ever stops awaiting it, the address
+        // never arrives and the connection silently uses the original
+        // host — which is indistinguishable from having no resolver at
+        // all, the exact defect ticket 6 exists to remove.
+        final server = await _startEchoServer();
+        addTearDown(() => server.close(force: true));
+
+        var awaited = false;
+        Future<String?> resolver(String host) async {
+          // A real await, so a caller that does not await this receives a
+          // Future rather than the address.
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+          awaited = true;
+          return InternetAddress.loopbackIPv4.address;
+        }
+
+        final socket = await connectWebSocketWithCustomRules(
+          Uri.parse('ws://$_unresolvableHost:${server.port}/ws'),
+          hostResolver: resolver,
+        );
+        addTearDown(() => socket.close());
+
+        expect(
+          awaited,
+          isTrue,
+          reason: 'the connection completed against a host that cannot '
+              'resolve, so the address can only have come from the seam',
+        );
+      },
+    );
+
+    test(
+      '6a  the seam is consulted once per attempt, with the host the stack '
+      'is about to connect to',
+      () async {
+        final server = await _startEchoServer();
+        addTearDown(() => server.close(force: true));
+
+        final asked = <String>[];
+        Future<String?> resolver(String host) async {
+          asked.add(host);
+          return InternetAddress.loopbackIPv4.address;
+        }
+
+        final socket = await connectWebSocketWithCustomRules(
+          Uri.parse('ws://$_unresolvableHost:${server.port}/ws'),
+          hostResolver: resolver,
+        );
+        addTearDown(() => socket.close());
+
+        expect(asked, contains(_unresolvableHost));
+        expect(
+          asked,
+          hasLength(1),
+          reason: 'one attempt, one question — the name is an input the '
+              'stack produces at connect time, not a set held in advance',
+        );
+      },
+    );
+
+    test(
+      '6g  the proxy path does not consult the seam, and that is deliberate',
+      () async {
+        // Documented exception, not an oversight: a proxy owns destination
+        // name resolution, because the target hostname travels to the proxy
+        // inside the request. A target-host-to-address mapping can never be
+        // applied on that path. Before this was written down the branch
+        // simply skipped the seam, which reads identically to a bug — so
+        // the test exists to keep the choice visible.
+        var consulted = false;
+        Future<String?> resolver(String host) async {
+          consulted = true;
+          return InternetAddress.loopbackIPv4.address;
+        }
+
+        // Port 1 refuses; the connection is expected to fail. The assertion
+        // is about whether the seam was asked, not about the outcome.
+        await expectLater(
+          connectWebSocketWithCustomRules(
+            Uri.parse('ws://$_unresolvableHost:9/ws'),
+            timeout: const Duration(milliseconds: 300),
+            hostResolver: resolver,
+            proxyResolver: (_) => 'PROXY 127.0.0.1:1',
+          ),
+          throwsA(anything),
+        );
+
+        expect(
+          consulted,
+          isFalse,
+          reason: 'consulting it here would apply a mapping the proxy path '
+              'cannot use, and would hide that the proxy is the one '
+              'resolving the name',
+        );
+      },
+    );
+
+    test('6a  the deliberate opt-out is a named value, not an omission', () {
+      // platformHostResolution behaves exactly like passing nothing. That is
+      // the point: before it existed, "I chose the platform" and "I forgot"
+      // looked identical at every construction site.
+      expect(platformHostResolution, isA<Future<String?> Function(String)>());
+    });
+  });
+
   group('WebSocket Custom Connector Tests', () {
     test(
       'connectWebSocketWithCustomRules configures client properties safely',

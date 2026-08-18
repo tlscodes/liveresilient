@@ -228,11 +228,26 @@ class DegradedModeDriver {
 
   Future<void> _captureOne() async {
     if (_recording || _disposed) return;
+    // _recording guards the MICROPHONE (one capture at a time), never the
+    // network: it is released the moment the clip's bytes exist. Delivery
+    // is ack-paced and can stall for an entire outage — holding the guard
+    // across it would swallow every later capture tick while the path is
+    // down, losing exactly the audio this mode exists to preserve.
     _recording = true;
     List<int>? bytes;
     try {
       bytes = await recordClip!(clipLength);
-      if (bytes == null || bytes.isEmpty || _disposed) return;
+    } catch (_) {
+      // Capture failed: nothing to enqueue; the next period retries.
+    } finally {
+      _recording = false;
+    }
+    if (bytes == null || bytes.isEmpty || _disposed) return;
+    unawaited(_enqueueClip(bytes));
+  }
+
+  Future<void> _enqueueClip(List<int> bytes) async {
+    try {
       // Rides the existing reliable outbox: chunked, acked, retransmitted
       // on tick — so the clip goes out whenever the transport is alive,
       // now or after the next reconnect.
@@ -250,10 +265,11 @@ class DegradedModeDriver {
       // queued for later retransmission) — the clip is otherwise lost. If
       // a fallback store was supplied, offer it there instead; it is
       // flushed through the messenger the next time the call reconnects.
-      // Capture/enqueue failures must never kill the loop; the next
-      // period retries with a fresh clip regardless.
+      // Enqueue failures must never kill the loop; the next period
+      // retries with a fresh clip regardless.
+      if (_disposed) return; // torn down: no post-dispose store offers
       final store = fallbackStore;
-      if (store != null && bytes != null && bytes.isNotEmpty) {
+      if (store != null && bytes.isNotEmpty) {
         try {
           store.offer(
             DtnBundle(
@@ -269,8 +285,6 @@ class DegradedModeDriver {
           // Offer failures are swallowed too — nothing left to do.
         }
       }
-    } finally {
-      _recording = false;
     }
   }
 
