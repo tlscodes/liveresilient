@@ -49,77 +49,28 @@ mkdir -p "$WORK"
 log() { printf '%s  %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
 
 # ── the capture program ─────────────────────────────────────────────────────
-# Written to disk rather than held in a heredoc inside a function so it can be
-# read, diffed and compiled by hand. It is the actual measurement instrument;
-# hiding it inside the runner would make the result unauditable.
+# The instrument lives at tools/first_record/first_record.c so it can be read,
+# diffed and compiled by hand. This function only stages it into the work
+# directory next to the libraries it links against.
+#
+# WHY THIS FUNCTION USED TO CONTAIN THE PROGRAM, AND WHAT THAT COST
+# Until 2026-08-18 it held an inline copy — an OLDER one. The extraction to a
+# real file happened, the comment describing the extraction was written, and
+# the copy inside this runner was never removed, so every capture compiled the
+# stale program while the file next to it documented calls that were never
+# made. The captured record therefore lacked four extensions the instrument's
+# own source configures. Nothing detected it for a day, because the only reader
+# of that record was a comparison against a profile that had been derived from
+# the same stale capture.
+#
+# It surfaced when a SECOND machine composed the same record through a
+# different code path (the shim in packages/pt_transport_darwin) and the two
+# disagreed. That is the argument for cross-checking a measurement against an
+# independent implementation rather than against itself.
 write_capture_program() {
-  cat > "$WORK/first_record.c" <<'PROGRAM'
-/* Prints the exact bytes of the first record an SSL client writes.
- *
- * The client is configured, never patched: only public API calls appear
- * below, because the question §5 asks is precisely whether configuration
- * alone suffices. Any line here that needed a library change would be the
- * answer "no".
- *
- * A memory BIO pair replaces the socket. SSL_connect writes its first
- * record into the write BIO and then wants a reply that will never come;
- * that WANT_READ is the end of the measurement, not a failure.
- */
-#include <stdio.h>
-#include <string.h>
-
-#include <openssl/ssl.h>
-#include <openssl/bio.h>
-#include <openssl/err.h>
-
-int main(void) {
-  SSL_CTX *ctx = SSL_CTX_new(TLS_method());
-  if (ctx == NULL) { fprintf(stderr, "SSL_CTX_new failed\n"); return 2; }
-
-  /* TLS 1.3 only: the profile being compared against offers it, and
-   * pinning both ends of the range removes a variable from the capture. */
-  SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-  SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
-
-  /* The chrome120 profile's ALPN, in its order. */
-  static const unsigned char alpn[] = {2, 'h', '2', 8, 'h', 't', 't', 'p',
-                                       '/', '1', '.', '1'};
-  SSL_CTX_set_alpn_protos(ctx, alpn, sizeof(alpn));
-
-  SSL *ssl = SSL_new(ctx);
-  if (ssl == NULL) { fprintf(stderr, "SSL_new failed\n"); return 2; }
-  SSL_set_connect_state(ssl);
-  /* SNI: a name is part of the record's shape, so it must be set. */
-  SSL_set_tlsext_host_name(ssl, "example.com");
-
-  BIO *rbio = BIO_new(BIO_s_mem());
-  BIO *wbio = BIO_new(BIO_s_mem());
-  if (rbio == NULL || wbio == NULL) {
-    fprintf(stderr, "BIO_new failed\n");
-    return 2;
-  }
-  SSL_set_bio(ssl, rbio, wbio);
-
-  int rc = SSL_connect(ssl);
-  int err = SSL_get_error(ssl, rc);
-  if (rc > 0 || (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)) {
-    fprintf(stderr, "unexpected SSL_connect result rc=%d err=%d\n", rc, err);
-    ERR_print_errors_fp(stderr);
-    /* Not a hard exit: whatever reached the BIO is still the answer. */
-  }
-
-  const unsigned char *bytes = NULL;
-  long n = BIO_get_mem_data(wbio, (char **)&bytes);
-  if (n <= 0) {
-    fprintf(stderr, "no bytes were written to the transport\n");
-    return 3;
-  }
-  for (long i = 0; i < n; i++) printf("%02x", bytes[i]);
-  printf("\n");
-  fprintf(stderr, "%ld bytes captured\n", n);
-  return 0;
-}
-PROGRAM
+  local instrument="$REPO/tools/first_record/first_record.c"
+  [ -f "$instrument" ] || { log "the instrument is missing: $instrument"; return 2; }
+  cp "$instrument" "$WORK/first_record.c"
 }
 
 # ── the parser ─────────────────────────────────────────────────────────────

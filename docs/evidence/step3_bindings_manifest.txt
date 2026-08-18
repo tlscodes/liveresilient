@@ -1,0 +1,13 @@
+artifact: generated bindings plus the C shim, linked into the phone app
+date: 2026-08-18T00:17:32Z
+generator: ffigen 21.0.0  (exact pin in packages/native_transport/pubspec.yaml)
+config: packages/native_transport/ffigen.yaml
+header: packages/pt_transport_darwin/ios/Sources/pt_shim.h  sha256=f74efdb2c9ee9d9d5be91a3a0917de6e5de83ecf82d9d2c564f15a4f0f434db5
+source: packages/pt_transport_darwin/ios/Sources/pt_shim.c  sha256=ad83fbdeaaeca6b775de863957a45e3a0b1a0be5d51243fce0745e24e326f36e
+generated: packages/native_transport/lib/src/generated/shim_bindings.dart  sha256=54bd3f9b63ec479c03a2ec5a44b03ab80c42e2dd56119ac7104b641ebcc3711d
+build: flutter build ios --debug --no-codesign exited 0
+linked_framework: Runner.app/Frameworks/pt_transport_darwin.framework
+exported_symbol: 0000000000004000 T _pt_shim_backend_linked
+exported_symbol: 0000000000004008 T _pt_shim_build_pin
+exported_symbol: 00000000000040b4 T _pt_shim_first_record
+backend: not vendored; archives referenced from $HOME/.cache/tlsapi/boringssl/build-ios-arm64 at pod install time
