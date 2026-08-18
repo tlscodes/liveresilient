@@ -33,3 +33,8 @@ tools/suite-logs/
 models/
 __pycache__/
 docs/TICKET4_FIRST_RECORD/work/
+
+# Working files of the local helper started by tools/t2/step5_helper.sh: a
+# generated key, its config list and a run log. The configuration that matters
+# is recorded in docs/evidence/step5_helper_config.txt, which IS committed.
+tools/t2/step5_work/

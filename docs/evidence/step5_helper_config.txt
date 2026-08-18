@@ -1,0 +1,14 @@
+artifact: the pinned backend's own server, running locally
+date: 2026-08-18T00:23:45Z
+tool: /Users/behnam/.cache/tlsapi/boringssl/build-host/bssl server
+pin: b0760837957bf86bd2014d258a948ee76f43c83f
+public_name: public-front-a7f3.example
+real_name: hidden-destination-a7f3.example
+config_id: 7
+port: 4433
+listen: 0.0.0.0:4433
+lan_address: 192.168.1.176:4433
+pid: 71498
+ech_config_list_bytes: 82
+ech_config_list_hex: 0050fe0d004c07002000206673e244b903bafc87a1186693d9dde2d78b66b8025457c689b965c248e4160e0008000100010001000300197075626c69632d66726f6e742d613766332e6578616d706c650000
+certificate: generated at run time by the tool (no key was supplied)

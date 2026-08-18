@@ -1,0 +1,10 @@
+artifact: the same pinned commit built for the phone architecture
+date: 2026-08-18T00:04:27Z
+pin: b0760837957bf86bd2014d258a948ee76f43c83f
+cmake: -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DCMAKE_BUILD_TYPE=Release -DCMAKE_MACOSX_BUNDLE=OFF -DBUILD_TESTING=OFF
+first_attempt_failed: configure error, install TARGETS given no BUNDLE DESTINATION for MACOSX_BUNDLE executable target bssl
+targets: ssl crypto
+artifact_bytes: libssl.a 13578896
+artifact_arch: libssl.a arm64
+artifact_bytes: libcrypto.a 17374960
+artifact_arch: libcrypto.a arm64

@@ -59,8 +59,16 @@ dependencies:
     path: ../../packages/media_webrtc
   media_webrtc_flutter:
     path: ../../packages/media_webrtc_flutter
+  # Carries PtTransport.xcframework into the Apple bundles; no Dart API of its
+  # own. Non-Apple builds ignore it — it declares only ios and macos.
+  pt_transport_darwin:
+    path: ../../packages/pt_transport_darwin
   signaling:
     path: ../../packages/signaling
+  # For the manifest's ICE servers: without them every call is placed with an
+  # empty STUN/TURN list.
+  signed_config:
+    path: ../../packages/signed_config
   live_captions:
     path: ../../packages/live_captions
   messaging:
@@ -68,6 +76,8 @@ dependencies:
   messaging_webrtc_adapter:
     path: ../../packages/messaging_webrtc_adapter
   file_selector: ^1.1.0
+  image: ^4.9.1
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:
@@ -88,6 +98,13 @@ dev_dependencies:
   # Direct dev-dep (same constraint as media_webrtc_flutter): the E2E
   # support code probes `getUserMedia` directly to report the media mode.
   flutter_webrtc: ^1.5.2
+
+  # Dev-only, and deliberately so: nothing the app ships imports this. One
+  # integration test asks the running process whether the pinned backend is
+  # linked into it and what bytes it composes, which is a measurement of THIS
+  # build on THIS architecture and cannot be made from the host.
+  native_transport:
+    path: ../../packages/native_transport
 
   # In-process TLS signaling relay for the on-device loopback E2E suite
   # (integration_test/): the tests bind the real relay inside the app

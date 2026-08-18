@@ -1,0 +1,44 @@
+{
+  "what_this_is": "The declaration of which parts of a composed first record do not depend on the machine that composed it. tools/compare_arch_records.py compares exactly these and nothing else, so widening the comparison is a reviewed change to this file rather than a flag somebody passes at 2 a.m.",
+  "why_not_bytes": "The configuration under measurement permutes its extension order per connection and fills several fields with fresh random material, so two runs on ONE machine already differ byte for byte. Byte equality would fail honest runs; loosening it until it passed would measure nothing.",
+
+  "invariant_fields": [
+    "record_version",
+    "legacy_version",
+    "cipher_suites_in_order",
+    "compression_methods",
+    "extension_set",
+    "extension_count"
+  ],
+
+  "invariant_extension_payloads": [0, 5, 11, 13, 16, 18, 23, 27, 35, 45, 17513, 65281],
+
+  "invariant_extension_payloads_why": {
+    "0": "server name — the name is configuration, identical on both machines",
+    "5": "status_request — a fixed request shape",
+    "11": "ec_point_formats — a fixed list",
+    "13": "signature_algorithms — the library's list for this configuration",
+    "16": "alpn — the profile's protocols in the profile's order",
+    "18": "signed_certificate_timestamp — empty by construction",
+    "23": "extended_master_secret — empty by construction",
+    "27": "compress_certificate — the algorithm registered by the configuration",
+    "35": "session_ticket — empty, no session to resume",
+    "45": "psk_key_exchange_modes — a fixed list",
+    "17513": "application_settings — carries the protocol it was configured for",
+    "65281": "renegotiation_info — empty on a first connection"
+  },
+
+  "variant_fields": [
+    "extension_order (permuted per connection by design)",
+    "client_random (fresh per connection)",
+    "session_id (fresh per connection)",
+    "grease_values (random per connection by design)",
+    "supported_groups payload (carries a grease group)",
+    "supported_versions payload (carries a grease version)",
+    "key_share payload (fresh key material)",
+    "padding payload (length-dependent)",
+    "total record length (follows the variant parts)"
+  ],
+
+  "what_this_does_not_declare": "That the two records are identical. It declares which parts must agree for the two machines to be composing the same shape, and the comparator additionally requires the candidate to state the architecture it ran on — because with the projection alone, a second run on the host would pass as a run on the phone."
+}

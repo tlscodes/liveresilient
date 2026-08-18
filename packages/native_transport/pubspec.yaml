@@ -1,0 +1,25 @@
+name: native_transport
+description: >-
+  Optional binding to the pluggable-transport C core over dart:ffi. Loads the
+  shared library explicitly, owns one native session per Dart isolate, and
+  exposes it behind the existing TransportChannel interface. Nothing in the
+  product depends on this package; it is opt-in.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  ffi: ^2.1.0
+  adaptive_transport:
+    path: ../adaptive_transport
+
+dev_dependencies:
+  # Exact, not a caret range: regenerating on another machine must produce a
+  # byte-identical file, because that identity is what detects a hand edit of
+  # lib/src/generated/. A range would let two machines disagree honestly.
+  ffigen: 21.0.0
+  test: ^1.25.0

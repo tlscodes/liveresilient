@@ -1,0 +1,14 @@
+artifact: pinned dependency built for the host
+date: 2026-08-18T00:04:26Z
+pin: b0760837957bf86bd2014d258a948ee76f43c83f
+pin_date: Fri Aug 14 19:44:21 2026 -0700
+source: $BORINGSSL_SRC default $HOME/.cache/tlsapi/boringssl (not vendored in this repository)
+cmake: -DCMAKE_BUILD_TYPE=Release
+targets: ssl crypto bssl
+host_uname: x86_64
+artifact_bytes: libssl.a 13591816
+artifact_arch: libssl.a x86_64
+artifact_bytes: libcrypto.a 18039624
+artifact_arch: libcrypto.a x86_64
+artifact_bytes: bssl 3054064
+artifact_arch: bssl x86_64
