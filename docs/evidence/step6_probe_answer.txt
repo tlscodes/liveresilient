@@ -1,29 +1,21 @@
-artifact: what a peer did with the configuration the linked backend offered
-date: 2026-08-18T00:42:58Z
-question: does the module, at run time, get the extension honoured by a peer that speaks it
-
-host_run: the same function, from a process that can reach the helper
-host_backend_linked: 1
-host_build_pin: b0760837
-host_peer: 127.0.0.1:4433
-host_inner_name_asked_for: hidden-destination-a7f3.example
-host_outcome: applied
-host_outcome_code: 1
-host_harness: tools/ech_probe_host.c linked against packages/pt_transport_darwin/ios/Sources/pt_shim.c
-
-device_run: the same function, on the phone
-device_outcome: unreachable
-device_peer: 192.168.1.176:4433
-device_inner_name_asked_for: hidden-destination-a7f3.example
-device_build_pin: b0760837
-device_log: tools/suite-logs/device_ech_probe_20260818T003747Z.log
-
-reading: the probe path is proven; the phone answered unreachable, which is
-reading: a statement about reaching this host, not about the module. Two
-reading: candidates: (1) the app declared no NSLocalNetworkUsageDescription, so
-reading: iOS refuses local-network connections outright - key added 2026-08-18,
-reading: and the first run after it raises a prompt somebody must tap; (2) this
-reading: Mac carries its address on a wired interface, so a phone on Wi-Fi or
-reading: cellular is on a different network from 192.168.1.176.
-unblocks: rerun tools/probe_device_ech.sh and watch for the prompt - a prompt
-unblocks: means cause 1, no prompt with the same answer means cause 2.
+artifact: what the peer did with the configuration this build offered
+date: 2026-08-18T01:06:01Z
+device: 00008030-001215003AF2802E
+source: integration_test/ech_probe_on_device_test.dart via pt_shim_ech_probe
+outcome: applied
+peer: 192.168.2.1:4433
+inner_name_asked_for: hidden-destination-a7f3.example
+build_pin: b0760837
+helper_public_name: public-front-a7f3.example
+test_exit: 0
+route: over the USB bridge, not Wi-Fi — tools/t2/usb_peer.sh reports the
+route: cabled phone at 192.168.2.2 on bridge100 and this host at 192.168.2.1.
+route: The earlier unreachable answer was against 192.168.1.176, a wired LAN
+route: address the phone has no path to. Nothing about the module changed
+route: between the two runs; only the address did.
+host_cross_check: the same function from a host process answered applied too
+host_cross_check: (tools/ech_probe_host.sh, against 127.0.0.1:4433)
+meaning: a peer that speaks the extension honoured the configuration this
+meaning: device build offered it, at run time, on the device that is running —
+meaning: which is the condition native_shape_availability.dart:86-97 names as
+meaning: the only source an available result may ever come from.
