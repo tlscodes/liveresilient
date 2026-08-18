@@ -9,7 +9,17 @@ is explicit, per gate, with a date on everything that is waiting.
 ## Where the ticket stands, per gate
 
 ```
-4a  BLOCKED   needs a server with the extension, and a linked module to reach it
+4a  CLOSED    2026-08-18 — the cabled phone reached a peer offering the
+              extension and the peer HONOURED the configuration it was given.
+              Module: the pinned commit cross-built for the device and reached
+              through the shim in this pod, bindings generated, nothing
+              vendored. Peer: the same library's own server, started locally
+              with a public name different from the name asked for. Evidence:
+              docs/evidence/step6_probe_answer.txt, held to its words by
+              packages/adaptive_transport/test/ticket4_device_probe_test.dart
+              (4 tests, including the negative control that rejects `ignored` —
+              an exchange that finished while the peer did nothing with the
+              configuration).
 4b  BLOCKED   needs a packet capture of a live connection to that server
 4c  CLOSED    2026-08-17 — the note, TICKET4_DECISION.md section 9, 4 tests
 4d  CLOSED    2026-08-17 — one-member status value + exhaustiveness, 8 tests
@@ -32,16 +42,32 @@ work and two measurements — not a decision.
 
 ## The two blockers, dated
 
-### BLOCKER 4a — no server with the extension, and nothing linked to reach it
+### BLOCKER 4a — CLOSED 2026-08-18
 
 ```
 BLOCKER   2026-08-17   opened
-NEEDS     (1) the native module built for the target and linked into the app
+CLOSED    2026-08-18   both halves ended the same night
+NEEDED    (1) the native module built for the target and linked into the app
           (2) a reachable test server that offers the extension, with a
               public name that is not the real name
-SLOT      the ticket 4 review already scheduled for 2026-09-12
-            (docs/PLAN_five_tickets_v4.md, the out-of-sequence blocked ledger)
+MET BY    (1) BoringSSL at b0760837 cross-built for the device; a C shim in
+              this pod; ffigen bindings; the archives referenced where they
+              were built, never copied into this repository
+          (2) that same library's own command-line server, started by
+              tools/t2/step5_helper.sh with two different names recorded
+ANSWER    applied — the peer honoured the configuration, which is a different
+          answer from `ignored`, the near-miss where the exchange finishes and
+          the peer does nothing with it
+ROUTE     the USB bridge (192.168.2.1). The first attempt answered
+          `unreachable` against a wired LAN address the phone has no path to,
+          which is why the evidence records the route as well as the outcome.
 ```
+
+What is worth carrying forward from this: the capability measurement failed
+once for a reason that had nothing to do with the capability. A gate that had
+accepted "the exchange completed" would have been green on a peer that ignored
+the configuration entirely; a gate that had not recorded the address would have
+left a later reader unable to tell a working module from a working network.
 
 Both halves are external to this repository. (1) is build-system work against a
 pinned external clone — the decision explicitly forbids vendoring the library
