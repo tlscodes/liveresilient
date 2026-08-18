@@ -97,17 +97,6 @@ class IntelligenceDirector extends ChangeNotifier {
     DateTime Function()? now,
   }) : _fabric = fabric,
        _now = now ?? DateTime.now {
-    // Transparent-narrator wiring («هوشمندی v3» pillar 5): the assistant
-    // cites the newest ids from the hub's PERSISTED evidence ring — the
-    // same ring the call/delivery pillars feed — so a narration's citation
-    // survives a restart alongside the measurement it points at.
-    // hub.assistant is concretely a RuleBasedAssistant (the only tier),
-    // so this wiring needs no cast and breaks no port.
-    _hub.assistant.setEvidenceSource(
-      // 3 = the two measurements one snapshot records plus one earlier id
-      // of margin; more would cite evidence the sentence never used.
-      () => _hub.journal.recent(3).map((r) => r.id).toList(),
-    );
     _sub = fabric.snapshots.listen(_onSnapshot);
     _onSnapshot(fabric.snapshot);
   }
@@ -147,22 +136,6 @@ class IntelligenceDirector extends ChangeNotifier {
 
   void _onSnapshot(ConnectivitySnapshot snapshot) {
     if (_disposed) return;
-    // Record what this snapshot actually observed BEFORE narrating, so
-    // the narration cites exactly these measurements (they are the newest
-    // entries in the hub ring the evidence source reads).
-    _hub.journal.add(
-      kind: 'fabric.pending_bundles',
-      value: snapshot.pendingBundles.toDouble(),
-      unit: 'count',
-      context: snapshot.bestLaneId,
-    );
-    _hub.journal.add(
-      kind: 'fabric.mode',
-      value: snapshot.mode.index.toDouble(),
-      unit: 'enum-index',
-      context: snapshot.mode.name,
-    );
-    _hub.markJournalDirty();
     final trendVerdict = snapshot.bestLaneId == null
         ? TrendVerdict.unknown
         : _fabric.trend.verdict(snapshot.bestLaneId!);
