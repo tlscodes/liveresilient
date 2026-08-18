@@ -3,6 +3,7 @@
 /// All numbers printed are measured in this run, never quoted.
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -10,6 +11,28 @@ import 'package:connection_orchestrator/src/media_codecs/live_context_compressor
 import 'package:test/test.dart';
 
 final _gzip = GZipCodec(level: 9);
+
+/// The "16 KB dart source" corpus is read off disk, and it used to be read at
+/// `lib/src/...` — relative to the CURRENT DIRECTORY. `dart test
+/// packages/connection_orchestrator` from the repository root is an ordinary
+/// invocation, and under it that path pointed at the workspace root, where no
+/// such file exists. The test went red with `PathNotFoundException` while the
+/// compressor it was measuring was entirely healthy.
+///
+/// A test that fails because of where it was launched from is a test that
+/// reports on the launcher. Resolve the package's own location instead, which
+/// is the same from any directory.
+late final String _libDir;
+
+Future<String> _resolveLibDir() async {
+  final uri = await Isolate.resolvePackageUri(
+    Uri.parse('package:connection_orchestrator/connection_orchestrator.dart'),
+  );
+  if (uri == null) {
+    throw StateError('cannot resolve package:connection_orchestrator');
+  }
+  return File(uri.toFilePath()).parent.path; // .../lib
+}
 
 String _representativeText(int size, int seed) {
   final rng = Random(seed);
@@ -40,6 +63,10 @@ String _representativeText(int size, int seed) {
 
 void main() {
   const c = LiveContextCompressor();
+
+  setUpAll(() async {
+    _libDir = await _resolveLibDir();
+  });
 
   test('round-trip is byte-exact: text, Persian, binary, random, edges', () {
     final rng = Random(9);
@@ -85,9 +112,9 @@ void main() {
       ),
       '16KB dart source': Uint8List.fromList(
         utf8.encode(
-          File('lib/src/rateless_stream.dart').readAsStringSync() +
-              File('lib/src/media_queue.dart').readAsStringSync() +
-              File('lib/src/micro_datagram_lane.dart').readAsStringSync(),
+          File('$_libDir/src/rateless_stream.dart').readAsStringSync() +
+              File('$_libDir/src/media_queue.dart').readAsStringSync() +
+              File('$_libDir/src/micro_datagram_lane.dart').readAsStringSync(),
         ),
       ),
     };

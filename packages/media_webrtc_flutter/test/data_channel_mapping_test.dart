@@ -55,4 +55,32 @@ void main() {
       expect(frameBytesFromMessage(message), isEmpty);
     });
   });
+
+  group('RetransmitCapDataChannelInit', () {
+    test('toMap keeps maxRetransmits: 0 on the wire (upstream drops it)', () {
+      // webrtc_interface 1.5.1 toMap() emits the key only when > 0, so a
+      // zero-retransmit (fully unreliable) channel silently became a
+      // RELIABLE one — the exact SCTP collapse the fountain lane escapes.
+      // Pin BOTH facts: upstream still drops zero (if this half ever
+      // fails, the subclass has become a harmless duplicate and may go),
+      // and the subclass restores it.
+      final upstream = rtc.RTCDataChannelInit()..maxRetransmits = 0;
+      expect(upstream.toMap().containsKey('maxRetransmits'), isFalse);
+      final fixed = RetransmitCapDataChannelInit()..maxRetransmits = 0;
+      expect(fixed.toMap()['maxRetransmits'], 0);
+    });
+
+    test('unset field stays absent (reliable channels byte-identical to '
+        'upstream); positive caps pass through', () {
+      expect(
+        RetransmitCapDataChannelInit().toMap().containsKey('maxRetransmits'),
+        isFalse,
+      );
+      expect(
+        (RetransmitCapDataChannelInit()..maxRetransmits = 3)
+            .toMap()['maxRetransmits'],
+        3,
+      );
+    });
+  });
 }

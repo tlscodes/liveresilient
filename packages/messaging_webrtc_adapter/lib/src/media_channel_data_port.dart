@@ -22,6 +22,10 @@ import 'package:messaging/messaging.dart';
 class MediaChannelDataPort implements DataChannelPort {
   /// Wraps [channel]. Subscribes to its streams immediately, so construct
   /// this port before signaling readiness to peers (broadcast-stream rule).
+  /// The seed below relaxes that rule for STATE only: an open reported before
+  /// construction is recovered from [MediaDataChannel.currentState], but an
+  /// inbound frame delivered before construction is still lost (ack layer
+  /// recovers it).
   MediaChannelDataPort(this._channel, {this.maxPendingFrames = 64}) {
     if (maxPendingFrames < 1) {
       throw ArgumentError.value(
@@ -32,6 +36,12 @@ class MediaChannelDataPort implements DataChannelPort {
     }
     _inboundSub = _channel.inbound.listen(_inboundController.add);
     _stateSub = _channel.state.listen(_onState);
+    // Seed AFTER subscribing: a channel born open on a live SCTP association
+    // emits its open event while nobody listens, and broadcast streams replay
+    // nothing — without this line every frame buffers into _pending forever
+    // (rig 2026-08-11: staged-photo lane, acked=0 minRtt=-1 retx=0). A later
+    // duplicate open from the stream is idempotent in _onState.
+    _onState(_channel.currentState);
   }
 
   final MediaDataChannel _channel;

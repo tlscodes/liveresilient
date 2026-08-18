@@ -33,10 +33,22 @@ class DataChannelConfig {
   /// at chat message rates.
   final bool ordered;
 
+  /// SCTP partial-reliability retransmit cap (RFC 3758 limited-retransmission
+  /// policy). null (default) = fully reliable, today's behavior everywhere.
+  /// 0 = the transport never retransmits a frame — the fountain video lane's
+  /// hard precondition: on a reliable channel SCTP retransmits underneath and
+  /// rebuilds the exact loss-collapse that lane exists to escape (see
+  /// messaging/src/fountain_stream_transfer.dart header). Reliability is a
+  /// per-side local send policy, not SDP: negotiated channels exchange no
+  /// DCEP OPEN, so both peers must pass the same value here for the channel
+  /// to be unreliable in both directions.
+  final int? maxRetransmits;
+
   const DataChannelConfig({
     this.label = 'vck-messaging',
     this.negotiatedId = 0,
     this.ordered = true,
+    this.maxRetransmits,
   });
 
   /// Validates field ranges; called by ports before touching the platform.
@@ -50,6 +62,14 @@ class DataChannelConfig {
         negotiatedId,
         'negotiatedId',
         'must be 0-65534',
+      );
+    }
+    final cap = maxRetransmits;
+    if (cap != null && (cap < 0 || cap > 65535)) {
+      throw ArgumentError.value(
+        cap,
+        'maxRetransmits',
+        'must be null (reliable) or 0-65535',
       );
     }
   }
@@ -71,4 +91,24 @@ abstract interface class MediaDataChannel {
   Stream<List<int>> get inbound;
   Future<void> send(List<int> frame);
   Future<void> close();
+
+  /// The channel's state right now, [MediaDataChannelState.connecting] until
+  /// an event says otherwise, [MediaDataChannelState.closed] after [close].
+  ///
+  /// [state] is a broadcast stream: an open event delivered while nobody is
+  /// subscribed (e.g. during an await between channel creation and port
+  /// construction) is gone, and a negotiated channel on an already-established
+  /// SCTP association opens immediately (measured 2026-08-11, staged-photo
+  /// lane: acked=0 minRtt=-1 inside a healthy call). Consumers gating sends on
+  /// openness must subscribe to [state] and then seed from this getter; the
+  /// stream alone is not sufficient.
+  MediaDataChannelState get currentState;
+
+  /// Bytes queued in the transport's send buffer, or null where the
+  /// platform does not report it. THE flow-control signal (standard
+  /// RTCDataChannel.bufferedAmount): a bulk sender that ignores it was
+  /// measured (2026-08-08, T2 bandwidth/latency video rows) pushing its
+  /// tail chunks into a full buffer whose silent drop looked exactly like
+  /// a dead receiver — flatlined acks, open channel, live call.
+  int? get bufferedAmount;
 }

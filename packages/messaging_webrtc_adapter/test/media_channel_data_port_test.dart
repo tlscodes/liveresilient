@@ -13,6 +13,9 @@ class FakeMediaChannel implements MediaDataChannel {
   @override
   final String label;
 
+  @override
+  int? get bufferedAmount => null; // in-memory fake: nothing ever queues
+
   FakeMediaChannel? peer;
   final sent = <List<int>>[];
   var failSends = false;
@@ -28,7 +31,13 @@ class FakeMediaChannel implements MediaDataChannel {
     return (a, b);
   }
 
-  void setState(MediaDataChannelState state) => _state.add(state);
+  @override
+  var currentState = MediaDataChannelState.connecting;
+
+  void setState(MediaDataChannelState state) {
+    currentState = state;
+    _state.add(state);
+  }
 
   void deliver(List<int> frame) => _inbound.add(frame);
 
@@ -80,6 +89,20 @@ void main() {
     await port.send([7]);
     expect(channel.sent, [
       [7],
+    ]);
+    await port.close();
+  });
+
+  test('channel already open before the port exists sends direct: the open '
+      'event predates the subscription, only currentState can report it '
+      '(staged-photo lane regression, rig 2026-08-11)', () async {
+    final channel = FakeMediaChannel()
+      ..currentState = MediaDataChannelState.open;
+    final port = MediaChannelDataPort(channel);
+
+    await port.send([42]); // no state event is ever emitted
+    expect(channel.sent, [
+      [42],
     ]);
     await port.close();
   });

@@ -1,0 +1,21 @@
+name: quality_governor
+description: >-
+  Closes the loop that network_quality_policy already opens: it reads the
+  quality rungs that package computes and actually applies them, under one
+  invariant — voice is never cut. Everything else is negotiable.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  adaptive_transport:
+    path: ../adaptive_transport
+  seed_lineage:
+    path: ../seed_lineage
+
+dev_dependencies:
+  test: ^1.25.0

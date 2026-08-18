@@ -206,12 +206,23 @@ class ConnectionFabric {
     int lifetimeMs = 24 * 60 * 60 * 1000,
   }) async {
     _checkLive();
+    final byId = {for (final l in _ranked()) l.profile.id: l};
+    // Live conditions from the best lane's measured health feed the
+    // bandit context (lane x conditions). rttMs 9999 is ChannelHealth's
+    // unmeasured sentinel — passed as null, not as a real slow link.
+    final bestLane = byId.isEmpty ? null : byId.values.first;
+    final bestHealth = bestLane?.channel.health;
     final ctx = DeliveryContext.at(
       _nowMs(),
       place: _place(),
       priority: priority,
+      lossFraction: bestHealth == null
+          ? null
+          : (1 - bestHealth.availability).clamp(0.0, 1.0),
+      rttMs: bestHealth == null || bestHealth.rttMs >= 9999
+          ? null
+          : bestHealth.rttMs.toDouble(),
     );
-    final byId = {for (final l in _ranked()) l.profile.id: l};
     // Foresight feed: if the trend watch says the current best lane is
     // heading down, the planner duplicates onto the runner-up in advance.
     final bestId = byId.isEmpty ? null : byId.keys.first;
@@ -391,7 +402,17 @@ class ConnectionFabric {
     // for the floor triggers recovery while the call is still alive.
     final now = _nowMs();
     for (final lane in _lanes.values) {
-      trend.observe(lane.profile.id, lane.channel.health.score(), nowMs: now);
+      // Feed all trend channels, not just the score: this is what arms
+      // the joint loss+rtt failingSoon trigger in production.
+      final health = lane.channel.health;
+      trend.observe(
+        lane.profile.id,
+        health.score(),
+        nowMs: now,
+        lossFraction: (1 - health.availability).clamp(0.0, 1.0),
+        rttMs: health.rttMs >= 9999 ? null : health.rttMs.toDouble(),
+        deliveryRate: health.availability,
+      );
     }
     final bestNow = ranked.isEmpty ? null : ranked.first;
     if (bestNow != null &&

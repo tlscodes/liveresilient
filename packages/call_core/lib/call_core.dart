@@ -3,5 +3,6 @@ library;
 
 export 'src/call_controller.dart';
 export 'src/call_state.dart';
+export 'src/connection_budget.dart';
 export 'src/reconnect_policy.dart';
 export 'src/operating_ladder.dart';

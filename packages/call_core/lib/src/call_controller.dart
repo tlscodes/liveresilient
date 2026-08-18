@@ -537,8 +537,9 @@ final class CallController {
   ///
   /// Throws [ArgumentError] if [callId] is empty, longer than 128
   /// characters, or contains characters outside `[A-Za-z0-9._~-]`; if
-  /// [operationTimeout] or [connectionTimeout] is not positive; or if
-  /// [maxBufferedIceCandidates] is outside `1..4096`.
+  /// [operationTimeout], [connectionTimeout], or [engineOperationTimeout]
+  /// is not positive; or if [maxBufferedIceCandidates] is outside
+  /// `1..4096`.
   CallController({
     required String callId,
     required this.role,
@@ -548,6 +549,8 @@ final class CallController {
     required this.reconnectPolicy,
     this.operationTimeout = const Duration(seconds: 15),
     this.connectionTimeout = const Duration(seconds: 20),
+    this.engineOperationTimeout = const Duration(seconds: 15),
+    this.mediaStartTimeout = const Duration(seconds: 30),
     this.maxBufferedIceCandidates = 256,
   }) : callId = _validateCallId(callId),
        _state = CallState(
@@ -560,6 +563,15 @@ final class CallController {
     }
     if (connectionTimeout <= Duration.zero) {
       throw ArgumentError.value(connectionTimeout, 'connectionTimeout');
+    }
+    if (engineOperationTimeout <= Duration.zero) {
+      throw ArgumentError.value(
+        engineOperationTimeout,
+        'engineOperationTimeout',
+      );
+    }
+    if (mediaStartTimeout <= Duration.zero) {
+      throw ArgumentError.value(mediaStartTimeout, 'mediaStartTimeout');
     }
     if (maxBufferedIceCandidates < 1 || maxBufferedIceCandidates > 4096) {
       throw ArgumentError.value(
@@ -589,11 +601,37 @@ final class CallController {
   /// [ReconnectPolicy].
   final ReconnectPolicy reconnectPolicy;
 
-  /// The per-operation timeout applied to every awaited call into
-  /// [transport], [signaling], and [media] (via `CallController._bounded`).
-  /// An operation that exceeds this fails with a [TimeoutException], which
-  /// is then handled the same as any other failure from that layer.
+  /// The per-operation timeout applied to every awaited NETWORK call into
+  /// [transport] and [signaling] (via `CallController._bounded`). An
+  /// operation that exceeds this fails with a [TimeoutException], which is
+  /// then handled the same as any other failure from that layer. On a
+  /// shaped or hostile path this should scale with the path's round-trip
+  /// time and loss (see `AdaptiveConnectionBudget.operationBudget`); calls
+  /// into [media] are engine-local and bounded by [engineOperationTimeout]
+  /// instead.
   final Duration operationTimeout;
+
+  /// The timeout applied to every awaited COMPUTE call into [media]
+  /// (createOffer, createAnswer, set*Description, rollback,
+  /// addRemoteIceCandidate, stop — via `CallController._boundedEngine`).
+  /// These touch no network, so this bound is deliberately FIXED and
+  /// independent of path conditions: a hung engine is a defect to detect
+  /// fast on every profile, not weather to wait out.
+  ///
+  /// [CallMediaSession.start] is NOT in this class — see
+  /// [mediaStartTimeout].
+  final Duration engineOperationTimeout;
+
+  /// The timeout for [CallMediaSession.start] alone. Start contains
+  /// `getUserMedia`, whose latency is HUMAN, not compute: on a fresh
+  /// install the OS permission prompt sits on screen until a person
+  /// answers it. Bounding that wait with the 15 s engine bound severed
+  /// the first call of every fresh install while the mic prompt was
+  /// still up; 30 s matches the documented TCC-prompt rationale in the
+  /// e2e harness. A wedged native stack now takes 30 s to classify on
+  /// start — the accepted price for not hanging up on a human reading a
+  /// dialog.
+  final Duration mediaStartTimeout;
 
   /// How long a recovery attempt waits for [media]'s
   /// [CallMediaSession.connectionState] to report
@@ -614,6 +652,18 @@ final class CallController {
   final List<StreamSubscription<Object?>> _subscriptions =
       <StreamSubscription<Object?>>[];
   final List<IceCandidate> _pendingLocalCandidates = <IceCandidate>[];
+
+  /// Remote candidates the engine refused, PARKED for the next remote
+  /// description. The at-least-once outbox acks on delivery, not on
+  /// application, so a refused candidate is never re-sent by the far
+  /// side — the receiver is the only place it can survive. Measured
+  /// 2026-08-09 (loss60, hedged sockets): a ~300B candidate overtakes
+  /// its multi-KB offer, the engine rejects it (no remote description
+  /// yet), and dropping it left the forced-relay generation with ZERO
+  /// remote candidates — no permission, no checks, an unconnectable
+  /// draw that looked merely slow. Same drop-oldest window as the
+  /// local buffer ([maxBufferedIceCandidates]).
+  final List<IceCandidate> _pendingRemoteCandidates = <IceCandidate>[];
 
   late CallState _state;
   Future<void> _serialTail = Future<void>.value();
@@ -636,6 +686,36 @@ final class CallController {
   DateTime? _recoveryStartedAt;
   Object? _lastRecoveryCause;
   Timer? _recoveryTimer;
+  Timer? _initialConnectTimer;
+
+  /// When the CURRENT initial-connect negotiation attempt began — the
+  /// age baseline for the progress-patience cap (see the watchdog).
+  DateTime? _initialAttemptStartedAt;
+
+  /// When recovery last ran a HARD cycle (fresh channels + ICE restart)
+  /// — the age baseline for recovery's progress-patience cap, the same
+  /// "mere arrival is not completion" rule the initial watchdog enforces
+  /// (its 2026-08-09 raise). Without it, mutual signaling chatter kept
+  /// every recovery attempt in the progressing skip and no fresh TURN
+  /// gathering ever started (measured 2026-08-09, loss60: two full 450s
+  /// draws, TWO gathering source ports total, zero connects).
+  DateTime? _recoveryHardCycleAt;
+
+  /// Grace timer for a media `disconnected` squall — see the handler.
+  Timer? _mediaDisconnectGraceTimer;
+
+  /// When the far side last demonstrably delivered a signaling frame
+  /// (description / candidate / restart request). Soft send-timeouts use
+  /// this to distinguish a SLOW-BUT-ADVANCING negotiation from a silent
+  /// one — only silence justifies cycling the socket (see _beginRecovery).
+  DateTime? _lastRemoteSignalAt;
+
+  /// Whether this call has EVER reached connected. The progress-aware
+  /// patience below applies only to the INITIAL connect: once a call has
+  /// been up, a recovery is about a path that already proved itself and
+  /// then died — recent signaling chatter must not soften that cycle
+  /// (path-health recovery on a connected call always hard-cycles).
+  bool _everConnected = false;
 
   /// Every [CallState] this controller emits, in emission order
   /// ([CallState.sequence] strictly increasing). A broadcast stream that
@@ -672,6 +752,7 @@ final class CallController {
         await _ensureMediaStarted();
         await _connectChannels();
         _emit(CallPhase.negotiating);
+        _armInitialConnectWatchdog();
 
         if (role == CallRole.initiator) {
           await _negotiate(iceRestart: false);
@@ -799,7 +880,7 @@ final class CallController {
         }
         await _finishEnded(CallEndReason.disposed);
       } else {
-        await _cancelSubscriptions();
+        _cancelSubscriptions();
       }
 
       _disposed = true;
@@ -928,16 +1009,37 @@ final class CallController {
       return;
     }
 
+    // Any remote signal IS delivery evidence: the path is demonstrably
+    // carrying frames right now. Recorded so soft send-timeouts can tell
+    // "slow but advancing" apart from "silent" (see _beginRecovery).
+    switch (event) {
+      case RemoteDescriptionEvent():
+      case RemoteIceCandidateEvent():
+      case RestartRequestedEvent():
+        _lastRemoteSignalAt = clock.now();
+      default:
+        break;
+    }
+
     try {
       switch (event) {
         case RemoteDescriptionEvent():
           await _handleRemoteDescription(event.description);
         case RemoteIceCandidateEvent():
           if (!_ignoreOffer) {
-            await _bounded(
-              media.addRemoteIceCandidate(event.candidate),
-              'add remote ICE candidate',
-            );
+            // A candidate the engine refuses is PARKED, not dropped and
+            // not a call failure. The old drop rested on "a candidate
+            // that matters is re-sent by the sender" — false by
+            // construction: the signaling layer acks every envelope on
+            // DELIVERY (before the app applies it), which cancels the
+            // outbox retransmission, and the dedup kills any duplicate.
+            // An application-level refusal is therefore a permanent loss
+            // unless the receiver keeps the candidate itself (measured
+            // 2026-08-09, loss60). Parked candidates re-apply after the
+            // next successful setRemoteDescription; one that fails BOTH
+            // times is genuinely stale (pre-restart ufrag) and dies
+            // quietly — still never costing a recovery cycle.
+            await _applyOrParkRemoteCandidate(event.candidate);
           }
         case RemoteHangupEvent():
           await _finishEnded(CallEndReason.remoteHangup);
@@ -982,12 +1084,44 @@ final class CallController {
       case MediaConnectionChangedEvent():
         switch (event.state) {
           case MediaConnectionState.connected:
+            _everConnected = true;
+            _cancelMediaDisconnectGrace();
             _completeRecovery();
             if (_state.phase != CallPhase.connected) {
               _emit(CallPhase.connected);
             }
           case MediaConnectionState.disconnected:
+            // SQUALL, NOT DEATH (raised 2026-08-08, loss60 draws 2-3):
+            // under heavy loss ICE reports `disconnected` on a burst of
+            // missed checks and usually self-heals within seconds once
+            // one lands; an instant restart trades a seconds-long squall
+            // for a fresh connect lottery (measured: three restarts in
+            // 21 s, then a connected call whose data channels never got
+            // to open). Grace = connectionTimeout/4, floor 2 s cap 20 s;
+            // `connected` cancels it; `failed`/`closed` stay immediate.
+            if (_mediaDisconnectGraceTimer == null && !_terminal) {
+              final graceMs = (connectionTimeout.inMilliseconds ~/ 4)
+                  .clamp(2000, 20000);
+              _mediaDisconnectGraceTimer =
+                  Timer(Duration(milliseconds: graceMs), () {
+                _mediaDisconnectGraceTimer = null;
+                _enqueueEvent(() async {
+                  if (_terminal) {
+                    return;
+                  }
+                  await _beginRecovery(
+                    const CallControllerException(
+                      'media_disconnected',
+                      'Media connection stayed disconnected past its '
+                          'squall grace window',
+                    ),
+                    StackTrace.current,
+                  );
+                });
+              });
+            }
           case MediaConnectionState.failed:
+            _cancelMediaDisconnectGrace();
             await _beginRecovery(
               event.error ??
                   CallControllerException(
@@ -997,6 +1131,7 @@ final class CallController {
               StackTrace.current,
             );
           case MediaConnectionState.closed:
+            _cancelMediaDisconnectGrace();
             _mediaStarted = false;
             await _beginRecovery(
               event.error ??
@@ -1019,6 +1154,46 @@ final class CallController {
     }
   }
 
+  /// Applies a remote candidate now, or parks it for the next remote
+  /// description when the engine refuses it (see the handler comment —
+  /// the sender can never re-send a refused candidate). Drop-oldest at
+  /// [maxBufferedIceCandidates], mirroring the local buffer.
+  Future<void> _applyOrParkRemoteCandidate(IceCandidate candidate) async {
+    try {
+      await _boundedEngine(
+        media.addRemoteIceCandidate(candidate),
+        'add remote ICE candidate',
+      );
+    } catch (_) {
+      _pendingRemoteCandidates.add(candidate);
+      if (_pendingRemoteCandidates.length > maxBufferedIceCandidates) {
+        _pendingRemoteCandidates.removeAt(0);
+      }
+    }
+  }
+
+  /// Re-applies parked remote candidates; runs after every successful
+  /// setRemoteDescription. A candidate that fails its re-apply belonged
+  /// to a previous ICE generation and is dropped for good.
+  Future<void> _drainPendingRemoteCandidates() async {
+    if (_pendingRemoteCandidates.isEmpty) {
+      return;
+    }
+    final parked = List<IceCandidate>.of(_pendingRemoteCandidates);
+    _pendingRemoteCandidates.clear();
+    for (final candidate in parked) {
+      try {
+        await _boundedEngine(
+          media.addRemoteIceCandidate(candidate),
+          'add remote ICE candidate',
+        );
+      } catch (_) {
+        // Failed on arrival AND after the description it could have
+        // belonged to: genuinely stale, dies quietly.
+      }
+    }
+  }
+
   Future<void> _handleRemoteDescription(SessionDescription description) async {
     switch (description.type) {
       case SessionDescriptionType.offer:
@@ -1032,21 +1207,28 @@ final class CallController {
         }
 
         if (collision) {
-          await _bounded(media.rollback(), 'rollback local description');
+          await _boundedEngine(media.rollback(), 'rollback local description');
         }
 
-        await _bounded(
+        await _boundedEngine(
           media.setRemoteDescription(description),
           'set remote offer',
         );
-        final answer = await _bounded(media.createAnswer(), 'create answer');
+        await _drainPendingRemoteCandidates();
+        final answer = await _boundedEngine(
+          media.createAnswer(),
+          'create answer',
+        );
         if (answer.type != SessionDescriptionType.answer) {
           throw CallProtocolException(
             'Media adapter returned ${answer.type.name} from createAnswer',
           );
         }
 
-        await _bounded(media.setLocalDescription(answer), 'set local answer');
+        await _boundedEngine(
+          media.setLocalDescription(answer),
+          'set local answer',
+        );
         await _bounded(
           signaling.send(SendDescriptionCommand(answer)),
           'send answer',
@@ -1057,10 +1239,11 @@ final class CallController {
         if (media.signalingState != MediaSignalingState.haveLocalOffer) {
           return;
         }
-        await _bounded(
+        await _boundedEngine(
           media.setRemoteDescription(description),
           'set remote answer',
         );
+        await _drainPendingRemoteCandidates();
         _ignoreOffer = false;
     }
   }
@@ -1077,10 +1260,10 @@ final class CallController {
     _makingOffer = true;
     try {
       if (iceRestart && media.signalingState != MediaSignalingState.stable) {
-        await _bounded(media.rollback(), 'rollback before ICE restart');
+        await _boundedEngine(media.rollback(), 'rollback before ICE restart');
       }
 
-      final offer = await _bounded(
+      final offer = await _boundedEngine(
         media.createOffer(iceRestart: iceRestart),
         iceRestart ? 'create ICE restart offer' : 'create offer',
       );
@@ -1090,7 +1273,7 @@ final class CallController {
         );
       }
 
-      await _bounded(media.setLocalDescription(offer), 'set local offer');
+      await _boundedEngine(media.setLocalDescription(offer), 'set local offer');
       await _bounded(
         signaling.send(SendDescriptionCommand(offer)),
         'send offer',
@@ -1104,7 +1287,9 @@ final class CallController {
     if (_mediaStarted) {
       return;
     }
-    await _bounded(media.start(), 'start media session');
+    // start() contains getUserMedia — human latency (permission prompt),
+    // not compute — so it gets its own bound; see [mediaStartTimeout].
+    await _boundedBy(media.start(), 'start media session', mediaStartTimeout);
     _mediaStarted = true;
   }
 
@@ -1133,11 +1318,124 @@ final class CallController {
     }
   }
 
+  /// INITIAL-CONNECT WATCHDOG — the recovery loop's missing first rung.
+  ///
+  /// The recovery loop already bounds every RE-negotiation with
+  /// [connectionTimeout] and schedules the next attempt when media never
+  /// arrives (`_performRecoveryAttempt`). The INITIAL negotiation had no
+  /// such bound: nothing throws on the happy path, so nothing fired.
+  /// Measured 2026-08-07 (T2 loss60, 60% per-direction loss): both peers
+  /// sat in `negotiating` with error=null for the entire connect budget —
+  /// the pcap showed 59 TURN Allocate packets and almost no ICE, because
+  /// the Allocate responses kept being dropped and gathering quietly
+  /// produced no relay candidate. Under a relay-only ICE policy an empty
+  /// gathering is SILENT: no error, no state change, nothing to recover
+  /// from — indistinguishable from slow, except by time.
+  ///
+  /// So time is the detector: if one modeled attempt cost passes without a
+  /// connected call, the controller enters its NORMAL recovery loop, whose
+  /// ICE restart re-runs gathering — a fresh TURN allocation with fresh
+  /// luck — bounded by the reconnect policy exactly like every other
+  /// recovery.
+  void _cancelMediaDisconnectGrace() {
+    _mediaDisconnectGraceTimer?.cancel();
+    _mediaDisconnectGraceTimer = null;
+  }
+
+  void _armInitialConnectWatchdog() {
+    _initialConnectTimer?.cancel();
+    _initialAttemptStartedAt ??= clock.now();
+    _initialConnectTimer = Timer(connectionTimeout, () {
+      _initialConnectTimer = null;
+      _enqueueEvent(() async {
+        if (_terminal ||
+            _recoveryActive ||
+            _state.phase == CallPhase.connected ||
+            _state.phase == CallPhase.degraded) {
+          return;
+        }
+        // Progress-aware: when the far side delivered within the window,
+        // the negotiation is advancing — extend patience (re-arm) instead
+        // of restarting the very sequence that is landing. CAPPED at 2x
+        // connectionTimeout of total attempt age (raised 2026-08-09,
+        // loss60 clean-window: frames TRICKLING every <window kept the
+        // patience alive for 220s while the handshake never completed —
+        // mere arrival is not completion, and an uncapped extension
+        // spends the whole connect budget on one doomed draw).
+        final last = _lastRemoteSignalAt;
+        final attemptAge = _initialAttemptStartedAt == null
+            ? Duration.zero
+            : clock.now().difference(_initialAttemptStartedAt!);
+        if (last != null &&
+            clock.now().difference(last) < connectionTimeout &&
+            attemptAge < connectionTimeout * 2) {
+          _armInitialConnectWatchdog();
+          return;
+        }
+        _initialAttemptStartedAt = null;
+        await _beginRecovery(
+          CallControllerException(
+            'initial_connection_timeout',
+            'Negotiation did not produce a connected call within one '
+                'modeled attempt cost (${connectionTimeout.inSeconds}s)',
+          ),
+          StackTrace.current,
+        );
+      });
+    });
+  }
+
   Future<void> _beginRecovery(Object cause, StackTrace stackTrace) async {
     if (_terminal || !_started) {
       return;
     }
 
+    // ADAPTIVE, not one-path (measured 2026-08-07, T2 loss60): a
+    // send-await timeout is SOFT under the at-least-once outbox — the
+    // envelope keeps retransmitting after the await gives up. When the far
+    // side has demonstrably delivered within one connectionTimeout, the
+    // negotiation is slow-but-advancing, and cycling the socket here was
+    // measured to reset exactly the progress it was waiting for (the run
+    // reached offer-delivered/answer-in-flight five times and reset five
+    // times). Silence keeps the hard cycle; progress extends patience —
+    // bounded as ever by the reconnect policy's outer budget.
+    // ONE JUDGE OF STAGNATION (raised 2026-08-08, loss60 with relay-tcp):
+    // the recency clause above was the wrong ruler — under 60% loss the
+    // NATURAL gap between healthy inbound signals exceeds one
+    // connectionTimeout, so send-await timeouts kept winning the race
+    // against the watchdog and cycled a socket whose outbox was still
+    // retransmitting (measured: three ~150s cycles ate the 450s budget;
+    // 'send local ICE candidate' timed out at 73s while the transport
+    // was open). During the initial connect, EVERY send-await timeout is
+    // soft: it re-arms the progress-aware watchdog and returns. The
+    // watchdog alone declares stagnation — when it fires with no recent
+    // remote delivery it begins recovery with its own non-Timeout cause,
+    // so true silence still cycles exactly once per modeled attempt.
+    final progressedRecently = !_everConnected &&
+        !_recoveryActive &&
+        cause is TimeoutException &&
+        // Engine bounds are LOCAL compute deadlines — a wedged engine is
+        // not slow signalling, and deferring it to the watchdog would
+        // just delay a certain failure (the setLocalDescription-hung
+        // test pins this).
+        cause is! EngineTimeoutException &&
+        (_state.phase == CallPhase.negotiating ||
+            _state.phase == CallPhase.connecting);
+    if (progressedRecently) {
+      // Swallow — but grant NO fresh patience. The watchdog's existing
+      // deadline stands; only REMOTE delivery (checked when it fires)
+      // extends it. Re-arming here let periodic send-timeouts push the
+      // deadline forever and the judge never ruled (measured 2026-08-08
+      // loss60: initiator spent the whole 450s budget in negotiating).
+      if (_initialConnectTimer == null) {
+        _armInitialConnectWatchdog();
+      }
+      return;
+    }
+
+    _initialConnectTimer?.cancel();
+    _initialConnectTimer = null;
+    _cancelMediaDisconnectGrace();
     _lastRecoveryCause = cause;
     if (!_recoveryActive) {
       _recoveryActive = true;
@@ -1230,19 +1528,93 @@ final class CallController {
     _recoveryAttemptInFlight = true;
     _waitingForConnection = false;
 
-    try {
-      await _resetChannels();
-      await _ensureMediaStarted();
-      await _connectChannels();
+    // ADAPTIVE ATTEMPT (measured 2026-08-07, T2 loss60): when the far side
+    // delivered a signaling frame within the last connectionTimeout, the
+    // in-flight negotiation is ADVANCING — offer and answer were measured
+    // delivered with candidates still flushing when the old
+    // unconditional reset threw the progress away, attempt after attempt.
+    // A progressing attempt therefore keeps its channels and its
+    // negotiation (the at-least-once outbox is still retransmitting the
+    // pending frames) and only re-waits for media. A SILENT attempt keeps
+    // the full reset + ICE-restart cycle — fresh sockets are how silence
+    // is escaped. The policy's attempt/elapsed accounting runs either way,
+    // so the outer budget still bounds everything.
+    // Progress-aware patience applies to the 2nd-and-later attempts of
+    // any recovery: the FIRST attempt always hard-cycles. Post-connected
+    // that was always the rule (a proven path died — fresh ICE restart
+    // is the correct medicine); for the initial connect the watchdog has
+    // ALREADY granted this generation 2x connectionTimeout of chatter
+    // patience before handing off, so letting attempt 1 re-enter the
+    // progressing skip overturned the watchdog's own ruling (raised
+    // 2026-08-09, loss60). Once a fresh cycle's negotiation is
+    // demonstrably delivering frames, resetting it again burns the very
+    // sequence being waited for (measured 2026-08-07) — so attempts 2+
+    // keep the recency skip, but CAPPED at 2x connectionTimeout since
+    // the last hard cycle: mere arrival is not completion, and an
+    // uncapped extension spends the whole reconnect budget on one
+    // doomed generation.
+    final last = _lastRemoteSignalAt;
+    final cycleBaseline = _recoveryHardCycleAt ?? _recoveryStartedAt;
+    final patienceFresh = cycleBaseline == null ||
+        clock.now().difference(cycleBaseline) < connectionTimeout * 2;
+    // ONE GENERATION FOR THE INITIAL CONNECT (wiretap-proven 2026-08-09):
+    // under heavy loss each signaling leg is a TCP retransmit ladder —
+    // measured first-delivery latencies of 54 s, 111 s, 194 s, 269 s on a
+    // LIVE socket — so any time-based reset window shorter than the whole
+    // connect budget misjudges an in-flight leg as silence. Across four
+    // instrumented draws every time-triggered reset destroyed a
+    // negotiation whose frames later arrived (offer@111s vs reset@87s,
+    // answer@269s vs reset@229s) and re-entered the dial lottery; not one
+    // reset helped. Until the call has EVER connected, recovery attempts
+    // therefore never tear the generation down on time alone — the
+    // at-least-once outbox and hedge-promoting transport keep grinding
+    // the SAME generation, late candidates park and re-apply, and the
+    // reconnect policy's elapsed budget remains the only clock. Real
+    // failures (signaling/engine/media events) still arrive here as
+    // recovery causes and still reset. Post-connected recovery keeps the
+    // proven shape: first attempt hard-cycles, later attempts extend on
+    // recency, capped at 2x connectionTimeout since the last hard cycle.
+    // Only TIME-DRIVEN causes get that one-generation patience: a real
+    // failure (signaling channel death, engine error, media failure)
+    // still hard-cycles immediately — patience cannot resurrect a dead
+    // channel, only a reset can.
+    final cause = _lastRecoveryCause;
+    final timeDriven = cause is CallControllerException &&
+        (cause.code == 'initial_connection_timeout' ||
+            cause.code == 'reconnect_connection_timeout');
+    final progressing = (!_everConnected && timeDriven) ||
+        (attempt > 1 &&
+            patienceFresh &&
+            last != null &&
+            clock.now().difference(last) < connectionTimeout);
 
-      if (role == CallRole.initiator) {
-        await _negotiate(iceRestart: true);
-      } else {
-        await _bounded(
-          signaling.send(const SendRestartRequestCommand()),
-          'request ICE restart',
-        );
-        await _negotiate(iceRestart: true);
+    try {
+      if (!progressing) {
+        _recoveryHardCycleAt = clock.now();
+        await _resetChannels();
+        await _ensureMediaStarted();
+        await _connectChannels();
+
+        if (role == CallRole.initiator) {
+          await _negotiate(iceRestart: true);
+        } else {
+          await _bounded(
+            signaling.send(const SendRestartRequestCommand()),
+            'request ICE restart',
+          );
+          // SINGLE-OWNER GENERATIONS during the initial connect (raised
+          // 2026-08-09, loss60): two independent judges resetting one
+          // shared negotiation trampled each other's draws — the
+          // receiver's own iceRestart negotiate raced the initiator's
+          // fresh offer and glared, attempt after attempt. Before the
+          // call has EVER connected the initiator owns every generation:
+          // the receiver refreshes its channels, asks for a restart, and
+          // ANSWERS what arrives. Post-connected recoveries keep the
+          // receiver-side negotiate (its rollback path is proven there).
+          if (_everConnected) {
+            await _negotiate(iceRestart: true);
+          }
+        }
       }
 
       _recoveryAttemptInFlight = false;
@@ -1256,22 +1628,7 @@ final class CallController {
       }
 
       _waitingForConnection = true;
-      _recoveryTimer = Timer(connectionTimeout, () {
-        _recoveryTimer = null;
-        _enqueueEvent(() async {
-          if (_terminal || !_recoveryActive || !_waitingForConnection) {
-            return;
-          }
-          _waitingForConnection = false;
-          final cause = CallControllerException(
-            'reconnect_connection_timeout',
-            'Media did not reconnect within the connection timeout',
-            cause: _lastRecoveryCause,
-          );
-          _lastRecoveryCause = cause;
-          await _scheduleNextRecovery(cause, StackTrace.current);
-        });
-      });
+      _armRecoveryWait();
     } catch (error, stackTrace) {
       _recoveryAttemptInFlight = false;
       _waitingForConnection = false;
@@ -1280,9 +1637,53 @@ final class CallController {
     }
   }
 
+  /// The recovery attempt's wait-for-media timer, PROGRESS-AWARE (the
+  /// user's own diagnosis, 2026-08-08): after a severe drop the restart's
+  /// renegotiation frames crawl back over the same impaired link, and a
+  /// blind connectionTimeout fired while re-ACKs were demonstrably in
+  /// flight — chopping every restart attempt at a fraction of its own
+  /// modeled attempt cost. On fire: remote signaling within the window →
+  /// re-arm and keep waiting (the negotiation is landing); silence → the
+  /// next recovery attempt, exactly as before. The reconnect policy's
+  /// elapsed budget bounds the whole loop either way.
+  void _armRecoveryWait() {
+    _recoveryTimer = Timer(connectionTimeout, () {
+      _recoveryTimer = null;
+      _enqueueEvent(() async {
+        if (_terminal || !_recoveryActive || !_waitingForConnection) {
+          return;
+        }
+        final last = _lastRemoteSignalAt;
+        // Same 2x cap as the attempt's progressing skip: without it this
+        // re-arm looped on chatter forever, bypassing the reconnect
+        // policy's attempt/elapsed accounting entirely (2026-08-09).
+        final cycleBaseline = _recoveryHardCycleAt ?? _recoveryStartedAt;
+        final patienceFresh = cycleBaseline == null ||
+            clock.now().difference(cycleBaseline) < connectionTimeout * 2;
+        if (patienceFresh &&
+            last != null &&
+            clock.now().difference(last) < connectionTimeout) {
+          _armRecoveryWait();
+          return;
+        }
+        _waitingForConnection = false;
+        final cause = CallControllerException(
+          'reconnect_connection_timeout',
+          'Media did not reconnect within the connection timeout',
+          cause: _lastRecoveryCause,
+        );
+        _lastRecoveryCause = cause;
+        await _scheduleNextRecovery(cause, StackTrace.current);
+      });
+    });
+  }
+
   void _completeRecovery() {
+    _initialConnectTimer?.cancel();
+    _initialConnectTimer = null;
     _recoveryTimer?.cancel();
     _recoveryTimer = null;
+    _recoveryHardCycleAt = null;
     _recoveryActive = false;
     _recoveryAttemptInFlight = false;
     _waitingForConnection = false;
@@ -1352,17 +1753,19 @@ final class CallController {
       );
 
       if (_mediaStarted) {
-        await _bestEffort(() => _bounded(media.stop(), 'stop media session'));
+        await _bestEffort(
+          () => _boundedEngine(media.stop(), 'stop media session'),
+        );
       }
       _mediaStarted = false;
       _pendingLocalCandidates.clear();
     } finally {
-      await _cancelSubscriptions();
+      _cancelSubscriptions();
       _suppressChannelEvents = false;
     }
   }
 
-  Future<void> _cancelSubscriptions() async {
+  void _cancelSubscriptions() {
     if (_subscriptions.isEmpty) {
       return;
     }
@@ -1370,8 +1773,24 @@ final class CallController {
     final subscriptions = List<StreamSubscription<Object?>>.of(_subscriptions);
     _subscriptions.clear();
 
+    // NOT awaited, deliberately. StreamSubscription.cancel() on a stream
+    // with no onCancel work returns the SDK's shared, ROOT-zone-completed
+    // `_nullFuture`; awaiting it schedules the continuation on the real
+    // event loop, outside any zone the caller controls. Measured
+    // 2026-08-07 under fake_async: `_teardown` parked here until after the
+    // test body finished, so the terminal `failed` state was emitted where
+    // no test could observe it. Removing the listener is synchronous for
+    // every source this controller subscribes to (sync broadcast
+    // controllers); the returned future is a completion formality, and a
+    // cancel that DID have async work owes nothing to teardown ordering —
+    // late events are already guarded by `_terminal` checks and the
+    // `_suppressChannelEvents` flag.
     for (final subscription in subscriptions) {
-      await _bestEffort(subscription.cancel);
+      try {
+        unawaited(subscription.cancel());
+      } catch (_) {
+        // A throwing cancel must not abort the teardown of the rest.
+      }
     }
   }
 
@@ -1413,12 +1832,33 @@ final class CallController {
   }
 
   Future<T> _bounded<T>(Future<T> future, String operation) {
+    return _boundedBy(future, operation, operationTimeout);
+  }
+
+  /// [_bounded] for local media-engine calls: same failure shape, but the
+  /// network-independent [engineOperationTimeout] applies.
+  Future<T> _boundedEngine<T>(Future<T> future, String operation) {
+    return _boundedBy(future, operation, engineOperationTimeout, engine: true);
+  }
+
+  Future<T> _boundedBy<T>(
+    Future<T> future,
+    String operation,
+    Duration limit, {
+    bool engine = false,
+  }) {
     return future.timeout(
-      operationTimeout,
+      limit,
       onTimeout: () {
+        if (engine) {
+          throw EngineTimeoutException(
+            'Timed out while attempting to $operation',
+            limit,
+          );
+        }
         throw TimeoutException(
           'Timed out while attempting to $operation',
-          operationTimeout,
+          limit,
         );
       },
     );
@@ -1520,4 +1960,12 @@ final class CallController {
     }
     return value;
   }
+}
+
+/// Local media-engine deadline exceeded (network-independent compute
+/// bound). Distinct from [TimeoutException] so the initial-connect
+/// soft-guard can defer network sends to the watchdog while a wedged
+/// engine still fails fast.
+final class EngineTimeoutException extends TimeoutException {
+  EngineTimeoutException(super.message, super.duration);
 }

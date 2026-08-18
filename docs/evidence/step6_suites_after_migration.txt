@@ -1,0 +1,7 @@
+artifact: the workspace suite AFTER the second member was added
+date: 2026-08-18T01:41:41Z
+branch: ticket4-second-member
+measured_on: the tree containing the member, never the tree before it
+SUITES GREEN — 74 steps passed
+goldens: five baselines regenerated after the master and test renders were compared
+goldens: diagnostics light+dark 5.87% (19329px), settings light+dark+rtl (the same panel)

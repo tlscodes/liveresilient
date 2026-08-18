@@ -1,0 +1,32 @@
+name: pt_transport_darwin
+description: >-
+  Carries the native transport core into Apple app bundles. It contains no Dart
+  API: its whole job is to vendor PtTransport.xcframework so CocoaPods embeds
+  and code-signs it into the Runner bundle, which is the only shape iOS accepts
+  (a loose dylib in a bundle is rejected, and a build-machine path does not
+  exist on a user's device). The Dart API stays in the pure-Dart
+  native_transport package, which resolves the embedded framework via @rpath.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+# Deliberately NOT a member of the root pure-Dart pub workspace — same reason as
+# media_webrtc_flutter: a Flutter SDK constraint here must never enter the root
+# resolution, which has to keep working with plain `dart pub get`.
+flutter:
+  plugin:
+    platforms:
+      ios:
+        ffiPlugin: true
+      macos:
+        ffiPlugin: true

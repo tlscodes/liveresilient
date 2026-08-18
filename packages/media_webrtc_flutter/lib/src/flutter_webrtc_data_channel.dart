@@ -47,8 +47,11 @@ List<int> frameBytesFromMessage(rtc.RTCDataChannelMessage message) {
 final class FlutterWebRtcDataChannel implements MediaDataChannel {
   FlutterWebRtcDataChannel(this._channel, this.label) {
     _channel.onDataChannelState = (rtc.RTCDataChannelState state) {
+      // _lastState updates before the isClosed guard so a state ingested
+      // during teardown still reaches currentState.
+      _lastState = mapDataChannelState(state);
       if (_stateController.isClosed) return;
-      _stateController.add(mapDataChannelState(state));
+      _stateController.add(_lastState);
     };
     _channel.onMessage = (rtc.RTCDataChannelMessage message) {
       if (_inboundController.isClosed) return;
@@ -64,12 +67,25 @@ final class FlutterWebRtcDataChannel implements MediaDataChannel {
   final _stateController = StreamController<MediaDataChannelState>.broadcast();
   final _inboundController = StreamController<List<int>>.broadcast();
   var _closed = false;
+  var _lastState = MediaDataChannelState.connecting;
 
   @override
   Stream<MediaDataChannelState> get state => _stateController.stream;
 
   @override
+  MediaDataChannelState get currentState {
+    // After close() the plugin field freezes (its event subscription is
+    // cancelled), so the frozen value would misreport an open channel.
+    if (_closed) return MediaDataChannelState.closed;
+    final live = _channel.state;
+    return live != null ? mapDataChannelState(live) : _lastState;
+  }
+
+  @override
   Stream<List<int>> get inbound => _inboundController.stream;
+
+  @override
+  int? get bufferedAmount => _channel.bufferedAmount;
 
   @override
   Future<void> send(List<int> frame) async {
