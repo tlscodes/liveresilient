@@ -38,3 +38,8 @@ docs/TICKET4_FIRST_RECORD/work/
 # generated key, its config list and a run log. The configuration that matters
 # is recorded in docs/evidence/step5_helper_config.txt, which IS committed.
 tools/t2/step5_work/
+
+# The full capture behind step 7: 65MB of the attached device every packet,
+# including unrelated personal traffic. Its sha256, size and scan transcript are
+# recorded in docs/evidence/step7_trace_analysis.txt, which is what the check reads.
+docs/evidence/step7_trace_raw.pcap

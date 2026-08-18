@@ -20,7 +20,16 @@ is explicit, per gate, with a date on everything that is waiting.
               (4 tests, including the negative control that rejects `ignored` —
               an exchange that finished while the peer did nothing with the
               configuration).
-4b  BLOCKED   needs a packet capture of a live connection to that server
+4b  CLOSED    2026-08-18 — the capture of that connection, checked two ways:
+              the name that must not travel in the clear is absent from all
+              68,511,532 recorded bytes in three encodings, by a scanner that
+              first proved it could find those encodings planted across a read
+              seam; the name that must appear is located — packet 4, offset 191
+              inside that packet's data region, parsed as the server_name of a
+              handshake record whose offered list carries extension 65037.
+              docs/evidence/step7_trace_analysis.txt, held to its words by
+              packages/adaptive_transport/test/ticket4b_trace_evidence_test.dart
+              (7 tests, the last rejecting five ways the record could be hollow).
 4c  CLOSED    2026-08-17 — the note, TICKET4_DECISION.md section 9, 4 tests
 4d  CLOSED    2026-08-17 — one-member status value + exhaustiveness, 8 tests
 4e  CLOSED    2026-08-17 — the panel row, rendered-output test, 7 tests with 4f
@@ -76,19 +85,38 @@ a server, a certificate and a published configuration. Neither can be
 manufactured by a test, and a gate that says "connect to a server" cannot be
 honestly closed without one.
 
-### BLOCKER 4b — no capture of a live connection
+### BLOCKER 4b — no capture of a live connection — CLEARED
 
 ```
 BLOCKER   2026-08-17   opened
 NEEDS     4a first, then a packet capture of the connection it establishes,
           inspected for the real name in the clear
-SLOT      the same 2026-09-12 review
+CLEARED   2026-08-18   before the 2026-09-12 slot
 ```
 
 Strictly downstream of 4a: there is nothing to capture until a connection
 happens. Worth naming separately anyway, because the two failures are
 different — 4a can pass while 4b fails, and that combination is precisely the
-interesting one: a working connection that still leaks the name.
+interesting one: a working connection that still leaks the name. It did not
+happen: the connection worked and the name did not appear.
+
+What actually cleared it was a privilege rule, not code. Attaching a recorder to
+the device needs root, and an unattended run cannot answer a password prompt, so
+the maintainer wrote one line in `/etc/sudoers.d` naming the exact absolute path
+of `tools/t2/step7_trace.sh` — never `ALL`. That grant is deliberate and its cost
+is stated in the script's own header: the script is writable by the ordinary
+user, so anything running as that user can reach root through it. On a
+single-user development machine that is an accepted trade; the stricter form is a
+root-owned copy with the rule pointing at the copy.
+
+The recording behind this is not committed. It is 65 MB and holds fifteen minutes
+of everything the attached device sent, most of it unrelated personal traffic.
+What is committed is the excerpt containing the located witness, the provenance,
+and the analysis carrying the full file's hash, size, scan coverage and
+encodings — which is what the acceptance predicate reads. Re-running
+`python3 tools/step7_analyze.py --recheck …` on a fresh clone re-measures the
+located half live and validates the scanned half from that record, and says in
+its first line which was which.
 
 ### Adjacent, and also dated: the second architecture
 
