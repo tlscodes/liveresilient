@@ -213,7 +213,7 @@ title: "The dependency's own tool serving locally, reachable from the phone"
 kind: attended
 needs:
   - host-dependency-build
-attended_cmd: '$HOME/.cache/tlsapi/boringssl/build-host/bssl server -accept 4433 -ech-key docs/evidence/step5_key -ech-config docs/evidence/step5_config | tee docs/evidence/step5_helper_config.txt'
+attended_cmd: 'bash tools/t2/step5_helper.sh'
 verify_cmd: 'awk -F": " "/^public_name/{p=\$2} /^real_name/{r=\$2} END{exit !(p && r && p != r)}" docs/evidence/step5_helper_config.txt'
 evidence:
   - docs/evidence/step5_helper_config.txt
@@ -246,6 +246,7 @@ closes:
   - 4a
 blocked_ref: "docs/gate_backlog.json#4a"
 evidence:
+  - docs/evidence/step6_probe_answer.txt
   - docs/evidence/step6_suites_before_migration.txt
   - docs/evidence/step6_suites_after_migration.txt
 rollback: 'git revert the single migration commit; a probe answering no aborts before any commit and the working tree is discarded to the prior green'

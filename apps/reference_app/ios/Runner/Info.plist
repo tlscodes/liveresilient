@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Reference App</string>
+	<string>Voice Call Kit</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -26,21 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Reference App uses the microphone to send your voice during a call.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Reference App uses the camera to send video during a call.</string>
-	<!-- 2026-07-17: background modes declared as CallKit/PushKit prep for a
-	     later work item (native CallKit/PushKit integration is deferred --
-	     it cannot be exercised on iOS Simulator, so no native code for it
-	     ships yet). `audio` keeps an active call's RTP flowing/backgrounded;
-	     `voip` is required for PushKit VoIP push registration once that
-	     lands. -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>audio</string>
-		<string>voip</string>
-	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Reference App uses the microphone to send your voice during a call.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Reference App reads the photo you choose from your library to send it in chat.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Reference App connects to a test peer on this network when you run the measurement in Diagnostics. It is not used during calls.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -64,6 +57,11 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>voip</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

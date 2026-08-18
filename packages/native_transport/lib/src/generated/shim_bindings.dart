@@ -53,6 +53,49 @@ class ShimBindings {
   late final _pt_shim_build_pin = _pt_shim_build_pinPtr
       .asFunction<int Function(ffi.Pointer<ffi.Char>, int)>();
 
+  int pt_shim_ech_probe(
+    ffi.Pointer<ffi.Char> host,
+    int port,
+    ffi.Pointer<ffi.Uint8> config,
+    int config_len,
+    ffi.Pointer<ffi.Char> inner_name,
+    int timeout_ms,
+  ) {
+    return _pt_shim_ech_probe(
+      host,
+      port,
+      config,
+      config_len,
+      inner_name,
+      timeout_ms,
+    );
+  }
+
+  late final _pt_shim_ech_probePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Pointer<ffi.Uint8>,
+            ffi.Int32,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+          )
+        >
+      >('pt_shim_ech_probe');
+  late final _pt_shim_ech_probe = _pt_shim_ech_probePtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<ffi.Char>,
+          int,
+          ffi.Pointer<ffi.Uint8>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          int,
+        )
+      >();
+
   int pt_shim_first_record(ffi.Pointer<ffi.Uint8> buf, int cap) {
     return _pt_shim_first_record(buf, cap);
   }
@@ -67,8 +110,18 @@ class ShimBindings {
       .asFunction<int Function(ffi.Pointer<ffi.Uint8>, int)>();
 }
 
+const int PT_SHIM_ECH_APPLIED = 1;
+
+const int PT_SHIM_ECH_IGNORED = 2;
+
 const int PT_SHIM_ERR_ARG = -2;
+
+const int PT_SHIM_ERR_ECH_REJECTED = -4;
 
 const int PT_SHIM_ERR_INTERNAL = -3;
 
+const int PT_SHIM_ERR_TIMEOUT = -5;
+
 const int PT_SHIM_ERR_UNLINKED = -1;
+
+const int PT_SHIM_ERR_UNREACHABLE = -6;

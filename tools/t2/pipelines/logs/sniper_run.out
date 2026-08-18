@@ -1,0 +1,30 @@
+SNIPER loss60 shot 1: loss60	TOOLING/NO-ATTACH	1.328	70.0	3140	1204981	-	-	-	-	-	-	mDNS query for an attached iOS device failed.
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	0.968	80.0	513	209494	-	-	-	-	-	-	only 433 from-peer / 80 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 1: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.130	60.0	133	521709	-	-	-	-	-	-	only 113 from-peer / 20 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 2: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.352	70.0	1655	498733	-	-	-	-	-	-	only 1465 from-peer / 190 to-peer shape-eligible UDP packets crossed br
+SNIPER loss60 waived try 3: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	2.388	90.0	155	492285	-	-	-	-	-	-	only 135 from-peer / 20 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 4: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.269	70.0	162	494071	-	-	-	-	-	-	only 130 from-peer / 32 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 5: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.013	70.0	302	295755	-	-	-	-	-	-	only 243 from-peer / 59 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 6: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.302	90.0	400	478170	-	-	-	-	-	-	only 328 from-peer / 72 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 7: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.234	80.0	538	503122	-	-	-	-	-	-	only 485 from-peer / 53 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 8: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.222	80.0	393	539236	-	-	-	-	-	-	only 301 from-peer / 92 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 9: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.194	90.0	345	479240	-	-	-	-	-	-	only 287 from-peer / 58 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 10: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.202	60.0	389	487825	-	-	-	-	-	-	only 354 from-peer / 35 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 11: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	?	100.0	299	503817	-	-	-	-	-	-	only 241 from-peer / 58 to-peer shape-eligible UDP packets crossed bridge10
+SNIPER loss60 waived try 12: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.380	70.0	541	505505	-	-	-	-	-	-	only 443 from-peer / 98 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 13: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	INVALID/UNROUTED	1.312	40.0	172	465626	-	-	-	-	-	-	only 123 from-peer / 49 to-peer shape-eligible UDP packets crossed bridg
+SNIPER loss60 waived try 14: zero packets crossed — phone permission gate, shot NOT counted
+SNIPER loss60 shot 2: loss60	FAIL/STRESS	1.132	50.0	4736	216325	-	-	-	-	-	-	criterion=stress(connect<=432s,recovery<=447s,independent); no SLA_SUMMARY: 

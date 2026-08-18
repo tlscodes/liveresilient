@@ -4,7 +4,7 @@
 library;
 
 export 'pt_bindings.dart' show PtBindings, PtSessionHandle;
-export 'shim_probe.dart' show ShimProbe, ShimProbeState;
+export 'shim_probe.dart' show EchProbeOutcome, ShimProbe, ShimProbeState;
 export 'pt_native_lane.dart' show PtNativeLane;
 export 'pt_session.dart' show PtSession;
 

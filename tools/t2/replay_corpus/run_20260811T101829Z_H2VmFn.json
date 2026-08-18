@@ -1,0 +1,879 @@
+{
+ "capturedUtc": "2026-08-11T10:18:29Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 9
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 9
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 10
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 10
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 11
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 11
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 13
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 13
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 16
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 16
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 16
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 17
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 17
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 18
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 19
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 19
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 20
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 20
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 21
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 21
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 22
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 22
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 22
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 23
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 23
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 24
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 24
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 25
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 26
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 26
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 27
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 27
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 27
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 28
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 29
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 29
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 30
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 30
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 30
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 31
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 31
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 32
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 32
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 33
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 33
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 33
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 33
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 17658,
+   "packets": 22
+  },
+  "1": {
+   "bytes": 2617,
+   "packets": 3
+  },
+  "100": {
+   "bytes": 5515,
+   "packets": 283
+  },
+  "101": {
+   "bytes": 4570,
+   "packets": 262
+  },
+  "102": {
+   "bytes": 5266,
+   "packets": 278
+  },
+  "103": {
+   "bytes": 4756,
+   "packets": 282
+  },
+  "104": {
+   "bytes": 4736,
+   "packets": 290
+  },
+  "105": {
+   "bytes": 4772,
+   "packets": 260
+  },
+  "106": {
+   "bytes": 4765,
+   "packets": 255
+  },
+  "107": {
+   "bytes": 4716,
+   "packets": 285
+  },
+  "108": {
+   "bytes": 4363,
+   "packets": 238
+  },
+  "109": {
+   "bytes": 2130,
+   "packets": 103
+  },
+  "13": {
+   "bytes": 1280,
+   "packets": 1
+  },
+  "23": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "24": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "25": {
+   "bytes": 1544,
+   "packets": 5
+  },
+  "26": {
+   "bytes": 70,
+   "packets": 2
+  },
+  "27": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "28": {
+   "bytes": 195,
+   "packets": 2
+  },
+  "29": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "3": {
+   "bytes": 2560,
+   "packets": 2
+  },
+  "30": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "31": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "32": {
+   "bytes": 78,
+   "packets": 2
+  },
+  "34": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "36": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "38": {
+   "bytes": 163,
+   "packets": 2
+  },
+  "40": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "41": {
+   "bytes": 126,
+   "packets": 2
+  },
+  "6": {
+   "bytes": 2560,
+   "packets": 2
+  },
+  "77": {
+   "bytes": 720,
+   "packets": 39
+  },
+  "78": {
+   "bytes": 460,
+   "packets": 10
+  },
+  "79": {
+   "bytes": 2260,
+   "packets": 110
+  },
+  "80": {
+   "bytes": 248,
+   "packets": 24
+  },
+  "81": {
+   "bytes": 2332,
+   "packets": 25
+  },
+  "82": {
+   "bytes": 918,
+   "packets": 27
+  },
+  "83": {
+   "bytes": 918,
+   "packets": 20
+  },
+  "84": {
+   "bytes": 629,
+   "packets": 11
+  },
+  "85": {
+   "bytes": 6042,
+   "packets": 194
+  },
+  "86": {
+   "bytes": 9886,
+   "packets": 308
+  },
+  "87": {
+   "bytes": 9318,
+   "packets": 277
+  },
+  "88": {
+   "bytes": 9445,
+   "packets": 329
+  },
+  "89": {
+   "bytes": 6662,
+   "packets": 281
+  },
+  "90": {
+   "bytes": 6837,
+   "packets": 267
+  },
+  "91": {
+   "bytes": 5162,
+   "packets": 274
+  },
+  "92": {
+   "bytes": 5592,
+   "packets": 297
+  },
+  "93": {
+   "bytes": 5343,
+   "packets": 285
+  },
+  "94": {
+   "bytes": 5230,
+   "packets": 288
+  },
+  "95": {
+   "bytes": 5610,
+   "packets": 292
+  },
+  "96": {
+   "bytes": 4446,
+   "packets": 254
+  },
+  "97": {
+   "bytes": 4965,
+   "packets": 276
+  },
+  "98": {
+   "bytes": 5400,
+   "packets": 303
+  },
+  "99": {
+   "bytes": 5042,
+   "packets": 277
+  }
+ },
+ "runDir": "/tmp/h2run.H2VmFn",
+ "summaries": {
+  "SLA": [
+   {
+    "ackProbeErrors": 0,
+    "ackProbes": 40,
+    "ackRttLossPct": 0,
+    "ackRttLost": 0,
+    "ackRttMaxMs": 4160,
+    "ackRttMinMs": 17,
+    "ackRttP50Ms": 259.0,
+    "ackRttP95Ms": 572.0,
+    "ackRttSamples": 40,
+    "adaptationDecisions": 4,
+    "adaptationLog": [
+     "initiator: MediaPolicyDecision(medium -> minimal: severe loss 41.0%)",
+     "initiator: MediaPolicyDecision(minimal -> lowRateVoice: severe loss 38.5%)",
+     "receiver: MediaPolicyDecision(medium -> minimal: severe loss 31.3%)",
+     "receiver: MediaPolicyDecision(minimal -> lowRateVoice: severe loss 35.4%)"
+    ],
+    "adaptationProfileInitiator": "lowRateVoice",
+    "adaptationProfileReceiver": "lowRateVoice",
+    "bothConnected": true,
+    "connectMs": 9385,
+    "mediaMode": "realAudio",
+    "notes": [],
+    "preventedFreezes": 0,
+    "recoveryConnectedMs": 243,
+    "recoveryFirstCandidateMs": 243,
+    "recoveryNewCandidates": 1,
+    "recoveryStatusLog": [],
+    "sentinelFirstGrounds": "projectedScore -0.09 <= floor 0.2",
+    "sentinelLeadMs": null,
+    "sentinelWarns": 1,
+    "stillConnectedAtEnd": true
+   }
+  ]
+ },
+ "trendSeries": [
+  {
+   "proj": null,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": null,
+   "t": 2,
+   "verdict": "unknown"
+  },
+  {
+   "proj": null,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": null,
+   "t": 3,
+   "verdict": "unknown"
+  },
+  {
+   "proj": -0.09,
+   "role": "initiator",
+   "score": 0.8182,
+   "slope": -0.09082,
+   "t": 4,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4541,
+   "role": "initiator",
+   "score": 0.9091,
+   "slope": -0.0455,
+   "t": 5,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.9088,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": -0.00912,
+   "t": 6,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4862,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": -0.02916,
+   "t": 7,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.791,
+   "role": "initiator",
+   "score": 0.9444,
+   "slope": -0.01534,
+   "t": 8,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.5558,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": -0.0222,
+   "t": 9,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.7583,
+   "role": "initiator",
+   "score": 0.8889,
+   "slope": -0.01305,
+   "t": 10,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.8762,
+   "role": "initiator",
+   "score": 0.8889,
+   "slope": -0.00126,
+   "t": 11,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5202,
+   "role": "initiator",
+   "score": 0.7222,
+   "slope": -0.0202,
+   "t": 12,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.8075,
+   "role": "initiator",
+   "score": 0.9167,
+   "slope": -0.01091,
+   "t": 13,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 1.1488,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.01488,
+   "t": 14,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6379,
+   "role": "initiator",
+   "score": 0.7105,
+   "slope": -0.00726,
+   "t": 15,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.1418,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.01418,
+   "t": 16,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6337,
+   "role": "initiator",
+   "score": 0.7105,
+   "slope": -0.00768,
+   "t": 17,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0808,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.00808,
+   "t": 18,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9226,
+   "role": "initiator",
+   "score": 0.8421,
+   "slope": 0.00805,
+   "t": 19,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6584,
+   "role": "initiator",
+   "score": 0.7895,
+   "slope": -0.01311,
+   "t": 20,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.7838,
+   "role": "initiator",
+   "score": 0.8684,
+   "slope": -0.00846,
+   "t": 21,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9793,
+   "role": "initiator",
+   "score": 0.8947,
+   "slope": 0.00845,
+   "t": 22,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9599,
+   "role": "initiator",
+   "score": 0.9474,
+   "slope": 0.00125,
+   "t": 23,
+   "verdict": "steady"
+  }
+ ],
+ "tsvJoinGapS": 4,
+ "tsvRow": {
+  "ack_loss": "0",
+  "ack_p50": "259.0",
+  "ack_p95": "572.0",
+  "alive": "True",
+  "connect_ms": "9385",
+  "date": "2026-08-11T10:18:34Z",
+  "elapsed_ms": "209004",
+  "loss_pct": "40.0",
+  "note": "criterion=stress(connect<=432s,recovery<=447s,independent); survived: connect 9385ms, recovered 243ms, alive; All tests passed!",
+  "packets": "7058",
+  "profile": "loss60",
+  "recovery_ms": "243",
+  "rtt_ms": "0.902",
+  "test": "sla_thresholds_test.dart",
+  "verdict": "PASS/STRESS"
+ }
+}

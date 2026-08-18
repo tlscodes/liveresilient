@@ -1,0 +1,1256 @@
+{
+ "capturedUtc": "2026-08-10T11:37:12Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 5
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 5
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "detail": "[CallControllerException(path_unhealthy): External path-health monitor scored the active...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 9
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 11
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 11
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 20
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 20
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 25
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 25
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 26
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 26
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 35
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 35
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 35
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 35
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 43
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 43
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 45
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 45
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 53
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 54
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 64
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 65
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 66
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 66
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 80
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 80
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 82
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 82
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 92
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 92
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 100
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 101
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 111
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 111
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 122
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 123
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 143
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 143
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 153
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 156
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 7111,
+   "packets": 31
+  },
+  "1": {
+   "bytes": 30345,
+   "packets": 84
+  },
+  "12": {
+   "bytes": 206388,
+   "packets": 229
+  },
+  "13": {
+   "bytes": 1444,
+   "packets": 3
+  },
+  "14": {
+   "bytes": 2463,
+   "packets": 2
+  },
+  "159": {
+   "bytes": 136,
+   "packets": 16
+  },
+  "160": {
+   "bytes": 564,
+   "packets": 31
+  },
+  "161": {
+   "bytes": 336,
+   "packets": 19
+  },
+  "162": {
+   "bytes": 276,
+   "packets": 18
+  },
+  "163": {
+   "bytes": 916,
+   "packets": 27
+  },
+  "164": {
+   "bytes": 4921,
+   "packets": 90
+  },
+  "165": {
+   "bytes": 1805,
+   "packets": 38
+  },
+  "166": {
+   "bytes": 8766,
+   "packets": 349
+  },
+  "167": {
+   "bytes": 7357,
+   "packets": 330
+  },
+  "168": {
+   "bytes": 7130,
+   "packets": 308
+  },
+  "169": {
+   "bytes": 8532,
+   "packets": 282
+  },
+  "170": {
+   "bytes": 10683,
+   "packets": 306
+  },
+  "171": {
+   "bytes": 6255,
+   "packets": 214
+  },
+  "172": {
+   "bytes": 7292,
+   "packets": 278
+  },
+  "173": {
+   "bytes": 10322,
+   "packets": 357
+  },
+  "174": {
+   "bytes": 8972,
+   "packets": 288
+  },
+  "175": {
+   "bytes": 9602,
+   "packets": 245
+  },
+  "176": {
+   "bytes": 15549,
+   "packets": 263
+  },
+  "177": {
+   "bytes": 15289,
+   "packets": 212
+  },
+  "178": {
+   "bytes": 33407,
+   "packets": 213
+  },
+  "179": {
+   "bytes": 22751,
+   "packets": 194
+  },
+  "180": {
+   "bytes": 13606,
+   "packets": 172
+  },
+  "181": {
+   "bytes": 11649,
+   "packets": 198
+  },
+  "182": {
+   "bytes": 15566,
+   "packets": 182
+  },
+  "183": {
+   "bytes": 8066,
+   "packets": 172
+  },
+  "184": {
+   "bytes": 6790,
+   "packets": 158
+  },
+  "185": {
+   "bytes": 7836,
+   "packets": 222
+  },
+  "186": {
+   "bytes": 8620,
+   "packets": 171
+  },
+  "187": {
+   "bytes": 8831,
+   "packets": 173
+  },
+  "188": {
+   "bytes": 7585,
+   "packets": 148
+  },
+  "189": {
+   "bytes": 8986,
+   "packets": 173
+  },
+  "190": {
+   "bytes": 9156,
+   "packets": 153
+  },
+  "191": {
+   "bytes": 8198,
+   "packets": 159
+  },
+  "192": {
+   "bytes": 8462,
+   "packets": 166
+  },
+  "193": {
+   "bytes": 11266,
+   "packets": 172
+  },
+  "194": {
+   "bytes": 7368,
+   "packets": 216
+  },
+  "195": {
+   "bytes": 6857,
+   "packets": 175
+  },
+  "196": {
+   "bytes": 10736,
+   "packets": 165
+  },
+  "197": {
+   "bytes": 7828,
+   "packets": 159
+  },
+  "198": {
+   "bytes": 7921,
+   "packets": 153
+  },
+  "199": {
+   "bytes": 23648,
+   "packets": 180
+  },
+  "2": {
+   "bytes": 12809,
+   "packets": 25
+  },
+  "200": {
+   "bytes": 8659,
+   "packets": 165
+  },
+  "201": {
+   "bytes": 8034,
+   "packets": 152
+  },
+  "202": {
+   "bytes": 9138,
+   "packets": 170
+  },
+  "203": {
+   "bytes": 8109,
+   "packets": 172
+  },
+  "204": {
+   "bytes": 7351,
+   "packets": 187
+  },
+  "205": {
+   "bytes": 6889,
+   "packets": 161
+  },
+  "206": {
+   "bytes": 7833,
+   "packets": 154
+  },
+  "207": {
+   "bytes": 8124,
+   "packets": 166
+  },
+  "208": {
+   "bytes": 8732,
+   "packets": 194
+  },
+  "209": {
+   "bytes": 6964,
+   "packets": 179
+  },
+  "210": {
+   "bytes": 7787,
+   "packets": 182
+  },
+  "211": {
+   "bytes": 8830,
+   "packets": 167
+  },
+  "212": {
+   "bytes": 8571,
+   "packets": 219
+  },
+  "213": {
+   "bytes": 7564,
+   "packets": 150
+  },
+  "214": {
+   "bytes": 9078,
+   "packets": 152
+  },
+  "215": {
+   "bytes": 9197,
+   "packets": 171
+  },
+  "216": {
+   "bytes": 7857,
+   "packets": 152
+  },
+  "217": {
+   "bytes": 13251,
+   "packets": 160
+  },
+  "218": {
+   "bytes": 8484,
+   "packets": 161
+  },
+  "219": {
+   "bytes": 8452,
+   "packets": 162
+  },
+  "220": {
+   "bytes": 7823,
+   "packets": 149
+  },
+  "221": {
+   "bytes": 8408,
+   "packets": 162
+  },
+  "222": {
+   "bytes": 8715,
+   "packets": 169
+  },
+  "223": {
+   "bytes": 6387,
+   "packets": 160
+  },
+  "224": {
+   "bytes": 6327,
+   "packets": 236
+  },
+  "225": {
+   "bytes": 7857,
+   "packets": 184
+  },
+  "226": {
+   "bytes": 7526,
+   "packets": 169
+  },
+  "227": {
+   "bytes": 7527,
+   "packets": 190
+  },
+  "228": {
+   "bytes": 13345,
+   "packets": 221
+  },
+  "229": {
+   "bytes": 7179,
+   "packets": 171
+  },
+  "23": {
+   "bytes": 2463,
+   "packets": 2
+  },
+  "230": {
+   "bytes": 6971,
+   "packets": 206
+  },
+  "231": {
+   "bytes": 6368,
+   "packets": 238
+  },
+  "232": {
+   "bytes": 6485,
+   "packets": 217
+  },
+  "233": {
+   "bytes": 6352,
+   "packets": 245
+  },
+  "234": {
+   "bytes": 7617,
+   "packets": 203
+  },
+  "235": {
+   "bytes": 8718,
+   "packets": 171
+  },
+  "236": {
+   "bytes": 8681,
+   "packets": 211
+  },
+  "237": {
+   "bytes": 9198,
+   "packets": 154
+  },
+  "238": {
+   "bytes": 7818,
+   "packets": 151
+  },
+  "239": {
+   "bytes": 7510,
+   "packets": 172
+  },
+  "240": {
+   "bytes": 20858,
+   "packets": 199
+  },
+  "241": {
+   "bytes": 7847,
+   "packets": 245
+  },
+  "242": {
+   "bytes": 7036,
+   "packets": 234
+  },
+  "243": {
+   "bytes": 7293,
+   "packets": 248
+  },
+  "244": {
+   "bytes": 7435,
+   "packets": 263
+  },
+  "245": {
+   "bytes": 5851,
+   "packets": 219
+  },
+  "246": {
+   "bytes": 6315,
+   "packets": 257
+  },
+  "247": {
+   "bytes": 6427,
+   "packets": 239
+  },
+  "248": {
+   "bytes": 9100,
+   "packets": 273
+  },
+  "249": {
+   "bytes": 5392,
+   "packets": 221
+  },
+  "250": {
+   "bytes": 6316,
+   "packets": 248
+  },
+  "251": {
+   "bytes": 11532,
+   "packets": 176
+  },
+  "252": {
+   "bytes": 7215,
+   "packets": 143
+  },
+  "253": {
+   "bytes": 8004,
+   "packets": 156
+  },
+  "254": {
+   "bytes": 8546,
+   "packets": 162
+  },
+  "255": {
+   "bytes": 7957,
+   "packets": 146
+  },
+  "256": {
+   "bytes": 8108,
+   "packets": 155
+  },
+  "257": {
+   "bytes": 8178,
+   "packets": 150
+  },
+  "258": {
+   "bytes": 7967,
+   "packets": 149
+  },
+  "259": {
+   "bytes": 6718,
+   "packets": 131
+  },
+  "260": {
+   "bytes": 7667,
+   "packets": 149
+  },
+  "261": {
+   "bytes": 13005,
+   "packets": 156
+  },
+  "262": {
+   "bytes": 8147,
+   "packets": 155
+  },
+  "263": {
+   "bytes": 8403,
+   "packets": 169
+  },
+  "264": {
+   "bytes": 8559,
+   "packets": 164
+  },
+  "265": {
+   "bytes": 52316,
+   "packets": 202
+  },
+  "266": {
+   "bytes": 12017,
+   "packets": 153
+  },
+  "267": {
+   "bytes": 8201,
+   "packets": 160
+  },
+  "268": {
+   "bytes": 14051,
+   "packets": 173
+  },
+  "269": {
+   "bytes": 7635,
+   "packets": 168
+  },
+  "270": {
+   "bytes": 7079,
+   "packets": 177
+  },
+  "271": {
+   "bytes": 7176,
+   "packets": 172
+  },
+  "272": {
+   "bytes": 8329,
+   "packets": 220
+  },
+  "273": {
+   "bytes": 9281,
+   "packets": 188
+  },
+  "274": {
+   "bytes": 8322,
+   "packets": 172
+  },
+  "275": {
+   "bytes": 18314,
+   "packets": 177
+  },
+  "276": {
+   "bytes": 56957,
+   "packets": 207
+  },
+  "277": {
+   "bytes": 55008,
+   "packets": 213
+  },
+  "278": {
+   "bytes": 49197,
+   "packets": 202
+  },
+  "279": {
+   "bytes": 53377,
+   "packets": 220
+  },
+  "280": {
+   "bytes": 55186,
+   "packets": 190
+  },
+  "281": {
+   "bytes": 52197,
+   "packets": 176
+  },
+  "282": {
+   "bytes": 48709,
+   "packets": 192
+  },
+  "283": {
+   "bytes": 55842,
+   "packets": 210
+  },
+  "284": {
+   "bytes": 47143,
+   "packets": 211
+  },
+  "285": {
+   "bytes": 8652,
+   "packets": 169
+  },
+  "286": {
+   "bytes": 14467,
+   "packets": 172
+  },
+  "287": {
+   "bytes": 10104,
+   "packets": 152
+  },
+  "288": {
+   "bytes": 9209,
+   "packets": 180
+  },
+  "289": {
+   "bytes": 8248,
+   "packets": 163
+  },
+  "290": {
+   "bytes": 10789,
+   "packets": 164
+  },
+  "291": {
+   "bytes": 8275,
+   "packets": 161
+  },
+  "292": {
+   "bytes": 8211,
+   "packets": 155
+  },
+  "293": {
+   "bytes": 9581,
+   "packets": 162
+  },
+  "294": {
+   "bytes": 8439,
+   "packets": 161
+  },
+  "295": {
+   "bytes": 7816,
+   "packets": 153
+  },
+  "296": {
+   "bytes": 9429,
+   "packets": 159
+  },
+  "297": {
+   "bytes": 7547,
+   "packets": 145
+  },
+  "298": {
+   "bytes": 8633,
+   "packets": 158
+  },
+  "299": {
+   "bytes": 10146,
+   "packets": 168
+  },
+  "3": {
+   "bytes": 13266,
+   "packets": 45
+  },
+  "300": {
+   "bytes": 8189,
+   "packets": 160
+  },
+  "301": {
+   "bytes": 7566,
+   "packets": 158
+  },
+  "302": {
+   "bytes": 8082,
+   "packets": 180
+  },
+  "303": {
+   "bytes": 6591,
+   "packets": 185
+  },
+  "304": {
+   "bytes": 7832,
+   "packets": 213
+  },
+  "305": {
+   "bytes": 7655,
+   "packets": 159
+  },
+  "306": {
+   "bytes": 6784,
+   "packets": 132
+  },
+  "307": {
+   "bytes": 7801,
+   "packets": 146
+  },
+  "308": {
+   "bytes": 9773,
+   "packets": 167
+  },
+  "309": {
+   "bytes": 8145,
+   "packets": 160
+  },
+  "310": {
+   "bytes": 8600,
+   "packets": 166
+  },
+  "311": {
+   "bytes": 10625,
+   "packets": 162
+  },
+  "312": {
+   "bytes": 6807,
+   "packets": 160
+  },
+  "313": {
+   "bytes": 5893,
+   "packets": 143
+  },
+  "314": {
+   "bytes": 8130,
+   "packets": 141
+  },
+  "315": {
+   "bytes": 7863,
+   "packets": 165
+  },
+  "316": {
+   "bytes": 7831,
+   "packets": 159
+  },
+  "317": {
+   "bytes": 9602,
+   "packets": 165
+  },
+  "318": {
+   "bytes": 8498,
+   "packets": 170
+  },
+  "319": {
+   "bytes": 8363,
+   "packets": 163
+  },
+  "320": {
+   "bytes": 147,
+   "packets": 8
+  },
+  "34": {
+   "bytes": 2463,
+   "packets": 2
+  },
+  "4": {
+   "bytes": 4162,
+   "packets": 14
+  },
+  "5": {
+   "bytes": 93277,
+   "packets": 115
+  },
+  "6": {
+   "bytes": 674,
+   "packets": 6
+  },
+  "67": {
+   "bytes": 14216,
+   "packets": 18
+  },
+  "68": {
+   "bytes": 35199,
+   "packets": 58
+  },
+  "69": {
+   "bytes": 114,
+   "packets": 3
+  },
+  "7": {
+   "bytes": 115747,
+   "packets": 121
+  },
+  "70": {
+   "bytes": 20853,
+   "packets": 19
+  },
+  "71": {
+   "bytes": 114,
+   "packets": 3
+  },
+  "75": {
+   "bytes": 31496,
+   "packets": 35
+  },
+  "76": {
+   "bytes": 41,
+   "packets": 1
+  },
+  "77": {
+   "bytes": 166,
+   "packets": 2
+  },
+  "78": {
+   "bytes": 250,
+   "packets": 2
+  },
+  "79": {
+   "bytes": 41,
+   "packets": 1
+  },
+  "8": {
+   "bytes": 128,
+   "packets": 2
+  },
+  "80": {
+   "bytes": 24563,
+   "packets": 25
+  },
+  "83": {
+   "bytes": 210,
+   "packets": 2
+  },
+  "85": {
+   "bytes": 11881,
+   "packets": 11
+  },
+  "87": {
+   "bytes": 125,
+   "packets": 1
+  },
+  "88": {
+   "bytes": 250,
+   "packets": 2
+  },
+  "90": {
+   "bytes": 17973,
+   "packets": 42
+  },
+  "91": {
+   "bytes": 33,
+   "packets": 1
+  },
+  "93": {
+   "bytes": 33,
+   "packets": 1
+  },
+  "95": {
+   "bytes": 21230,
+   "packets": 25
+  },
+  "96": {
+   "bytes": 246,
+   "packets": 3
+  },
+  "97": {
+   "bytes": 418,
+   "packets": 6
+  },
+  "98": {
+   "bytes": 387,
+   "packets": 5
+  },
+  "99": {
+   "bytes": 312,
+   "packets": 4
+  }
+ },
+ "runDir": "/tmp/h2run.4s9E6H",
+ "summaries": {
+  "MSG": [
+   {
+    "connectMs": 7196,
+    "mediaMode": "realAudio",
+    "notes": [],
+    "photoBytes": 98304,
+    "photoLane": "fountain",
+    "photoTransport": "datagram",
+    "renegotiatedMs": 7220,
+    "retryAfterMs": 34125,
+    "stagedPhotoBytes": 98304,
+    "stagedPreviewBytes": 15360,
+    "stagedWindowMs": 420000,
+    "textCount": 5,
+    "textDelivered": 5,
+    "textMaxMs": 3851,
+    "textP50Ms": 1683.0,
+    "thumbHashBytes": 31,
+    "voiceBytes": 24576,
+    "voiceIntact": true,
+    "voiceMs": 85964
+   }
+  ]
+ },
+ "tsvJoinGapS": 3,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-10T11:37:16Z",
+  "elapsed_ms": "343388",
+  "loss_pct": "30.0",
+  "note": "criterion=msg-survival(all delivered + intact; times recorded as baseline); photo not intact; text p50 1683.0ms max 3851ms; photo 98304B in Nonems; voice 24576B in 85964ms; The following TimeoutException was thrown running a test: TimeoutException after 0:00:30.000000: Future not completed When the exception was thrown, this was the stack: <asynchronous suspension>",
+  "packets": "29925",
+  "profile": "loss60",
+  "recovery_ms": "-",
+  "rtt_ms": "0.787",
+  "test": "messaging_survival_test.dart",
+  "verdict": "FAIL/STRESS"
+ }
+}

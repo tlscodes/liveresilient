@@ -8,10 +8,18 @@
 /// Every claim below is printed as a measured number; the media source that
 /// actually ran (real capture vs documented no-capture fallback) is
 /// reported by `resolveMediaMode`.
+///
+/// The library-level @Timeout mirrors the survival gates: flutter_test's
+/// default 5-minute per-test cap silently undercut the stress connect
+/// budget (455 s) — measured 2026-08-09, loss60: the draw died at 05:00
+/// with the budget still open.
+@Timeout(Duration(minutes: 45))
 library;
 
 // Evidence numbers are deliberately printed to the test log.
 // ignore_for_file: avoid_print
+
+import 'dart:async';
 
 import 'package:call_core/call_core.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,13 +49,13 @@ void main() {
 
       const callId = 'e2e-loopback-call-1';
       final initiator = E2eCallStack.build(
-        relayPort: relay.port,
+        endpoint: relay.endpoint,
         callId: callId,
         role: CallRole.initiator,
         mode: mode,
       );
       final receiver = E2eCallStack.build(
-        relayPort: relay.port,
+        endpoint: relay.endpoint,
         callId: callId,
         role: CallRole.receiver,
         mode: mode,
@@ -56,12 +64,35 @@ void main() {
       try {
         // Both peers start concurrently: the initiator's offer is only
         // deliverable once the receiver has joined the relay room.
-        final connected = await Future.wait([
-          initiator.controller.start().then(
-            (_) => initiator.waitForConnected(),
+        // Connect gets the same budget the survival gates honor
+        // (E2E_CONNECT_BUDGET_S / E2E_STRESS_CONNECT_S): under heavy loss
+        // the whole point of the draw is the retry window, and a flat 30s
+        // cap here silently discarded the budget the harness granted.
+        const appConnectBudget = Duration(
+          seconds: int.fromEnvironment(
+            'E2E_CONNECT_BUDGET_S',
+            defaultValue: 30,
           ),
-          receiver.controller.start().then((_) => receiver.waitForConnected()),
-        ]).timeout(const Duration(seconds: 30));
+        );
+        const stressConnectWindow = Duration(
+          seconds: int.fromEnvironment('E2E_STRESS_CONNECT_S'),
+        );
+        final connectBudget = stressConnectWindow > appConnectBudget
+            ? stressConnectWindow
+            : appConnectBudget;
+        final connected = await Future.wait([
+          initiator.controller
+              .start()
+              .then((_) => initiator.waitForConnected(timeout: connectBudget)),
+          receiver.controller
+              .start()
+              .then((_) => receiver.waitForConnected(timeout: connectBudget)),
+        ]).timeout(
+          connectBudget + const Duration(seconds: 5),
+          onTimeout: () => throw TimeoutException(
+            'connect budget (${connectBudget.inSeconds}s + 5s) exhausted',
+          ),
+        );
 
         expect(connected[0].phase, CallPhase.connected);
         expect(connected[1].phase, CallPhase.connected);
@@ -214,8 +245,13 @@ void main() {
       }
 
       await waitForActiveRooms(relay.server, 0);
-      expect(relay.server.activeRooms, 0);
-      print('e2e: relay rooms drained to 0 after teardown');
+      final localServer = relay.server;
+      if (localServer != null) {
+        expect(localServer.activeRooms, 0);
+        print('e2e: relay rooms drained to 0 after teardown');
+      } else {
+        print('e2e: remote relay — room drain not observable from here');
+      }
     },
     timeout: const Timeout(Duration(minutes: 5)),
   );

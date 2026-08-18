@@ -1,0 +1,17 @@
+FINALE voice-loss60 try 1: NO_ROW
+FINALE voice-loss60 try 2: loss60	FAIL/STRESS	0.817	60.0	16178	3215613	-	-	-	-	-	-	criterion=stress(connect<=432s,recovery<=447s,independent); no SLA_SUMMARY: the stress criteri
+FINALE voice-loss60 try 3: loss60	TOOLING/NO-ATTACH	0.984	80.0	2210	118142	-	-	-	-	-	-	flutter could not attach to the device
+FINALE voice-loss60 waived try 1: tooling/unrouted, not counted
+FINALE voice-loss60 try 3: loss60	PASS/STRESS	1.275	80.0	6743	162666	4454	170.0	537.0	0	844	True	criterion=stress(connect<=432s,recovery<=447s,independent); survived: connect 44
+FINALE voice-loss60 GREEN
+FINALE voice loss60 GREEN (historic item 8 closed)
+FINALE msg-loss60 try 1: loss60	PASS/STRESS	0.955	80.0	397712	1856964	-	-	-	-	-	-	criterion=msg-survival(all delivered + intact; times recorded as baseline); delivered intact:
+FINALE msg-loss60 GREEN
+FINALE msg-extreme try 1: extreme	FAIL/STRESS	2091.658	10.0	12797	458406	-	-	-	-	-	-	criterion=msg-survival(all delivered + intact; times recorded as baseline); text None/5; ph
+FINALE msg-extreme try 2: extreme	PASS/STRESS	2043.048	10.0	17349	661160	-	-	-	-	-	-	criterion=msg-survival(all delivered + intact; times recorded as baseline); delivered intac
+FINALE msg-extreme GREEN
+FINALE video-loss60 try 1: loss60	FAIL/STRESS	0.685	70.0	147168	1085616	-	-	-	-	-	-	criterion=video-survival(delivered + sha256; times recorded as baseline); not delivered/verif
+FINALE video-loss60 try 2: loss60	FAIL/STRESS	0.628	40.0	132623	1006515	-	-	-	-	-	-	criterion=video-survival(delivered + sha256; times recorded as baseline); not delivered/verif
+FINALE video-extreme try 1: extreme	PASS/STRESS	2042.891	30.0	48585	1505340	-	-	-	-	-	-	criterion=video-survival(delivered + sha256; times recorded as baseline); delivered sha-ve
+FINALE video-extreme GREEN
+FINALE_DONE

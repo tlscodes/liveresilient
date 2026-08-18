@@ -1,6 +1,13 @@
-# Data Flow — VoiceCallKit v2
+# Data Flow — VoiceCallKit (v2 boundaries; v3 delta lives in the threat model)
 
-Companion to `security/THREAT_MODEL.md` (trust boundaries TB1-TB5 there map
+Companion to `security/THREAT_MODEL.md`. That document now covers v3 (its
+§8 adds TB6-TB8 for the relay, the mesh/carrier lanes, and the broadcast
+chain); this file still diagrams the v2 boundaries TB1-TB5 only, and says so
+rather than implying it is complete. Contradiction 7, noted 2026-07-31: the
+2026-07-27 architecture review said no threat model existed — the file
+existed but was v2-only, which is now fixed at the source.
+
+(trust boundaries TB1-TB5 there map
 directly to the boundary markers below). This document shows *where data
 goes and where it is protected*, not the threats — see the threat model
 for the STRIDE analysis and per-item evidence.
@@ -75,7 +82,7 @@ sequenceDiagram
     App->>Verifier: verify(manifest, signature, pinnedKeys)
     Verifier->>Verifier: check signature, expiry, notYetValid,<br/>revokedKeyIds, monotonic revision
     Verifier-->>App: ManifestAccepted | ManifestRejected(reason)
-    Note over Verifier: Real-crypto path (CryptographyEd25519Verifier)<br/>currently has 2 failing tests as of 2026-07-16 -<br/>see THREAT_MODEL.md T2. Logic path against fakes<br/>is fully tested and passing.
+    Note over Verifier: Real-crypto path (CryptographyEd25519Verifier)<br/>is green: 10/10 in crypto_ed25519_verifier_test.dart,<br/>confirmed by key_rotation_test.dart (8/8, real keys).<br/>The 2026-07-16 failures noted here were fixed the same day<br/>- see THREAT_MODEL.md T2.
 ```
 
 ## 3. Trust boundaries and what crosses them

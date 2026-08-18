@@ -51,7 +51,7 @@ app excludes exactly the people who may depend on it most.
 ## Engineering process
 
 - Semantics coverage is part of widget-test acceptance for every screen
-  (`apps/resilient_call/test`).
+  (`apps/reference_app/test`).
 - Screen-reader smoke pass (TalkBack + VoiceOver) is a release checklist
   item on the riskiest flows: receive call, in-call controls, key-change
   warning, consent dialogs.

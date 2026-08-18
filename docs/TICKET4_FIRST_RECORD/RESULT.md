@@ -78,10 +78,20 @@ different TLS 1.3 set or order would hit a real wall here.
 
 ## What this does NOT establish
 
-- **One architecture only.** Captured on x86_64 macOS. §5 asks for both
-  architectures; the arm64 capture has not been run. The instrument is
-  architecture-independent source, so this is a run that has not happened, not
-  a result that is missing.
+- ~~**One architecture only.**~~ **Both architectures, since 2026-08-18.** The
+  arm64 run happened on a physical phone, through an independent path: the
+  library was cross-built for the device, a small shim in the app's own pod
+  composes the record there, and an integration test reports the bytes. The two
+  records agree under a committed projection of the machine-independent fields,
+  and the comparator additionally requires the candidate to declare its
+  architecture, so a second host run cannot pass as a phone run.
+
+  ```
+  docs/evidence/first_record_x86_64.txt   1533 bytes   Darwin x86_64
+  docs/evidence/first_record_arm64.txt    1533 bytes   iOS 26.0, ios_arm64
+  python3 tools/compare_arch_records.py --require-arch arm64
+    -> ARCH COMPARE PASSED
+  ```
 - **Nothing about the handshake past the first record.** The measurement stops
   where §5 stops. A server's reply, session resumption, and 0-RTT are all
   outside it.
@@ -92,6 +102,33 @@ different TLS 1.3 set or order would hit a real wall here.
 - **No packet capture.** The bytes come from a memory BIO, which is what makes
   the measurement repeatable. What a middlebox sees on a real path is a
   different measurement.
+
+## The instrument was not the instrument — found 2026-08-18
+
+Every capture before this date compiled a copy of the program that lived inside
+`tools/first_record_dump` as an inline heredoc, and that copy was OLDER than the
+file beside it. The extraction to `tools/first_record/first_record.c` had
+happened and the comment describing the extraction had been written; only the
+deletion of the old copy had not. So the runner compiled a program without the
+strict cipher list, without the stapling and timestamp requests, without
+certificate compression and without the application-settings extension, while
+the file that documented the measurement configured all four.
+
+```
+before  16 ciphers incl. 0xc009 0xc00a   11 extensions   1488 bytes
+after   16 ciphers, those two absent     17 extensions   1533 bytes
+```
+
+Nothing caught it for a day. The record's only reader was a comparison against a
+profile that had itself been derived from the same capture, so the measurement
+was agreeing with itself. It surfaced within minutes of a SECOND machine
+composing the record through an independent implementation — the shim in the
+app's pod — and the two disagreeing on exactly those four extensions.
+
+The runner now stages the real file; the sections above were re-derived from the
+corrected capture. The general lesson is recorded in the knowledge tree: a
+measurement that is only ever compared against something derived from itself is
+not being checked.
 
 ## The comparison tool's verdict line — the named defect, fixed 2026-08-17
 

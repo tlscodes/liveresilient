@@ -33,6 +33,18 @@ final class PtSessionHandle {
   PtSessionHandle._();
 }
 
+/// Mirrors the real branch's outcomes so code naming them still compiles here.
+enum EchProbeOutcome {
+  applied,
+  ignored,
+  rejected,
+  timedOut,
+  unreachable,
+  badArgument,
+  internalFailure,
+  noBackendInThisProcess,
+}
+
 /// Mirrors the real branch's states so code naming them still compiles here.
 /// Only one of them can ever occur on this branch, and it is the honest one:
 /// a platform without `dart:ffi` cannot look a symbol up at all.
@@ -58,6 +70,15 @@ class ShimProbe {
   String? buildPin() => null;
 
   Uint8List? firstRecord() => null;
+
+  EchProbeOutcome echProbe({
+    required String host,
+    required int port,
+    required Uint8List configList,
+    required String innerName,
+    Duration timeout = const Duration(seconds: 10),
+  }) =>
+      EchProbeOutcome.noBackendInThisProcess;
 }
 
 /// Stub of the FFI bindings. Every way of obtaining one throws.

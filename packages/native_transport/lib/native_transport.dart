@@ -19,6 +19,7 @@ export 'src/pt_ffi.dart'
         PtNativeLane,
         PtSession,
         PtSessionHandle,
+        EchProbeOutcome,
         ShimProbe,
         ShimProbeState,
         isNativeTransportAvailable;

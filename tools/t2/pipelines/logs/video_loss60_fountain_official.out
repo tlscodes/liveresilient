@@ -1,0 +1,53 @@
+wired-gate baseline ok: loss=0% rtt=0ms on bridge100
+profile   loss60  (bw=- delay=- plr=0.60)
+iface     bridge100   self 192.168.2.1   peer 192.168.2.3
+rig       relay wss://192.168.2.1:8443/ (TCP shaped)  turn 192.168.2.1:3478 (UDP shaped, media forced through it)
+test      integration_test/video_survival_test.dart
+e2e-honest plr: pipe 0.3675 per crossing -> e2e 0.60
+pfctl: Use of -f option, could result in flushing of rules
+present in the main ruleset added by the system at startup.
+See /etc/pf.conf for further details.
+
+No ALTQ support in kernel
+ALTQ related functions disabled
+verified  rtt 0.766 ms  loss 40.0%
+stun_probe: 192.168.2.1:3478 answered Binding Success
+turn_probe: challenged realm=local.dev nonce=6a79276044297651...
+turn_probe: ALLOCATED relay 192.168.2.1:49168 lifetime 600s  (resp 84B)
+rig up    relay pid 60707, turnserver pid 60756 (STUN + Allocate verified)
+probes    40 (E2E_ACK_PROBES)
+conditions rtt 4ms loss 0.60 bw unshaped
+connect budget 450s (E2E_CONNECT_BUDGET_S)
+tier      STRESS: survive + connect<=432s recover<=447s (independent of the app budget)
+prewarm   ok (try 1)
+
+profile	verdict	rtt_ms	loss_pct	packets	elapsed_ms	connect_ms	ack_p50	ack_p95	ack_loss	recovery_ms	alive	note
+loss60	FAIL/STRESS	0.766	40.0	143677	1080928	-	-	-	-	-	-	criterion=video-survival(delivered + sha256; times recorded as baseline); not delivered/verified: 4194304B in Nonems (None kbps, None/None chunks resumed); The following TimeoutException was thrown running a test: video (fountain) not delivered within 790s (sent=1158 decoded=172 rate=0kbps loss=93% helloAcked=true, senderCh=[open], receiverCh=[open], phases=connected/connected) When the exception was thrown, this was the stack:
+
+log     /tmp/h2run.W29N6z/test.log
+pcap    /tmp/h2run.W29N6z/traffic.txt
+EXCEPTION /tmp/h2run.W29N6z/exception.txt
+results /Users/behnam/Downloads/voice_call_kit_v3/tools/t2/h2_results.tsv
+
+--- exception (first 20 lines; full text in /tmp/h2run.W29N6z/exception.txt) ---
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TimeoutException was thrown running a test:
+video (fountain) not delivered within 790s (sent=1158 decoded=172 rate=0kbps loss=93%
+helloAcked=true, senderCh=[open], receiverCh=[open], phases=connected/connected)
+
+When the exception was thrown, this was the stack:
+#0      main.<anonymous closure>.<anonymous closure> (file:///Users/behnam/Downloads/voice_call_kit_v3/apps/reference_app/integration_test/video_survival_test.dart:348:15)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///Users/behnam/Downloads/voice_call_kit_v3/apps/reference_app/integration_test/video_survival_test.dart:338:28)
+<asynchronous suspension>
+#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1952:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 6 frames from dart:async and package:stack_trace)
+
+The test description was:
+  Video survival: a camera-quality proxy clip delivers intact on the binary lane under whatever
+  impairment is applied
+-----------------------------------------------------

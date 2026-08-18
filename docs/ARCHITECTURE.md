@@ -1,16 +1,33 @@
-# Architecture — VoiceCallKit v2
+# Architecture — VoiceCallKit v3
 
 A standards-based, resilient audio/video calling stack for degraded and
 unstable network environments. Everything the app does on the network is a
 plain, honestly-labelled standard protocol: WebRTC (ICE, STUN, TURN,
-DTLS-SRTP) for media, WSS for signaling, HTTPS for configuration, and an
-Ed25519-signed manifest for endpoint discovery.
+DTLS-SRTP) for media, WSS for signaling, HTTPS for configuration and for the
+relay/long-poll fallback lanes, and an Ed25519-signed manifest for endpoint
+discovery.
+
+> **Scope correction, 2026-07-31 (documented contradictions 8 and 9).** Two
+> things in this document were behind the code:
+>
+> - The app directory is **`apps/reference_app`**, not `apps/resilient_call`.
+>   Ground truth is the filesystem and the workspace gate, which report
+>   `reference_app`; the old name is gone.
+> - The sections below described only the WebRTC + WSS path. v3 also ships a
+>   deployed HTTPS relay, an HTTP long-poll lane, a store-and-forward DTN
+>   queue, a broadcast layer, and a low-rate codec as a last-resort audio
+>   path. They are listed in §"v3 layers" below rather than left out.
+>
+> Still true, and enforced: `tool/architecture_guard.dart` fails CI on any
+> excluded legacy transport component, and the project makes **no attempt to
+> disguise its traffic as another protocol**. Every lane named here is a
+> standard protocol used as itself.
 
 ## Layering
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ apps/resilient_call        Flutter UI, permissions, UX   │
+│ apps/reference_app         Flutter UI, permissions, UX   │
 ├──────────────────────────────────────────────────────────┤
 │ call_core                  Call state machine, controller│
 │                            ICE-restart reconnect policy  │
@@ -86,11 +103,48 @@ Ed25519-signed manifest for endpoint discovery.
    `PathSelector` failover (WSS endpoints, push wake-up, and — only with
    consent, only when degraded — the local peer path).
 
+## v3 layers (added after the v2 text above)
+
+- **connection_orchestrator** — one fabric over every lane. Ranks lanes by
+  measured health and cost, delivers live-first, and falls back to a bounded
+  store-and-forward queue (`DtnBundleQueue`) when every lane is down. It
+  reports what it actually did (`sentLive` / `queuedForLater`) and never
+  reports success on a caller's behalf. Invariants are pinned by a chaos
+  suite over twelve fixed seeds plus a frozen-digest reproducibility gate
+  (`test/chaos_fabric_test.dart`).
+- **Resilient fallback lanes** (`adaptive_transport/lib/src/resilient/`) —
+  UDP → WebSocket relay → HTTP long-poll → local mesh, each a plain standard
+  protocol, tried in order as the preceding one dies. `PoissonPacer` spaces
+  sends by an exponential distribution instead of a fixed timer.
+- **Deployed relay** (`tools/cloudflare_relay_worker`) — pairs two peers by
+  session id and passes bytes through untouched. Known limits, stated: no
+  peer authentication, no persistence, 256-frame / 4 MB queue cap, 25 s hold.
+  The session id is therefore a secret (see `security/THREAT_MODEL.md` T26).
+- **broadcast / broadcast_media** — signed one-to-many publishing: a
+  fixed-length descriptor commits to each layer's hash and is signed by a
+  delegated publishing key chaining to a root key. No variable-length head,
+  no "latest" pointer.
+- **hamseda_codec** — a last-resort very-low-rate audio path for links too
+  narrow for Opus. It is a survival path, not a privacy feature, and its
+  31.8 bps figure is labelled "measured on a recording, not on a live call"
+  wherever it appears.
+- **device_link / carrier lanes** — consent-gated nearby and carrier paths,
+  unchanged in kind from v2, now driven through the fabric.
+
+Known open defect on this layer: `micro_datagram_lane.dart:32` overflows when
+`mtuBlockSize > 224` (2026-07-27 framing audit,
+`docs/AUDIT_PLAN_media_transport_framing.md` §1).
+
+What v3 does **not** have, stated here so nobody infers it from the list
+above: no measurement of how distinguishable this traffic is, and no
+size/timing shaping. The fixed 25 s long-poll cadence is a known fingerprint.
+
 ## Design rules (enforced)
 
 - Standards only; `tool/architecture_guard.dart` runs in CI and fails the
   build on any excluded legacy transport component (see
-  `UPGRADE_BLUEPRINT_V2.md` §Excluded legacy).
+  `UPGRADE_BLUEPRINT_V3.md`; the v2 blueprint this line used to cite is not in
+  this repo).
 - Runtime validation over asserts at every trust boundary.
 - No custom cryptography; audited libraries behind narrow adapters.
 - Ports-and-adapters at every platform edge (`PeerConnectionPort`,

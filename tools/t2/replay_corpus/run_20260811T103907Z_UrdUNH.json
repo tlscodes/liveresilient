@@ -1,0 +1,393 @@
+{
+ "capturedUtc": "2026-08-11T10:39:07Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 9
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 19
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 19
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 21
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 21
+  },
+  {
+   "detail": "[CallControllerException(initial_connection_timeout): Negotiation did not produce a conn...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 29
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 41
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 41
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 41
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 41
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 41
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 49
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 49
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 51
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 51
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 53
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 53
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 53
+  },
+  {
+   "detail": "[CallControllerException(initial_connection_timeout): Negotiation did not produce a conn...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 55
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 55
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 56
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 66,
+   "packets": 2
+  },
+  "1": {
+   "bytes": 66,
+   "packets": 2
+  },
+  "139": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "140": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "141": {
+   "bytes": 181,
+   "packets": 3
+  },
+  "142": {
+   "bytes": 324,
+   "packets": 4
+  },
+  "143": {
+   "bytes": 164,
+   "packets": 1
+  },
+  "144": {
+   "bytes": 307,
+   "packets": 2
+  },
+  "2": {
+   "bytes": 2743,
+   "packets": 6
+  },
+  "203": {
+   "bytes": 192,
+   "packets": 10
+  },
+  "204": {
+   "bytes": 96,
+   "packets": 4
+  },
+  "205": {
+   "bytes": 1072,
+   "packets": 26
+  },
+  "206": {
+   "bytes": 448,
+   "packets": 8
+  },
+  "207": {
+   "bytes": 368,
+   "packets": 14
+  },
+  "209": {
+   "bytes": 208,
+   "packets": 6
+  },
+  "211": {
+   "bytes": 0,
+   "packets": 2
+  },
+  "212": {
+   "bytes": 840,
+   "packets": 16
+  },
+  "213": {
+   "bytes": 0,
+   "packets": 4
+  },
+  "214": {
+   "bytes": 0,
+   "packets": 6
+  },
+  "215": {
+   "bytes": 80,
+   "packets": 18
+  },
+  "216": {
+   "bytes": 40,
+   "packets": 4
+  },
+  "217": {
+   "bytes": 40,
+   "packets": 2
+  },
+  "219": {
+   "bytes": 40,
+   "packets": 2
+  },
+  "221": {
+   "bytes": 400,
+   "packets": 14
+  },
+  "226": {
+   "bytes": 300,
+   "packets": 1
+  },
+  "231": {
+   "bytes": 40,
+   "packets": 2
+  },
+  "232": {
+   "bytes": 80,
+   "packets": 4
+  },
+  "233": {
+   "bytes": 500,
+   "packets": 7
+  },
+  "234": {
+   "bytes": 80,
+   "packets": 2
+  },
+  "235": {
+   "bytes": 80,
+   "packets": 2
+  },
+  "241": {
+   "bytes": 96,
+   "packets": 5
+  },
+  "242": {
+   "bytes": 48,
+   "packets": 2
+  },
+  "243": {
+   "bytes": 576,
+   "packets": 16
+  },
+  "244": {
+   "bytes": 264,
+   "packets": 6
+  },
+  "245": {
+   "bytes": 3244,
+   "packets": 46
+  },
+  "246": {
+   "bytes": 2832,
+   "packets": 32
+  },
+  "247": {
+   "bytes": 1504,
+   "packets": 33
+  },
+  "248": {
+   "bytes": 1848,
+   "packets": 40
+  },
+  "249": {
+   "bytes": 2856,
+   "packets": 60
+  },
+  "250": {
+   "bytes": 8240,
+   "packets": 111
+  },
+  "251": {
+   "bytes": 15148,
+   "packets": 147
+  },
+  "252": {
+   "bytes": 12036,
+   "packets": 180
+  },
+  "253": {
+   "bytes": 7352,
+   "packets": 169
+  },
+  "254": {
+   "bytes": 6548,
+   "packets": 129
+  },
+  "255": {
+   "bytes": 4485,
+   "packets": 78
+  },
+  "256": {
+   "bytes": 2285,
+   "packets": 37
+  },
+  "257": {
+   "bytes": 2094,
+   "packets": 18
+  },
+  "258": {
+   "bytes": 574,
+   "packets": 18
+  },
+  "259": {
+   "bytes": 1075,
+   "packets": 12
+  },
+  "260": {
+   "bytes": 0,
+   "packets": 4
+  },
+  "3": {
+   "bytes": 343,
+   "packets": 4
+  },
+  "4": {
+   "bytes": 6546,
+   "packets": 10
+  },
+  "5": {
+   "bytes": 281,
+   "packets": 3
+  },
+  "6": {
+   "bytes": 101,
+   "packets": 1
+  },
+  "7": {
+   "bytes": 101,
+   "packets": 1
+  }
+ },
+ "runDir": "/tmp/h2run.UrdUNH",
+ "summaries": {},
+ "tsvJoinGapS": 2,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-11T10:39:10Z",
+  "elapsed_ms": "269048",
+  "loss_pct": "0.0",
+  "note": "criterion=sla; The following TimeoutException was thrown running a test: connect budget (59s + 5s) exhausted; initiator phase=reconnecting error=CallControllerException(initial_connection_timeout): Negotiation did not produce a connected call within one modeled attempt cost (20s); receiver phase=reconnecting",
+  "packets": "1338",
+  "profile": "latency",
+  "recovery_ms": "-",
+  "rtt_ms": "1801.234",
+  "test": "sla_thresholds_test.dart",
+  "verdict": "FAIL"
+ }
+}
