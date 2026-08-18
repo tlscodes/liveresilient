@@ -268,6 +268,25 @@ name must not appear, and the name that does appear in the clear must be the
 public one. A capture of nothing passes the first half of that and fails the
 second.
 
+The two halves are not the same kind of claim, and the checker treats them
+differently for that reason. "Does not appear" is universal, so it is decided by
+a byte scan over every byte of the complete unfiltered recording, in three
+encodings, by a scanner that must first find those encodings planted in a
+scratch file — including across a read seam — before its verdict counts. "Does
+appear" is existential, so one witness settles it, but the witness must be
+located: the offset has to fall inside a captured packet's data region and the
+surrounding bytes are parsed far enough to name the field, because a hit in the
+recording's own metadata would otherwise pass while the device sent nothing.
+
+The complete recording is fifteen minutes of everything the attached device
+sent, so it is deliberately not committed — it is 65 MB and most of it is
+unrelated personal traffic. What is committed is the excerpt containing the
+witness, plus the analysis recording the full file's hash, size, scan coverage
+and encodings. `--recheck` therefore re-measures the existential half live and
+validates the universal half from that record, and says in its first line which
+half was which. If the full recording is present and its hash matches, the same
+command re-measures both and says it was upgraded.
+
 ```yaml
 step: 7
 id: trace-absence-check
@@ -275,14 +294,15 @@ title: "A capture of the connection, checked for the real name in the clear"
 kind: attended
 needs:
   - status-type-second-member
-attended_cmd: 'sudo rvictl -s "$(idevice_id -l | head -1)" && sudo tcpdump -i rvi0 -s 0 -w docs/evidence/step7_trace.pcap'
-verify_cmd: 'test -s docs/evidence/step7_trace.pcap && grep -qE "^tool: " docs/evidence/step7_trace_provenance.txt && grep -qE "^date: 20[0-9]{2}-[0-9]{2}-[0-9]{2}" docs/evidence/step7_trace_provenance.txt && ! strings docs/evidence/step7_trace.pcap | grep -qiF "$(cat docs/evidence/step7_real_name.txt)" && strings docs/evidence/step7_trace.pcap | grep -qiF "$(cat docs/evidence/step7_public_name.txt)"'
+attended_cmd: 'sudo -n tools/t2/step7_trace.sh --udid "$(idevice_id -l | head -1)" --out docs/evidence/step7_trace_raw --seconds 900'
+verify_cmd: 'grep -qE "^tool: " docs/evidence/step7_trace_provenance.txt && grep -qE "^date: 20[0-9]{2}-[0-9]{2}-[0-9]{2}" docs/evidence/step7_trace_provenance.txt && python3 tools/step7_analyze.py --recheck docs/evidence/step7_trace_analysis.txt --excerpt docs/evidence/step7_trace.pcap --absent-label docs/evidence/step7_real_name.txt --present-label docs/evidence/step7_public_name.txt --extraction "recorded in the analysis"'
 closes:
   - 4b
 blocked_ref: "docs/gate_backlog.json#4b"
 evidence:
   - docs/evidence/step7_trace.pcap
   - docs/evidence/step7_trace_provenance.txt
+  - docs/evidence/step7_trace_analysis.txt
   - docs/evidence/step7_real_name.txt
   - docs/evidence/step7_public_name.txt
 ```

@@ -1,0 +1,41 @@
+artifact: two claims about one recorded exchange, each checked in the form its logic requires
+absent_label: hidden-destination-a7f3.example
+present_label: public-front-a7f3.example
+
+# the universal claim, measured over every byte of the complete capture
+full_capture: step7_trace_raw.pcap
+full_sha256: 2e725a6dac4923a5f7306fa65f896d57de240595aca20917007d95b12fca0c9c
+full_bytes: 68511532
+full_packets_parsed: 67552 (pcapng; a parser stops at the first defect, a byte scan does not)
+scan_method: streaming byte scan, whole file, buffers overlapped by the longest pattern
+scan_coverage_bytes: 68511532
+scan_encoding: ascii/utf-8 (case-insensitive)
+scan_encoding: utf-16le (case-insensitive)
+scan_encoding: utf-16be (case-insensitive)
+scanner_self_test: every encoding planted and found, including across a buffer seam
+absent_label_found: no
+
+# the existential claim, located rather than merely present
+excerpt: step7_trace.pcap
+excerpt_sha256: 374f655bc9cb40be458713fef57299c45a15f03952064e87f51e402b5f0cda85
+excerpt_bytes: 6008
+excerpt_format: pcapng (link type 1)
+excerpt_packets: 16
+extraction: tcpdump -r step7_trace_raw.pcap -w step7_trace.pcap 'host 192.168.2.1 and tcp port 4433'
+reader_note: tcpdump: pcap_loop: block in pcapng dump file has a length of 262146 that is not a multiple of 4
+witness_packet_index: 4
+witness_packet_epoch: 1787077128.944518
+witness_offset_in_packet_data: 191
+witness_in_packet_data_region: yes (packet data spans file bytes 904..2418)
+witness_field: the name offered in the clear in a handshake record at packet offset 66
+witness_field_value: public-front-a7f3.example
+offered_extension_count: 9
+offered_extension_ids: 0,65037,23,65281,10,11,35,13,51
+offered_extension_under_test_present: yes
+
+# what this does not claim
+residual: a label split across two segments would evade a byte scan; the excerpt
+residual: shows the exchange arrived in one record, which is why that gap is small here.
+residual: 'not in the clear' is the whole claim — an encrypted occurrence is expected
+residual: and is not what this scan is looking for.
+residual: one recorded exchange is one exchange; nothing here generalises beyond it.

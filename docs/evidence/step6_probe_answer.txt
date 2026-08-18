@@ -1,5 +1,5 @@
 artifact: what the peer did with the configuration this build offered
-date: 2026-08-18T01:06:01Z
+date: 2026-08-18T18:18:57Z
 device: 00008030-001215003AF2802E
 source: integration_test/ech_probe_on_device_test.dart via pt_shim_ech_probe
 outcome: applied
@@ -19,3 +19,5 @@ meaning: a peer that speaks the extension honoured the configuration this
 meaning: device build offered it, at run time, on the device that is running —
 meaning: which is the condition native_shape_availability.dart:86-97 names as
 meaning: the only source an available result may ever come from.
+capture: this run happened inside the step 7 recording window, which is how
+capture: one exchange supports both gate 4a and gate 4b.
