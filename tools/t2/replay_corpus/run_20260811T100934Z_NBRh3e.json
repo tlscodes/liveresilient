@@ -1,0 +1,562 @@
+{
+ "capturedUtc": "2026-08-11T10:09:34Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 6
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 6
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 6
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 8
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 8
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 14
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 24
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 35341,
+   "packets": 69
+  },
+  "1": {
+   "bytes": 13229,
+   "packets": 26
+  },
+  "100": {
+   "bytes": 1624,
+   "packets": 28
+  },
+  "101": {
+   "bytes": 1624,
+   "packets": 26
+  },
+  "102": {
+   "bytes": 1524,
+   "packets": 27
+  },
+  "103": {
+   "bytes": 1492,
+   "packets": 27
+  },
+  "104": {
+   "bytes": 928,
+   "packets": 14
+  },
+  "108": {
+   "bytes": 60,
+   "packets": 2
+  },
+  "118": {
+   "bytes": 60,
+   "packets": 2
+  },
+  "119": {
+   "bytes": 328,
+   "packets": 16
+  },
+  "2": {
+   "bytes": 42,
+   "packets": 1
+  },
+  "25": {
+   "bytes": 74,
+   "packets": 2
+  },
+  "26": {
+   "bytes": 485,
+   "packets": 4
+  },
+  "27": {
+   "bytes": 369,
+   "packets": 4
+  },
+  "81": {
+   "bytes": 712,
+   "packets": 36
+  },
+  "83": {
+   "bytes": 7320,
+   "packets": 94
+  },
+  "84": {
+   "bytes": 25272,
+   "packets": 288
+  },
+  "85": {
+   "bytes": 26236,
+   "packets": 296
+  },
+  "86": {
+   "bytes": 24768,
+   "packets": 280
+  },
+  "87": {
+   "bytes": 25528,
+   "packets": 288
+  },
+  "88": {
+   "bytes": 24696,
+   "packets": 280
+  },
+  "89": {
+   "bytes": 4632,
+   "packets": 104
+  },
+  "90": {
+   "bytes": 232,
+   "packets": 2
+  },
+  "91": {
+   "bytes": 628,
+   "packets": 13
+  },
+  "92": {
+   "bytes": 1356,
+   "packets": 29
+  },
+  "93": {
+   "bytes": 1092,
+   "packets": 31
+  },
+  "94": {
+   "bytes": 1224,
+   "packets": 30
+  },
+  "95": {
+   "bytes": 1192,
+   "packets": 28
+  },
+  "96": {
+   "bytes": 1224,
+   "packets": 30
+  },
+  "97": {
+   "bytes": 1092,
+   "packets": 31
+  },
+  "98": {
+   "bytes": 1284,
+   "packets": 30
+  },
+  "99": {
+   "bytes": 1492,
+   "packets": 27
+  }
+ },
+ "runDir": "/tmp/h2run.NBRh3e",
+ "summaries": {
+  "SLA": [
+   {
+    "ackProbeErrors": 0,
+    "ackProbes": 20,
+    "ackRttLossPct": 0,
+    "ackRttLost": 0,
+    "ackRttMaxMs": 324,
+    "ackRttMinMs": 7,
+    "ackRttP50Ms": 17.0,
+    "ackRttP95Ms": 22.0,
+    "ackRttSamples": 20,
+    "adaptationDecisions": 0,
+    "adaptationLog": [],
+    "adaptationProfileInitiator": "medium",
+    "adaptationProfileReceiver": "medium",
+    "bothConnected": true,
+    "connectMs": 2918,
+    "mediaMode": "realAudio",
+    "notes": [],
+    "preventedFreezes": 0,
+    "recoveryConnectedMs": 92,
+    "recoveryFirstCandidateMs": 92,
+    "recoveryNewCandidates": 2,
+    "recoveryStatusLog": [],
+    "sentinelFirstGrounds": null,
+    "sentinelLeadMs": null,
+    "sentinelWarns": 0,
+    "stillConnectedAtEnd": true
+   }
+  ]
+ },
+ "trendSeries": [
+  {
+   "proj": null,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": null,
+   "t": 2,
+   "verdict": "unknown"
+  },
+  {
+   "proj": null,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": null,
+   "t": 3,
+   "verdict": "unknown"
+  },
+  {
+   "proj": 1.0,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.0,
+   "t": 4,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.0,
+   "t": 5,
+   "verdict": "steady"
+  }
+ ],
+ "tsvJoinGapS": 5,
+ "tsvRow": {
+  "ack_loss": "0",
+  "ack_p50": "17.0",
+  "ack_p95": "22.0",
+  "alive": "True",
+  "connect_ms": "2918",
+  "date": "2026-08-11T10:09:39Z",
+  "elapsed_ms": "196650",
+  "loss_pct": "0.0",
+  "note": "criterion=sla; All tests passed!",
+  "packets": "2165",
+  "profile": "clean",
+  "recovery_ms": "92",
+  "rtt_ms": "1.121",
+  "test": "sla_thresholds_test.dart",
+  "verdict": "PASS"
+ }
+}

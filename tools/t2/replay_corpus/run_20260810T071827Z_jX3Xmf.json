@@ -1,0 +1,2075 @@
+{
+ "capturedUtc": "2026-08-10T07:18:27Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 10
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 10
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 10
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 18
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 18
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 18
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 18
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 26
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 26
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 40
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 40
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 51
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 51
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 66
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 67
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 78
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 79
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 79
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 80
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 87
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 88
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 93
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 93
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 101
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 102
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 107
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 107
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 115
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 115
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 133
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 133
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 135
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 135
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 143
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 143
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 143
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 144
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 151
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 152
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 165
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 165
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 176
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 176
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 189
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 189
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 194
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 194
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 200
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 200
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 208
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 208
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 209
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 209
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 215
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 215
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 219
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 220
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 224
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 226
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 227
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 227
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 245
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 245
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 259
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 259
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 274
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 274
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 289
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 289
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 296
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 296
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 330
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 330
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 340
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 340
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 133,
+   "packets": 1
+  },
+  "164": {
+   "bytes": 816,
+   "packets": 37
+  },
+  "165": {
+   "bytes": 108,
+   "packets": 17
+  },
+  "166": {
+   "bytes": 2424,
+   "packets": 48
+  },
+  "167": {
+   "bytes": 10372,
+   "packets": 95
+  },
+  "168": {
+   "bytes": 8193,
+   "packets": 77
+  },
+  "169": {
+   "bytes": 8987,
+   "packets": 79
+  },
+  "170": {
+   "bytes": 8132,
+   "packets": 72
+  },
+  "171": {
+   "bytes": 7713,
+   "packets": 75
+  },
+  "172": {
+   "bytes": 8946,
+   "packets": 121
+  },
+  "173": {
+   "bytes": 10703,
+   "packets": 122
+  },
+  "174": {
+   "bytes": 41623,
+   "packets": 217
+  },
+  "175": {
+   "bytes": 61261,
+   "packets": 214
+  },
+  "176": {
+   "bytes": 63047,
+   "packets": 247
+  },
+  "177": {
+   "bytes": 60817,
+   "packets": 229
+  },
+  "178": {
+   "bytes": 55669,
+   "packets": 228
+  },
+  "179": {
+   "bytes": 56986,
+   "packets": 233
+  },
+  "180": {
+   "bytes": 61100,
+   "packets": 247
+  },
+  "181": {
+   "bytes": 51354,
+   "packets": 263
+  },
+  "182": {
+   "bytes": 50449,
+   "packets": 302
+  },
+  "183": {
+   "bytes": 52806,
+   "packets": 285
+  },
+  "184": {
+   "bytes": 56769,
+   "packets": 215
+  },
+  "185": {
+   "bytes": 59304,
+   "packets": 237
+  },
+  "186": {
+   "bytes": 59103,
+   "packets": 234
+  },
+  "187": {
+   "bytes": 67566,
+   "packets": 237
+  },
+  "188": {
+   "bytes": 67404,
+   "packets": 237
+  },
+  "189": {
+   "bytes": 81888,
+   "packets": 265
+  },
+  "190": {
+   "bytes": 71007,
+   "packets": 296
+  },
+  "191": {
+   "bytes": 56983,
+   "packets": 247
+  },
+  "192": {
+   "bytes": 46618,
+   "packets": 208
+  },
+  "193": {
+   "bytes": 58379,
+   "packets": 218
+  },
+  "194": {
+   "bytes": 71619,
+   "packets": 230
+  },
+  "195": {
+   "bytes": 67996,
+   "packets": 215
+  },
+  "196": {
+   "bytes": 56657,
+   "packets": 213
+  },
+  "197": {
+   "bytes": 54742,
+   "packets": 199
+  },
+  "198": {
+   "bytes": 56376,
+   "packets": 195
+  },
+  "199": {
+   "bytes": 54460,
+   "packets": 198
+  },
+  "200": {
+   "bytes": 50633,
+   "packets": 202
+  },
+  "201": {
+   "bytes": 56081,
+   "packets": 207
+  },
+  "202": {
+   "bytes": 52319,
+   "packets": 195
+  },
+  "203": {
+   "bytes": 57753,
+   "packets": 235
+  },
+  "204": {
+   "bytes": 56092,
+   "packets": 282
+  },
+  "205": {
+   "bytes": 55882,
+   "packets": 279
+  },
+  "206": {
+   "bytes": 54880,
+   "packets": 354
+  },
+  "207": {
+   "bytes": 61832,
+   "packets": 239
+  },
+  "208": {
+   "bytes": 61381,
+   "packets": 210
+  },
+  "209": {
+   "bytes": 62393,
+   "packets": 209
+  },
+  "210": {
+   "bytes": 54998,
+   "packets": 203
+  },
+  "211": {
+   "bytes": 52410,
+   "packets": 198
+  },
+  "212": {
+   "bytes": 56948,
+   "packets": 204
+  },
+  "213": {
+   "bytes": 51620,
+   "packets": 199
+  },
+  "214": {
+   "bytes": 53327,
+   "packets": 217
+  },
+  "215": {
+   "bytes": 59546,
+   "packets": 220
+  },
+  "216": {
+   "bytes": 62731,
+   "packets": 182
+  },
+  "217": {
+   "bytes": 55209,
+   "packets": 202
+  },
+  "218": {
+   "bytes": 65265,
+   "packets": 213
+  },
+  "219": {
+   "bytes": 71563,
+   "packets": 236
+  },
+  "220": {
+   "bytes": 69626,
+   "packets": 214
+  },
+  "221": {
+   "bytes": 63692,
+   "packets": 215
+  },
+  "222": {
+   "bytes": 67642,
+   "packets": 212
+  },
+  "223": {
+   "bytes": 63472,
+   "packets": 213
+  },
+  "224": {
+   "bytes": 62926,
+   "packets": 213
+  },
+  "225": {
+   "bytes": 53618,
+   "packets": 200
+  },
+  "226": {
+   "bytes": 58834,
+   "packets": 203
+  },
+  "227": {
+   "bytes": 60771,
+   "packets": 203
+  },
+  "228": {
+   "bytes": 63883,
+   "packets": 219
+  },
+  "229": {
+   "bytes": 58119,
+   "packets": 205
+  },
+  "230": {
+   "bytes": 63232,
+   "packets": 213
+  },
+  "231": {
+   "bytes": 68567,
+   "packets": 209
+  },
+  "232": {
+   "bytes": 63212,
+   "packets": 211
+  },
+  "233": {
+   "bytes": 60172,
+   "packets": 205
+  },
+  "234": {
+   "bytes": 51925,
+   "packets": 205
+  },
+  "235": {
+   "bytes": 52789,
+   "packets": 221
+  },
+  "236": {
+   "bytes": 57929,
+   "packets": 207
+  },
+  "237": {
+   "bytes": 50651,
+   "packets": 200
+  },
+  "238": {
+   "bytes": 56095,
+   "packets": 208
+  },
+  "239": {
+   "bytes": 51766,
+   "packets": 187
+  },
+  "240": {
+   "bytes": 56337,
+   "packets": 209
+  },
+  "241": {
+   "bytes": 57844,
+   "packets": 190
+  },
+  "242": {
+   "bytes": 70645,
+   "packets": 259
+  },
+  "243": {
+   "bytes": 74294,
+   "packets": 260
+  },
+  "244": {
+   "bytes": 76829,
+   "packets": 267
+  },
+  "245": {
+   "bytes": 65555,
+   "packets": 233
+  },
+  "246": {
+   "bytes": 66988,
+   "packets": 222
+  },
+  "247": {
+   "bytes": 58317,
+   "packets": 212
+  },
+  "248": {
+   "bytes": 53764,
+   "packets": 249
+  },
+  "249": {
+   "bytes": 61395,
+   "packets": 219
+  },
+  "250": {
+   "bytes": 58413,
+   "packets": 213
+  },
+  "251": {
+   "bytes": 52430,
+   "packets": 234
+  },
+  "252": {
+   "bytes": 49687,
+   "packets": 272
+  },
+  "253": {
+   "bytes": 52303,
+   "packets": 283
+  },
+  "254": {
+   "bytes": 59563,
+   "packets": 216
+  },
+  "255": {
+   "bytes": 69029,
+   "packets": 208
+  },
+  "256": {
+   "bytes": 72849,
+   "packets": 235
+  },
+  "257": {
+   "bytes": 65487,
+   "packets": 225
+  },
+  "258": {
+   "bytes": 77219,
+   "packets": 223
+  },
+  "259": {
+   "bytes": 74315,
+   "packets": 225
+  },
+  "260": {
+   "bytes": 67798,
+   "packets": 213
+  },
+  "261": {
+   "bytes": 62644,
+   "packets": 200
+  },
+  "262": {
+   "bytes": 62505,
+   "packets": 211
+  },
+  "263": {
+   "bytes": 55891,
+   "packets": 204
+  },
+  "264": {
+   "bytes": 58403,
+   "packets": 183
+  },
+  "265": {
+   "bytes": 55275,
+   "packets": 243
+  },
+  "266": {
+   "bytes": 58406,
+   "packets": 285
+  },
+  "267": {
+   "bytes": 50810,
+   "packets": 190
+  },
+  "268": {
+   "bytes": 51158,
+   "packets": 198
+  },
+  "269": {
+   "bytes": 58491,
+   "packets": 214
+  },
+  "270": {
+   "bytes": 55197,
+   "packets": 208
+  },
+  "271": {
+   "bytes": 53602,
+   "packets": 248
+  },
+  "272": {
+   "bytes": 57157,
+   "packets": 207
+  },
+  "273": {
+   "bytes": 70757,
+   "packets": 214
+  },
+  "274": {
+   "bytes": 73405,
+   "packets": 224
+  },
+  "275": {
+   "bytes": 68763,
+   "packets": 213
+  },
+  "276": {
+   "bytes": 69770,
+   "packets": 217
+  },
+  "277": {
+   "bytes": 61858,
+   "packets": 217
+  },
+  "278": {
+   "bytes": 54688,
+   "packets": 203
+  },
+  "279": {
+   "bytes": 50235,
+   "packets": 230
+  },
+  "280": {
+   "bytes": 55339,
+   "packets": 277
+  },
+  "281": {
+   "bytes": 61734,
+   "packets": 221
+  },
+  "282": {
+   "bytes": 62734,
+   "packets": 219
+  },
+  "283": {
+   "bytes": 65367,
+   "packets": 208
+  },
+  "284": {
+   "bytes": 60078,
+   "packets": 221
+  },
+  "285": {
+   "bytes": 55482,
+   "packets": 200
+  },
+  "286": {
+   "bytes": 65501,
+   "packets": 214
+  },
+  "287": {
+   "bytes": 55780,
+   "packets": 199
+  },
+  "288": {
+   "bytes": 56291,
+   "packets": 207
+  },
+  "289": {
+   "bytes": 55603,
+   "packets": 199
+  },
+  "290": {
+   "bytes": 55770,
+   "packets": 198
+  },
+  "291": {
+   "bytes": 52355,
+   "packets": 197
+  },
+  "292": {
+   "bytes": 52482,
+   "packets": 199
+  },
+  "293": {
+   "bytes": 56440,
+   "packets": 197
+  },
+  "294": {
+   "bytes": 54906,
+   "packets": 205
+  },
+  "295": {
+   "bytes": 53319,
+   "packets": 207
+  },
+  "296": {
+   "bytes": 55123,
+   "packets": 206
+  },
+  "297": {
+   "bytes": 54823,
+   "packets": 211
+  },
+  "298": {
+   "bytes": 59773,
+   "packets": 203
+  },
+  "299": {
+   "bytes": 55282,
+   "packets": 209
+  },
+  "300": {
+   "bytes": 57965,
+   "packets": 202
+  },
+  "301": {
+   "bytes": 71354,
+   "packets": 225
+  },
+  "302": {
+   "bytes": 56948,
+   "packets": 203
+  },
+  "303": {
+   "bytes": 52889,
+   "packets": 203
+  },
+  "304": {
+   "bytes": 55025,
+   "packets": 204
+  },
+  "305": {
+   "bytes": 58058,
+   "packets": 207
+  },
+  "306": {
+   "bytes": 54084,
+   "packets": 215
+  },
+  "307": {
+   "bytes": 58152,
+   "packets": 310
+  },
+  "308": {
+   "bytes": 61227,
+   "packets": 212
+  },
+  "309": {
+   "bytes": 73216,
+   "packets": 228
+  },
+  "310": {
+   "bytes": 64270,
+   "packets": 211
+  },
+  "311": {
+   "bytes": 66773,
+   "packets": 214
+  },
+  "312": {
+   "bytes": 57819,
+   "packets": 203
+  },
+  "313": {
+   "bytes": 53193,
+   "packets": 208
+  },
+  "314": {
+   "bytes": 56450,
+   "packets": 213
+  },
+  "315": {
+   "bytes": 61179,
+   "packets": 188
+  },
+  "316": {
+   "bytes": 68083,
+   "packets": 294
+  },
+  "317": {
+   "bytes": 69201,
+   "packets": 293
+  },
+  "318": {
+   "bytes": 57632,
+   "packets": 327
+  },
+  "319": {
+   "bytes": 54683,
+   "packets": 280
+  },
+  "320": {
+   "bytes": 57776,
+   "packets": 247
+  },
+  "321": {
+   "bytes": 51785,
+   "packets": 201
+  },
+  "322": {
+   "bytes": 58176,
+   "packets": 208
+  },
+  "323": {
+   "bytes": 59908,
+   "packets": 203
+  },
+  "324": {
+   "bytes": 53548,
+   "packets": 204
+  },
+  "325": {
+   "bytes": 55962,
+   "packets": 206
+  },
+  "326": {
+   "bytes": 66978,
+   "packets": 217
+  },
+  "327": {
+   "bytes": 72716,
+   "packets": 216
+  },
+  "328": {
+   "bytes": 73646,
+   "packets": 212
+  },
+  "329": {
+   "bytes": 78087,
+   "packets": 231
+  },
+  "330": {
+   "bytes": 74165,
+   "packets": 223
+  },
+  "331": {
+   "bytes": 69166,
+   "packets": 220
+  },
+  "332": {
+   "bytes": 58676,
+   "packets": 204
+  },
+  "333": {
+   "bytes": 53869,
+   "packets": 204
+  },
+  "334": {
+   "bytes": 59012,
+   "packets": 207
+  },
+  "335": {
+   "bytes": 55793,
+   "packets": 203
+  },
+  "336": {
+   "bytes": 54529,
+   "packets": 197
+  },
+  "337": {
+   "bytes": 49371,
+   "packets": 196
+  },
+  "338": {
+   "bytes": 54751,
+   "packets": 200
+  },
+  "339": {
+   "bytes": 59211,
+   "packets": 197
+  },
+  "340": {
+   "bytes": 55126,
+   "packets": 255
+  },
+  "341": {
+   "bytes": 55253,
+   "packets": 218
+  },
+  "342": {
+   "bytes": 59579,
+   "packets": 254
+  },
+  "343": {
+   "bytes": 57947,
+   "packets": 239
+  },
+  "344": {
+   "bytes": 110282,
+   "packets": 320
+  },
+  "345": {
+   "bytes": 115084,
+   "packets": 345
+  },
+  "346": {
+   "bytes": 59602,
+   "packets": 208
+  },
+  "347": {
+   "bytes": 55666,
+   "packets": 199
+  },
+  "348": {
+   "bytes": 52533,
+   "packets": 201
+  },
+  "349": {
+   "bytes": 55190,
+   "packets": 209
+  },
+  "350": {
+   "bytes": 52979,
+   "packets": 203
+  },
+  "351": {
+   "bytes": 52834,
+   "packets": 204
+  },
+  "352": {
+   "bytes": 58159,
+   "packets": 204
+  },
+  "353": {
+   "bytes": 50325,
+   "packets": 266
+  },
+  "354": {
+   "bytes": 49775,
+   "packets": 276
+  },
+  "355": {
+   "bytes": 50247,
+   "packets": 278
+  },
+  "356": {
+   "bytes": 63621,
+   "packets": 221
+  },
+  "357": {
+   "bytes": 63950,
+   "packets": 221
+  },
+  "358": {
+   "bytes": 64750,
+   "packets": 262
+  },
+  "359": {
+   "bytes": 63015,
+   "packets": 210
+  },
+  "360": {
+   "bytes": 65120,
+   "packets": 208
+  },
+  "361": {
+   "bytes": 62867,
+   "packets": 205
+  },
+  "362": {
+   "bytes": 65814,
+   "packets": 213
+  },
+  "363": {
+   "bytes": 65041,
+   "packets": 226
+  },
+  "364": {
+   "bytes": 74461,
+   "packets": 227
+  },
+  "365": {
+   "bytes": 69280,
+   "packets": 206
+  },
+  "366": {
+   "bytes": 66481,
+   "packets": 214
+  },
+  "367": {
+   "bytes": 65401,
+   "packets": 208
+  },
+  "368": {
+   "bytes": 63051,
+   "packets": 217
+  },
+  "369": {
+   "bytes": 61797,
+   "packets": 216
+  },
+  "370": {
+   "bytes": 62389,
+   "packets": 213
+  },
+  "371": {
+   "bytes": 57383,
+   "packets": 215
+  },
+  "372": {
+   "bytes": 53884,
+   "packets": 225
+  },
+  "373": {
+   "bytes": 53962,
+   "packets": 285
+  },
+  "374": {
+   "bytes": 58380,
+   "packets": 297
+  },
+  "375": {
+   "bytes": 50662,
+   "packets": 201
+  },
+  "376": {
+   "bytes": 59579,
+   "packets": 215
+  },
+  "377": {
+   "bytes": 61711,
+   "packets": 218
+  },
+  "378": {
+   "bytes": 60184,
+   "packets": 207
+  },
+  "379": {
+   "bytes": 60900,
+   "packets": 282
+  },
+  "380": {
+   "bytes": 46278,
+   "packets": 232
+  },
+  "381": {
+   "bytes": 58834,
+   "packets": 214
+  },
+  "382": {
+   "bytes": 57204,
+   "packets": 177
+  },
+  "383": {
+   "bytes": 53157,
+   "packets": 189
+  },
+  "384": {
+   "bytes": 49755,
+   "packets": 202
+  },
+  "385": {
+   "bytes": 54442,
+   "packets": 195
+  },
+  "386": {
+   "bytes": 53451,
+   "packets": 222
+  },
+  "387": {
+   "bytes": 60095,
+   "packets": 205
+  },
+  "388": {
+   "bytes": 60111,
+   "packets": 187
+  },
+  "389": {
+   "bytes": 62856,
+   "packets": 188
+  },
+  "390": {
+   "bytes": 59658,
+   "packets": 206
+  },
+  "391": {
+   "bytes": 65113,
+   "packets": 228
+  },
+  "392": {
+   "bytes": 56927,
+   "packets": 248
+  },
+  "393": {
+   "bytes": 63278,
+   "packets": 226
+  },
+  "394": {
+   "bytes": 53495,
+   "packets": 203
+  },
+  "395": {
+   "bytes": 57546,
+   "packets": 197
+  },
+  "396": {
+   "bytes": 61364,
+   "packets": 215
+  },
+  "397": {
+   "bytes": 54986,
+   "packets": 206
+  },
+  "398": {
+   "bytes": 65458,
+   "packets": 208
+  },
+  "399": {
+   "bytes": 71176,
+   "packets": 223
+  },
+  "400": {
+   "bytes": 70062,
+   "packets": 220
+  },
+  "401": {
+   "bytes": 61900,
+   "packets": 221
+  },
+  "402": {
+   "bytes": 56057,
+   "packets": 189
+  },
+  "403": {
+   "bytes": 57365,
+   "packets": 214
+  },
+  "404": {
+   "bytes": 57685,
+   "packets": 199
+  },
+  "405": {
+   "bytes": 51829,
+   "packets": 200
+  },
+  "406": {
+   "bytes": 53750,
+   "packets": 206
+  },
+  "407": {
+   "bytes": 74789,
+   "packets": 256
+  },
+  "408": {
+   "bytes": 71146,
+   "packets": 256
+  },
+  "409": {
+   "bytes": 52010,
+   "packets": 284
+  },
+  "410": {
+   "bytes": 67938,
+   "packets": 287
+  },
+  "411": {
+   "bytes": 61025,
+   "packets": 293
+  },
+  "412": {
+   "bytes": 60002,
+   "packets": 301
+  },
+  "413": {
+   "bytes": 60120,
+   "packets": 258
+  },
+  "414": {
+   "bytes": 67042,
+   "packets": 223
+  },
+  "415": {
+   "bytes": 60734,
+   "packets": 201
+  },
+  "416": {
+   "bytes": 52077,
+   "packets": 206
+  },
+  "417": {
+   "bytes": 58292,
+   "packets": 210
+  },
+  "418": {
+   "bytes": 59771,
+   "packets": 215
+  },
+  "419": {
+   "bytes": 61987,
+   "packets": 219
+  },
+  "420": {
+   "bytes": 65435,
+   "packets": 213
+  },
+  "421": {
+   "bytes": 64824,
+   "packets": 218
+  },
+  "422": {
+   "bytes": 64236,
+   "packets": 237
+  },
+  "423": {
+   "bytes": 73105,
+   "packets": 294
+  },
+  "424": {
+   "bytes": 68537,
+   "packets": 213
+  },
+  "425": {
+   "bytes": 79030,
+   "packets": 221
+  },
+  "426": {
+   "bytes": 76629,
+   "packets": 231
+  },
+  "427": {
+   "bytes": 71079,
+   "packets": 225
+  },
+  "428": {
+   "bytes": 68869,
+   "packets": 215
+  },
+  "429": {
+   "bytes": 59925,
+   "packets": 203
+  },
+  "430": {
+   "bytes": 55580,
+   "packets": 219
+  },
+  "431": {
+   "bytes": 61297,
+   "packets": 209
+  },
+  "432": {
+   "bytes": 58761,
+   "packets": 212
+  },
+  "433": {
+   "bytes": 56962,
+   "packets": 201
+  },
+  "434": {
+   "bytes": 50940,
+   "packets": 207
+  },
+  "435": {
+   "bytes": 51180,
+   "packets": 194
+  },
+  "436": {
+   "bytes": 54752,
+   "packets": 199
+  },
+  "437": {
+   "bytes": 53534,
+   "packets": 191
+  },
+  "438": {
+   "bytes": 55853,
+   "packets": 242
+  },
+  "439": {
+   "bytes": 62417,
+   "packets": 240
+  },
+  "440": {
+   "bytes": 66621,
+   "packets": 255
+  },
+  "441": {
+   "bytes": 67231,
+   "packets": 277
+  },
+  "442": {
+   "bytes": 65069,
+   "packets": 235
+  },
+  "443": {
+   "bytes": 60522,
+   "packets": 221
+  },
+  "444": {
+   "bytes": 52798,
+   "packets": 203
+  },
+  "445": {
+   "bytes": 47509,
+   "packets": 198
+  },
+  "446": {
+   "bytes": 52734,
+   "packets": 203
+  },
+  "447": {
+   "bytes": 52787,
+   "packets": 202
+  },
+  "448": {
+   "bytes": 60901,
+   "packets": 220
+  },
+  "449": {
+   "bytes": 68100,
+   "packets": 221
+  },
+  "450": {
+   "bytes": 54336,
+   "packets": 212
+  },
+  "451": {
+   "bytes": 57008,
+   "packets": 208
+  },
+  "452": {
+   "bytes": 54491,
+   "packets": 213
+  },
+  "453": {
+   "bytes": 53258,
+   "packets": 191
+  },
+  "454": {
+   "bytes": 53529,
+   "packets": 201
+  },
+  "455": {
+   "bytes": 52001,
+   "packets": 204
+  },
+  "456": {
+   "bytes": 54403,
+   "packets": 192
+  },
+  "457": {
+   "bytes": 61231,
+   "packets": 208
+  },
+  "458": {
+   "bytes": 53593,
+   "packets": 201
+  },
+  "459": {
+   "bytes": 58599,
+   "packets": 216
+  },
+  "460": {
+   "bytes": 64892,
+   "packets": 281
+  },
+  "461": {
+   "bytes": 58811,
+   "packets": 278
+  },
+  "462": {
+   "bytes": 68813,
+   "packets": 294
+  },
+  "463": {
+   "bytes": 69867,
+   "packets": 335
+  },
+  "464": {
+   "bytes": 66211,
+   "packets": 310
+  },
+  "465": {
+   "bytes": 73321,
+   "packets": 327
+  },
+  "466": {
+   "bytes": 69687,
+   "packets": 307
+  },
+  "467": {
+   "bytes": 76400,
+   "packets": 345
+  },
+  "468": {
+   "bytes": 72822,
+   "packets": 334
+  },
+  "469": {
+   "bytes": 62733,
+   "packets": 219
+  },
+  "470": {
+   "bytes": 60436,
+   "packets": 241
+  },
+  "471": {
+   "bytes": 54838,
+   "packets": 228
+  },
+  "472": {
+   "bytes": 50609,
+   "packets": 218
+  },
+  "473": {
+   "bytes": 57573,
+   "packets": 211
+  },
+  "474": {
+   "bytes": 83866,
+   "packets": 290
+  },
+  "475": {
+   "bytes": 63910,
+   "packets": 202
+  },
+  "476": {
+   "bytes": 52635,
+   "packets": 200
+  },
+  "477": {
+   "bytes": 33460,
+   "packets": 187
+  },
+  "478": {
+   "bytes": 8211,
+   "packets": 160
+  },
+  "479": {
+   "bytes": 8332,
+   "packets": 160
+  },
+  "480": {
+   "bytes": 7845,
+   "packets": 154
+  },
+  "481": {
+   "bytes": 7701,
+   "packets": 149
+  },
+  "482": {
+   "bytes": 8706,
+   "packets": 164
+  },
+  "483": {
+   "bytes": 7987,
+   "packets": 154
+  },
+  "484": {
+   "bytes": 8101,
+   "packets": 156
+  },
+  "485": {
+   "bytes": 9035,
+   "packets": 171
+  },
+  "486": {
+   "bytes": 7645,
+   "packets": 148
+  },
+  "487": {
+   "bytes": 7625,
+   "packets": 149
+  },
+  "488": {
+   "bytes": 7938,
+   "packets": 154
+  },
+  "489": {
+   "bytes": 8259,
+   "packets": 160
+  },
+  "490": {
+   "bytes": 8015,
+   "packets": 155
+  },
+  "491": {
+   "bytes": 8356,
+   "packets": 163
+  },
+  "492": {
+   "bytes": 8595,
+   "packets": 167
+  },
+  "493": {
+   "bytes": 6740,
+   "packets": 170
+  },
+  "494": {
+   "bytes": 3822,
+   "packets": 223
+  },
+  "495": {
+   "bytes": 4080,
+   "packets": 195
+  },
+  "496": {
+   "bytes": 6218,
+   "packets": 197
+  },
+  "497": {
+   "bytes": 7843,
+   "packets": 153
+  },
+  "498": {
+   "bytes": 8086,
+   "packets": 157
+  },
+  "499": {
+   "bytes": 8009,
+   "packets": 155
+  },
+  "500": {
+   "bytes": 7844,
+   "packets": 152
+  },
+  "501": {
+   "bytes": 8469,
+   "packets": 163
+  },
+  "502": {
+   "bytes": 7697,
+   "packets": 149
+  },
+  "503": {
+   "bytes": 7629,
+   "packets": 152
+  },
+  "504": {
+   "bytes": 8499,
+   "packets": 165
+  },
+  "505": {
+   "bytes": 7805,
+   "packets": 158
+  },
+  "506": {
+   "bytes": 8176,
+   "packets": 158
+  },
+  "507": {
+   "bytes": 4748,
+   "packets": 102
+  },
+  "66": {
+   "bytes": 384,
+   "packets": 6
+  },
+  "67": {
+   "bytes": 469,
+   "packets": 8
+  },
+  "68": {
+   "bytes": 333,
+   "packets": 4
+  },
+  "69": {
+   "bytes": 19636,
+   "packets": 26
+  },
+  "70": {
+   "bytes": 1111,
+   "packets": 15
+  },
+  "71": {
+   "bytes": 230,
+   "packets": 5
+  },
+  "72": {
+   "bytes": 345,
+   "packets": 6
+  },
+  "73": {
+   "bytes": 135,
+   "packets": 3
+  },
+  "74": {
+   "bytes": 51,
+   "packets": 1
+  },
+  "76": {
+   "bytes": 96,
+   "packets": 2
+  }
+ },
+ "runDir": "/tmp/h2run.jX3Xmf",
+ "summaries": {
+  "VID": [
+   {
+    "chunkBytes": 16384,
+    "connectMs": 10596,
+    "deliveryKbps": 33,
+    "lane": "fountain",
+    "mediaMode": "realAudio",
+    "receiverDatagrams": 4210,
+    "receiverMediaMode": "realAudio",
+    "recoveryFreezes": 0,
+    "resumedGenerations": null,
+    "senderDatagrams": 10414,
+    "senderLocalDrops": 0,
+    "senderLossEstimatePct": 78,
+    "senderTermination": "unterminated after delivery: TimeoutException after 0:00:30.000000: Future not completed",
+    "sentSymbols": 10413,
+    "sha256Ok": true,
+    "sizeBytes": 4194304,
+    "symbolBytes": 1024,
+    "throughputKbps": 111,
+    "totalGenerations": null,
+    "totalSourceSymbols": 4096,
+    "transport": "datagram",
+    "videoMs": 303564,
+    "windowMs": 790000
+   }
+  ]
+ },
+ "tsvJoinGapS": 4,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-10T07:18:32Z",
+  "elapsed_ms": "608833",
+  "loss_pct": "40.0",
+  "note": "criterion=video-survival(delivered + sha256; times recorded as baseline); delivered sha-verified: 4194304B in 303564ms (111 kbps, None/None chunks resumed); All tests passed!",
+  "packets": "73992",
+  "profile": "loss60",
+  "recovery_ms": "-",
+  "rtt_ms": "0.856",
+  "test": "video_survival_test.dart",
+  "verdict": "PASS/STRESS"
+ }
+}

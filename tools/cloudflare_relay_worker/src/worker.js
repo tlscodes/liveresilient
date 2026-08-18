@@ -40,7 +40,12 @@ const MAX_QUEUED_FRAMES = 256;
 /** Bytes buffered for a peer that has not connected yet, per direction. */
 const MAX_QUEUED_BYTES = 4 * 1024 * 1024;
 
-/** Longest a long-poll is held open before answering empty. */
+/**
+ * Bounds for the per-request long-poll ceiling. Each poll draws its own
+ * ceiling uniformly from [MIN_POLL_WAIT_MS, MAX_POLL_WAIT_MS]; a request
+ * is never held open longer than MAX_POLL_WAIT_MS.
+ */
+const MIN_POLL_WAIT_MS = 15_000;
 const MAX_POLL_WAIT_MS = 25_000;
 
 /** Sessions idle this long are dropped. */
@@ -240,6 +245,12 @@ export class RelaySession {
     this.waiters = { a: [], b: [] };
 
     this.lastSeenMs = Date.now();
+
+    /**
+     * Uniform [0,1) source for the per-request poll ceiling. Injectable so
+     * tests can pin the draw; never call Math.random inline in a handler.
+     */
+    this.random = Math.random;
   }
 
   async fetch(request) {
@@ -310,12 +321,16 @@ export class RelaySession {
   /**
    * Long-poll: answers with whatever is queued for [role], waiting up to
    * `wait` milliseconds for the first frame rather than returning empty
-   * immediately.
+   * immediately. The ceiling on `wait` is drawn per request, uniformly
+   * from [MIN_POLL_WAIT_MS, MAX_POLL_WAIT_MS]; a requested value below
+   * the drawn ceiling is honored unchanged.
    */
   async handlePoll(url, role) {
     const requested = Number(url.searchParams.get('wait') ?? '0');
+    const ceiling =
+      MIN_POLL_WAIT_MS + this.random() * (MAX_POLL_WAIT_MS - MIN_POLL_WAIT_MS);
     const wait = Number.isFinite(requested)
-      ? Math.min(Math.max(requested, 0), MAX_POLL_WAIT_MS)
+      ? Math.min(Math.max(requested, 0), ceiling)
       : 0;
 
     if (this.inbox[role].length === 0 && wait > 0) {

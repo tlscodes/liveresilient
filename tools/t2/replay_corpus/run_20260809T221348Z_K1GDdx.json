@@ -1,0 +1,774 @@
+{
+ "capturedUtc": "2026-08-09T22:13:48Z",
+ "events": [],
+ "packetSeries": {
+  "0": {
+   "bytes": 220,
+   "packets": 4
+  },
+  "1": {
+   "bytes": 21727,
+   "packets": 59
+  },
+  "10": {
+   "bytes": 673,
+   "packets": 9
+  },
+  "100": {
+   "bytes": 37768,
+   "packets": 547
+  },
+  "101": {
+   "bytes": 26043,
+   "packets": 328
+  },
+  "102": {
+   "bytes": 11932,
+   "packets": 306
+  },
+  "103": {
+   "bytes": 9029,
+   "packets": 291
+  },
+  "104": {
+   "bytes": 8706,
+   "packets": 259
+  },
+  "105": {
+   "bytes": 8195,
+   "packets": 241
+  },
+  "106": {
+   "bytes": 14268,
+   "packets": 295
+  },
+  "107": {
+   "bytes": 5911,
+   "packets": 287
+  },
+  "108": {
+   "bytes": 8506,
+   "packets": 236
+  },
+  "109": {
+   "bytes": 8929,
+   "packets": 266
+  },
+  "11": {
+   "bytes": 2641,
+   "packets": 5
+  },
+  "110": {
+   "bytes": 4900,
+   "packets": 248
+  },
+  "111": {
+   "bytes": 4892,
+   "packets": 250
+  },
+  "112": {
+   "bytes": 5342,
+   "packets": 302
+  },
+  "113": {
+   "bytes": 5063,
+   "packets": 268
+  },
+  "114": {
+   "bytes": 5750,
+   "packets": 260
+  },
+  "115": {
+   "bytes": 5430,
+   "packets": 280
+  },
+  "116": {
+   "bytes": 4759,
+   "packets": 228
+  },
+  "117": {
+   "bytes": 6242,
+   "packets": 237
+  },
+  "118": {
+   "bytes": 4535,
+   "packets": 276
+  },
+  "119": {
+   "bytes": 4823,
+   "packets": 257
+  },
+  "12": {
+   "bytes": 662,
+   "packets": 6
+  },
+  "120": {
+   "bytes": 6427,
+   "packets": 294
+  },
+  "121": {
+   "bytes": 4992,
+   "packets": 253
+  },
+  "122": {
+   "bytes": 4736,
+   "packets": 278
+  },
+  "123": {
+   "bytes": 6164,
+   "packets": 259
+  },
+  "124": {
+   "bytes": 7666,
+   "packets": 286
+  },
+  "125": {
+   "bytes": 5925,
+   "packets": 291
+  },
+  "126": {
+   "bytes": 5696,
+   "packets": 245
+  },
+  "127": {
+   "bytes": 4939,
+   "packets": 291
+  },
+  "128": {
+   "bytes": 4490,
+   "packets": 245
+  },
+  "129": {
+   "bytes": 10936,
+   "packets": 277
+  },
+  "13": {
+   "bytes": 98,
+   "packets": 2
+  },
+  "130": {
+   "bytes": 4453,
+   "packets": 250
+  },
+  "131": {
+   "bytes": 4643,
+   "packets": 257
+  },
+  "132": {
+   "bytes": 4697,
+   "packets": 262
+  },
+  "133": {
+   "bytes": 4480,
+   "packets": 256
+  },
+  "134": {
+   "bytes": 5793,
+   "packets": 246
+  },
+  "135": {
+   "bytes": 4470,
+   "packets": 270
+  },
+  "136": {
+   "bytes": 4781,
+   "packets": 242
+  },
+  "137": {
+   "bytes": 6009,
+   "packets": 269
+  },
+  "138": {
+   "bytes": 4450,
+   "packets": 258
+  },
+  "139": {
+   "bytes": 4542,
+   "packets": 270
+  },
+  "140": {
+   "bytes": 6117,
+   "packets": 241
+  },
+  "141": {
+   "bytes": 4957,
+   "packets": 228
+  },
+  "142": {
+   "bytes": 4528,
+   "packets": 254
+  },
+  "143": {
+   "bytes": 3900,
+   "packets": 137
+  },
+  "15": {
+   "bytes": 145,
+   "packets": 3
+  },
+  "16": {
+   "bytes": 1200,
+   "packets": 1
+  },
+  "1633": {
+   "bytes": 36,
+   "packets": 1
+  },
+  "1634": {
+   "bytes": 36,
+   "packets": 1
+  },
+  "1636": {
+   "bytes": 36,
+   "packets": 1
+  },
+  "1640": {
+   "bytes": 36,
+   "packets": 1
+  },
+  "1648": {
+   "bytes": 360,
+   "packets": 7
+  },
+  "1736": {
+   "bytes": 300,
+   "packets": 1
+  },
+  "1737": {
+   "bytes": 300,
+   "packets": 1
+  },
+  "1893": {
+   "bytes": 254,
+   "packets": 4
+  },
+  "1894": {
+   "bytes": 185,
+   "packets": 3
+  },
+  "1896": {
+   "bytes": 41,
+   "packets": 1
+  },
+  "19": {
+   "bytes": 58,
+   "packets": 1
+  },
+  "1900": {
+   "bytes": 149,
+   "packets": 2
+  },
+  "1930": {
+   "bytes": 558,
+   "packets": 8
+  },
+  "2": {
+   "bytes": 3699,
+   "packets": 27
+  },
+  "2096": {
+   "bytes": 64,
+   "packets": 2
+  },
+  "2097": {
+   "bytes": 18474,
+   "packets": 31
+  },
+  "2098": {
+   "bytes": 128,
+   "packets": 3
+  },
+  "2099": {
+   "bytes": 233,
+   "packets": 5
+  },
+  "21": {
+   "bytes": 134,
+   "packets": 3
+  },
+  "2100": {
+   "bytes": 5415,
+   "packets": 12
+  },
+  "2101": {
+   "bytes": 6653,
+   "packets": 17
+  },
+  "2102": {
+   "bytes": 149,
+   "packets": 3
+  },
+  "2103": {
+   "bytes": 405,
+   "packets": 5
+  },
+  "2104": {
+   "bytes": 741,
+   "packets": 9
+  },
+  "2105": {
+   "bytes": 211,
+   "packets": 3
+  },
+  "2106": {
+   "bytes": 45,
+   "packets": 1
+  },
+  "2107": {
+   "bytes": 122,
+   "packets": 2
+  },
+  "2109": {
+   "bytes": 48,
+   "packets": 1
+  },
+  "2114": {
+   "bytes": 2474,
+   "packets": 4
+  },
+  "2115": {
+   "bytes": 74,
+   "packets": 2
+  },
+  "2117": {
+   "bytes": 74,
+   "packets": 2
+  },
+  "2118": {
+   "bytes": 49,
+   "packets": 1
+  },
+  "2178": {
+   "bytes": 162,
+   "packets": 3
+  },
+  "2179": {
+   "bytes": 34,
+   "packets": 1
+  },
+  "2181": {
+   "bytes": 34,
+   "packets": 1
+  },
+  "2186": {
+   "bytes": 34,
+   "packets": 1
+  },
+  "2194": {
+   "bytes": 34,
+   "packets": 1
+  },
+  "2210": {
+   "bytes": 100,
+   "packets": 2
+  },
+  "2212": {
+   "bytes": 16989,
+   "packets": 23
+  },
+  "2213": {
+   "bytes": 327,
+   "packets": 6
+  },
+  "2215": {
+   "bytes": 191,
+   "packets": 4
+  },
+  "2219": {
+   "bytes": 457,
+   "packets": 6
+  },
+  "2220": {
+   "bytes": 286,
+   "packets": 2
+  },
+  "2225": {
+   "bytes": 23914,
+   "packets": 32
+  },
+  "2226": {
+   "bytes": 6710,
+   "packets": 9
+  },
+  "2227": {
+   "bytes": 4951,
+   "packets": 5
+  },
+  "2228": {
+   "bytes": 1423,
+   "packets": 6
+  },
+  "2229": {
+   "bytes": 21,
+   "packets": 1
+  },
+  "2231": {
+   "bytes": 21,
+   "packets": 1
+  },
+  "2232": {
+   "bytes": 194,
+   "packets": 4
+  },
+  "2234": {
+   "bytes": 21,
+   "packets": 1
+  },
+  "2241": {
+   "bytes": 42,
+   "packets": 2
+  },
+  "2255": {
+   "bytes": 21,
+   "packets": 1
+  },
+  "2284": {
+   "bytes": 34,
+   "packets": 1
+  },
+  "2285": {
+   "bytes": 34,
+   "packets": 1
+  },
+  "2287": {
+   "bytes": 100,
+   "packets": 2
+  },
+  "237": {
+   "bytes": 52049,
+   "packets": 76
+  },
+  "238": {
+   "bytes": 10061,
+   "packets": 19
+  },
+  "239": {
+   "bytes": 6720,
+   "packets": 13
+  },
+  "242": {
+   "bytes": 146,
+   "packets": 3
+  },
+  "247": {
+   "bytes": 97,
+   "packets": 2
+  },
+  "256": {
+   "bytes": 146,
+   "packets": 3
+  },
+  "2593": {
+   "bytes": 48,
+   "packets": 1
+  },
+  "2595": {
+   "bytes": 192,
+   "packets": 4
+  },
+  "2801": {
+   "bytes": 853,
+   "packets": 13
+  },
+  "2802": {
+   "bytes": 357,
+   "packets": 6
+  },
+  "2804": {
+   "bytes": 498,
+   "packets": 7
+  },
+  "2805": {
+   "bytes": 132,
+   "packets": 2
+  },
+  "2866": {
+   "bytes": 17752,
+   "packets": 36
+  },
+  "2867": {
+   "bytes": 36183,
+   "packets": 69
+  },
+  "2868": {
+   "bytes": 330,
+   "packets": 9
+  },
+  "2876": {
+   "bytes": 1200,
+   "packets": 1
+  },
+  "2929": {
+   "bytes": 389,
+   "packets": 5
+  },
+  "2930": {
+   "bytes": 45,
+   "packets": 1
+  },
+  "2932": {
+   "bytes": 45,
+   "packets": 1
+  },
+  "3": {
+   "bytes": 4143,
+   "packets": 29
+  },
+  "3058": {
+   "bytes": 31995,
+   "packets": 55
+  },
+  "33": {
+   "bytes": 145,
+   "packets": 3
+  },
+  "373": {
+   "bytes": 7551,
+   "packets": 7
+  },
+  "374": {
+   "bytes": 5838,
+   "packets": 5
+  },
+  "4": {
+   "bytes": 766,
+   "packets": 15
+  },
+  "456": {
+   "bytes": 60,
+   "packets": 2
+  },
+  "457": {
+   "bytes": 328,
+   "packets": 6
+  },
+  "458": {
+   "bytes": 68,
+   "packets": 2
+  },
+  "460": {
+   "bytes": 162,
+   "packets": 3
+  },
+  "461": {
+   "bytes": 34,
+   "packets": 1
+  },
+  "5": {
+   "bytes": 30668,
+   "packets": 66
+  },
+  "6": {
+   "bytes": 1842,
+   "packets": 26
+  },
+  "631": {
+   "bytes": 56,
+   "packets": 2
+  },
+  "632": {
+   "bytes": 31445,
+   "packets": 35
+  },
+  "633": {
+   "bytes": 21279,
+   "packets": 32
+  },
+  "634": {
+   "bytes": 1200,
+   "packets": 1
+  },
+  "635": {
+   "bytes": 136,
+   "packets": 1
+  },
+  "639": {
+   "bytes": 58,
+   "packets": 1
+  },
+  "672": {
+   "bytes": 0,
+   "packets": 1
+  },
+  "674": {
+   "bytes": 0,
+   "packets": 1
+  },
+  "691": {
+   "bytes": 0,
+   "packets": 1
+  },
+  "7": {
+   "bytes": 867,
+   "packets": 9
+  },
+  "70": {
+   "bytes": 864,
+   "packets": 18
+  },
+  "71": {
+   "bytes": 408,
+   "packets": 15
+  },
+  "72": {
+   "bytes": 1696,
+   "packets": 61
+  },
+  "73": {
+   "bytes": 2776,
+   "packets": 67
+  },
+  "74": {
+   "bytes": 3440,
+   "packets": 80
+  },
+  "75": {
+   "bytes": 2076,
+   "packets": 71
+  },
+  "76": {
+   "bytes": 1576,
+   "packets": 60
+  },
+  "77": {
+   "bytes": 3317,
+   "packets": 160
+  },
+  "78": {
+   "bytes": 0,
+   "packets": 2
+  },
+  "79": {
+   "bytes": 780,
+   "packets": 50
+  },
+  "8": {
+   "bytes": 964,
+   "packets": 13
+  },
+  "80": {
+   "bytes": 866,
+   "packets": 22
+  },
+  "81": {
+   "bytes": 168,
+   "packets": 7
+  },
+  "82": {
+   "bytes": 276,
+   "packets": 7
+  },
+  "83": {
+   "bytes": 236,
+   "packets": 19
+  },
+  "84": {
+   "bytes": 168,
+   "packets": 7
+  },
+  "85": {
+   "bytes": 336,
+   "packets": 11
+  },
+  "86": {
+   "bytes": 1862,
+   "packets": 28
+  },
+  "87": {
+   "bytes": 5618,
+   "packets": 107
+  },
+  "88": {
+   "bytes": 5435,
+   "packets": 80
+  },
+  "89": {
+   "bytes": 7229,
+   "packets": 141
+  },
+  "9": {
+   "bytes": 44757,
+   "packets": 73
+  },
+  "90": {
+   "bytes": 5802,
+   "packets": 67
+  },
+  "91": {
+   "bytes": 3821,
+   "packets": 127
+  },
+  "92": {
+   "bytes": 3864,
+   "packets": 154
+  },
+  "93": {
+   "bytes": 3160,
+   "packets": 192
+  },
+  "94": {
+   "bytes": 3756,
+   "packets": 355
+  },
+  "95": {
+   "bytes": 6444,
+   "packets": 290
+  },
+  "96": {
+   "bytes": 2644,
+   "packets": 186
+  },
+  "97": {
+   "bytes": 20664,
+   "packets": 318
+  },
+  "98": {
+   "bytes": 2056,
+   "packets": 298
+  },
+  "99": {
+   "bytes": 7108,
+   "packets": 228
+  },
+  "993": {
+   "bytes": 26393,
+   "packets": 59
+  },
+  "994": {
+   "bytes": 8509,
+   "packets": 32
+  },
+  "995": {
+   "bytes": 487,
+   "packets": 2
+  },
+  "996": {
+   "bytes": 1278,
+   "packets": 3
+  },
+  "998": {
+   "bytes": 487,
+   "packets": 2
+  }
+ },
+ "runDir": "/tmp/h2run.K1GDdx",
+ "summaries": {},
+ "tsvJoinGapS": 49,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-09T22:14:38Z",
+  "elapsed_ms": "118142",
+  "loss_pct": "80.0",
+  "note": "flutter could not attach to the device",
+  "packets": "2210",
+  "profile": "loss60",
+  "recovery_ms": "-",
+  "rtt_ms": "0.984",
+  "test": "sla_thresholds_test.dart",
+  "verdict": "TOOLING/NO-ATTACH"
+ }
+}

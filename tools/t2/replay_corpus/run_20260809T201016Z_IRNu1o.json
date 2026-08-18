@@ -1,0 +1,25 @@
+{
+ "capturedUtc": "2026-08-09T20:10:16Z",
+ "events": [],
+ "packetSeries": {},
+ "runDir": "/tmp/h2run.IRNu1o",
+ "summaries": {},
+ "tsvJoinGapS": 241,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-09T20:06:16Z",
+  "elapsed_ms": "378899",
+  "loss_pct": "80.0",
+  "note": "devicectl launch denied -> Xcode fallback (mDNS-only, dead on en6); killed early after 2 retries",
+  "packets": "0",
+  "profile": "loss60",
+  "recovery_ms": "-",
+  "rtt_ms": "0.730",
+  "test": "video_survival_test.dart",
+  "verdict": "TOOLING/NO-ATTACH"
+ }
+}

@@ -1,0 +1,540 @@
+{
+ "capturedUtc": "2026-08-11T09:03:10Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 6
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 6
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 6
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 7
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 14
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 24
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 305,
+   "packets": 4
+  },
+  "1": {
+   "bytes": 57008,
+   "packets": 109
+  },
+  "100": {
+   "bytes": 1224,
+   "packets": 32
+  },
+  "101": {
+   "bytes": 1224,
+   "packets": 30
+  },
+  "102": {
+   "bytes": 1192,
+   "packets": 30
+  },
+  "103": {
+   "bytes": 1484,
+   "packets": 28
+  },
+  "104": {
+   "bytes": 1492,
+   "packets": 27
+  },
+  "105": {
+   "bytes": 1624,
+   "packets": 26
+  },
+  "106": {
+   "bytes": 1524,
+   "packets": 27
+  },
+  "107": {
+   "bytes": 1624,
+   "packets": 28
+  },
+  "108": {
+   "bytes": 1164,
+   "packets": 29
+  },
+  "109": {
+   "bytes": 1000,
+   "packets": 30
+  },
+  "110": {
+   "bytes": 100,
+   "packets": 1
+  },
+  "113": {
+   "bytes": 60,
+   "packets": 2
+  },
+  "119": {
+   "bytes": 510,
+   "packets": 2
+  },
+  "123": {
+   "bytes": 388,
+   "packets": 18
+  },
+  "2": {
+   "bytes": 80220,
+   "packets": 73
+  },
+  "3": {
+   "bytes": 622,
+   "packets": 6
+  },
+  "40": {
+   "bytes": 17223,
+   "packets": 39
+  },
+  "41": {
+   "bytes": 1020,
+   "packets": 4
+  },
+  "43": {
+   "bytes": 510,
+   "packets": 2
+  },
+  "45": {
+   "bytes": 510,
+   "packets": 2
+  },
+  "50": {
+   "bytes": 510,
+   "packets": 2
+  },
+  "60": {
+   "bytes": 510,
+   "packets": 2
+  },
+  "80": {
+   "bytes": 510,
+   "packets": 2
+  },
+  "87": {
+   "bytes": 7877,
+   "packets": 130
+  },
+  "88": {
+   "bytes": 672,
+   "packets": 8
+  },
+  "89": {
+   "bytes": 672,
+   "packets": 8
+  },
+  "92": {
+   "bytes": 672,
+   "packets": 8
+  },
+  "93": {
+   "bytes": 2668,
+   "packets": 86
+  },
+  "94": {
+   "bytes": 404,
+   "packets": 3
+  },
+  "95": {
+   "bytes": 464,
+   "packets": 10
+  },
+  "96": {
+   "bytes": 1256,
+   "packets": 30
+  },
+  "97": {
+   "bytes": 1224,
+   "packets": 30
+  },
+  "98": {
+   "bytes": 1224,
+   "packets": 30
+  },
+  "99": {
+   "bytes": 1192,
+   "packets": 30
+  }
+ },
+ "runDir": "/tmp/h2run.b05j4H",
+ "summaries": {
+  "SLA": [
+   {
+    "ackProbeErrors": 0,
+    "ackProbes": 20,
+    "ackRttLossPct": 0,
+    "ackRttLost": 0,
+    "ackRttMaxMs": 64,
+    "ackRttMinMs": 5,
+    "ackRttP50Ms": 18.0,
+    "ackRttP95Ms": 20.0,
+    "ackRttSamples": 20,
+    "adaptationDecisions": 0,
+    "adaptationLog": [],
+    "adaptationProfileInitiator": "medium",
+    "adaptationProfileReceiver": "medium",
+    "bothConnected": true,
+    "connectMs": 1641,
+    "mediaMode": "noLocalAudio",
+    "notes": [],
+    "recoveryConnectedMs": 94,
+    "recoveryFirstCandidateMs": 94,
+    "recoveryNewCandidates": 2,
+    "recoveryStatusLog": [],
+    "stillConnectedAtEnd": true
+   }
+  ]
+ },
+ "tsvJoinGapS": 3,
+ "tsvRow": {
+  "ack_loss": "0",
+  "ack_p50": "18.0",
+  "ack_p95": "20.0",
+  "alive": "True",
+  "connect_ms": "1641",
+  "date": "2026-08-11T09:03:13Z",
+  "elapsed_ms": "290385",
+  "loss_pct": "0.0",
+  "note": "criterion=sla; All tests passed!",
+  "packets": "928",
+  "profile": "clean",
+  "recovery_ms": "94",
+  "rtt_ms": "1.162",
+  "test": "sla_thresholds_test.dart",
+  "verdict": "PASS"
+ }
+}

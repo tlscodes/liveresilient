@@ -50,13 +50,13 @@ void main() {
       for (var i = 0; i < totalCycles; i++) {
         final callId = 'e2e-soak-call-$i';
         final initiator = E2eCallStack.build(
-          relayPort: relay.port,
+          endpoint: relay.endpoint,
           callId: callId,
           role: CallRole.initiator,
           mode: mode,
         );
         final receiver = E2eCallStack.build(
-          relayPort: relay.port,
+          endpoint: relay.endpoint,
           callId: callId,
           role: CallRole.receiver,
           mode: mode,
@@ -124,10 +124,11 @@ void main() {
         }
 
         await waitForActiveRooms(relay.server, 0);
-        if (relay.server.activeRooms != 0) {
+        final localServer = relay.server;
+        if (localServer != null && localServer.activeRooms != 0) {
           errors.add(
             'cycle $i: relay room leaked '
-            '(activeRooms=${relay.server.activeRooms})',
+            '(activeRooms=${localServer.activeRooms})',
           );
         }
 

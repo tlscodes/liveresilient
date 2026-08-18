@@ -34,6 +34,24 @@ enum ShimProbeState {
   presentBackendLinked,
 }
 
+/// What a peer did with a configuration this process offered it.
+///
+/// [applied] and [ignored] are both "the exchange finished", and keeping them
+/// apart is the only reason this enum exists: a caller that treats finishing as
+/// success learns nothing about the capability under test. [rejected] is a
+/// failure that still proves the peer read the configuration, which is a
+/// different fact again from never having been understood.
+enum EchProbeOutcome {
+  applied,
+  ignored,
+  rejected,
+  timedOut,
+  unreachable,
+  badArgument,
+  internalFailure,
+  noBackendInThisProcess,
+}
+
 /// A live probe of this process. Construct once and ask.
 class ShimProbe {
   ShimProbe._(this._bindings, this.state);
@@ -104,6 +122,59 @@ class ShimProbe {
       return Uint8List.fromList(buffer.asTypedList(written));
     } finally {
       pkg_ffi.calloc.free(buffer);
+    }
+  }
+
+  /// Asks a cooperating peer at [host]:[port] to honour [configList] while
+  /// this side asks for [innerName], and reports what the peer did with it.
+  ///
+  /// The wait is bounded and has no "forever": a caller that wants to keep
+  /// trying writes that loop where a reader can see it.
+  EchProbeOutcome echProbe({
+    required String host,
+    required int port,
+    required Uint8List configList,
+    required String innerName,
+    Duration timeout = const Duration(seconds: 10),
+  }) {
+    final bindings = _bindings;
+    if (bindings == null) return EchProbeOutcome.noBackendInThisProcess;
+
+    final hostPtr = host.toNativeUtf8();
+    final namePtr = innerName.toNativeUtf8();
+    final configPtr = pkg_ffi.calloc<ffi.Uint8>(configList.length);
+    try {
+      configPtr.asTypedList(configList.length).setAll(0, configList);
+      final code = bindings.pt_shim_ech_probe(
+        hostPtr.cast<ffi.Char>(),
+        port,
+        configPtr,
+        configList.length,
+        namePtr.cast<ffi.Char>(),
+        timeout.inMilliseconds,
+      );
+      switch (code) {
+        case PT_SHIM_ECH_APPLIED:
+          return EchProbeOutcome.applied;
+        case PT_SHIM_ECH_IGNORED:
+          return EchProbeOutcome.ignored;
+        case PT_SHIM_ERR_ECH_REJECTED:
+          return EchProbeOutcome.rejected;
+        case PT_SHIM_ERR_TIMEOUT:
+          return EchProbeOutcome.timedOut;
+        case PT_SHIM_ERR_UNREACHABLE:
+          return EchProbeOutcome.unreachable;
+        case PT_SHIM_ERR_ARG:
+          return EchProbeOutcome.badArgument;
+        case PT_SHIM_ERR_UNLINKED:
+          return EchProbeOutcome.noBackendInThisProcess;
+        default:
+          return EchProbeOutcome.internalFailure;
+      }
+    } finally {
+      pkg_ffi.calloc.free(configPtr);
+      pkg_ffi.calloc.free(namePtr);
+      pkg_ffi.calloc.free(hostPtr);
     }
   }
 }

@@ -1,6 +1,30 @@
-# STATUS — DESTINATION REACHED (2026-07-22)
+# STATUS — a dated journal, newest entry first
 
-Every roadmap phase (1, 2a, 2b) is closed. Final measured workspace gate:
+> **How to read this file (added 2026-07-31, resolving documented contradictions 1, 2 and 6).**
+> This is an append-only journal. **Every heading below is a snapshot of the day it
+> names, not a statement about today.** The current state of the project lives in
+> `docs/PROJECT_STATE_2026-07-29.md`; the current phase status lives in
+> `docs/EXECUTION_PLAYBOOK.md`. Where they disagree with anything below, they win.
+>
+> Three specific corrections, because the stale text is kept rather than deleted:
+>
+> - **"DESTINATION REACHED" meant the 2026-07-22 roadmap (phases 1, 2a, 2b), not the
+>   product.** Phases 9 and 11 of `docs/EXECUTION_PLAYBOOK.md` are a different,
+>   longer numbering and are both **OPEN**, dated, and device/infra-blocked. The
+>   playbook is authoritative on phase status because its entries carry dates and
+>   named blockers; this file's headline did not.
+> - **Test totals are per-date snapshots and do not sum:** 946 (2026-07-22) →
+>   1632 → **2087 (2026-07-29, `tools/workspace_gate.sh`, EXIT=0)**. The 946 figure
+>   predates three packages that did not exist yet. 2087 is the current number.
+> - **Sealed `CallState` is DONE** (2026-07-22 entry). The "deferred by design" line
+>   in the 2026-07-19 entry below was true when written and is now superseded —
+>   kept, per archive-don't-delete, but it is not current.
+
+---
+
+# STATUS — roadmap phases 1/2a/2b closed (2026-07-22)
+
+Every roadmap phase (1, 2a, 2b) is closed. Measured workspace gate that day:
 
 ```
 apps/reference_app        56   packages/media_webrtc          82
@@ -231,5 +255,7 @@ tests (idempotency, status mapping, resolver actually used, echo round-trip).
   `getUserMedia` without a public-API change).
 - **2026-07-18** — real-device / real-network call run (TURN, push wake) still requires
   physical devices and deployed infra; all current numbers are simulator/pure-logic.
-- Deferred by design: sealed-`CallState` redesign (breaks every importer — needs a
-  major-version decision, not a hardening pass).
+- ~~Deferred by design: sealed-`CallState` redesign (breaks every importer — needs a
+  major-version decision, not a hardening pass).~~ **SUPERSEDED 2026-07-22** — the
+  redesign landed the same week (see the 2026-07-22 entry, PHASE 2b). Struck, not
+  deleted.

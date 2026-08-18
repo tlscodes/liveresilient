@@ -34,7 +34,10 @@ import 'package:native_transport/native_transport.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('4-arm64 the process composes a first record on this device',
+  // Not named after any gate id, for the same reason as the sibling probe: the
+  // ledger treats a leading gate id as a claim of proof, and this measurement
+  // feeds a verdict rather than closing a numbered gate.
+  testWidgets('measurement: the process composes a first record on this device',
       (WidgetTester tester) async {
     final probe = ShimProbe.ofThisProcess();
 

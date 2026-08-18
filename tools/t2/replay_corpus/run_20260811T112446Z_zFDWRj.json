@@ -1,0 +1,802 @@
+{
+ "capturedUtc": "2026-08-11T11:24:46Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 2
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 2
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "detail": "[CallControllerException(path_unhealthy): External path-health monitor scored the active...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 4
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 5
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 337,
+   "packets": 4
+  },
+  "100": {
+   "bytes": 19318,
+   "packets": 235
+  },
+  "101": {
+   "bytes": 19921,
+   "packets": 242
+  },
+  "102": {
+   "bytes": 20325,
+   "packets": 248
+  },
+  "103": {
+   "bytes": 19460,
+   "packets": 239
+  },
+  "104": {
+   "bytes": 19719,
+   "packets": 242
+  },
+  "105": {
+   "bytes": 19256,
+   "packets": 235
+  },
+  "106": {
+   "bytes": 19669,
+   "packets": 241
+  },
+  "107": {
+   "bytes": 20123,
+   "packets": 245
+  },
+  "108": {
+   "bytes": 19342,
+   "packets": 236
+  },
+  "109": {
+   "bytes": 19739,
+   "packets": 242
+  },
+  "110": {
+   "bytes": 19326,
+   "packets": 237
+  },
+  "111": {
+   "bytes": 19595,
+   "packets": 238
+  },
+  "112": {
+   "bytes": 20428,
+   "packets": 248
+  },
+  "113": {
+   "bytes": 19178,
+   "packets": 236
+  },
+  "114": {
+   "bytes": 19973,
+   "packets": 242
+  },
+  "115": {
+   "bytes": 19281,
+   "packets": 235
+  },
+  "116": {
+   "bytes": 19303,
+   "packets": 235
+  },
+  "117": {
+   "bytes": 20310,
+   "packets": 248
+  },
+  "118": {
+   "bytes": 19142,
+   "packets": 237
+  },
+  "119": {
+   "bytes": 20282,
+   "packets": 250
+  },
+  "120": {
+   "bytes": 19012,
+   "packets": 234
+  },
+  "121": {
+   "bytes": 19024,
+   "packets": 234
+  },
+  "122": {
+   "bytes": 20918,
+   "packets": 253
+  },
+  "123": {
+   "bytes": 19480,
+   "packets": 239
+  },
+  "124": {
+   "bytes": 19818,
+   "packets": 241
+  },
+  "125": {
+   "bytes": 19334,
+   "packets": 235
+  },
+  "126": {
+   "bytes": 19150,
+   "packets": 233
+  },
+  "127": {
+   "bytes": 20879,
+   "packets": 255
+  },
+  "128": {
+   "bytes": 18886,
+   "packets": 232
+  },
+  "129": {
+   "bytes": 19905,
+   "packets": 244
+  },
+  "130": {
+   "bytes": 19043,
+   "packets": 241
+  },
+  "131": {
+   "bytes": 19178,
+   "packets": 236
+  },
+  "132": {
+   "bytes": 20836,
+   "packets": 255
+  },
+  "133": {
+   "bytes": 18996,
+   "packets": 233
+  },
+  "134": {
+   "bytes": 19746,
+   "packets": 242
+  },
+  "135": {
+   "bytes": 19388,
+   "packets": 237
+  },
+  "136": {
+   "bytes": 19059,
+   "packets": 233
+  },
+  "137": {
+   "bytes": 20857,
+   "packets": 253
+  },
+  "138": {
+   "bytes": 18999,
+   "packets": 233
+  },
+  "139": {
+   "bytes": 20082,
+   "packets": 247
+  },
+  "140": {
+   "bytes": 19199,
+   "packets": 234
+  },
+  "141": {
+   "bytes": 19078,
+   "packets": 234
+  },
+  "142": {
+   "bytes": 21043,
+   "packets": 255
+  },
+  "143": {
+   "bytes": 18973,
+   "packets": 233
+  },
+  "144": {
+   "bytes": 19691,
+   "packets": 243
+  },
+  "145": {
+   "bytes": 19310,
+   "packets": 237
+  },
+  "146": {
+   "bytes": 19227,
+   "packets": 235
+  },
+  "147": {
+   "bytes": 20671,
+   "packets": 253
+  },
+  "148": {
+   "bytes": 19077,
+   "packets": 235
+  },
+  "149": {
+   "bytes": 19583,
+   "packets": 243
+  },
+  "150": {
+   "bytes": 19655,
+   "packets": 243
+  },
+  "151": {
+   "bytes": 18835,
+   "packets": 232
+  },
+  "152": {
+   "bytes": 20621,
+   "packets": 252
+  },
+  "153": {
+   "bytes": 19084,
+   "packets": 235
+  },
+  "154": {
+   "bytes": 19630,
+   "packets": 243
+  },
+  "155": {
+   "bytes": 18967,
+   "packets": 235
+  },
+  "156": {
+   "bytes": 18807,
+   "packets": 231
+  },
+  "157": {
+   "bytes": 20389,
+   "packets": 251
+  },
+  "158": {
+   "bytes": 19256,
+   "packets": 239
+  },
+  "159": {
+   "bytes": 19491,
+   "packets": 241
+  },
+  "160": {
+   "bytes": 18956,
+   "packets": 233
+  },
+  "161": {
+   "bytes": 19410,
+   "packets": 240
+  },
+  "162": {
+   "bytes": 20823,
+   "packets": 254
+  },
+  "163": {
+   "bytes": 18989,
+   "packets": 233
+  },
+  "164": {
+   "bytes": 19789,
+   "packets": 243
+  },
+  "165": {
+   "bytes": 19039,
+   "packets": 233
+  },
+  "166": {
+   "bytes": 18995,
+   "packets": 233
+  },
+  "167": {
+   "bytes": 20994,
+   "packets": 259
+  },
+  "168": {
+   "bytes": 19259,
+   "packets": 236
+  },
+  "169": {
+   "bytes": 19847,
+   "packets": 242
+  },
+  "170": {
+   "bytes": 19107,
+   "packets": 234
+  },
+  "171": {
+   "bytes": 19271,
+   "packets": 238
+  },
+  "172": {
+   "bytes": 20789,
+   "packets": 254
+  },
+  "173": {
+   "bytes": 19131,
+   "packets": 236
+  },
+  "174": {
+   "bytes": 19912,
+   "packets": 244
+  },
+  "175": {
+   "bytes": 18874,
+   "packets": 233
+  },
+  "176": {
+   "bytes": 19122,
+   "packets": 236
+  },
+  "177": {
+   "bytes": 20718,
+   "packets": 252
+  },
+  "178": {
+   "bytes": 18229,
+   "packets": 224
+  },
+  "179": {
+   "bytes": 5159,
+   "packets": 88
+  },
+  "2": {
+   "bytes": 349,
+   "packets": 4
+  },
+  "53": {
+   "bytes": 1088,
+   "packets": 49
+  },
+  "54": {
+   "bytes": 356,
+   "packets": 18
+  },
+  "55": {
+   "bytes": 8279,
+   "packets": 118
+  },
+  "56": {
+   "bytes": 11738,
+   "packets": 176
+  },
+  "57": {
+   "bytes": 73895,
+   "packets": 431
+  },
+  "58": {
+   "bytes": 49672,
+   "packets": 280
+  },
+  "59": {
+   "bytes": 20415,
+   "packets": 291
+  },
+  "60": {
+   "bytes": 19401,
+   "packets": 280
+  },
+  "61": {
+   "bytes": 21114,
+   "packets": 299
+  },
+  "62": {
+   "bytes": 17152,
+   "packets": 232
+  },
+  "63": {
+   "bytes": 17181,
+   "packets": 232
+  },
+  "64": {
+   "bytes": 17665,
+   "packets": 237
+  },
+  "65": {
+   "bytes": 16929,
+   "packets": 228
+  },
+  "66": {
+   "bytes": 18603,
+   "packets": 250
+  },
+  "67": {
+   "bytes": 17120,
+   "packets": 231
+  },
+  "68": {
+   "bytes": 17186,
+   "packets": 232
+  },
+  "69": {
+   "bytes": 17856,
+   "packets": 238
+  },
+  "70": {
+   "bytes": 16989,
+   "packets": 231
+  },
+  "71": {
+   "bytes": 18389,
+   "packets": 247
+  },
+  "72": {
+   "bytes": 17204,
+   "packets": 234
+  },
+  "73": {
+   "bytes": 17159,
+   "packets": 232
+  },
+  "74": {
+   "bytes": 18044,
+   "packets": 237
+  },
+  "75": {
+   "bytes": 18763,
+   "packets": 233
+  },
+  "76": {
+   "bytes": 20571,
+   "packets": 252
+  },
+  "77": {
+   "bytes": 19299,
+   "packets": 237
+  },
+  "78": {
+   "bytes": 19180,
+   "packets": 236
+  },
+  "79": {
+   "bytes": 19704,
+   "packets": 241
+  },
+  "80": {
+   "bytes": 19086,
+   "packets": 233
+  },
+  "81": {
+   "bytes": 20275,
+   "packets": 246
+  },
+  "82": {
+   "bytes": 19592,
+   "packets": 242
+  },
+  "83": {
+   "bytes": 19212,
+   "packets": 232
+  },
+  "84": {
+   "bytes": 19873,
+   "packets": 244
+  },
+  "85": {
+   "bytes": 19094,
+   "packets": 233
+  },
+  "86": {
+   "bytes": 20726,
+   "packets": 254
+  },
+  "87": {
+   "bytes": 19918,
+   "packets": 244
+  },
+  "88": {
+   "bytes": 19288,
+   "packets": 234
+  },
+  "89": {
+   "bytes": 20308,
+   "packets": 249
+  },
+  "90": {
+   "bytes": 19187,
+   "packets": 234
+  },
+  "91": {
+   "bytes": 19993,
+   "packets": 245
+  },
+  "92": {
+   "bytes": 20588,
+   "packets": 250
+  },
+  "93": {
+   "bytes": 19106,
+   "packets": 233
+  },
+  "94": {
+   "bytes": 19721,
+   "packets": 240
+  },
+  "95": {
+   "bytes": 19440,
+   "packets": 237
+  },
+  "96": {
+   "bytes": 19827,
+   "packets": 242
+  },
+  "97": {
+   "bytes": 20156,
+   "packets": 245
+  },
+  "98": {
+   "bytes": 19434,
+   "packets": 237
+  },
+  "99": {
+   "bytes": 20033,
+   "packets": 242
+  }
+ },
+ "runDir": "/tmp/h2run.zFDWRj",
+ "summaries": {
+  "MSG": [
+   {
+    "connectMs": 4378,
+    "mediaMode": "realAudio",
+    "notes": [],
+    "photoBytes": 98304,
+    "photoLane": "arq",
+    "photoTransport": "sctp",
+    "renegotiatedMs": 4407,
+    "retryAfterMs": 2600,
+    "stagedAnnounceDelivery": "delivered",
+    "stagedAnnounceMsgId": "msg-initiator-2273c6-7",
+    "stagedLaneBudgetBytesPerSec": 0,
+    "stagedPhotoBytes": 98304,
+    "stagedPreviewBytes": 15360,
+    "stagedStages": [
+     "announced"
+    ],
+    "stagedWindowMs": 120000,
+    "textCount": 5,
+    "textDelivered": 5,
+    "textMaxMs": 975,
+    "textP50Ms": 88.0,
+    "thumbHashBytes": 31,
+    "voiceBytes": 24576,
+    "voiceIntact": true,
+    "voiceMs": 813
+   }
+  ]
+ },
+ "tsvJoinGapS": 2,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-11T11:24:48Z",
+  "elapsed_ms": "291822",
+  "loss_pct": "0.0",
+  "note": "criterion=msg-survival(all delivered + intact; times recorded as baseline); photo not intact; text p50 88.0ms max 975ms; photo 98304B in Nonems; voice 24576B in 813ms; The following TimeoutException was thrown running a test: staged photo not delivered within 120s (srtt=0ms rttvar=0ms minRtt=-1ms rate=0kbps acked=0 retx=0) When the exception was thrown, this was the stack: #0      main.<anonymous closure>.<anonymous closure> (file:///Users/behnam/Downloads/voice_call_kit_v3/apps/reference_app/integration_test/messaging_survival_test.dart:570:32)",
+  "packets": "30096",
+  "profile": "normal",
+  "recovery_ms": "-",
+  "rtt_ms": "81.263",
+  "test": "messaging_survival_test.dart",
+  "verdict": "FAIL"
+ }
+}

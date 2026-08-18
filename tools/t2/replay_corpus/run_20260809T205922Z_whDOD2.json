@@ -1,0 +1,2697 @@
+{
+ "capturedUtc": "2026-08-09T20:59:22Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 9
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 10
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 10
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 12
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 20
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 21
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 21
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 21
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 21
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 23
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 23
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 23
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 23
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 35
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 36
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 38
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 43
+  },
+  {
+   "detail": "[CallControllerException(media_failed): Media connection became failed]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 43
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 44
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 44
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 44
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 47
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 47
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 48
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 49
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 49
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 49
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 49
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 49
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 51
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 51
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 51
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 52
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 67
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 67
+  },
+  {
+   "detail": "[CallControllerException(media_disconnected): Media connection stayed disconnected past ...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 70
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 76
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 76
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 83
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 83
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 86
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 87
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 94
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 95
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 98
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 98
+  },
+  {
+   "detail": "[CallControllerException(media_disconnected): Media connection stayed disconnected past ...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 102
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 114
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 114
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 117
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 118
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 131
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 131
+  },
+  {
+   "detail": "[CallControllerException(media_disconnected): Media connection stayed disconnected past ...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 133
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 135
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 135
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 137
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 137
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 139
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 139
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 139
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 144
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 144
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 157
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 157
+  },
+  {
+   "detail": "[CallControllerException(media_disconnected): Media connection stayed disconnected past ...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 158
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 168
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 169
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 172
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 172
+  },
+  {
+   "detail": "[CallControllerException(media_disconnected): Media connection stayed disconnected past ...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 191
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 191
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 191
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 202
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 203
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 209
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 209
+  },
+  {
+   "detail": "[CallControllerException(media_disconnected): Media connection stayed disconnected past ...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 211
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 216
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 217
+  },
+  {
+   "detail": "[CallControllerException(media_disconnected): Media connection stayed disconnected past ...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 236
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 242
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 242
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 242
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 242
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 242
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 244
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 244
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 264
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 264
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 267
+  },
+  {
+   "detail": "[CallControllerException(media_failed): Media connection became failed]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 267
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 270
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 271
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 289
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 289
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 341
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 341
+  },
+  {
+   "detail": "[CallControllerException(reconnect_connection_timeout): Media did not reconnect within t...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 352
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 357
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 357
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 412
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 412
+  },
+  {
+   "detail": "[CallControllerException(reconnect_connection_timeout): Media did not reconnect within t...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 435
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 437
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 437
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 448
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 449
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 462874,
+   "packets": 471
+  },
+  "1": {
+   "bytes": 2561,
+   "packets": 4
+  },
+  "10": {
+   "bytes": 96,
+   "packets": 2
+  },
+  "100": {
+   "bytes": 74,
+   "packets": 2
+  },
+  "101": {
+   "bytes": 162,
+   "packets": 2
+  },
+  "102": {
+   "bytes": 341,
+   "packets": 5
+  },
+  "103": {
+   "bytes": 37,
+   "packets": 1
+  },
+  "105": {
+   "bytes": 37,
+   "packets": 1
+  },
+  "109": {
+   "bytes": 37,
+   "packets": 1
+  },
+  "117": {
+   "bytes": 231,
+   "packets": 4
+  },
+  "118": {
+   "bytes": 37,
+   "packets": 1
+  },
+  "12": {
+   "bytes": 146,
+   "packets": 3
+  },
+  "120": {
+   "bytes": 560,
+   "packets": 6
+  },
+  "121": {
+   "bytes": 497,
+   "packets": 7
+  },
+  "122": {
+   "bytes": 51,
+   "packets": 1
+  },
+  "124": {
+   "bytes": 162,
+   "packets": 2
+  },
+  "13": {
+   "bytes": 146,
+   "packets": 3
+  },
+  "144": {
+   "bytes": 596,
+   "packets": 8
+  },
+  "145": {
+   "bytes": 185,
+   "packets": 3
+  },
+  "146": {
+   "bytes": 41,
+   "packets": 1
+  },
+  "147": {
+   "bytes": 41,
+   "packets": 1
+  },
+  "148": {
+   "bytes": 676,
+   "packets": 6
+  },
+  "150": {
+   "bytes": 41,
+   "packets": 1
+  },
+  "154": {
+   "bytes": 41,
+   "packets": 1
+  },
+  "156": {
+   "bytes": 320,
+   "packets": 3
+  },
+  "157": {
+   "bytes": 282,
+   "packets": 3
+  },
+  "158": {
+   "bytes": 251,
+   "packets": 2
+  },
+  "17": {
+   "bytes": 146,
+   "packets": 3
+  },
+  "183": {
+   "bytes": 504,
+   "packets": 19
+  },
+  "184": {
+   "bytes": 436,
+   "packets": 15
+  },
+  "185": {
+   "bytes": 0,
+   "packets": 19
+  },
+  "187": {
+   "bytes": 0,
+   "packets": 2
+  },
+  "191": {
+   "bytes": 0,
+   "packets": 2
+  },
+  "192": {
+   "bytes": 0,
+   "packets": 4
+  },
+  "193": {
+   "bytes": 40,
+   "packets": 2
+  },
+  "194": {
+   "bytes": 100,
+   "packets": 4
+  },
+  "195": {
+   "bytes": 376,
+   "packets": 8
+  },
+  "196": {
+   "bytes": 124,
+   "packets": 13
+  },
+  "197": {
+   "bytes": 1328,
+   "packets": 50
+  },
+  "198": {
+   "bytes": 1320,
+   "packets": 31
+  },
+  "199": {
+   "bytes": 1380,
+   "packets": 31
+  },
+  "2": {
+   "bytes": 14234,
+   "packets": 23
+  },
+  "200": {
+   "bytes": 1320,
+   "packets": 42
+  },
+  "201": {
+   "bytes": 1188,
+   "packets": 31
+  },
+  "202": {
+   "bytes": 1320,
+   "packets": 24
+  },
+  "203": {
+   "bytes": 1320,
+   "packets": 32
+  },
+  "204": {
+   "bytes": 1248,
+   "packets": 36
+  },
+  "205": {
+   "bytes": 1452,
+   "packets": 33
+  },
+  "206": {
+   "bytes": 1320,
+   "packets": 32
+  },
+  "207": {
+   "bytes": 1268,
+   "packets": 31
+  },
+  "208": {
+   "bytes": 1320,
+   "packets": 36
+  },
+  "209": {
+   "bytes": 1532,
+   "packets": 33
+  },
+  "21": {
+   "bytes": 194,
+   "packets": 4
+  },
+  "210": {
+   "bytes": 1320,
+   "packets": 31
+  },
+  "211": {
+   "bytes": 1320,
+   "packets": 29
+  },
+  "212": {
+   "bytes": 1188,
+   "packets": 16
+  },
+  "214": {
+   "bytes": 40,
+   "packets": 2
+  },
+  "215": {
+   "bytes": 60,
+   "packets": 7
+  },
+  "217": {
+   "bytes": 20,
+   "packets": 1
+  },
+  "218": {
+   "bytes": 5861,
+   "packets": 53
+  },
+  "219": {
+   "bytes": 7222,
+   "packets": 38
+  },
+  "220": {
+   "bytes": 2482,
+   "packets": 16
+  },
+  "221": {
+   "bytes": 6837,
+   "packets": 92
+  },
+  "222": {
+   "bytes": 8378,
+   "packets": 95
+  },
+  "223": {
+   "bytes": 9267,
+   "packets": 98
+  },
+  "224": {
+   "bytes": 9941,
+   "packets": 101
+  },
+  "225": {
+   "bytes": 12699,
+   "packets": 133
+  },
+  "226": {
+   "bytes": 14062,
+   "packets": 109
+  },
+  "227": {
+   "bytes": 8692,
+   "packets": 75
+  },
+  "228": {
+   "bytes": 8624,
+   "packets": 93
+  },
+  "229": {
+   "bytes": 10658,
+   "packets": 101
+  },
+  "23": {
+   "bytes": 171,
+   "packets": 3
+  },
+  "230": {
+   "bytes": 10288,
+   "packets": 88
+  },
+  "231": {
+   "bytes": 9984,
+   "packets": 81
+  },
+  "232": {
+   "bytes": 9904,
+   "packets": 81
+  },
+  "233": {
+   "bytes": 7399,
+   "packets": 74
+  },
+  "234": {
+   "bytes": 8442,
+   "packets": 79
+  },
+  "235": {
+   "bytes": 8206,
+   "packets": 74
+  },
+  "236": {
+   "bytes": 6232,
+   "packets": 78
+  },
+  "237": {
+   "bytes": 7186,
+   "packets": 67
+  },
+  "238": {
+   "bytes": 8003,
+   "packets": 77
+  },
+  "239": {
+   "bytes": 8076,
+   "packets": 72
+  },
+  "24": {
+   "bytes": 111,
+   "packets": 3
+  },
+  "240": {
+   "bytes": 8937,
+   "packets": 93
+  },
+  "241": {
+   "bytes": 7923,
+   "packets": 83
+  },
+  "242": {
+   "bytes": 8805,
+   "packets": 76
+  },
+  "243": {
+   "bytes": 8204,
+   "packets": 66
+  },
+  "244": {
+   "bytes": 9578,
+   "packets": 80
+  },
+  "245": {
+   "bytes": 10961,
+   "packets": 107
+  },
+  "246": {
+   "bytes": 8932,
+   "packets": 77
+  },
+  "247": {
+   "bytes": 9245,
+   "packets": 77
+  },
+  "248": {
+   "bytes": 9545,
+   "packets": 80
+  },
+  "249": {
+   "bytes": 9497,
+   "packets": 88
+  },
+  "25": {
+   "bytes": 143,
+   "packets": 3
+  },
+  "250": {
+   "bytes": 8760,
+   "packets": 116
+  },
+  "251": {
+   "bytes": 9208,
+   "packets": 110
+  },
+  "252": {
+   "bytes": 8420,
+   "packets": 67
+  },
+  "253": {
+   "bytes": 8398,
+   "packets": 71
+  },
+  "254": {
+   "bytes": 9601,
+   "packets": 84
+  },
+  "255": {
+   "bytes": 8772,
+   "packets": 75
+  },
+  "256": {
+   "bytes": 7892,
+   "packets": 67
+  },
+  "257": {
+   "bytes": 13082,
+   "packets": 147
+  },
+  "258": {
+   "bytes": 8911,
+   "packets": 77
+  },
+  "259": {
+   "bytes": 8652,
+   "packets": 77
+  },
+  "26": {
+   "bytes": 224,
+   "packets": 4
+  },
+  "260": {
+   "bytes": 4728,
+   "packets": 63
+  },
+  "261": {
+   "bytes": 5440,
+   "packets": 107
+  },
+  "262": {
+   "bytes": 6207,
+   "packets": 81
+  },
+  "263": {
+   "bytes": 6492,
+   "packets": 70
+  },
+  "264": {
+   "bytes": 7143,
+   "packets": 94
+  },
+  "265": {
+   "bytes": 6890,
+   "packets": 75
+  },
+  "266": {
+   "bytes": 6654,
+   "packets": 67
+  },
+  "267": {
+   "bytes": 7108,
+   "packets": 93
+  },
+  "268": {
+   "bytes": 10186,
+   "packets": 130
+  },
+  "269": {
+   "bytes": 5633,
+   "packets": 76
+  },
+  "270": {
+   "bytes": 6195,
+   "packets": 88
+  },
+  "271": {
+   "bytes": 5457,
+   "packets": 72
+  },
+  "272": {
+   "bytes": 4307,
+   "packets": 71
+  },
+  "273": {
+   "bytes": 5420,
+   "packets": 80
+  },
+  "274": {
+   "bytes": 5785,
+   "packets": 74
+  },
+  "275": {
+   "bytes": 7273,
+   "packets": 94
+  },
+  "276": {
+   "bytes": 5764,
+   "packets": 81
+  },
+  "277": {
+   "bytes": 5196,
+   "packets": 70
+  },
+  "278": {
+   "bytes": 5872,
+   "packets": 79
+  },
+  "279": {
+   "bytes": 5896,
+   "packets": 75
+  },
+  "280": {
+   "bytes": 5953,
+   "packets": 75
+  },
+  "281": {
+   "bytes": 5274,
+   "packets": 70
+  },
+  "282": {
+   "bytes": 5492,
+   "packets": 75
+  },
+  "283": {
+   "bytes": 8477,
+   "packets": 90
+  },
+  "284": {
+   "bytes": 6117,
+   "packets": 79
+  },
+  "285": {
+   "bytes": 5077,
+   "packets": 69
+  },
+  "286": {
+   "bytes": 5445,
+   "packets": 73
+  },
+  "287": {
+   "bytes": 7065,
+   "packets": 89
+  },
+  "288": {
+   "bytes": 10411,
+   "packets": 153
+  },
+  "289": {
+   "bytes": 7135,
+   "packets": 84
+  },
+  "29": {
+   "bytes": 96,
+   "packets": 2
+  },
+  "290": {
+   "bytes": 5498,
+   "packets": 74
+  },
+  "291": {
+   "bytes": 5971,
+   "packets": 80
+  },
+  "292": {
+   "bytes": 4604,
+   "packets": 80
+  },
+  "293": {
+   "bytes": 5112,
+   "packets": 73
+  },
+  "294": {
+   "bytes": 5551,
+   "packets": 72
+  },
+  "295": {
+   "bytes": 5096,
+   "packets": 68
+  },
+  "296": {
+   "bytes": 5799,
+   "packets": 77
+  },
+  "297": {
+   "bytes": 5579,
+   "packets": 73
+  },
+  "298": {
+   "bytes": 5970,
+   "packets": 82
+  },
+  "299": {
+   "bytes": 5813,
+   "packets": 76
+  },
+  "3": {
+   "bytes": 4720,
+   "packets": 24
+  },
+  "300": {
+   "bytes": 6668,
+   "packets": 86
+  },
+  "301": {
+   "bytes": 6424,
+   "packets": 81
+  },
+  "302": {
+   "bytes": 5739,
+   "packets": 73
+  },
+  "303": {
+   "bytes": 5279,
+   "packets": 71
+  },
+  "304": {
+   "bytes": 5506,
+   "packets": 77
+  },
+  "305": {
+   "bytes": 6000,
+   "packets": 82
+  },
+  "306": {
+   "bytes": 5963,
+   "packets": 74
+  },
+  "307": {
+   "bytes": 5092,
+   "packets": 68
+  },
+  "308": {
+   "bytes": 5481,
+   "packets": 72
+  },
+  "309": {
+   "bytes": 6148,
+   "packets": 91
+  },
+  "310": {
+   "bytes": 6331,
+   "packets": 117
+  },
+  "311": {
+   "bytes": 5961,
+   "packets": 83
+  },
+  "312": {
+   "bytes": 5851,
+   "packets": 80
+  },
+  "313": {
+   "bytes": 8002,
+   "packets": 103
+  },
+  "314": {
+   "bytes": 7387,
+   "packets": 83
+  },
+  "315": {
+   "bytes": 7810,
+   "packets": 81
+  },
+  "316": {
+   "bytes": 7954,
+   "packets": 82
+  },
+  "317": {
+   "bytes": 6691,
+   "packets": 78
+  },
+  "318": {
+   "bytes": 7360,
+   "packets": 83
+  },
+  "319": {
+   "bytes": 8614,
+   "packets": 99
+  },
+  "320": {
+   "bytes": 7534,
+   "packets": 82
+  },
+  "321": {
+   "bytes": 9489,
+   "packets": 96
+  },
+  "322": {
+   "bytes": 8177,
+   "packets": 82
+  },
+  "323": {
+   "bytes": 7879,
+   "packets": 83
+  },
+  "324": {
+   "bytes": 7534,
+   "packets": 76
+  },
+  "325": {
+   "bytes": 7546,
+   "packets": 87
+  },
+  "326": {
+   "bytes": 7059,
+   "packets": 75
+  },
+  "327": {
+   "bytes": 7230,
+   "packets": 76
+  },
+  "328": {
+   "bytes": 6453,
+   "packets": 70
+  },
+  "329": {
+   "bytes": 6795,
+   "packets": 79
+  },
+  "330": {
+   "bytes": 6993,
+   "packets": 77
+  },
+  "331": {
+   "bytes": 7524,
+   "packets": 88
+  },
+  "332": {
+   "bytes": 7160,
+   "packets": 76
+  },
+  "333": {
+   "bytes": 7243,
+   "packets": 83
+  },
+  "334": {
+   "bytes": 8931,
+   "packets": 96
+  },
+  "335": {
+   "bytes": 8069,
+   "packets": 83
+  },
+  "336": {
+   "bytes": 6364,
+   "packets": 68
+  },
+  "337": {
+   "bytes": 5714,
+   "packets": 69
+  },
+  "338": {
+   "bytes": 6078,
+   "packets": 71
+  },
+  "339": {
+   "bytes": 5854,
+   "packets": 68
+  },
+  "34": {
+   "bytes": 14867,
+   "packets": 20
+  },
+  "340": {
+   "bytes": 6756,
+   "packets": 76
+  },
+  "341": {
+   "bytes": 6010,
+   "packets": 73
+  },
+  "342": {
+   "bytes": 4830,
+   "packets": 63
+  },
+  "343": {
+   "bytes": 5534,
+   "packets": 82
+  },
+  "344": {
+   "bytes": 5711,
+   "packets": 73
+  },
+  "345": {
+   "bytes": 6468,
+   "packets": 85
+  },
+  "346": {
+   "bytes": 8835,
+   "packets": 121
+  },
+  "347": {
+   "bytes": 6569,
+   "packets": 75
+  },
+  "348": {
+   "bytes": 6607,
+   "packets": 74
+  },
+  "349": {
+   "bytes": 6331,
+   "packets": 67
+  },
+  "35": {
+   "bytes": 261,
+   "packets": 6
+  },
+  "350": {
+   "bytes": 7771,
+   "packets": 88
+  },
+  "351": {
+   "bytes": 6368,
+   "packets": 71
+  },
+  "352": {
+   "bytes": 5828,
+   "packets": 70
+  },
+  "353": {
+   "bytes": 6879,
+   "packets": 86
+  },
+  "354": {
+   "bytes": 6395,
+   "packets": 75
+  },
+  "355": {
+   "bytes": 6122,
+   "packets": 71
+  },
+  "356": {
+   "bytes": 7225,
+   "packets": 81
+  },
+  "357": {
+   "bytes": 8451,
+   "packets": 103
+  },
+  "358": {
+   "bytes": 7412,
+   "packets": 91
+  },
+  "359": {
+   "bytes": 6289,
+   "packets": 70
+  },
+  "36": {
+   "bytes": 1448,
+   "packets": 22
+  },
+  "360": {
+   "bytes": 6859,
+   "packets": 73
+  },
+  "361": {
+   "bytes": 6816,
+   "packets": 77
+  },
+  "362": {
+   "bytes": 7876,
+   "packets": 82
+  },
+  "363": {
+   "bytes": 7170,
+   "packets": 78
+  },
+  "364": {
+   "bytes": 6362,
+   "packets": 72
+  },
+  "365": {
+   "bytes": 7013,
+   "packets": 78
+  },
+  "366": {
+   "bytes": 6841,
+   "packets": 74
+  },
+  "367": {
+   "bytes": 8231,
+   "packets": 87
+  },
+  "368": {
+   "bytes": 6655,
+   "packets": 78
+  },
+  "369": {
+   "bytes": 6318,
+   "packets": 70
+  },
+  "37": {
+   "bytes": 814,
+   "packets": 15
+  },
+  "370": {
+   "bytes": 6763,
+   "packets": 72
+  },
+  "371": {
+   "bytes": 7719,
+   "packets": 82
+  },
+  "372": {
+   "bytes": 7467,
+   "packets": 81
+  },
+  "373": {
+   "bytes": 5998,
+   "packets": 65
+  },
+  "374": {
+   "bytes": 6728,
+   "packets": 73
+  },
+  "375": {
+   "bytes": 7120,
+   "packets": 86
+  },
+  "376": {
+   "bytes": 6581,
+   "packets": 77
+  },
+  "377": {
+   "bytes": 7156,
+   "packets": 77
+  },
+  "378": {
+   "bytes": 6400,
+   "packets": 76
+  },
+  "379": {
+   "bytes": 7680,
+   "packets": 85
+  },
+  "38": {
+   "bytes": 68,
+   "packets": 2
+  },
+  "380": {
+   "bytes": 9012,
+   "packets": 106
+  },
+  "381": {
+   "bytes": 7325,
+   "packets": 79
+  },
+  "382": {
+   "bytes": 5890,
+   "packets": 72
+  },
+  "383": {
+   "bytes": 4431,
+   "packets": 110
+  },
+  "384": {
+   "bytes": 3748,
+   "packets": 130
+  },
+  "385": {
+   "bytes": 5008,
+   "packets": 153
+  },
+  "386": {
+   "bytes": 7269,
+   "packets": 142
+  },
+  "387": {
+   "bytes": 6867,
+   "packets": 89
+  },
+  "388": {
+   "bytes": 6714,
+   "packets": 85
+  },
+  "389": {
+   "bytes": 8251,
+   "packets": 100
+  },
+  "39": {
+   "bytes": 333,
+   "packets": 6
+  },
+  "390": {
+   "bytes": 8478,
+   "packets": 119
+  },
+  "391": {
+   "bytes": 7316,
+   "packets": 100
+  },
+  "392": {
+   "bytes": 6164,
+   "packets": 78
+  },
+  "393": {
+   "bytes": 7506,
+   "packets": 106
+  },
+  "394": {
+   "bytes": 4646,
+   "packets": 95
+  },
+  "395": {
+   "bytes": 4161,
+   "packets": 56
+  },
+  "396": {
+   "bytes": 4945,
+   "packets": 59
+  },
+  "397": {
+   "bytes": 5717,
+   "packets": 71
+  },
+  "398": {
+   "bytes": 5634,
+   "packets": 70
+  },
+  "399": {
+   "bytes": 8603,
+   "packets": 124
+  },
+  "4": {
+   "bytes": 19493,
+   "packets": 41
+  },
+  "40": {
+   "bytes": 386,
+   "packets": 7
+  },
+  "400": {
+   "bytes": 9600,
+   "packets": 147
+  },
+  "401": {
+   "bytes": 5887,
+   "packets": 74
+  },
+  "402": {
+   "bytes": 6348,
+   "packets": 78
+  },
+  "403": {
+   "bytes": 5505,
+   "packets": 64
+  },
+  "404": {
+   "bytes": 7532,
+   "packets": 92
+  },
+  "405": {
+   "bytes": 8640,
+   "packets": 135
+  },
+  "406": {
+   "bytes": 6675,
+   "packets": 79
+  },
+  "407": {
+   "bytes": 5335,
+   "packets": 68
+  },
+  "408": {
+   "bytes": 6015,
+   "packets": 76
+  },
+  "409": {
+   "bytes": 7621,
+   "packets": 97
+  },
+  "41": {
+   "bytes": 268,
+   "packets": 5
+  },
+  "410": {
+   "bytes": 7203,
+   "packets": 91
+  },
+  "411": {
+   "bytes": 5512,
+   "packets": 74
+  },
+  "412": {
+   "bytes": 5273,
+   "packets": 70
+  },
+  "413": {
+   "bytes": 5884,
+   "packets": 83
+  },
+  "414": {
+   "bytes": 5187,
+   "packets": 71
+  },
+  "415": {
+   "bytes": 5868,
+   "packets": 78
+  },
+  "416": {
+   "bytes": 8603,
+   "packets": 121
+  },
+  "417": {
+   "bytes": 7990,
+   "packets": 117
+  },
+  "418": {
+   "bytes": 10346,
+   "packets": 98
+  },
+  "419": {
+   "bytes": 7456,
+   "packets": 98
+  },
+  "42": {
+   "bytes": 161,
+   "packets": 3
+  },
+  "420": {
+   "bytes": 6745,
+   "packets": 85
+  },
+  "421": {
+   "bytes": 7676,
+   "packets": 94
+  },
+  "422": {
+   "bytes": 7120,
+   "packets": 86
+  },
+  "423": {
+   "bytes": 6981,
+   "packets": 78
+  },
+  "424": {
+   "bytes": 6427,
+   "packets": 77
+  },
+  "425": {
+   "bytes": 7673,
+   "packets": 82
+  },
+  "426": {
+   "bytes": 6619,
+   "packets": 76
+  },
+  "427": {
+   "bytes": 7158,
+   "packets": 80
+  },
+  "428": {
+   "bytes": 7222,
+   "packets": 85
+  },
+  "429": {
+   "bytes": 6155,
+   "packets": 74
+  },
+  "430": {
+   "bytes": 7130,
+   "packets": 79
+  },
+  "431": {
+   "bytes": 6389,
+   "packets": 72
+  },
+  "432": {
+   "bytes": 7006,
+   "packets": 74
+  },
+  "433": {
+   "bytes": 7599,
+   "packets": 80
+  },
+  "434": {
+   "bytes": 7346,
+   "packets": 78
+  },
+  "435": {
+   "bytes": 7219,
+   "packets": 77
+  },
+  "436": {
+   "bytes": 7021,
+   "packets": 80
+  },
+  "437": {
+   "bytes": 7654,
+   "packets": 90
+  },
+  "438": {
+   "bytes": 6250,
+   "packets": 78
+  },
+  "439": {
+   "bytes": 6284,
+   "packets": 72
+  },
+  "440": {
+   "bytes": 6950,
+   "packets": 79
+  },
+  "441": {
+   "bytes": 7379,
+   "packets": 83
+  },
+  "442": {
+   "bytes": 6603,
+   "packets": 76
+  },
+  "443": {
+   "bytes": 5677,
+   "packets": 68
+  },
+  "444": {
+   "bytes": 6247,
+   "packets": 76
+  },
+  "445": {
+   "bytes": 6628,
+   "packets": 75
+  },
+  "446": {
+   "bytes": 7131,
+   "packets": 80
+  },
+  "447": {
+   "bytes": 6405,
+   "packets": 75
+  },
+  "448": {
+   "bytes": 7385,
+   "packets": 76
+  },
+  "449": {
+   "bytes": 6404,
+   "packets": 74
+  },
+  "450": {
+   "bytes": 6983,
+   "packets": 78
+  },
+  "451": {
+   "bytes": 9229,
+   "packets": 108
+  },
+  "452": {
+   "bytes": 6574,
+   "packets": 75
+  },
+  "453": {
+   "bytes": 6579,
+   "packets": 79
+  },
+  "454": {
+   "bytes": 6477,
+   "packets": 76
+  },
+  "455": {
+   "bytes": 6379,
+   "packets": 123
+  },
+  "456": {
+   "bytes": 6510,
+   "packets": 79
+  },
+  "457": {
+   "bytes": 6589,
+   "packets": 76
+  },
+  "458": {
+   "bytes": 8355,
+   "packets": 84
+  },
+  "459": {
+   "bytes": 7215,
+   "packets": 76
+  },
+  "460": {
+   "bytes": 7623,
+   "packets": 86
+  },
+  "461": {
+   "bytes": 6712,
+   "packets": 91
+  },
+  "462": {
+   "bytes": 6700,
+   "packets": 79
+  },
+  "463": {
+   "bytes": 6771,
+   "packets": 74
+  },
+  "464": {
+   "bytes": 7202,
+   "packets": 81
+  },
+  "465": {
+   "bytes": 7484,
+   "packets": 82
+  },
+  "466": {
+   "bytes": 7399,
+   "packets": 79
+  },
+  "467": {
+   "bytes": 8367,
+   "packets": 91
+  },
+  "468": {
+   "bytes": 6583,
+   "packets": 71
+  },
+  "469": {
+   "bytes": 7459,
+   "packets": 83
+  },
+  "470": {
+   "bytes": 6354,
+   "packets": 71
+  },
+  "471": {
+   "bytes": 6910,
+   "packets": 72
+  },
+  "472": {
+   "bytes": 8833,
+   "packets": 104
+  },
+  "473": {
+   "bytes": 6550,
+   "packets": 76
+  },
+  "474": {
+   "bytes": 6802,
+   "packets": 76
+  },
+  "475": {
+   "bytes": 8869,
+   "packets": 94
+  },
+  "476": {
+   "bytes": 6353,
+   "packets": 70
+  },
+  "477": {
+   "bytes": 7797,
+   "packets": 79
+  },
+  "478": {
+   "bytes": 7001,
+   "packets": 88
+  },
+  "479": {
+   "bytes": 6784,
+   "packets": 74
+  },
+  "480": {
+   "bytes": 8172,
+   "packets": 84
+  },
+  "481": {
+   "bytes": 7332,
+   "packets": 79
+  },
+  "482": {
+   "bytes": 6794,
+   "packets": 76
+  },
+  "483": {
+   "bytes": 6430,
+   "packets": 73
+  },
+  "484": {
+   "bytes": 8116,
+   "packets": 91
+  },
+  "485": {
+   "bytes": 6952,
+   "packets": 73
+  },
+  "486": {
+   "bytes": 6663,
+   "packets": 72
+  },
+  "487": {
+   "bytes": 8555,
+   "packets": 99
+  },
+  "488": {
+   "bytes": 10659,
+   "packets": 125
+  },
+  "489": {
+   "bytes": 6013,
+   "packets": 81
+  },
+  "490": {
+   "bytes": 6737,
+   "packets": 101
+  },
+  "491": {
+   "bytes": 7890,
+   "packets": 105
+  },
+  "492": {
+   "bytes": 8079,
+   "packets": 115
+  },
+  "493": {
+   "bytes": 7241,
+   "packets": 83
+  },
+  "494": {
+   "bytes": 6711,
+   "packets": 70
+  },
+  "495": {
+   "bytes": 6425,
+   "packets": 78
+  },
+  "496": {
+   "bytes": 6652,
+   "packets": 72
+  },
+  "497": {
+   "bytes": 6241,
+   "packets": 75
+  },
+  "498": {
+   "bytes": 6862,
+   "packets": 76
+  },
+  "499": {
+   "bytes": 7068,
+   "packets": 73
+  },
+  "5": {
+   "bytes": 586,
+   "packets": 12
+  },
+  "500": {
+   "bytes": 7301,
+   "packets": 76
+  },
+  "501": {
+   "bytes": 7933,
+   "packets": 83
+  },
+  "502": {
+   "bytes": 6345,
+   "packets": 72
+  },
+  "503": {
+   "bytes": 6822,
+   "packets": 77
+  },
+  "504": {
+   "bytes": 7815,
+   "packets": 100
+  },
+  "505": {
+   "bytes": 7104,
+   "packets": 77
+  },
+  "506": {
+   "bytes": 7118,
+   "packets": 75
+  },
+  "507": {
+   "bytes": 7416,
+   "packets": 85
+  },
+  "508": {
+   "bytes": 6484,
+   "packets": 72
+  },
+  "509": {
+   "bytes": 6297,
+   "packets": 71
+  },
+  "510": {
+   "bytes": 6287,
+   "packets": 69
+  },
+  "511": {
+   "bytes": 7378,
+   "packets": 82
+  },
+  "512": {
+   "bytes": 9860,
+   "packets": 140
+  },
+  "513": {
+   "bytes": 6021,
+   "packets": 77
+  },
+  "514": {
+   "bytes": 6554,
+   "packets": 76
+  },
+  "515": {
+   "bytes": 6179,
+   "packets": 76
+  },
+  "516": {
+   "bytes": 6015,
+   "packets": 65
+  },
+  "517": {
+   "bytes": 7391,
+   "packets": 78
+  },
+  "518": {
+   "bytes": 7432,
+   "packets": 75
+  },
+  "519": {
+   "bytes": 7287,
+   "packets": 77
+  },
+  "520": {
+   "bytes": 7668,
+   "packets": 92
+  },
+  "521": {
+   "bytes": 6666,
+   "packets": 73
+  },
+  "522": {
+   "bytes": 5944,
+   "packets": 69
+  },
+  "523": {
+   "bytes": 7726,
+   "packets": 90
+  },
+  "524": {
+   "bytes": 7281,
+   "packets": 80
+  },
+  "525": {
+   "bytes": 6034,
+   "packets": 69
+  },
+  "526": {
+   "bytes": 6193,
+   "packets": 71
+  },
+  "527": {
+   "bytes": 6671,
+   "packets": 73
+  },
+  "528": {
+   "bytes": 7112,
+   "packets": 75
+  },
+  "529": {
+   "bytes": 6445,
+   "packets": 73
+  },
+  "530": {
+   "bytes": 7260,
+   "packets": 81
+  },
+  "531": {
+   "bytes": 5735,
+   "packets": 74
+  },
+  "532": {
+   "bytes": 6390,
+   "packets": 78
+  },
+  "533": {
+   "bytes": 5679,
+   "packets": 72
+  },
+  "534": {
+   "bytes": 6904,
+   "packets": 86
+  },
+  "535": {
+   "bytes": 6802,
+   "packets": 74
+  },
+  "536": {
+   "bytes": 8523,
+   "packets": 96
+  },
+  "537": {
+   "bytes": 6566,
+   "packets": 74
+  },
+  "538": {
+   "bytes": 6076,
+   "packets": 70
+  },
+  "539": {
+   "bytes": 7768,
+   "packets": 103
+  },
+  "540": {
+   "bytes": 8457,
+   "packets": 105
+  },
+  "541": {
+   "bytes": 6329,
+   "packets": 81
+  },
+  "542": {
+   "bytes": 6186,
+   "packets": 72
+  },
+  "543": {
+   "bytes": 6753,
+   "packets": 75
+  },
+  "544": {
+   "bytes": 6807,
+   "packets": 80
+  },
+  "545": {
+   "bytes": 6412,
+   "packets": 72
+  },
+  "546": {
+   "bytes": 6801,
+   "packets": 79
+  },
+  "547": {
+   "bytes": 6435,
+   "packets": 74
+  },
+  "548": {
+   "bytes": 10335,
+   "packets": 135
+  },
+  "549": {
+   "bytes": 7287,
+   "packets": 88
+  },
+  "550": {
+   "bytes": 6429,
+   "packets": 71
+  },
+  "551": {
+   "bytes": 6832,
+   "packets": 77
+  },
+  "552": {
+   "bytes": 8849,
+   "packets": 120
+  },
+  "553": {
+   "bytes": 9587,
+   "packets": 140
+  },
+  "554": {
+   "bytes": 6010,
+   "packets": 71
+  },
+  "555": {
+   "bytes": 6866,
+   "packets": 78
+  },
+  "556": {
+   "bytes": 6090,
+   "packets": 70
+  },
+  "557": {
+   "bytes": 10390,
+   "packets": 135
+  },
+  "558": {
+   "bytes": 6558,
+   "packets": 76
+  },
+  "559": {
+   "bytes": 6615,
+   "packets": 75
+  },
+  "560": {
+   "bytes": 7338,
+   "packets": 90
+  },
+  "561": {
+   "bytes": 9253,
+   "packets": 113
+  },
+  "562": {
+   "bytes": 6986,
+   "packets": 80
+  },
+  "563": {
+   "bytes": 6555,
+   "packets": 73
+  },
+  "564": {
+   "bytes": 6511,
+   "packets": 74
+  },
+  "565": {
+   "bytes": 6549,
+   "packets": 75
+  },
+  "566": {
+   "bytes": 6071,
+   "packets": 70
+  },
+  "567": {
+   "bytes": 6677,
+   "packets": 76
+  },
+  "568": {
+   "bytes": 7172,
+   "packets": 75
+  },
+  "569": {
+   "bytes": 6146,
+   "packets": 69
+  },
+  "570": {
+   "bytes": 6807,
+   "packets": 76
+  },
+  "571": {
+   "bytes": 5923,
+   "packets": 69
+  },
+  "572": {
+   "bytes": 5888,
+   "packets": 69
+  },
+  "573": {
+   "bytes": 6317,
+   "packets": 73
+  },
+  "574": {
+   "bytes": 8506,
+   "packets": 107
+  },
+  "575": {
+   "bytes": 7986,
+   "packets": 114
+  },
+  "576": {
+   "bytes": 6783,
+   "packets": 80
+  },
+  "577": {
+   "bytes": 6393,
+   "packets": 74
+  },
+  "578": {
+   "bytes": 6486,
+   "packets": 75
+  },
+  "579": {
+   "bytes": 7126,
+   "packets": 87
+  },
+  "580": {
+   "bytes": 6897,
+   "packets": 78
+  },
+  "581": {
+   "bytes": 6280,
+   "packets": 72
+  },
+  "582": {
+   "bytes": 6841,
+   "packets": 78
+  },
+  "583": {
+   "bytes": 9575,
+   "packets": 128
+  },
+  "584": {
+   "bytes": 5895,
+   "packets": 69
+  },
+  "585": {
+   "bytes": 6024,
+   "packets": 69
+  },
+  "586": {
+   "bytes": 4887,
+   "packets": 65
+  },
+  "587": {
+   "bytes": 5235,
+   "packets": 72
+  },
+  "588": {
+   "bytes": 5891,
+   "packets": 77
+  },
+  "589": {
+   "bytes": 6675,
+   "packets": 85
+  },
+  "590": {
+   "bytes": 6668,
+   "packets": 76
+  },
+  "591": {
+   "bytes": 6572,
+   "packets": 74
+  },
+  "592": {
+   "bytes": 6656,
+   "packets": 78
+  },
+  "593": {
+   "bytes": 9819,
+   "packets": 125
+  },
+  "594": {
+   "bytes": 9227,
+   "packets": 122
+  },
+  "595": {
+   "bytes": 7265,
+   "packets": 86
+  },
+  "596": {
+   "bytes": 5695,
+   "packets": 79
+  },
+  "597": {
+   "bytes": 5828,
+   "packets": 69
+  },
+  "598": {
+   "bytes": 8030,
+   "packets": 101
+  },
+  "599": {
+   "bytes": 6448,
+   "packets": 76
+  },
+  "6": {
+   "bytes": 88,
+   "packets": 2
+  },
+  "600": {
+   "bytes": 7127,
+   "packets": 80
+  },
+  "601": {
+   "bytes": 6805,
+   "packets": 79
+  },
+  "602": {
+   "bytes": 6750,
+   "packets": 77
+  },
+  "603": {
+   "bytes": 8602,
+   "packets": 115
+  },
+  "604": {
+   "bytes": 5791,
+   "packets": 66
+  },
+  "605": {
+   "bytes": 5945,
+   "packets": 69
+  },
+  "606": {
+   "bytes": 7891,
+   "packets": 106
+  },
+  "607": {
+   "bytes": 7550,
+   "packets": 123
+  },
+  "608": {
+   "bytes": 5262,
+   "packets": 92
+  },
+  "609": {
+   "bytes": 7330,
+   "packets": 97
+  },
+  "610": {
+   "bytes": 7273,
+   "packets": 90
+  },
+  "611": {
+   "bytes": 4587,
+   "packets": 110
+  },
+  "612": {
+   "bytes": 5883,
+   "packets": 130
+  },
+  "613": {
+   "bytes": 6083,
+   "packets": 73
+  },
+  "614": {
+   "bytes": 6284,
+   "packets": 75
+  },
+  "615": {
+   "bytes": 7003,
+   "packets": 78
+  },
+  "616": {
+   "bytes": 6583,
+   "packets": 74
+  },
+  "617": {
+   "bytes": 6979,
+   "packets": 79
+  },
+  "618": {
+   "bytes": 6994,
+   "packets": 79
+  },
+  "619": {
+   "bytes": 5613,
+   "packets": 73
+  },
+  "620": {
+   "bytes": 7145,
+   "packets": 86
+  },
+  "621": {
+   "bytes": 6841,
+   "packets": 78
+  },
+  "622": {
+   "bytes": 5671,
+   "packets": 69
+  },
+  "623": {
+   "bytes": 5552,
+   "packets": 122
+  },
+  "624": {
+   "bytes": 5524,
+   "packets": 65
+  },
+  "625": {
+   "bytes": 47140,
+   "packets": 93
+  },
+  "626": {
+   "bytes": 2389,
+   "packets": 10
+  },
+  "627": {
+   "bytes": 1280,
+   "packets": 1
+  },
+  "628": {
+   "bytes": 458,
+   "packets": 5
+  },
+  "63": {
+   "bytes": 98,
+   "packets": 2
+  },
+  "7": {
+   "bytes": 2705,
+   "packets": 7
+  },
+  "8": {
+   "bytes": 52,
+   "packets": 1
+  },
+  "84": {
+   "bytes": 42,
+   "packets": 1
+  },
+  "85": {
+   "bytes": 42,
+   "packets": 1
+  },
+  "87": {
+   "bytes": 116,
+   "packets": 2
+  },
+  "9": {
+   "bytes": 145,
+   "packets": 3
+  },
+  "99": {
+   "bytes": 74,
+   "packets": 2
+  }
+ },
+ "runDir": "/tmp/h2run.whDOD2",
+ "summaries": {
+  "VID": [
+   {
+    "chunkBytes": 16384,
+    "mediaMode": "realAudio",
+    "receiverMediaMode": "realAudio",
+    "sizeBytes": 4194304
+   }
+  ]
+ },
+ "tsvJoinGapS": 4,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-09T20:59:27Z",
+  "elapsed_ms": "628347",
+  "loss_pct": "50.0",
+  "note": "criterion=video-survival(delivered + sha256; times recorded as baseline); not delivered/verified: 4194304B in Nonems (None kbps, None/None chunks resumed); The following TimeoutException was thrown running a test: receiver never reached connected; last phase=reconnecting error=CallControllerException(reconnect_connection_timeout): Media did not reconnect within the connection timeout",
+  "packets": "35354",
+  "profile": "loss60",
+  "recovery_ms": "-",
+  "rtt_ms": "0.590",
+  "test": "video_survival_test.dart",
+  "verdict": "FAIL/STRESS"
+ }
+}

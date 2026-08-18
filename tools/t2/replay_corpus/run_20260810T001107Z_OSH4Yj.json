@@ -1,0 +1,5904 @@
+{
+ "capturedUtc": "2026-08-10T00:11:07Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 12
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 12
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 17
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 18
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 37
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 37
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 38
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 40
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 41
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 42
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 42
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 45
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 46
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 47
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 52
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 57
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 62
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 65
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 92
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 92
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 96
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 96
+  },
+  {
+   "detail": "[CallControllerException(path_unhealthy): External path-health monitor scored the active...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 96
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 102
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 103
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 105
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 106
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 107
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 109
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 109
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 110
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 117
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 126
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 128
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 369
+  },
+  {
+   "detail": "[CallControllerException(media_failed): Media connection became failed]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 369
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 369
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 370
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "initiator",
+   "t_s": 371
+  },
+  {
+   "detail": "[CallControllerException(media_failed): Media connection became failed]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 371
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 379
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 384
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 385
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 390
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 392
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 395
+  },
+  {
+   "detail": "[TimeoutException after 0:00:36.459000: Timed out while attempting to request ICE restart]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 405
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 405
+  },
+  {
+   "detail": "[TimeoutException after 0:00:36.459000: Timed out while attempting to send offer]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 408
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 408
+  },
+  {
+   "detail": "[TimeoutException after 0:00:36.459000: Timed out while attempting to send local ICE can...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 444
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 473
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 473
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 473
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 473
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 480
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 480
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 483
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 484
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 486
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 486
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 486
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 494
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 494
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 506
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 510
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 511
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 513
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 516
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 519
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 525
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 525
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 535
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 536
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 544
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 550
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 557
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 300,
+   "packets": 1
+  },
+  "100": {
+   "bytes": 1200,
+   "packets": 1
+  },
+  "1000": {
+   "bytes": 2287,
+   "packets": 33
+  },
+  "1001": {
+   "bytes": 3546,
+   "packets": 35
+  },
+  "1002": {
+   "bytes": 3208,
+   "packets": 41
+  },
+  "1003": {
+   "bytes": 2119,
+   "packets": 31
+  },
+  "1004": {
+   "bytes": 4510,
+   "packets": 45
+  },
+  "1005": {
+   "bytes": 2166,
+   "packets": 36
+  },
+  "1006": {
+   "bytes": 5172,
+   "packets": 38
+  },
+  "1007": {
+   "bytes": 2542,
+   "packets": 46
+  },
+  "1008": {
+   "bytes": 1206,
+   "packets": 19
+  },
+  "1009": {
+   "bytes": 5208,
+   "packets": 44
+  },
+  "101": {
+   "bytes": 1200,
+   "packets": 1
+  },
+  "1010": {
+   "bytes": 1250,
+   "packets": 27
+  },
+  "1011": {
+   "bytes": 6513,
+   "packets": 33
+  },
+  "1012": {
+   "bytes": 1816,
+   "packets": 28
+  },
+  "1013": {
+   "bytes": 1809,
+   "packets": 10
+  },
+  "1014": {
+   "bytes": 5306,
+   "packets": 42
+  },
+  "1015": {
+   "bytes": 2100,
+   "packets": 33
+  },
+  "1016": {
+   "bytes": 1942,
+   "packets": 30
+  },
+  "1017": {
+   "bytes": 6700,
+   "packets": 41
+  },
+  "1018": {
+   "bytes": 1833,
+   "packets": 23
+  },
+  "1019": {
+   "bytes": 2581,
+   "packets": 34
+  },
+  "102": {
+   "bytes": 146,
+   "packets": 3
+  },
+  "1020": {
+   "bytes": 3161,
+   "packets": 12
+  },
+  "1021": {
+   "bytes": 4282,
+   "packets": 41
+  },
+  "1022": {
+   "bytes": 5242,
+   "packets": 26
+  },
+  "1023": {
+   "bytes": 3308,
+   "packets": 27
+  },
+  "1024": {
+   "bytes": 2996,
+   "packets": 25
+  },
+  "1025": {
+   "bytes": 4716,
+   "packets": 18
+  },
+  "1026": {
+   "bytes": 7123,
+   "packets": 41
+  },
+  "1027": {
+   "bytes": 2371,
+   "packets": 30
+  },
+  "1028": {
+   "bytes": 1779,
+   "packets": 11
+  },
+  "1029": {
+   "bytes": 5905,
+   "packets": 45
+  },
+  "1030": {
+   "bytes": 1779,
+   "packets": 29
+  },
+  "1031": {
+   "bytes": 1858,
+   "packets": 27
+  },
+  "1032": {
+   "bytes": 1178,
+   "packets": 20
+  },
+  "1033": {
+   "bytes": 1662,
+   "packets": 27
+  },
+  "1034": {
+   "bytes": 5657,
+   "packets": 25
+  },
+  "1035": {
+   "bytes": 1550,
+   "packets": 25
+  },
+  "1036": {
+   "bytes": 2141,
+   "packets": 16
+  },
+  "1037": {
+   "bytes": 4842,
+   "packets": 39
+  },
+  "1038": {
+   "bytes": 1537,
+   "packets": 25
+  },
+  "1039": {
+   "bytes": 2015,
+   "packets": 33
+  },
+  "104": {
+   "bytes": 58,
+   "packets": 1
+  },
+  "1040": {
+   "bytes": 1838,
+   "packets": 28
+  },
+  "1041": {
+   "bytes": 1603,
+   "packets": 25
+  },
+  "1042": {
+   "bytes": 6800,
+   "packets": 41
+  },
+  "1043": {
+   "bytes": 1258,
+   "packets": 18
+  },
+  "1044": {
+   "bytes": 2390,
+   "packets": 18
+  },
+  "1045": {
+   "bytes": 6835,
+   "packets": 32
+  },
+  "1046": {
+   "bytes": 2175,
+   "packets": 34
+  },
+  "1047": {
+   "bytes": 3936,
+   "packets": 22
+  },
+  "1048": {
+   "bytes": 4058,
+   "packets": 36
+  },
+  "1049": {
+   "bytes": 2417,
+   "packets": 17
+  },
+  "1050": {
+   "bytes": 8135,
+   "packets": 46
+  },
+  "1051": {
+   "bytes": 1753,
+   "packets": 25
+  },
+  "1052": {
+   "bytes": 2421,
+   "packets": 19
+  },
+  "1053": {
+   "bytes": 4522,
+   "packets": 26
+  },
+  "1054": {
+   "bytes": 3014,
+   "packets": 45
+  },
+  "1055": {
+   "bytes": 2069,
+   "packets": 28
+  },
+  "1056": {
+   "bytes": 2195,
+   "packets": 34
+  },
+  "1057": {
+   "bytes": 2756,
+   "packets": 38
+  },
+  "1058": {
+   "bytes": 5592,
+   "packets": 27
+  },
+  "1059": {
+   "bytes": 2105,
+   "packets": 33
+  },
+  "106": {
+   "bytes": 58,
+   "packets": 1
+  },
+  "1060": {
+   "bytes": 1180,
+   "packets": 19
+  },
+  "1061": {
+   "bytes": 5451,
+   "packets": 21
+  },
+  "1062": {
+   "bytes": 3134,
+   "packets": 48
+  },
+  "1063": {
+   "bytes": 1584,
+   "packets": 24
+  },
+  "1064": {
+   "bytes": 2653,
+   "packets": 42
+  },
+  "1065": {
+   "bytes": 2145,
+   "packets": 29
+  },
+  "1066": {
+   "bytes": 6811,
+   "packets": 40
+  },
+  "1067": {
+   "bytes": 2542,
+   "packets": 33
+  },
+  "1068": {
+   "bytes": 1507,
+   "packets": 21
+  },
+  "1069": {
+   "bytes": 5124,
+   "packets": 16
+  },
+  "1070": {
+   "bytes": 4401,
+   "packets": 64
+  },
+  "1071": {
+   "bytes": 1235,
+   "packets": 19
+  },
+  "1072": {
+   "bytes": 3355,
+   "packets": 46
+  },
+  "1073": {
+   "bytes": 2487,
+   "packets": 35
+  },
+  "1074": {
+   "bytes": 7750,
+   "packets": 47
+  },
+  "1075": {
+   "bytes": 3225,
+   "packets": 41
+  },
+  "1076": {
+   "bytes": 2230,
+   "packets": 29
+  },
+  "1077": {
+   "bytes": 4989,
+   "packets": 16
+  },
+  "1078": {
+   "bytes": 6134,
+   "packets": 59
+  },
+  "1079": {
+   "bytes": 4978,
+   "packets": 45
+  },
+  "1080": {
+   "bytes": 3658,
+   "packets": 31
+  },
+  "1081": {
+   "bytes": 4346,
+   "packets": 56
+  },
+  "1082": {
+   "bytes": 6226,
+   "packets": 36
+  },
+  "1083": {
+   "bytes": 3419,
+   "packets": 43
+  },
+  "1084": {
+   "bytes": 2662,
+   "packets": 33
+  },
+  "1085": {
+   "bytes": 3548,
+   "packets": 13
+  },
+  "1086": {
+   "bytes": 6035,
+   "packets": 62
+  },
+  "1087": {
+   "bytes": 2991,
+   "packets": 31
+  },
+  "1088": {
+   "bytes": 3165,
+   "packets": 44
+  },
+  "1089": {
+   "bytes": 3094,
+   "packets": 33
+  },
+  "1090": {
+   "bytes": 7849,
+   "packets": 50
+  },
+  "1091": {
+   "bytes": 2699,
+   "packets": 31
+  },
+  "1092": {
+   "bytes": 3381,
+   "packets": 41
+  },
+  "1093": {
+   "bytes": 3932,
+   "packets": 16
+  },
+  "1094": {
+   "bytes": 5977,
+   "packets": 52
+  },
+  "1095": {
+   "bytes": 3137,
+   "packets": 39
+  },
+  "1096": {
+   "bytes": 2821,
+   "packets": 37
+  },
+  "1097": {
+   "bytes": 2988,
+   "packets": 38
+  },
+  "1098": {
+   "bytes": 7274,
+   "packets": 39
+  },
+  "1099": {
+   "bytes": 3086,
+   "packets": 35
+  },
+  "1100": {
+   "bytes": 2685,
+   "packets": 33
+  },
+  "1101": {
+   "bytes": 3302,
+   "packets": 14
+  },
+  "1102": {
+   "bytes": 5446,
+   "packets": 45
+  },
+  "1103": {
+   "bytes": 3239,
+   "packets": 45
+  },
+  "1104": {
+   "bytes": 2812,
+   "packets": 39
+  },
+  "1105": {
+   "bytes": 3027,
+   "packets": 39
+  },
+  "1106": {
+   "bytes": 2970,
+   "packets": 42
+  },
+  "1107": {
+   "bytes": 6808,
+   "packets": 35
+  },
+  "1108": {
+   "bytes": 2706,
+   "packets": 34
+  },
+  "1109": {
+   "bytes": 3823,
+   "packets": 17
+  },
+  "111": {
+   "bytes": 194,
+   "packets": 4
+  },
+  "1110": {
+   "bytes": 4842,
+   "packets": 55
+  },
+  "1111": {
+   "bytes": 2381,
+   "packets": 30
+  },
+  "1112": {
+   "bytes": 3234,
+   "packets": 47
+  },
+  "1113": {
+   "bytes": 2212,
+   "packets": 33
+  },
+  "1114": {
+   "bytes": 2180,
+   "packets": 33
+  },
+  "1115": {
+   "bytes": 6460,
+   "packets": 38
+  },
+  "1116": {
+   "bytes": 2032,
+   "packets": 30
+  },
+  "1117": {
+   "bytes": 2028,
+   "packets": 13
+  },
+  "1118": {
+   "bytes": 5355,
+   "packets": 37
+  },
+  "1119": {
+   "bytes": 4007,
+   "packets": 43
+  },
+  "1120": {
+   "bytes": 2068,
+   "packets": 29
+  },
+  "1121": {
+   "bytes": 2736,
+   "packets": 25
+  },
+  "1122": {
+   "bytes": 2730,
+   "packets": 42
+  },
+  "1123": {
+   "bytes": 5861,
+   "packets": 27
+  },
+  "1124": {
+   "bytes": 2122,
+   "packets": 33
+  },
+  "1125": {
+   "bytes": 2258,
+   "packets": 13
+  },
+  "1126": {
+   "bytes": 5846,
+   "packets": 40
+  },
+  "1127": {
+   "bytes": 2780,
+   "packets": 39
+  },
+  "1128": {
+   "bytes": 2816,
+   "packets": 39
+  },
+  "1129": {
+   "bytes": 2749,
+   "packets": 39
+  },
+  "1130": {
+   "bytes": 2240,
+   "packets": 35
+  },
+  "1131": {
+   "bytes": 7207,
+   "packets": 38
+  },
+  "1132": {
+   "bytes": 1919,
+   "packets": 30
+  },
+  "1133": {
+   "bytes": 2015,
+   "packets": 13
+  },
+  "1134": {
+   "bytes": 5367,
+   "packets": 27
+  },
+  "1135": {
+   "bytes": 3598,
+   "packets": 46
+  },
+  "1136": {
+   "bytes": 2383,
+   "packets": 33
+  },
+  "1137": {
+   "bytes": 2124,
+   "packets": 33
+  },
+  "1138": {
+   "bytes": 2185,
+   "packets": 30
+  },
+  "1139": {
+   "bytes": 2993,
+   "packets": 28
+  },
+  "1140": {
+   "bytes": 1674,
+   "packets": 24
+  },
+  "1141": {
+   "bytes": 931,
+   "packets": 18
+  },
+  "1142": {
+   "bytes": 4071,
+   "packets": 43
+  },
+  "1143": {
+   "bytes": 1545,
+   "packets": 24
+  },
+  "1144": {
+   "bytes": 3910,
+   "packets": 38
+  },
+  "1145": {
+   "bytes": 1195,
+   "packets": 20
+  },
+  "1146": {
+   "bytes": 3958,
+   "packets": 26
+  },
+  "1147": {
+   "bytes": 1626,
+   "packets": 26
+  },
+  "1148": {
+   "bytes": 1724,
+   "packets": 9
+  },
+  "1149": {
+   "bytes": 3769,
+   "packets": 40
+  },
+  "1150": {
+   "bytes": 1065,
+   "packets": 19
+  },
+  "1151": {
+   "bytes": 3304,
+   "packets": 16
+  },
+  "1152": {
+   "bytes": 3190,
+   "packets": 32
+  },
+  "1153": {
+   "bytes": 3260,
+   "packets": 13
+  },
+  "1154": {
+   "bytes": 2679,
+   "packets": 40
+  },
+  "1155": {
+   "bytes": 4259,
+   "packets": 27
+  },
+  "1156": {
+   "bytes": 4009,
+   "packets": 27
+  },
+  "1157": {
+   "bytes": 1773,
+   "packets": 22
+  },
+  "1158": {
+   "bytes": 3427,
+   "packets": 19
+  },
+  "1159": {
+   "bytes": 5511,
+   "packets": 47
+  },
+  "1160": {
+   "bytes": 3683,
+   "packets": 27
+  },
+  "1161": {
+   "bytes": 2179,
+   "packets": 30
+  },
+  "1162": {
+   "bytes": 2024,
+   "packets": 27
+  },
+  "1163": {
+   "bytes": 7862,
+   "packets": 45
+  },
+  "1164": {
+   "bytes": 2553,
+   "packets": 35
+  },
+  "1165": {
+   "bytes": 4086,
+   "packets": 36
+  },
+  "1166": {
+   "bytes": 4208,
+   "packets": 25
+  },
+  "1167": {
+   "bytes": 3694,
+   "packets": 35
+  },
+  "1168": {
+   "bytes": 2262,
+   "packets": 34
+  },
+  "1169": {
+   "bytes": 1766,
+   "packets": 28
+  },
+  "1170": {
+   "bytes": 1741,
+   "packets": 26
+  },
+  "1171": {
+   "bytes": 5700,
+   "packets": 28
+  },
+  "1172": {
+   "bytes": 1914,
+   "packets": 28
+  },
+  "1173": {
+   "bytes": 1221,
+   "packets": 21
+  },
+  "1174": {
+   "bytes": 3128,
+   "packets": 12
+  },
+  "1175": {
+   "bytes": 5218,
+   "packets": 53
+  },
+  "1176": {
+   "bytes": 1339,
+   "packets": 21
+  },
+  "1177": {
+   "bytes": 2169,
+   "packets": 33
+  },
+  "1178": {
+   "bytes": 1911,
+   "packets": 30
+  },
+  "1179": {
+   "bytes": 5925,
+   "packets": 29
+  },
+  "1180": {
+   "bytes": 2163,
+   "packets": 32
+  },
+  "1181": {
+   "bytes": 1461,
+   "packets": 22
+  },
+  "1182": {
+   "bytes": 2305,
+   "packets": 15
+  },
+  "1183": {
+   "bytes": 4853,
+   "packets": 48
+  },
+  "1184": {
+   "bytes": 1836,
+   "packets": 30
+  },
+  "1185": {
+   "bytes": 2410,
+   "packets": 37
+  },
+  "1186": {
+   "bytes": 1414,
+   "packets": 25
+  },
+  "1187": {
+   "bytes": 6226,
+   "packets": 33
+  },
+  "1188": {
+   "bytes": 1751,
+   "packets": 29
+  },
+  "1189": {
+   "bytes": 1745,
+   "packets": 26
+  },
+  "1190": {
+   "bytes": 3314,
+   "packets": 14
+  },
+  "1191": {
+   "bytes": 6992,
+   "packets": 45
+  },
+  "1192": {
+   "bytes": 2694,
+   "packets": 22
+  },
+  "1193": {
+   "bytes": 3790,
+   "packets": 20
+  },
+  "1194": {
+   "bytes": 3733,
+   "packets": 38
+  },
+  "1195": {
+   "bytes": 3270,
+   "packets": 28
+  },
+  "1196": {
+   "bytes": 7084,
+   "packets": 31
+  },
+  "1197": {
+   "bytes": 2516,
+   "packets": 37
+  },
+  "1198": {
+   "bytes": 1033,
+   "packets": 11
+  },
+  "1199": {
+   "bytes": 4391,
+   "packets": 46
+  },
+  "1200": {
+   "bytes": 1525,
+   "packets": 19
+  },
+  "1201": {
+   "bytes": 1413,
+   "packets": 26
+  },
+  "1202": {
+   "bytes": 3145,
+   "packets": 28
+  },
+  "1203": {
+   "bytes": 1240,
+   "packets": 19
+  },
+  "1204": {
+   "bytes": 1428,
+   "packets": 21
+  },
+  "1205": {
+   "bytes": 4741,
+   "packets": 34
+  },
+  "1206": {
+   "bytes": 2874,
+   "packets": 26
+  },
+  "1207": {
+   "bytes": 2953,
+   "packets": 26
+  },
+  "1208": {
+   "bytes": 3028,
+   "packets": 25
+  },
+  "1209": {
+   "bytes": 3021,
+   "packets": 31
+  },
+  "1210": {
+   "bytes": 3995,
+   "packets": 41
+  },
+  "1211": {
+   "bytes": 1648,
+   "packets": 27
+  },
+  "1212": {
+   "bytes": 6561,
+   "packets": 41
+  },
+  "1213": {
+   "bytes": 2110,
+   "packets": 28
+  },
+  "1214": {
+   "bytes": 3005,
+   "packets": 22
+  },
+  "1215": {
+   "bytes": 4367,
+   "packets": 55
+  },
+  "1216": {
+   "bytes": 5490,
+   "packets": 34
+  },
+  "1217": {
+   "bytes": 3345,
+   "packets": 43
+  },
+  "1218": {
+   "bytes": 3248,
+   "packets": 29
+  },
+  "1219": {
+   "bytes": 3162,
+   "packets": 11
+  },
+  "1220": {
+   "bytes": 4182,
+   "packets": 46
+  },
+  "1221": {
+   "bytes": 7088,
+   "packets": 34
+  },
+  "1222": {
+   "bytes": 8366,
+   "packets": 43
+  },
+  "1223": {
+   "bytes": 2560,
+   "packets": 29
+  },
+  "1224": {
+   "bytes": 4494,
+   "packets": 27
+  },
+  "1225": {
+   "bytes": 5974,
+   "packets": 26
+  },
+  "1226": {
+   "bytes": 4989,
+   "packets": 31
+  },
+  "1227": {
+   "bytes": 5725,
+   "packets": 66
+  },
+  "1228": {
+   "bytes": 8342,
+   "packets": 57
+  },
+  "1229": {
+   "bytes": 3364,
+   "packets": 36
+  },
+  "1230": {
+   "bytes": 3023,
+   "packets": 37
+  },
+  "1231": {
+   "bytes": 4077,
+   "packets": 25
+  },
+  "1232": {
+   "bytes": 5537,
+   "packets": 57
+  },
+  "1233": {
+   "bytes": 3968,
+   "packets": 44
+  },
+  "1234": {
+   "bytes": 3407,
+   "packets": 46
+  },
+  "1235": {
+   "bytes": 3075,
+   "packets": 39
+  },
+  "1236": {
+   "bytes": 7667,
+   "packets": 39
+  },
+  "1237": {
+   "bytes": 3446,
+   "packets": 42
+  },
+  "1238": {
+   "bytes": 2023,
+   "packets": 25
+  },
+  "1239": {
+   "bytes": 3896,
+   "packets": 16
+  },
+  "1240": {
+   "bytes": 5837,
+   "packets": 67
+  },
+  "1241": {
+   "bytes": 3811,
+   "packets": 45
+  },
+  "1242": {
+   "bytes": 3185,
+   "packets": 40
+  },
+  "1243": {
+   "bytes": 4013,
+   "packets": 42
+  },
+  "1244": {
+   "bytes": 7143,
+   "packets": 43
+  },
+  "1245": {
+   "bytes": 3876,
+   "packets": 36
+  },
+  "1246": {
+   "bytes": 1590,
+   "packets": 23
+  },
+  "1247": {
+   "bytes": 4142,
+   "packets": 38
+  },
+  "1248": {
+   "bytes": 4709,
+   "packets": 44
+  },
+  "1249": {
+   "bytes": 3165,
+   "packets": 49
+  },
+  "1250": {
+   "bytes": 3528,
+   "packets": 43
+  },
+  "1251": {
+   "bytes": 3364,
+   "packets": 39
+  },
+  "1252": {
+   "bytes": 7260,
+   "packets": 43
+  },
+  "1253": {
+   "bytes": 3240,
+   "packets": 40
+  },
+  "1254": {
+   "bytes": 2616,
+   "packets": 32
+  },
+  "1255": {
+   "bytes": 4598,
+   "packets": 14
+  },
+  "1256": {
+   "bytes": 5254,
+   "packets": 62
+  },
+  "1257": {
+   "bytes": 4992,
+   "packets": 32
+  },
+  "1258": {
+   "bytes": 4874,
+   "packets": 42
+  },
+  "1259": {
+   "bytes": 2096,
+   "packets": 26
+  },
+  "1260": {
+   "bytes": 9598,
+   "packets": 49
+  },
+  "1261": {
+   "bytes": 3907,
+   "packets": 35
+  },
+  "1262": {
+   "bytes": 6239,
+   "packets": 39
+  },
+  "1263": {
+   "bytes": 4042,
+   "packets": 23
+  },
+  "1264": {
+   "bytes": 4047,
+   "packets": 36
+  },
+  "1265": {
+   "bytes": 3739,
+   "packets": 34
+  },
+  "1266": {
+   "bytes": 8041,
+   "packets": 51
+  },
+  "1267": {
+   "bytes": 4009,
+   "packets": 52
+  },
+  "1268": {
+   "bytes": 6574,
+   "packets": 29
+  },
+  "1269": {
+   "bytes": 5402,
+   "packets": 48
+  },
+  "1270": {
+   "bytes": 2972,
+   "packets": 37
+  },
+  "1271": {
+   "bytes": 3454,
+   "packets": 13
+  },
+  "1272": {
+   "bytes": 5888,
+   "packets": 51
+  },
+  "1273": {
+   "bytes": 2787,
+   "packets": 41
+  },
+  "1274": {
+   "bytes": 2708,
+   "packets": 38
+  },
+  "1275": {
+   "bytes": 2684,
+   "packets": 36
+  },
+  "1276": {
+   "bytes": 6096,
+   "packets": 33
+  },
+  "1277": {
+   "bytes": 2594,
+   "packets": 35
+  },
+  "1278": {
+   "bytes": 2177,
+   "packets": 29
+  },
+  "1279": {
+   "bytes": 3596,
+   "packets": 15
+  },
+  "1280": {
+   "bytes": 3622,
+   "packets": 46
+  },
+  "1281": {
+   "bytes": 2854,
+   "packets": 36
+  },
+  "1282": {
+   "bytes": 2487,
+   "packets": 37
+  },
+  "1283": {
+   "bytes": 2818,
+   "packets": 40
+  },
+  "1284": {
+   "bytes": 2389,
+   "packets": 34
+  },
+  "1285": {
+   "bytes": 6356,
+   "packets": 34
+  },
+  "1286": {
+   "bytes": 2345,
+   "packets": 34
+  },
+  "1287": {
+   "bytes": 2306,
+   "packets": 16
+  },
+  "1288": {
+   "bytes": 5909,
+   "packets": 42
+  },
+  "1289": {
+   "bytes": 3310,
+   "packets": 34
+  },
+  "1290": {
+   "bytes": 3882,
+   "packets": 38
+  },
+  "1291": {
+   "bytes": 1893,
+   "packets": 31
+  },
+  "1292": {
+   "bytes": 3912,
+   "packets": 35
+  },
+  "1293": {
+   "bytes": 7967,
+   "packets": 51
+  },
+  "1294": {
+   "bytes": 3499,
+   "packets": 40
+  },
+  "1295": {
+   "bytes": 2077,
+   "packets": 13
+  },
+  "1296": {
+   "bytes": 6120,
+   "packets": 45
+  },
+  "1297": {
+   "bytes": 3577,
+   "packets": 46
+  },
+  "1298": {
+   "bytes": 2229,
+   "packets": 31
+  },
+  "1299": {
+   "bytes": 2778,
+   "packets": 43
+  },
+  "1300": {
+   "bytes": 1739,
+   "packets": 28
+  },
+  "1301": {
+   "bytes": 6309,
+   "packets": 34
+  },
+  "1302": {
+   "bytes": 2125,
+   "packets": 30
+  },
+  "1303": {
+   "bytes": 2649,
+   "packets": 18
+  },
+  "1304": {
+   "bytes": 5336,
+   "packets": 39
+  },
+  "1305": {
+   "bytes": 3036,
+   "packets": 41
+  },
+  "1306": {
+   "bytes": 2858,
+   "packets": 37
+  },
+  "1307": {
+   "bytes": 3185,
+   "packets": 42
+  },
+  "1308": {
+   "bytes": 2806,
+   "packets": 35
+  },
+  "1309": {
+   "bytes": 7047,
+   "packets": 41
+  },
+  "1310": {
+   "bytes": 2633,
+   "packets": 35
+  },
+  "1311": {
+   "bytes": 2522,
+   "packets": 19
+  },
+  "1312": {
+   "bytes": 4055,
+   "packets": 35
+  },
+  "1313": {
+   "bytes": 3763,
+   "packets": 43
+  },
+  "1314": {
+   "bytes": 1737,
+   "packets": 28
+  },
+  "1315": {
+   "bytes": 2620,
+   "packets": 37
+  },
+  "1316": {
+   "bytes": 1698,
+   "packets": 28
+  },
+  "1317": {
+   "bytes": 6464,
+   "packets": 35
+  },
+  "1318": {
+   "bytes": 2030,
+   "packets": 30
+  },
+  "1319": {
+   "bytes": 1518,
+   "packets": 20
+  },
+  "1320": {
+   "bytes": 6275,
+   "packets": 36
+  },
+  "1321": {
+   "bytes": 3480,
+   "packets": 47
+  },
+  "1322": {
+   "bytes": 4857,
+   "packets": 40
+  },
+  "1323": {
+   "bytes": 4168,
+   "packets": 40
+  },
+  "1324": {
+   "bytes": 4299,
+   "packets": 33
+  },
+  "1325": {
+   "bytes": 3665,
+   "packets": 34
+  },
+  "1326": {
+   "bytes": 6461,
+   "packets": 37
+  },
+  "1327": {
+   "bytes": 7029,
+   "packets": 49
+  },
+  "1328": {
+   "bytes": 3916,
+   "packets": 32
+  },
+  "1329": {
+   "bytes": 5636,
+   "packets": 32
+  },
+  "1330": {
+   "bytes": 4436,
+   "packets": 41
+  },
+  "1331": {
+   "bytes": 5543,
+   "packets": 43
+  },
+  "1332": {
+   "bytes": 2820,
+   "packets": 40
+  },
+  "1333": {
+   "bytes": 4848,
+   "packets": 31
+  },
+  "1334": {
+   "bytes": 3625,
+   "packets": 41
+  },
+  "1335": {
+   "bytes": 1083,
+   "packets": 18
+  },
+  "1336": {
+   "bytes": 5988,
+   "packets": 40
+  },
+  "1337": {
+   "bytes": 2029,
+   "packets": 32
+  },
+  "1338": {
+   "bytes": 1806,
+   "packets": 27
+  },
+  "1339": {
+   "bytes": 3830,
+   "packets": 40
+  },
+  "1340": {
+   "bytes": 10058,
+   "packets": 35
+  },
+  "1341": {
+   "bytes": 11576,
+   "packets": 38
+  },
+  "1342": {
+   "bytes": 1650,
+   "packets": 23
+  },
+  "1343": {
+   "bytes": 998,
+   "packets": 14
+  },
+  "1344": {
+   "bytes": 1085,
+   "packets": 16
+  },
+  "1345": {
+   "bytes": 2170,
+   "packets": 14
+  },
+  "1346": {
+   "bytes": 2741,
+   "packets": 21
+  },
+  "1347": {
+   "bytes": 5089,
+   "packets": 50
+  },
+  "1348": {
+   "bytes": 5151,
+   "packets": 37
+  },
+  "1349": {
+   "bytes": 4452,
+   "packets": 57
+  },
+  "1350": {
+   "bytes": 13980,
+   "packets": 44
+  },
+  "1351": {
+   "bytes": 4754,
+   "packets": 44
+  },
+  "1352": {
+   "bytes": 2531,
+   "packets": 32
+  },
+  "1353": {
+   "bytes": 3323,
+   "packets": 11
+  },
+  "1354": {
+   "bytes": 4976,
+   "packets": 17
+  },
+  "1355": {
+   "bytes": 5748,
+   "packets": 25
+  },
+  "1356": {
+   "bytes": 4661,
+   "packets": 15
+  },
+  "1357": {
+   "bytes": 8001,
+   "packets": 35
+  },
+  "1358": {
+   "bytes": 8092,
+   "packets": 50
+  },
+  "1359": {
+   "bytes": 6478,
+   "packets": 34
+  },
+  "1360": {
+   "bytes": 4151,
+   "packets": 37
+  },
+  "1361": {
+   "bytes": 7318,
+   "packets": 61
+  },
+  "1362": {
+   "bytes": 5719,
+   "packets": 68
+  },
+  "1363": {
+   "bytes": 8574,
+   "packets": 59
+  },
+  "1364": {
+   "bytes": 4302,
+   "packets": 46
+  },
+  "1365": {
+   "bytes": 3191,
+   "packets": 48
+  },
+  "1366": {
+   "bytes": 4988,
+   "packets": 20
+  },
+  "1367": {
+   "bytes": 5631,
+   "packets": 67
+  },
+  "1368": {
+   "bytes": 3726,
+   "packets": 32
+  },
+  "1369": {
+   "bytes": 6409,
+   "packets": 46
+  },
+  "1370": {
+   "bytes": 3381,
+   "packets": 23
+  },
+  "1371": {
+   "bytes": 2883,
+   "packets": 26
+  },
+  "1372": {
+   "bytes": 4931,
+   "packets": 49
+  },
+  "1373": {
+   "bytes": 5059,
+   "packets": 33
+  },
+  "1374": {
+   "bytes": 5657,
+   "packets": 43
+  },
+  "1375": {
+   "bytes": 1786,
+   "packets": 10
+  },
+  "1376": {
+   "bytes": 5519,
+   "packets": 32
+  },
+  "1377": {
+   "bytes": 3989,
+   "packets": 42
+  },
+  "1378": {
+   "bytes": 2086,
+   "packets": 27
+  },
+  "1379": {
+   "bytes": 1857,
+   "packets": 29
+  },
+  "1380": {
+   "bytes": 3640,
+   "packets": 31
+  },
+  "1381": {
+   "bytes": 1645,
+   "packets": 26
+  },
+  "1382": {
+   "bytes": 5917,
+   "packets": 28
+  },
+  "1383": {
+   "bytes": 1432,
+   "packets": 22
+  },
+  "1384": {
+   "bytes": 3787,
+   "packets": 17
+  },
+  "1385": {
+   "bytes": 4206,
+   "packets": 40
+  },
+  "1386": {
+   "bytes": 1768,
+   "packets": 25
+  },
+  "1387": {
+   "bytes": 4106,
+   "packets": 27
+  },
+  "1388": {
+   "bytes": 1436,
+   "packets": 24
+  },
+  "1389": {
+   "bytes": 3059,
+   "packets": 27
+  },
+  "1390": {
+   "bytes": 3972,
+   "packets": 30
+  },
+  "1391": {
+   "bytes": 1327,
+   "packets": 20
+  },
+  "1392": {
+   "bytes": 4630,
+   "packets": 36
+  },
+  "1393": {
+   "bytes": 1861,
+   "packets": 29
+  },
+  "1394": {
+   "bytes": 4755,
+   "packets": 28
+  },
+  "1395": {
+   "bytes": 1302,
+   "packets": 22
+  },
+  "1396": {
+   "bytes": 2394,
+   "packets": 19
+  },
+  "1397": {
+   "bytes": 3266,
+   "packets": 22
+  },
+  "1398": {
+   "bytes": 4348,
+   "packets": 41
+  },
+  "1399": {
+   "bytes": 4581,
+   "packets": 31
+  },
+  "1400": {
+   "bytes": 1842,
+   "packets": 25
+  },
+  "1401": {
+   "bytes": 3081,
+   "packets": 24
+  },
+  "1402": {
+   "bytes": 4030,
+   "packets": 26
+  },
+  "1403": {
+   "bytes": 3703,
+   "packets": 53
+  },
+  "1404": {
+   "bytes": 2896,
+   "packets": 35
+  },
+  "1405": {
+   "bytes": 2493,
+   "packets": 37
+  },
+  "1406": {
+   "bytes": 7097,
+   "packets": 43
+  },
+  "1407": {
+   "bytes": 2203,
+   "packets": 29
+  },
+  "1408": {
+   "bytes": 1981,
+   "packets": 14
+  },
+  "1409": {
+   "bytes": 4966,
+   "packets": 31
+  },
+  "1410": {
+   "bytes": 2499,
+   "packets": 38
+  },
+  "1411": {
+   "bytes": 1837,
+   "packets": 25
+  },
+  "1412": {
+   "bytes": 2062,
+   "packets": 34
+  },
+  "1413": {
+   "bytes": 6708,
+   "packets": 34
+  },
+  "1414": {
+   "bytes": 6346,
+   "packets": 36
+  },
+  "1415": {
+   "bytes": 2088,
+   "packets": 11
+  },
+  "1416": {
+   "bytes": 4189,
+   "packets": 12
+  },
+  "1417": {
+   "bytes": 6395,
+   "packets": 28
+  },
+  "1418": {
+   "bytes": 8074,
+   "packets": 47
+  },
+  "1419": {
+   "bytes": 8112,
+   "packets": 56
+  },
+  "1420": {
+   "bytes": 4623,
+   "packets": 18
+  },
+  "1421": {
+   "bytes": 4304,
+   "packets": 11
+  },
+  "1422": {
+   "bytes": 6846,
+   "packets": 26
+  },
+  "1423": {
+   "bytes": 4583,
+   "packets": 58
+  },
+  "1424": {
+   "bytes": 5607,
+   "packets": 47
+  },
+  "1425": {
+   "bytes": 11282,
+   "packets": 58
+  },
+  "1426": {
+   "bytes": 5282,
+   "packets": 44
+  },
+  "1427": {
+   "bytes": 4037,
+   "packets": 56
+  },
+  "1428": {
+   "bytes": 1957,
+   "packets": 27
+  },
+  "1429": {
+   "bytes": 5786,
+   "packets": 43
+  },
+  "1430": {
+   "bytes": 5206,
+   "packets": 57
+  },
+  "1431": {
+   "bytes": 6591,
+   "packets": 47
+  },
+  "1432": {
+   "bytes": 3311,
+   "packets": 39
+  },
+  "1433": {
+   "bytes": 3822,
+   "packets": 24
+  },
+  "1434": {
+   "bytes": 3006,
+   "packets": 23
+  },
+  "1435": {
+   "bytes": 5113,
+   "packets": 56
+  },
+  "1436": {
+   "bytes": 4350,
+   "packets": 36
+  },
+  "1437": {
+   "bytes": 2890,
+   "packets": 42
+  },
+  "1438": {
+   "bytes": 5896,
+   "packets": 26
+  },
+  "1439": {
+   "bytes": 2201,
+   "packets": 34
+  },
+  "1440": {
+   "bytes": 1658,
+   "packets": 22
+  },
+  "1441": {
+   "bytes": 4353,
+   "packets": 13
+  },
+  "1442": {
+   "bytes": 3738,
+   "packets": 46
+  },
+  "1443": {
+   "bytes": 4192,
+   "packets": 33
+  },
+  "1444": {
+   "bytes": 3636,
+   "packets": 42
+  },
+  "1445": {
+   "bytes": 1692,
+   "packets": 25
+  },
+  "1446": {
+   "bytes": 7889,
+   "packets": 30
+  },
+  "1447": {
+   "bytes": 4535,
+   "packets": 50
+  },
+  "1448": {
+   "bytes": 2529,
+   "packets": 18
+  },
+  "1449": {
+   "bytes": 4369,
+   "packets": 13
+  },
+  "1450": {
+   "bytes": 5834,
+   "packets": 58
+  },
+  "1451": {
+   "bytes": 6228,
+   "packets": 35
+  },
+  "1452": {
+   "bytes": 3661,
+   "packets": 33
+  },
+  "1453": {
+   "bytes": 2655,
+   "packets": 36
+  },
+  "1454": {
+   "bytes": 8858,
+   "packets": 45
+  },
+  "1455": {
+   "bytes": 2418,
+   "packets": 33
+  },
+  "1456": {
+   "bytes": 2303,
+   "packets": 30
+  },
+  "1457": {
+   "bytes": 3418,
+   "packets": 13
+  },
+  "1458": {
+   "bytes": 5032,
+   "packets": 42
+  },
+  "1459": {
+   "bytes": 3825,
+   "packets": 52
+  },
+  "1460": {
+   "bytes": 1784,
+   "packets": 24
+  },
+  "1461": {
+   "bytes": 3053,
+   "packets": 45
+  },
+  "1462": {
+   "bytes": 6642,
+   "packets": 51
+  },
+  "1463": {
+   "bytes": 2366,
+   "packets": 36
+  },
+  "1464": {
+   "bytes": 1468,
+   "packets": 18
+  },
+  "1465": {
+   "bytes": 6566,
+   "packets": 39
+  },
+  "1466": {
+   "bytes": 3809,
+   "packets": 49
+  },
+  "1467": {
+   "bytes": 4107,
+   "packets": 34
+  },
+  "1468": {
+   "bytes": 3510,
+   "packets": 49
+  },
+  "1469": {
+   "bytes": 2060,
+   "packets": 25
+  },
+  "1470": {
+   "bytes": 7901,
+   "packets": 55
+  },
+  "1471": {
+   "bytes": 1996,
+   "packets": 29
+  },
+  "1472": {
+   "bytes": 4370,
+   "packets": 52
+  },
+  "1473": {
+   "bytes": 2299,
+   "packets": 13
+  },
+  "1474": {
+   "bytes": 3463,
+   "packets": 37
+  },
+  "1475": {
+   "bytes": 3840,
+   "packets": 49
+  },
+  "1476": {
+   "bytes": 2026,
+   "packets": 27
+  },
+  "1477": {
+   "bytes": 2470,
+   "packets": 35
+  },
+  "1478": {
+   "bytes": 2604,
+   "packets": 34
+  },
+  "1479": {
+   "bytes": 6864,
+   "packets": 37
+  },
+  "1480": {
+   "bytes": 2128,
+   "packets": 29
+  },
+  "1481": {
+   "bytes": 2382,
+   "packets": 14
+  },
+  "1482": {
+   "bytes": 6520,
+   "packets": 48
+  },
+  "1483": {
+   "bytes": 3245,
+   "packets": 41
+  },
+  "1484": {
+   "bytes": 4175,
+   "packets": 40
+  },
+  "1485": {
+   "bytes": 2629,
+   "packets": 31
+  },
+  "1486": {
+   "bytes": 3871,
+   "packets": 35
+  },
+  "1487": {
+   "bytes": 8732,
+   "packets": 53
+  },
+  "1488": {
+   "bytes": 2044,
+   "packets": 26
+  },
+  "1489": {
+   "bytes": 6083,
+   "packets": 36
+  },
+  "1490": {
+   "bytes": 5805,
+   "packets": 45
+  },
+  "1491": {
+   "bytes": 4224,
+   "packets": 50
+  },
+  "1492": {
+   "bytes": 3629,
+   "packets": 49
+  },
+  "1493": {
+   "bytes": 2218,
+   "packets": 34
+  },
+  "1494": {
+   "bytes": 3024,
+   "packets": 42
+  },
+  "1495": {
+   "bytes": 1796,
+   "packets": 21
+  },
+  "1496": {
+   "bytes": 2839,
+   "packets": 40
+  },
+  "1497": {
+   "bytes": 2884,
+   "packets": 33
+  },
+  "1498": {
+   "bytes": 2788,
+   "packets": 36
+  },
+  "1499": {
+   "bytes": 2661,
+   "packets": 34
+  },
+  "1500": {
+   "bytes": 2127,
+   "packets": 28
+  },
+  "1501": {
+   "bytes": 952,
+   "packets": 11
+  },
+  "1502": {
+   "bytes": 311,
+   "packets": 9
+  },
+  "156": {
+   "bytes": 282,
+   "packets": 6
+  },
+  "157": {
+   "bytes": 282,
+   "packets": 6
+  },
+  "158": {
+   "bytes": 827,
+   "packets": 7
+  },
+  "159": {
+   "bytes": 1057,
+   "packets": 10
+  },
+  "160": {
+   "bytes": 297,
+   "packets": 3
+  },
+  "161": {
+   "bytes": 854,
+   "packets": 7
+  },
+  "162": {
+   "bytes": 12074,
+   "packets": 18
+  },
+  "163": {
+   "bytes": 493,
+   "packets": 6
+  },
+  "164": {
+   "bytes": 484,
+   "packets": 4
+  },
+  "165": {
+   "bytes": 4902,
+   "packets": 6
+  },
+  "166": {
+   "bytes": 3885,
+   "packets": 4
+  },
+  "167": {
+   "bytes": 3868,
+   "packets": 4
+  },
+  "168": {
+   "bytes": 2771,
+   "packets": 4
+  },
+  "169": {
+   "bytes": 4310,
+   "packets": 11
+  },
+  "170": {
+   "bytes": 3630,
+   "packets": 18
+  },
+  "171": {
+   "bytes": 178,
+   "packets": 2
+  },
+  "174": {
+   "bytes": 5246,
+   "packets": 7
+  },
+  "175": {
+   "bytes": 23266,
+   "packets": 22
+  },
+  "176": {
+   "bytes": 13938,
+   "packets": 16
+  },
+  "177": {
+   "bytes": 1388,
+   "packets": 5
+  },
+  "178": {
+   "bytes": 153,
+   "packets": 3
+  },
+  "179": {
+   "bytes": 1339,
+   "packets": 4
+  },
+  "180": {
+   "bytes": 3789,
+   "packets": 6
+  },
+  "181": {
+   "bytes": 3785,
+   "packets": 6
+  },
+  "182": {
+   "bytes": 4885,
+   "packets": 6
+  },
+  "183": {
+   "bytes": 3680,
+   "packets": 4
+  },
+  "184": {
+   "bytes": 4306,
+   "packets": 8
+  },
+  "185": {
+   "bytes": 3478,
+   "packets": 6
+  },
+  "186": {
+   "bytes": 24525,
+   "packets": 22
+  },
+  "187": {
+   "bytes": 3878,
+   "packets": 4
+  },
+  "188": {
+   "bytes": 13258,
+   "packets": 13
+  },
+  "189": {
+   "bytes": 3600,
+   "packets": 3
+  },
+  "190": {
+   "bytes": 4091,
+   "packets": 8
+  },
+  "191": {
+   "bytes": 3599,
+   "packets": 3
+  },
+  "192": {
+   "bytes": 2939,
+   "packets": 22
+  },
+  "193": {
+   "bytes": 4799,
+   "packets": 4
+  },
+  "194": {
+   "bytes": 3834,
+   "packets": 5
+  },
+  "195": {
+   "bytes": 3757,
+   "packets": 4
+  },
+  "196": {
+   "bytes": 3860,
+   "packets": 5
+  },
+  "197": {
+   "bytes": 4021,
+   "packets": 9
+  },
+  "198": {
+   "bytes": 3794,
+   "packets": 7
+  },
+  "199": {
+   "bytes": 3680,
+   "packets": 4
+  },
+  "200": {
+   "bytes": 3927,
+   "packets": 8
+  },
+  "201": {
+   "bytes": 3432,
+   "packets": 7
+  },
+  "202": {
+   "bytes": 3896,
+   "packets": 4
+  },
+  "203": {
+   "bytes": 3699,
+   "packets": 5
+  },
+  "204": {
+   "bytes": 1977,
+   "packets": 17
+  },
+  "206": {
+   "bytes": 194,
+   "packets": 4
+  },
+  "210": {
+   "bytes": 194,
+   "packets": 4
+  },
+  "223": {
+   "bytes": 192,
+   "packets": 12
+  },
+  "224": {
+   "bytes": 96,
+   "packets": 6
+  },
+  "225": {
+   "bytes": 608,
+   "packets": 20
+  },
+  "226": {
+   "bytes": 12266,
+   "packets": 32
+  },
+  "227": {
+   "bytes": 9780,
+   "packets": 32
+  },
+  "228": {
+   "bytes": 9662,
+   "packets": 29
+  },
+  "229": {
+   "bytes": 2400,
+   "packets": 4
+  },
+  "230": {
+   "bytes": 3825,
+   "packets": 5
+  },
+  "231": {
+   "bytes": 3808,
+   "packets": 7
+  },
+  "232": {
+   "bytes": 1841,
+   "packets": 15
+  },
+  "233": {
+   "bytes": 494,
+   "packets": 20
+  },
+  "234": {
+   "bytes": 2594,
+   "packets": 6
+  },
+  "235": {
+   "bytes": 3936,
+   "packets": 8
+  },
+  "236": {
+   "bytes": 3957,
+   "packets": 13
+  },
+  "237": {
+   "bytes": 4021,
+   "packets": 7
+  },
+  "238": {
+   "bytes": 3600,
+   "packets": 3
+  },
+  "239": {
+   "bytes": 1876,
+   "packets": 29
+  },
+  "240": {
+   "bytes": 727,
+   "packets": 21
+  },
+  "241": {
+   "bytes": 80,
+   "packets": 2
+  },
+  "243": {
+   "bytes": 194,
+   "packets": 4
+  },
+  "245": {
+   "bytes": 146,
+   "packets": 3
+  },
+  "246": {
+   "bytes": 145,
+   "packets": 3
+  },
+  "250": {
+   "bytes": 274,
+   "packets": 8
+  },
+  "251": {
+   "bytes": 40,
+   "packets": 2
+  },
+  "252": {
+   "bytes": 160,
+   "packets": 5
+  },
+  "253": {
+   "bytes": 80,
+   "packets": 2
+  },
+  "254": {
+   "bytes": 306,
+   "packets": 12
+  },
+  "255": {
+   "bytes": 130,
+   "packets": 6
+  },
+  "256": {
+   "bytes": 572,
+   "packets": 14
+  },
+  "257": {
+   "bytes": 607,
+   "packets": 13
+  },
+  "258": {
+   "bytes": 824,
+   "packets": 15
+  },
+  "259": {
+   "bytes": 3070,
+   "packets": 32
+  },
+  "260": {
+   "bytes": 2832,
+   "packets": 26
+  },
+  "261": {
+   "bytes": 2640,
+   "packets": 23
+  },
+  "262": {
+   "bytes": 2880,
+   "packets": 27
+  },
+  "263": {
+   "bytes": 1888,
+   "packets": 27
+  },
+  "264": {
+   "bytes": 1572,
+   "packets": 29
+  },
+  "265": {
+   "bytes": 1400,
+   "packets": 31
+  },
+  "266": {
+   "bytes": 1460,
+   "packets": 30
+  },
+  "267": {
+   "bytes": 1340,
+   "packets": 22
+  },
+  "268": {
+   "bytes": 1360,
+   "packets": 15
+  },
+  "269": {
+   "bytes": 1400,
+   "packets": 17
+  },
+  "270": {
+   "bytes": 1320,
+   "packets": 15
+  },
+  "271": {
+   "bytes": 1320,
+   "packets": 13
+  },
+  "272": {
+   "bytes": 1320,
+   "packets": 17
+  },
+  "273": {
+   "bytes": 1188,
+   "packets": 16
+  },
+  "274": {
+   "bytes": 876,
+   "packets": 21
+  },
+  "275": {
+   "bytes": 1032,
+   "packets": 28
+  },
+  "276": {
+   "bytes": 900,
+   "packets": 28
+  },
+  "277": {
+   "bytes": 1028,
+   "packets": 31
+  },
+  "278": {
+   "bytes": 1300,
+   "packets": 34
+  },
+  "279": {
+   "bytes": 1340,
+   "packets": 37
+  },
+  "280": {
+   "bytes": 1400,
+   "packets": 35
+  },
+  "281": {
+   "bytes": 3432,
+   "packets": 67
+  },
+  "282": {
+   "bytes": 2896,
+   "packets": 57
+  },
+  "283": {
+   "bytes": 3416,
+   "packets": 76
+  },
+  "284": {
+   "bytes": 3704,
+   "packets": 75
+  },
+  "285": {
+   "bytes": 3464,
+   "packets": 68
+  },
+  "286": {
+   "bytes": 3600,
+   "packets": 67
+  },
+  "287": {
+   "bytes": 3252,
+   "packets": 62
+  },
+  "288": {
+   "bytes": 3444,
+   "packets": 41
+  },
+  "289": {
+   "bytes": 3884,
+   "packets": 66
+  },
+  "290": {
+   "bytes": 3480,
+   "packets": 87
+  },
+  "291": {
+   "bytes": 3772,
+   "packets": 53
+  },
+  "292": {
+   "bytes": 3532,
+   "packets": 49
+  },
+  "293": {
+   "bytes": 2648,
+   "packets": 49
+  },
+  "294": {
+   "bytes": 1344,
+   "packets": 24
+  },
+  "295": {
+   "bytes": 2220,
+   "packets": 97
+  },
+  "296": {
+   "bytes": 3789,
+   "packets": 39
+  },
+  "297": {
+   "bytes": 2127,
+   "packets": 44
+  },
+  "298": {
+   "bytes": 1041,
+   "packets": 50
+  },
+  "299": {
+   "bytes": 2301,
+   "packets": 40
+  },
+  "3": {
+   "bytes": 300,
+   "packets": 1
+  },
+  "300": {
+   "bytes": 1834,
+   "packets": 55
+  },
+  "301": {
+   "bytes": 954,
+   "packets": 13
+  },
+  "302": {
+   "bytes": 549,
+   "packets": 64
+  },
+  "303": {
+   "bytes": 1628,
+   "packets": 25
+  },
+  "304": {
+   "bytes": 1078,
+   "packets": 21
+  },
+  "305": {
+   "bytes": 176,
+   "packets": 27
+  },
+  "306": {
+   "bytes": 2808,
+   "packets": 53
+  },
+  "307": {
+   "bytes": 2774,
+   "packets": 38
+  },
+  "308": {
+   "bytes": 3951,
+   "packets": 47
+  },
+  "309": {
+   "bytes": 3959,
+   "packets": 49
+  },
+  "310": {
+   "bytes": 3615,
+   "packets": 51
+  },
+  "311": {
+   "bytes": 2699,
+   "packets": 53
+  },
+  "312": {
+   "bytes": 928,
+   "packets": 44
+  },
+  "313": {
+   "bytes": 1013,
+   "packets": 33
+  },
+  "314": {
+   "bytes": 1462,
+   "packets": 58
+  },
+  "315": {
+   "bytes": 2829,
+   "packets": 102
+  },
+  "316": {
+   "bytes": 1341,
+   "packets": 31
+  },
+  "317": {
+   "bytes": 2053,
+   "packets": 41
+  },
+  "318": {
+   "bytes": 1000,
+   "packets": 45
+  },
+  "319": {
+   "bytes": 2704,
+   "packets": 76
+  },
+  "320": {
+   "bytes": 2558,
+   "packets": 52
+  },
+  "321": {
+   "bytes": 2394,
+   "packets": 86
+  },
+  "322": {
+   "bytes": 3813,
+   "packets": 67
+  },
+  "323": {
+   "bytes": 3576,
+   "packets": 47
+  },
+  "324": {
+   "bytes": 1492,
+   "packets": 49
+  },
+  "325": {
+   "bytes": 3850,
+   "packets": 68
+  },
+  "326": {
+   "bytes": 3364,
+   "packets": 69
+  },
+  "327": {
+   "bytes": 5018,
+   "packets": 68
+  },
+  "328": {
+   "bytes": 4420,
+   "packets": 64
+  },
+  "329": {
+   "bytes": 2802,
+   "packets": 43
+  },
+  "330": {
+   "bytes": 1198,
+   "packets": 30
+  },
+  "331": {
+   "bytes": 2721,
+   "packets": 66
+  },
+  "332": {
+   "bytes": 4913,
+   "packets": 67
+  },
+  "333": {
+   "bytes": 5301,
+   "packets": 65
+  },
+  "334": {
+   "bytes": 4733,
+   "packets": 58
+  },
+  "335": {
+   "bytes": 3760,
+   "packets": 65
+  },
+  "336": {
+   "bytes": 3628,
+   "packets": 57
+  },
+  "337": {
+   "bytes": 4002,
+   "packets": 68
+  },
+  "338": {
+   "bytes": 4368,
+   "packets": 62
+  },
+  "339": {
+   "bytes": 3429,
+   "packets": 45
+  },
+  "340": {
+   "bytes": 6435,
+   "packets": 77
+  },
+  "341": {
+   "bytes": 4686,
+   "packets": 51
+  },
+  "342": {
+   "bytes": 4276,
+   "packets": 48
+  },
+  "343": {
+   "bytes": 6973,
+   "packets": 63
+  },
+  "344": {
+   "bytes": 6874,
+   "packets": 56
+  },
+  "345": {
+   "bytes": 6538,
+   "packets": 68
+  },
+  "346": {
+   "bytes": 10505,
+   "packets": 87
+  },
+  "347": {
+   "bytes": 7324,
+   "packets": 65
+  },
+  "348": {
+   "bytes": 6080,
+   "packets": 63
+  },
+  "349": {
+   "bytes": 7644,
+   "packets": 67
+  },
+  "350": {
+   "bytes": 5592,
+   "packets": 65
+  },
+  "351": {
+   "bytes": 4569,
+   "packets": 64
+  },
+  "352": {
+   "bytes": 5590,
+   "packets": 46
+  },
+  "353": {
+   "bytes": 5912,
+   "packets": 57
+  },
+  "354": {
+   "bytes": 6428,
+   "packets": 61
+  },
+  "355": {
+   "bytes": 4995,
+   "packets": 47
+  },
+  "356": {
+   "bytes": 4852,
+   "packets": 28
+  },
+  "357": {
+   "bytes": 7358,
+   "packets": 57
+  },
+  "358": {
+   "bytes": 2882,
+   "packets": 42
+  },
+  "359": {
+   "bytes": 4911,
+   "packets": 33
+  },
+  "360": {
+   "bytes": 4775,
+   "packets": 32
+  },
+  "361": {
+   "bytes": 6390,
+   "packets": 46
+  },
+  "362": {
+   "bytes": 4557,
+   "packets": 39
+  },
+  "363": {
+   "bytes": 4056,
+   "packets": 35
+  },
+  "364": {
+   "bytes": 6438,
+   "packets": 30
+  },
+  "365": {
+   "bytes": 4850,
+   "packets": 45
+  },
+  "366": {
+   "bytes": 7155,
+   "packets": 47
+  },
+  "367": {
+   "bytes": 4723,
+   "packets": 53
+  },
+  "368": {
+   "bytes": 6808,
+   "packets": 34
+  },
+  "369": {
+   "bytes": 2550,
+   "packets": 55
+  },
+  "370": {
+   "bytes": 3492,
+   "packets": 26
+  },
+  "371": {
+   "bytes": 4543,
+   "packets": 58
+  },
+  "372": {
+   "bytes": 4697,
+   "packets": 36
+  },
+  "373": {
+   "bytes": 3863,
+   "packets": 38
+  },
+  "374": {
+   "bytes": 6403,
+   "packets": 62
+  },
+  "375": {
+   "bytes": 6204,
+   "packets": 53
+  },
+  "376": {
+   "bytes": 2611,
+   "packets": 35
+  },
+  "377": {
+   "bytes": 6601,
+   "packets": 47
+  },
+  "378": {
+   "bytes": 4608,
+   "packets": 45
+  },
+  "379": {
+   "bytes": 4225,
+   "packets": 31
+  },
+  "380": {
+   "bytes": 5604,
+   "packets": 39
+  },
+  "381": {
+   "bytes": 2429,
+   "packets": 31
+  },
+  "382": {
+   "bytes": 6879,
+   "packets": 52
+  },
+  "383": {
+   "bytes": 2509,
+   "packets": 32
+  },
+  "384": {
+   "bytes": 1649,
+   "packets": 25
+  },
+  "385": {
+   "bytes": 4719,
+   "packets": 41
+  },
+  "386": {
+   "bytes": 4853,
+   "packets": 32
+  },
+  "387": {
+   "bytes": 4477,
+   "packets": 33
+  },
+  "388": {
+   "bytes": 2020,
+   "packets": 29
+  },
+  "389": {
+   "bytes": 3539,
+   "packets": 22
+  },
+  "390": {
+   "bytes": 4576,
+   "packets": 30
+  },
+  "391": {
+   "bytes": 5762,
+   "packets": 58
+  },
+  "392": {
+   "bytes": 4421,
+   "packets": 32
+  },
+  "393": {
+   "bytes": 3020,
+   "packets": 43
+  },
+  "394": {
+   "bytes": 5766,
+   "packets": 33
+  },
+  "395": {
+   "bytes": 3998,
+   "packets": 42
+  },
+  "396": {
+   "bytes": 5206,
+   "packets": 42
+  },
+  "397": {
+   "bytes": 3530,
+   "packets": 27
+  },
+  "398": {
+   "bytes": 1436,
+   "packets": 22
+  },
+  "399": {
+   "bytes": 5402,
+   "packets": 45
+  },
+  "400": {
+   "bytes": 2554,
+   "packets": 31
+  },
+  "401": {
+   "bytes": 2746,
+   "packets": 39
+  },
+  "402": {
+   "bytes": 1920,
+   "packets": 29
+  },
+  "403": {
+   "bytes": 6674,
+   "packets": 35
+  },
+  "404": {
+   "bytes": 2090,
+   "packets": 32
+  },
+  "405": {
+   "bytes": 3295,
+   "packets": 14
+  },
+  "406": {
+   "bytes": 4291,
+   "packets": 47
+  },
+  "407": {
+   "bytes": 1317,
+   "packets": 22
+  },
+  "408": {
+   "bytes": 3283,
+   "packets": 32
+  },
+  "409": {
+   "bytes": 1856,
+   "packets": 29
+  },
+  "410": {
+   "bytes": 2825,
+   "packets": 26
+  },
+  "411": {
+   "bytes": 6337,
+   "packets": 35
+  },
+  "412": {
+   "bytes": 1835,
+   "packets": 26
+  },
+  "413": {
+   "bytes": 2396,
+   "packets": 13
+  },
+  "414": {
+   "bytes": 4891,
+   "packets": 51
+  },
+  "415": {
+   "bytes": 2113,
+   "packets": 25
+  },
+  "416": {
+   "bytes": 3822,
+   "packets": 46
+  },
+  "417": {
+   "bytes": 1832,
+   "packets": 25
+  },
+  "418": {
+   "bytes": 3614,
+   "packets": 40
+  },
+  "419": {
+   "bytes": 6346,
+   "packets": 37
+  },
+  "420": {
+   "bytes": 2765,
+   "packets": 35
+  },
+  "421": {
+   "bytes": 3095,
+   "packets": 23
+  },
+  "422": {
+   "bytes": 5599,
+   "packets": 43
+  },
+  "423": {
+   "bytes": 5312,
+   "packets": 48
+  },
+  "424": {
+   "bytes": 4843,
+   "packets": 41
+  },
+  "425": {
+   "bytes": 3377,
+   "packets": 31
+  },
+  "426": {
+   "bytes": 3379,
+   "packets": 41
+  },
+  "427": {
+   "bytes": 8171,
+   "packets": 43
+  },
+  "428": {
+   "bytes": 2296,
+   "packets": 36
+  },
+  "429": {
+   "bytes": 2513,
+   "packets": 17
+  },
+  "430": {
+   "bytes": 3457,
+   "packets": 26
+  },
+  "431": {
+   "bytes": 3649,
+   "packets": 54
+  },
+  "432": {
+   "bytes": 2190,
+   "packets": 28
+  },
+  "433": {
+   "bytes": 3329,
+   "packets": 38
+  },
+  "434": {
+   "bytes": 2721,
+   "packets": 38
+  },
+  "435": {
+   "bytes": 6830,
+   "packets": 31
+  },
+  "436": {
+   "bytes": 2690,
+   "packets": 37
+  },
+  "437": {
+   "bytes": 1042,
+   "packets": 13
+  },
+  "438": {
+   "bytes": 5765,
+   "packets": 40
+  },
+  "439": {
+   "bytes": 2678,
+   "packets": 37
+  },
+  "440": {
+   "bytes": 3704,
+   "packets": 34
+  },
+  "441": {
+   "bytes": 2370,
+   "packets": 31
+  },
+  "442": {
+   "bytes": 3310,
+   "packets": 29
+  },
+  "443": {
+   "bytes": 7060,
+   "packets": 42
+  },
+  "444": {
+   "bytes": 2531,
+   "packets": 34
+  },
+  "445": {
+   "bytes": 1414,
+   "packets": 21
+  },
+  "446": {
+   "bytes": 5989,
+   "packets": 26
+  },
+  "447": {
+   "bytes": 4082,
+   "packets": 59
+  },
+  "448": {
+   "bytes": 4813,
+   "packets": 37
+  },
+  "449": {
+   "bytes": 3019,
+   "packets": 48
+  },
+  "450": {
+   "bytes": 3142,
+   "packets": 28
+  },
+  "451": {
+   "bytes": 8389,
+   "packets": 53
+  },
+  "452": {
+   "bytes": 3257,
+   "packets": 37
+  },
+  "453": {
+   "bytes": 1948,
+   "packets": 24
+  },
+  "454": {
+   "bytes": 5468,
+   "packets": 23
+  },
+  "455": {
+   "bytes": 4581,
+   "packets": 60
+  },
+  "456": {
+   "bytes": 2249,
+   "packets": 30
+  },
+  "457": {
+   "bytes": 3053,
+   "packets": 41
+  },
+  "458": {
+   "bytes": 2095,
+   "packets": 31
+  },
+  "459": {
+   "bytes": 7032,
+   "packets": 39
+  },
+  "460": {
+   "bytes": 1719,
+   "packets": 25
+  },
+  "461": {
+   "bytes": 2088,
+   "packets": 28
+  },
+  "462": {
+   "bytes": 5057,
+   "packets": 18
+  },
+  "463": {
+   "bytes": 4038,
+   "packets": 53
+  },
+  "464": {
+   "bytes": 2875,
+   "packets": 35
+  },
+  "465": {
+   "bytes": 2358,
+   "packets": 36
+  },
+  "466": {
+   "bytes": 3313,
+   "packets": 44
+  },
+  "467": {
+   "bytes": 5992,
+   "packets": 32
+  },
+  "468": {
+   "bytes": 2485,
+   "packets": 34
+  },
+  "469": {
+   "bytes": 2533,
+   "packets": 33
+  },
+  "470": {
+   "bytes": 3241,
+   "packets": 11
+  },
+  "471": {
+   "bytes": 5927,
+   "packets": 57
+  },
+  "472": {
+   "bytes": 2388,
+   "packets": 27
+  },
+  "473": {
+   "bytes": 2881,
+   "packets": 40
+  },
+  "474": {
+   "bytes": 2764,
+   "packets": 35
+  },
+  "475": {
+   "bytes": 7014,
+   "packets": 37
+  },
+  "476": {
+   "bytes": 2627,
+   "packets": 38
+  },
+  "477": {
+   "bytes": 2193,
+   "packets": 28
+  },
+  "478": {
+   "bytes": 3633,
+   "packets": 14
+  },
+  "479": {
+   "bytes": 5572,
+   "packets": 58
+  },
+  "480": {
+   "bytes": 2768,
+   "packets": 37
+  },
+  "481": {
+   "bytes": 2600,
+   "packets": 39
+  },
+  "482": {
+   "bytes": 2329,
+   "packets": 35
+  },
+  "483": {
+   "bytes": 6209,
+   "packets": 34
+  },
+  "484": {
+   "bytes": 2335,
+   "packets": 33
+  },
+  "485": {
+   "bytes": 1974,
+   "packets": 28
+  },
+  "486": {
+   "bytes": 3495,
+   "packets": 14
+  },
+  "487": {
+   "bytes": 4500,
+   "packets": 51
+  },
+  "488": {
+   "bytes": 2363,
+   "packets": 31
+  },
+  "489": {
+   "bytes": 2511,
+   "packets": 37
+  },
+  "490": {
+   "bytes": 2843,
+   "packets": 40
+  },
+  "491": {
+   "bytes": 2753,
+   "packets": 36
+  },
+  "492": {
+   "bytes": 7111,
+   "packets": 42
+  },
+  "493": {
+   "bytes": 2853,
+   "packets": 37
+  },
+  "494": {
+   "bytes": 3461,
+   "packets": 14
+  },
+  "495": {
+   "bytes": 4313,
+   "packets": 47
+  },
+  "496": {
+   "bytes": 2369,
+   "packets": 38
+  },
+  "497": {
+   "bytes": 3523,
+   "packets": 36
+  },
+  "498": {
+   "bytes": 1861,
+   "packets": 34
+  },
+  "499": {
+   "bytes": 2148,
+   "packets": 32
+  },
+  "500": {
+   "bytes": 5633,
+   "packets": 29
+  },
+  "501": {
+   "bytes": 2086,
+   "packets": 29
+  },
+  "502": {
+   "bytes": 2501,
+   "packets": 16
+  },
+  "503": {
+   "bytes": 4422,
+   "packets": 23
+  },
+  "504": {
+   "bytes": 4719,
+   "packets": 47
+  },
+  "505": {
+   "bytes": 3380,
+   "packets": 29
+  },
+  "506": {
+   "bytes": 2847,
+   "packets": 38
+  },
+  "507": {
+   "bytes": 3811,
+   "packets": 31
+  },
+  "508": {
+   "bytes": 7565,
+   "packets": 36
+  },
+  "509": {
+   "bytes": 3918,
+   "packets": 43
+  },
+  "510": {
+   "bytes": 2463,
+   "packets": 16
+  },
+  "511": {
+   "bytes": 3496,
+   "packets": 26
+  },
+  "512": {
+   "bytes": 4712,
+   "packets": 56
+  },
+  "513": {
+   "bytes": 3044,
+   "packets": 37
+  },
+  "514": {
+   "bytes": 3336,
+   "packets": 42
+  },
+  "515": {
+   "bytes": 2466,
+   "packets": 33
+  },
+  "516": {
+   "bytes": 7408,
+   "packets": 44
+  },
+  "517": {
+   "bytes": 2536,
+   "packets": 33
+  },
+  "518": {
+   "bytes": 3259,
+   "packets": 27
+  },
+  "519": {
+   "bytes": 5159,
+   "packets": 30
+  },
+  "520": {
+   "bytes": 3705,
+   "packets": 48
+  },
+  "521": {
+   "bytes": 5443,
+   "packets": 40
+  },
+  "522": {
+   "bytes": 3575,
+   "packets": 44
+  },
+  "523": {
+   "bytes": 3113,
+   "packets": 25
+  },
+  "524": {
+   "bytes": 7368,
+   "packets": 49
+  },
+  "525": {
+   "bytes": 3258,
+   "packets": 35
+  },
+  "526": {
+   "bytes": 1699,
+   "packets": 23
+  },
+  "527": {
+   "bytes": 4111,
+   "packets": 41
+  },
+  "528": {
+   "bytes": 3557,
+   "packets": 43
+  },
+  "529": {
+   "bytes": 2024,
+   "packets": 29
+  },
+  "530": {
+   "bytes": 1495,
+   "packets": 22
+  },
+  "531": {
+   "bytes": 2830,
+   "packets": 41
+  },
+  "532": {
+   "bytes": 6692,
+   "packets": 38
+  },
+  "533": {
+   "bytes": 2172,
+   "packets": 30
+  },
+  "534": {
+   "bytes": 2462,
+   "packets": 30
+  },
+  "535": {
+   "bytes": 5800,
+   "packets": 19
+  },
+  "536": {
+   "bytes": 6292,
+   "packets": 69
+  },
+  "537": {
+   "bytes": 3844,
+   "packets": 31
+  },
+  "538": {
+   "bytes": 5094,
+   "packets": 36
+  },
+  "539": {
+   "bytes": 4792,
+   "packets": 29
+  },
+  "540": {
+   "bytes": 7864,
+   "packets": 45
+  },
+  "541": {
+   "bytes": 4808,
+   "packets": 44
+  },
+  "542": {
+   "bytes": 3256,
+   "packets": 31
+  },
+  "543": {
+   "bytes": 5223,
+   "packets": 33
+  },
+  "544": {
+   "bytes": 4212,
+   "packets": 54
+  },
+  "545": {
+   "bytes": 2742,
+   "packets": 34
+  },
+  "546": {
+   "bytes": 3060,
+   "packets": 40
+  },
+  "547": {
+   "bytes": 3062,
+   "packets": 38
+  },
+  "548": {
+   "bytes": 7236,
+   "packets": 41
+  },
+  "549": {
+   "bytes": 2443,
+   "packets": 31
+  },
+  "550": {
+   "bytes": 2642,
+   "packets": 33
+  },
+  "551": {
+   "bytes": 4822,
+   "packets": 14
+  },
+  "552": {
+   "bytes": 4851,
+   "packets": 62
+  },
+  "553": {
+   "bytes": 3450,
+   "packets": 27
+  },
+  "554": {
+   "bytes": 5010,
+   "packets": 47
+  },
+  "555": {
+   "bytes": 1506,
+   "packets": 19
+  },
+  "556": {
+   "bytes": 9682,
+   "packets": 43
+  },
+  "557": {
+   "bytes": 3779,
+   "packets": 49
+  },
+  "558": {
+   "bytes": 2405,
+   "packets": 32
+  },
+  "559": {
+   "bytes": 5382,
+   "packets": 29
+  },
+  "560": {
+   "bytes": 3717,
+   "packets": 51
+  },
+  "561": {
+   "bytes": 2468,
+   "packets": 28
+  },
+  "562": {
+   "bytes": 4807,
+   "packets": 57
+  },
+  "563": {
+   "bytes": 2071,
+   "packets": 30
+  },
+  "564": {
+   "bytes": 6938,
+   "packets": 45
+  },
+  "565": {
+   "bytes": 1963,
+   "packets": 29
+  },
+  "566": {
+   "bytes": 2179,
+   "packets": 30
+  },
+  "567": {
+   "bytes": 4196,
+   "packets": 19
+  },
+  "568": {
+   "bytes": 6076,
+   "packets": 57
+  },
+  "569": {
+   "bytes": 5072,
+   "packets": 52
+  },
+  "570": {
+   "bytes": 28175,
+   "packets": 71
+  },
+  "571": {
+   "bytes": 2423,
+   "packets": 42
+  },
+  "572": {
+   "bytes": 8898,
+   "packets": 46
+  },
+  "573": {
+   "bytes": 2261,
+   "packets": 22
+  },
+  "574": {
+   "bytes": 4890,
+   "packets": 17
+  },
+  "575": {
+   "bytes": 3256,
+   "packets": 13
+  },
+  "576": {
+   "bytes": 7426,
+   "packets": 44
+  },
+  "577": {
+   "bytes": 8290,
+   "packets": 52
+  },
+  "578": {
+   "bytes": 9121,
+   "packets": 54
+  },
+  "579": {
+   "bytes": 8689,
+   "packets": 56
+  },
+  "580": {
+   "bytes": 9183,
+   "packets": 57
+  },
+  "581": {
+   "bytes": 8060,
+   "packets": 46
+  },
+  "582": {
+   "bytes": 5023,
+   "packets": 18
+  },
+  "583": {
+   "bytes": 4934,
+   "packets": 14
+  },
+  "584": {
+   "bytes": 14228,
+   "packets": 32
+  },
+  "585": {
+   "bytes": 6539,
+   "packets": 54
+  },
+  "586": {
+   "bytes": 8172,
+   "packets": 93
+  },
+  "587": {
+   "bytes": 6301,
+   "packets": 62
+  },
+  "588": {
+   "bytes": 5988,
+   "packets": 28
+  },
+  "589": {
+   "bytes": 5996,
+   "packets": 26
+  },
+  "590": {
+   "bytes": 6049,
+   "packets": 26
+  },
+  "591": {
+   "bytes": 6261,
+   "packets": 28
+  },
+  "592": {
+   "bytes": 5113,
+   "packets": 27
+  },
+  "593": {
+   "bytes": 7112,
+   "packets": 33
+  },
+  "594": {
+   "bytes": 8646,
+   "packets": 47
+  },
+  "595": {
+   "bytes": 7873,
+   "packets": 65
+  },
+  "596": {
+   "bytes": 8958,
+   "packets": 61
+  },
+  "597": {
+   "bytes": 9329,
+   "packets": 109
+  },
+  "598": {
+   "bytes": 6851,
+   "packets": 87
+  },
+  "599": {
+   "bytes": 9333,
+   "packets": 55
+  },
+  "600": {
+   "bytes": 7666,
+   "packets": 48
+  },
+  "601": {
+   "bytes": 7566,
+   "packets": 57
+  },
+  "602": {
+   "bytes": 6960,
+   "packets": 67
+  },
+  "603": {
+   "bytes": 8437,
+   "packets": 95
+  },
+  "604": {
+   "bytes": 9238,
+   "packets": 110
+  },
+  "605": {
+   "bytes": 9101,
+   "packets": 103
+  },
+  "606": {
+   "bytes": 7939,
+   "packets": 76
+  },
+  "607": {
+   "bytes": 6231,
+   "packets": 75
+  },
+  "608": {
+   "bytes": 6622,
+   "packets": 82
+  },
+  "609": {
+   "bytes": 7837,
+   "packets": 73
+  },
+  "610": {
+   "bytes": 7584,
+   "packets": 88
+  },
+  "611": {
+   "bytes": 7198,
+   "packets": 68
+  },
+  "612": {
+   "bytes": 6717,
+   "packets": 68
+  },
+  "613": {
+   "bytes": 3099,
+   "packets": 38
+  },
+  "614": {
+   "bytes": 6337,
+   "packets": 46
+  },
+  "615": {
+   "bytes": 6493,
+   "packets": 69
+  },
+  "616": {
+   "bytes": 4660,
+   "packets": 54
+  },
+  "617": {
+   "bytes": 4245,
+   "packets": 41
+  },
+  "618": {
+   "bytes": 5700,
+   "packets": 64
+  },
+  "619": {
+   "bytes": 3814,
+   "packets": 50
+  },
+  "620": {
+   "bytes": 5413,
+   "packets": 55
+  },
+  "621": {
+   "bytes": 7268,
+   "packets": 45
+  },
+  "622": {
+   "bytes": 4462,
+   "packets": 42
+  },
+  "623": {
+   "bytes": 3463,
+   "packets": 44
+  },
+  "624": {
+   "bytes": 3007,
+   "packets": 40
+  },
+  "625": {
+   "bytes": 4497,
+   "packets": 26
+  },
+  "626": {
+   "bytes": 5061,
+   "packets": 49
+  },
+  "627": {
+   "bytes": 3724,
+   "packets": 47
+  },
+  "628": {
+   "bytes": 2275,
+   "packets": 29
+  },
+  "629": {
+   "bytes": 11259,
+   "packets": 59
+  },
+  "630": {
+   "bytes": 3219,
+   "packets": 43
+  },
+  "631": {
+   "bytes": 3100,
+   "packets": 38
+  },
+  "632": {
+   "bytes": 4493,
+   "packets": 26
+  },
+  "633": {
+   "bytes": 6786,
+   "packets": 32
+  },
+  "634": {
+   "bytes": 4365,
+   "packets": 56
+  },
+  "635": {
+   "bytes": 6005,
+   "packets": 57
+  },
+  "636": {
+   "bytes": 8980,
+   "packets": 52
+  },
+  "637": {
+   "bytes": 4778,
+   "packets": 63
+  },
+  "638": {
+   "bytes": 3952,
+   "packets": 34
+  },
+  "639": {
+   "bytes": 4086,
+   "packets": 21
+  },
+  "640": {
+   "bytes": 5747,
+   "packets": 38
+  },
+  "641": {
+   "bytes": 6933,
+   "packets": 68
+  },
+  "642": {
+   "bytes": 10084,
+   "packets": 61
+  },
+  "643": {
+   "bytes": 4729,
+   "packets": 60
+  },
+  "644": {
+   "bytes": 4728,
+   "packets": 53
+  },
+  "645": {
+   "bytes": 4291,
+   "packets": 22
+  },
+  "646": {
+   "bytes": 3417,
+   "packets": 23
+  },
+  "647": {
+   "bytes": 5166,
+   "packets": 56
+  },
+  "648": {
+   "bytes": 5771,
+   "packets": 55
+  },
+  "649": {
+   "bytes": 4768,
+   "packets": 37
+  },
+  "650": {
+   "bytes": 2784,
+   "packets": 23
+  },
+  "651": {
+   "bytes": 4089,
+   "packets": 37
+  },
+  "652": {
+   "bytes": 6655,
+   "packets": 38
+  },
+  "653": {
+   "bytes": 4134,
+   "packets": 38
+  },
+  "654": {
+   "bytes": 4940,
+   "packets": 38
+  },
+  "655": {
+   "bytes": 5417,
+   "packets": 34
+  },
+  "656": {
+   "bytes": 4186,
+   "packets": 31
+  },
+  "657": {
+   "bytes": 7549,
+   "packets": 61
+  },
+  "658": {
+   "bytes": 13076,
+   "packets": 101
+  },
+  "659": {
+   "bytes": 8095,
+   "packets": 91
+  },
+  "660": {
+   "bytes": 5093,
+   "packets": 57
+  },
+  "661": {
+   "bytes": 4618,
+   "packets": 27
+  },
+  "662": {
+   "bytes": 5138,
+   "packets": 36
+  },
+  "663": {
+   "bytes": 6129,
+   "packets": 62
+  },
+  "664": {
+   "bytes": 5827,
+   "packets": 66
+  },
+  "665": {
+   "bytes": 5491,
+   "packets": 60
+  },
+  "666": {
+   "bytes": 4015,
+   "packets": 44
+  },
+  "667": {
+   "bytes": 5298,
+   "packets": 52
+  },
+  "668": {
+   "bytes": 4299,
+   "packets": 53
+  },
+  "669": {
+   "bytes": 5194,
+   "packets": 53
+  },
+  "670": {
+   "bytes": 4069,
+   "packets": 43
+  },
+  "671": {
+   "bytes": 6554,
+   "packets": 72
+  },
+  "672": {
+   "bytes": 3894,
+   "packets": 45
+  },
+  "673": {
+   "bytes": 4959,
+   "packets": 60
+  },
+  "674": {
+   "bytes": 6590,
+   "packets": 73
+  },
+  "675": {
+   "bytes": 4691,
+   "packets": 55
+  },
+  "676": {
+   "bytes": 6304,
+   "packets": 71
+  },
+  "677": {
+   "bytes": 4630,
+   "packets": 52
+  },
+  "678": {
+   "bytes": 3963,
+   "packets": 42
+  },
+  "679": {
+   "bytes": 5815,
+   "packets": 64
+  },
+  "680": {
+   "bytes": 4204,
+   "packets": 54
+  },
+  "681": {
+   "bytes": 3573,
+   "packets": 43
+  },
+  "682": {
+   "bytes": 4952,
+   "packets": 64
+  },
+  "683": {
+   "bytes": 2960,
+   "packets": 38
+  },
+  "684": {
+   "bytes": 3491,
+   "packets": 44
+  },
+  "685": {
+   "bytes": 1811,
+   "packets": 25
+  },
+  "686": {
+   "bytes": 2489,
+   "packets": 34
+  },
+  "687": {
+   "bytes": 1930,
+   "packets": 26
+  },
+  "688": {
+   "bytes": 1611,
+   "packets": 22
+  },
+  "689": {
+   "bytes": 6652,
+   "packets": 79
+  },
+  "690": {
+   "bytes": 6538,
+   "packets": 65
+  },
+  "691": {
+   "bytes": 5306,
+   "packets": 65
+  },
+  "692": {
+   "bytes": 5147,
+   "packets": 65
+  },
+  "693": {
+   "bytes": 5649,
+   "packets": 65
+  },
+  "694": {
+   "bytes": 4830,
+   "packets": 56
+  },
+  "695": {
+   "bytes": 3196,
+   "packets": 40
+  },
+  "696": {
+   "bytes": 4991,
+   "packets": 66
+  },
+  "697": {
+   "bytes": 3448,
+   "packets": 47
+  },
+  "698": {
+   "bytes": 3986,
+   "packets": 49
+  },
+  "699": {
+   "bytes": 4098,
+   "packets": 70
+  },
+  "700": {
+   "bytes": 3850,
+   "packets": 51
+  },
+  "701": {
+   "bytes": 1849,
+   "packets": 37
+  },
+  "702": {
+   "bytes": 10935,
+   "packets": 89
+  },
+  "703": {
+   "bytes": 8397,
+   "packets": 95
+  },
+  "704": {
+   "bytes": 7333,
+   "packets": 81
+  },
+  "705": {
+   "bytes": 6564,
+   "packets": 40
+  },
+  "706": {
+   "bytes": 7991,
+   "packets": 67
+  },
+  "707": {
+   "bytes": 5698,
+   "packets": 54
+  },
+  "708": {
+   "bytes": 4664,
+   "packets": 49
+  },
+  "709": {
+   "bytes": 6472,
+   "packets": 67
+  },
+  "710": {
+   "bytes": 13034,
+   "packets": 103
+  },
+  "711": {
+   "bytes": 6202,
+   "packets": 66
+  },
+  "712": {
+   "bytes": 7453,
+   "packets": 75
+  },
+  "713": {
+   "bytes": 7451,
+   "packets": 74
+  },
+  "714": {
+   "bytes": 6246,
+   "packets": 54
+  },
+  "715": {
+   "bytes": 10726,
+   "packets": 102
+  },
+  "716": {
+   "bytes": 10616,
+   "packets": 96
+  },
+  "717": {
+   "bytes": 10795,
+   "packets": 99
+  },
+  "718": {
+   "bytes": 11046,
+   "packets": 92
+  },
+  "719": {
+   "bytes": 12406,
+   "packets": 104
+  },
+  "720": {
+   "bytes": 6346,
+   "packets": 63
+  },
+  "721": {
+   "bytes": 5066,
+   "packets": 53
+  },
+  "722": {
+   "bytes": 5396,
+   "packets": 61
+  },
+  "723": {
+   "bytes": 6496,
+   "packets": 63
+  },
+  "724": {
+   "bytes": 5522,
+   "packets": 60
+  },
+  "725": {
+   "bytes": 2448,
+   "packets": 40
+  },
+  "726": {
+   "bytes": 3128,
+   "packets": 55
+  },
+  "727": {
+   "bytes": 4497,
+   "packets": 44
+  },
+  "728": {
+   "bytes": 4648,
+   "packets": 50
+  },
+  "729": {
+   "bytes": 3373,
+   "packets": 56
+  },
+  "730": {
+   "bytes": 8324,
+   "packets": 48
+  },
+  "731": {
+   "bytes": 2856,
+   "packets": 49
+  },
+  "732": {
+   "bytes": 3685,
+   "packets": 49
+  },
+  "733": {
+   "bytes": 2310,
+   "packets": 14
+  },
+  "734": {
+   "bytes": 5155,
+   "packets": 49
+  },
+  "735": {
+   "bytes": 7456,
+   "packets": 68
+  },
+  "736": {
+   "bytes": 7089,
+   "packets": 57
+  },
+  "737": {
+   "bytes": 6142,
+   "packets": 71
+  },
+  "738": {
+   "bytes": 4441,
+   "packets": 50
+  },
+  "739": {
+   "bytes": 7296,
+   "packets": 51
+  },
+  "740": {
+   "bytes": 8026,
+   "packets": 59
+  },
+  "741": {
+   "bytes": 5240,
+   "packets": 60
+  },
+  "742": {
+   "bytes": 10782,
+   "packets": 70
+  },
+  "743": {
+   "bytes": 5369,
+   "packets": 63
+  },
+  "744": {
+   "bytes": 5848,
+   "packets": 56
+  },
+  "745": {
+   "bytes": 2736,
+   "packets": 49
+  },
+  "746": {
+   "bytes": 3415,
+   "packets": 16
+  },
+  "747": {
+   "bytes": 4785,
+   "packets": 58
+  },
+  "748": {
+   "bytes": 3325,
+   "packets": 31
+  },
+  "749": {
+   "bytes": 6330,
+   "packets": 52
+  },
+  "750": {
+   "bytes": 7092,
+   "packets": 55
+  },
+  "751": {
+   "bytes": 2121,
+   "packets": 41
+  },
+  "752": {
+   "bytes": 3884,
+   "packets": 21
+  },
+  "753": {
+   "bytes": 4117,
+   "packets": 38
+  },
+  "754": {
+   "bytes": 3865,
+   "packets": 45
+  },
+  "755": {
+   "bytes": 8093,
+   "packets": 51
+  },
+  "756": {
+   "bytes": 3191,
+   "packets": 43
+  },
+  "757": {
+   "bytes": 2488,
+   "packets": 21
+  },
+  "758": {
+   "bytes": 3815,
+   "packets": 33
+  },
+  "759": {
+   "bytes": 3677,
+   "packets": 45
+  },
+  "760": {
+   "bytes": 7122,
+   "packets": 37
+  },
+  "761": {
+   "bytes": 3506,
+   "packets": 41
+  },
+  "762": {
+   "bytes": 4169,
+   "packets": 39
+  },
+  "763": {
+   "bytes": 5705,
+   "packets": 45
+  },
+  "764": {
+   "bytes": 3715,
+   "packets": 55
+  },
+  "765": {
+   "bytes": 7425,
+   "packets": 66
+  },
+  "766": {
+   "bytes": 2945,
+   "packets": 41
+  },
+  "767": {
+   "bytes": 7137,
+   "packets": 42
+  },
+  "768": {
+   "bytes": 3466,
+   "packets": 29
+  },
+  "769": {
+   "bytes": 3204,
+   "packets": 31
+  },
+  "770": {
+   "bytes": 4454,
+   "packets": 45
+  },
+  "771": {
+   "bytes": 3393,
+   "packets": 32
+  },
+  "772": {
+   "bytes": 4435,
+   "packets": 43
+  },
+  "773": {
+   "bytes": 2604,
+   "packets": 35
+  },
+  "774": {
+   "bytes": 4271,
+   "packets": 25
+  },
+  "775": {
+   "bytes": 6944,
+   "packets": 59
+  },
+  "776": {
+   "bytes": 2824,
+   "packets": 39
+  },
+  "777": {
+   "bytes": 5390,
+   "packets": 42
+  },
+  "778": {
+   "bytes": 5283,
+   "packets": 45
+  },
+  "779": {
+   "bytes": 2522,
+   "packets": 16
+  },
+  "780": {
+   "bytes": 12421,
+   "packets": 59
+  },
+  "781": {
+   "bytes": 5779,
+   "packets": 49
+  },
+  "782": {
+   "bytes": 3005,
+   "packets": 32
+  },
+  "783": {
+   "bytes": 3440,
+   "packets": 15
+  },
+  "784": {
+   "bytes": 4995,
+   "packets": 17
+  },
+  "785": {
+   "bytes": 5895,
+   "packets": 59
+  },
+  "786": {
+   "bytes": 4756,
+   "packets": 43
+  },
+  "787": {
+   "bytes": 4800,
+   "packets": 49
+  },
+  "788": {
+   "bytes": 4819,
+   "packets": 42
+  },
+  "789": {
+   "bytes": 5652,
+   "packets": 54
+  },
+  "790": {
+   "bytes": 2410,
+   "packets": 34
+  },
+  "791": {
+   "bytes": 5578,
+   "packets": 16
+  },
+  "792": {
+   "bytes": 4286,
+   "packets": 47
+  },
+  "793": {
+   "bytes": 1275,
+   "packets": 16
+  },
+  "794": {
+   "bytes": 5660,
+   "packets": 22
+  },
+  "795": {
+   "bytes": 3319,
+   "packets": 43
+  },
+  "796": {
+   "bytes": 1116,
+   "packets": 17
+  },
+  "797": {
+   "bytes": 4289,
+   "packets": 34
+  },
+  "798": {
+   "bytes": 2000,
+   "packets": 32
+  },
+  "799": {
+   "bytes": 7705,
+   "packets": 37
+  },
+  "800": {
+   "bytes": 1998,
+   "packets": 30
+  },
+  "801": {
+   "bytes": 1052,
+   "packets": 14
+  },
+  "802": {
+   "bytes": 5020,
+   "packets": 15
+  },
+  "803": {
+   "bytes": 3647,
+   "packets": 54
+  },
+  "804": {
+   "bytes": 2398,
+   "packets": 19
+  },
+  "805": {
+   "bytes": 2493,
+   "packets": 38
+  },
+  "806": {
+   "bytes": 1615,
+   "packets": 28
+  },
+  "807": {
+   "bytes": 5790,
+   "packets": 27
+  },
+  "808": {
+   "bytes": 1830,
+   "packets": 31
+  },
+  "809": {
+   "bytes": 1172,
+   "packets": 19
+  },
+  "810": {
+   "bytes": 4625,
+   "packets": 15
+  },
+  "811": {
+   "bytes": 4799,
+   "packets": 46
+  },
+  "812": {
+   "bytes": 2773,
+   "packets": 29
+  },
+  "813": {
+   "bytes": 2158,
+   "packets": 33
+  },
+  "814": {
+   "bytes": 3282,
+   "packets": 32
+  },
+  "815": {
+   "bytes": 2346,
+   "packets": 32
+  },
+  "816": {
+   "bytes": 1138,
+   "packets": 20
+  },
+  "817": {
+   "bytes": 6225,
+   "packets": 40
+  },
+  "818": {
+   "bytes": 1910,
+   "packets": 33
+  },
+  "819": {
+   "bytes": 3918,
+   "packets": 26
+  },
+  "820": {
+   "bytes": 4398,
+   "packets": 39
+  },
+  "821": {
+   "bytes": 2002,
+   "packets": 26
+  },
+  "822": {
+   "bytes": 4701,
+   "packets": 29
+  },
+  "823": {
+   "bytes": 3722,
+   "packets": 44
+  },
+  "824": {
+   "bytes": 7650,
+   "packets": 36
+  },
+  "825": {
+   "bytes": 3676,
+   "packets": 45
+  },
+  "826": {
+   "bytes": 2676,
+   "packets": 17
+  },
+  "827": {
+   "bytes": 4691,
+   "packets": 31
+  },
+  "828": {
+   "bytes": 4754,
+   "packets": 62
+  },
+  "829": {
+   "bytes": 4270,
+   "packets": 40
+  },
+  "830": {
+   "bytes": 2980,
+   "packets": 43
+  },
+  "831": {
+   "bytes": 7166,
+   "packets": 40
+  },
+  "832": {
+   "bytes": 3361,
+   "packets": 43
+  },
+  "833": {
+   "bytes": 2980,
+   "packets": 38
+  },
+  "834": {
+   "bytes": 3664,
+   "packets": 14
+  },
+  "835": {
+   "bytes": 4886,
+   "packets": 41
+  },
+  "836": {
+   "bytes": 3300,
+   "packets": 45
+  },
+  "837": {
+   "bytes": 8236,
+   "packets": 62
+  },
+  "838": {
+   "bytes": 2048,
+   "packets": 27
+  },
+  "839": {
+   "bytes": 3252,
+   "packets": 29
+  },
+  "840": {
+   "bytes": 7124,
+   "packets": 29
+  },
+  "841": {
+   "bytes": 6339,
+   "packets": 60
+  },
+  "842": {
+   "bytes": 2480,
+   "packets": 16
+  },
+  "843": {
+   "bytes": 5042,
+   "packets": 45
+  },
+  "844": {
+   "bytes": 4647,
+   "packets": 56
+  },
+  "845": {
+   "bytes": 2520,
+   "packets": 29
+  },
+  "846": {
+   "bytes": 4981,
+   "packets": 54
+  },
+  "847": {
+   "bytes": 8989,
+   "packets": 31
+  },
+  "848": {
+   "bytes": 6436,
+   "packets": 39
+  },
+  "849": {
+   "bytes": 6231,
+   "packets": 32
+  },
+  "850": {
+   "bytes": 1611,
+   "packets": 17
+  },
+  "851": {
+   "bytes": 3144,
+   "packets": 11
+  },
+  "852": {
+   "bytes": 4241,
+   "packets": 22
+  },
+  "853": {
+   "bytes": 5283,
+   "packets": 38
+  },
+  "854": {
+   "bytes": 4564,
+   "packets": 28
+  },
+  "855": {
+   "bytes": 5562,
+   "packets": 36
+  },
+  "856": {
+   "bytes": 8246,
+   "packets": 63
+  },
+  "857": {
+   "bytes": 3851,
+   "packets": 52
+  },
+  "858": {
+   "bytes": 3983,
+   "packets": 54
+  },
+  "859": {
+   "bytes": 3838,
+   "packets": 16
+  },
+  "860": {
+   "bytes": 5700,
+   "packets": 63
+  },
+  "861": {
+   "bytes": 4553,
+   "packets": 45
+  },
+  "862": {
+   "bytes": 3053,
+   "packets": 42
+  },
+  "863": {
+   "bytes": 1943,
+   "packets": 26
+  },
+  "864": {
+   "bytes": 7839,
+   "packets": 49
+  },
+  "865": {
+   "bytes": 2994,
+   "packets": 35
+  },
+  "866": {
+   "bytes": 2400,
+   "packets": 23
+  },
+  "867": {
+   "bytes": 5093,
+   "packets": 20
+  },
+  "868": {
+   "bytes": 5154,
+   "packets": 58
+  },
+  "869": {
+   "bytes": 3077,
+   "packets": 37
+  },
+  "870": {
+   "bytes": 3617,
+   "packets": 44
+  },
+  "871": {
+   "bytes": 2852,
+   "packets": 36
+  },
+  "872": {
+   "bytes": 7168,
+   "packets": 42
+  },
+  "873": {
+   "bytes": 2361,
+   "packets": 29
+  },
+  "874": {
+   "bytes": 1497,
+   "packets": 21
+  },
+  "875": {
+   "bytes": 5926,
+   "packets": 33
+  },
+  "876": {
+   "bytes": 2989,
+   "packets": 38
+  },
+  "877": {
+   "bytes": 3840,
+   "packets": 50
+  },
+  "878": {
+   "bytes": 2488,
+   "packets": 31
+  },
+  "879": {
+   "bytes": 2586,
+   "packets": 37
+  },
+  "880": {
+   "bytes": 7857,
+   "packets": 49
+  },
+  "881": {
+   "bytes": 1713,
+   "packets": 23
+  },
+  "882": {
+   "bytes": 3175,
+   "packets": 42
+  },
+  "883": {
+   "bytes": 4608,
+   "packets": 43
+  },
+  "884": {
+   "bytes": 3074,
+   "packets": 42
+  },
+  "885": {
+   "bytes": 4067,
+   "packets": 41
+  },
+  "886": {
+   "bytes": 2179,
+   "packets": 33
+  },
+  "887": {
+   "bytes": 3942,
+   "packets": 44
+  },
+  "888": {
+   "bytes": 6491,
+   "packets": 31
+  },
+  "889": {
+   "bytes": 2874,
+   "packets": 40
+  },
+  "890": {
+   "bytes": 2305,
+   "packets": 28
+  },
+  "891": {
+   "bytes": 4669,
+   "packets": 17
+  },
+  "892": {
+   "bytes": 3474,
+   "packets": 50
+  },
+  "893": {
+   "bytes": 4471,
+   "packets": 25
+  },
+  "894": {
+   "bytes": 1901,
+   "packets": 33
+  },
+  "895": {
+   "bytes": 2844,
+   "packets": 25
+  },
+  "896": {
+   "bytes": 8187,
+   "packets": 37
+  },
+  "897": {
+   "bytes": 1581,
+   "packets": 23
+  },
+  "898": {
+   "bytes": 1946,
+   "packets": 26
+  },
+  "899": {
+   "bytes": 4220,
+   "packets": 12
+  },
+  "900": {
+   "bytes": 4510,
+   "packets": 54
+  },
+  "901": {
+   "bytes": 2025,
+   "packets": 22
+  },
+  "902": {
+   "bytes": 3340,
+   "packets": 37
+  },
+  "903": {
+   "bytes": 2314,
+   "packets": 29
+  },
+  "904": {
+   "bytes": 7710,
+   "packets": 42
+  },
+  "905": {
+   "bytes": 2523,
+   "packets": 33
+  },
+  "906": {
+   "bytes": 1672,
+   "packets": 25
+  },
+  "907": {
+   "bytes": 2113,
+   "packets": 14
+  },
+  "908": {
+   "bytes": 5181,
+   "packets": 53
+  },
+  "909": {
+   "bytes": 1725,
+   "packets": 26
+  },
+  "91": {
+   "bytes": 17294,
+   "packets": 16
+  },
+  "910": {
+   "bytes": 2389,
+   "packets": 39
+  },
+  "911": {
+   "bytes": 1453,
+   "packets": 24
+  },
+  "912": {
+   "bytes": 5796,
+   "packets": 29
+  },
+  "913": {
+   "bytes": 1797,
+   "packets": 27
+  },
+  "914": {
+   "bytes": 1244,
+   "packets": 24
+  },
+  "915": {
+   "bytes": 3109,
+   "packets": 11
+  },
+  "916": {
+   "bytes": 3690,
+   "packets": 49
+  },
+  "917": {
+   "bytes": 2450,
+   "packets": 20
+  },
+  "918": {
+   "bytes": 3592,
+   "packets": 36
+  },
+  "919": {
+   "bytes": 923,
+   "packets": 13
+  },
+  "92": {
+   "bytes": 72,
+   "packets": 2
+  },
+  "920": {
+   "bytes": 8432,
+   "packets": 37
+  },
+  "921": {
+   "bytes": 2954,
+   "packets": 25
+  },
+  "922": {
+   "bytes": 2874,
+   "packets": 28
+  },
+  "923": {
+   "bytes": 5837,
+   "packets": 27
+  },
+  "924": {
+   "bytes": 3406,
+   "packets": 37
+  },
+  "925": {
+   "bytes": 3240,
+   "packets": 40
+  },
+  "926": {
+   "bytes": 2451,
+   "packets": 35
+  },
+  "927": {
+   "bytes": 2538,
+   "packets": 36
+  },
+  "928": {
+   "bytes": 2293,
+   "packets": 30
+  },
+  "929": {
+   "bytes": 6926,
+   "packets": 39
+  },
+  "93": {
+   "bytes": 336,
+   "packets": 3
+  },
+  "930": {
+   "bytes": 2693,
+   "packets": 36
+  },
+  "931": {
+   "bytes": 2745,
+   "packets": 16
+  },
+  "932": {
+   "bytes": 4730,
+   "packets": 40
+  },
+  "933": {
+   "bytes": 3618,
+   "packets": 46
+  },
+  "934": {
+   "bytes": 3267,
+   "packets": 39
+  },
+  "935": {
+   "bytes": 3621,
+   "packets": 35
+  },
+  "936": {
+   "bytes": 4293,
+   "packets": 42
+  },
+  "937": {
+   "bytes": 6311,
+   "packets": 37
+  },
+  "938": {
+   "bytes": 1682,
+   "packets": 21
+  },
+  "939": {
+   "bytes": 5538,
+   "packets": 42
+  },
+  "94": {
+   "bytes": 2451,
+   "packets": 3
+  },
+  "940": {
+   "bytes": 5473,
+   "packets": 44
+  },
+  "941": {
+   "bytes": 5992,
+   "packets": 59
+  },
+  "942": {
+   "bytes": 1971,
+   "packets": 30
+  },
+  "943": {
+   "bytes": 3189,
+   "packets": 43
+  },
+  "944": {
+   "bytes": 3163,
+   "packets": 28
+  },
+  "945": {
+   "bytes": 5666,
+   "packets": 27
+  },
+  "946": {
+   "bytes": 2417,
+   "packets": 34
+  },
+  "947": {
+   "bytes": 2618,
+   "packets": 16
+  },
+  "948": {
+   "bytes": 5065,
+   "packets": 33
+  },
+  "949": {
+   "bytes": 3620,
+   "packets": 45
+  },
+  "95": {
+   "bytes": 3600,
+   "packets": 3
+  },
+  "950": {
+   "bytes": 2282,
+   "packets": 30
+  },
+  "951": {
+   "bytes": 3140,
+   "packets": 41
+  },
+  "952": {
+   "bytes": 2257,
+   "packets": 30
+  },
+  "953": {
+   "bytes": 6887,
+   "packets": 41
+  },
+  "954": {
+   "bytes": 2093,
+   "packets": 31
+  },
+  "955": {
+   "bytes": 2772,
+   "packets": 20
+  },
+  "956": {
+   "bytes": 4585,
+   "packets": 20
+  },
+  "957": {
+   "bytes": 3337,
+   "packets": 54
+  },
+  "958": {
+   "bytes": 1979,
+   "packets": 28
+  },
+  "959": {
+   "bytes": 2447,
+   "packets": 35
+  },
+  "96": {
+   "bytes": 3600,
+   "packets": 3
+  },
+  "960": {
+   "bytes": 1797,
+   "packets": 28
+  },
+  "961": {
+   "bytes": 6115,
+   "packets": 26
+  },
+  "962": {
+   "bytes": 2134,
+   "packets": 35
+  },
+  "963": {
+   "bytes": 1332,
+   "packets": 15
+  },
+  "964": {
+   "bytes": 5384,
+   "packets": 32
+  },
+  "965": {
+   "bytes": 3033,
+   "packets": 47
+  },
+  "966": {
+   "bytes": 4217,
+   "packets": 37
+  },
+  "967": {
+   "bytes": 1935,
+   "packets": 33
+  },
+  "968": {
+   "bytes": 1870,
+   "packets": 22
+  },
+  "969": {
+   "bytes": 5208,
+   "packets": 44
+  },
+  "97": {
+   "bytes": 3657,
+   "packets": 4
+  },
+  "970": {
+   "bytes": 1541,
+   "packets": 24
+  },
+  "971": {
+   "bytes": 3117,
+   "packets": 29
+  },
+  "972": {
+   "bytes": 2733,
+   "packets": 25
+  },
+  "973": {
+   "bytes": 2391,
+   "packets": 18
+  },
+  "974": {
+   "bytes": 5176,
+   "packets": 47
+  },
+  "975": {
+   "bytes": 1673,
+   "packets": 26
+  },
+  "976": {
+   "bytes": 2697,
+   "packets": 22
+  },
+  "977": {
+   "bytes": 6727,
+   "packets": 48
+  },
+  "978": {
+   "bytes": 2791,
+   "packets": 24
+  },
+  "979": {
+   "bytes": 1432,
+   "packets": 22
+  },
+  "98": {
+   "bytes": 4079,
+   "packets": 9
+  },
+  "980": {
+   "bytes": 4752,
+   "packets": 28
+  },
+  "981": {
+   "bytes": 3568,
+   "packets": 38
+  },
+  "982": {
+   "bytes": 2372,
+   "packets": 30
+  },
+  "983": {
+   "bytes": 2767,
+   "packets": 37
+  },
+  "984": {
+   "bytes": 2960,
+   "packets": 39
+  },
+  "985": {
+   "bytes": 7354,
+   "packets": 43
+  },
+  "986": {
+   "bytes": 3291,
+   "packets": 44
+  },
+  "987": {
+   "bytes": 2030,
+   "packets": 28
+  },
+  "988": {
+   "bytes": 4853,
+   "packets": 17
+  },
+  "989": {
+   "bytes": 5682,
+   "packets": 62
+  },
+  "99": {
+   "bytes": 1882,
+   "packets": 7
+  },
+  "990": {
+   "bytes": 3180,
+   "packets": 42
+  },
+  "991": {
+   "bytes": 3214,
+   "packets": 34
+  },
+  "992": {
+   "bytes": 3294,
+   "packets": 46
+  },
+  "993": {
+   "bytes": 6326,
+   "packets": 32
+  },
+  "994": {
+   "bytes": 2648,
+   "packets": 40
+  },
+  "995": {
+   "bytes": 1503,
+   "packets": 25
+  },
+  "996": {
+   "bytes": 4496,
+   "packets": 15
+  },
+  "997": {
+   "bytes": 3975,
+   "packets": 57
+  },
+  "998": {
+   "bytes": 1871,
+   "packets": 35
+  },
+  "999": {
+   "bytes": 3066,
+   "packets": 44
+  }
+ },
+ "runDir": "/tmp/h2run.OSH4Yj",
+ "summaries": {
+  "VID": [
+   {
+    "chunkBytes": 4000,
+    "connectMs": 96184,
+    "deliveryKbps": 4,
+    "laneBudgetBytesPerSec": 500,
+    "mediaMode": "realAudio",
+    "receiverMediaMode": "noLocalAudio",
+    "recoveryFreezes": 3,
+    "resumedChunks": 0,
+    "retransmitAfterMs": 12693,
+    "sha256Ok": true,
+    "sizeBytes": 524288,
+    "srttMs": 8637,
+    "throughputKbps": 4,
+    "totalChunks": 132,
+    "videoMs": 1187459,
+    "windowMs": 1500000
+   }
+  ]
+ },
+ "tsvJoinGapS": 4,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-10T00:11:11Z",
+  "elapsed_ms": "1505340",
+  "loss_pct": "30.0",
+  "note": "criterion=video-survival(delivered + sha256; times recorded as baseline); delivered sha-verified: 524288B in 1187459ms (4 kbps, 0/132 chunks resumed); All tests passed!",
+  "packets": "48585",
+  "profile": "extreme",
+  "recovery_ms": "-",
+  "rtt_ms": "2042.891",
+  "test": "video_survival_test.dart",
+  "verdict": "PASS/STRESS"
+ }
+}

@@ -1,0 +1,1506 @@
+{
+ "capturedUtc": "2026-08-11T11:19:04Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 1
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 1
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 3
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 3
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 4
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 5
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 6
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 6
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 6
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 8
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 9
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 22
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 22
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 24
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 24
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 25
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 29
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 32
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 35
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 38
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 42
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 45
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 48
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 51
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 55
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 58
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 61
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 65
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 70
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 76
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 79
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 82
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 85
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 89
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 92
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 95
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 96
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 96
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 96
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 97
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 97
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 97
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 98
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 103
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 113
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 369,
+   "packets": 4
+  },
+  "1": {
+   "bytes": 5706,
+   "packets": 8
+  },
+  "10": {
+   "bytes": 3507,
+   "packets": 3
+  },
+  "100": {
+   "bytes": 2129,
+   "packets": 38
+  },
+  "101": {
+   "bytes": 1929,
+   "packets": 37
+  },
+  "102": {
+   "bytes": 2100,
+   "packets": 37
+  },
+  "103": {
+   "bytes": 2149,
+   "packets": 38
+  },
+  "104": {
+   "bytes": 2735,
+   "packets": 48
+  },
+  "105": {
+   "bytes": 2112,
+   "packets": 38
+  },
+  "106": {
+   "bytes": 1995,
+   "packets": 38
+  },
+  "107": {
+   "bytes": 2235,
+   "packets": 40
+  },
+  "108": {
+   "bytes": 2038,
+   "packets": 37
+  },
+  "109": {
+   "bytes": 2441,
+   "packets": 42
+  },
+  "11": {
+   "bytes": 4107,
+   "packets": 4
+  },
+  "110": {
+   "bytes": 1855,
+   "packets": 34
+  },
+  "111": {
+   "bytes": 2766,
+   "packets": 46
+  },
+  "112": {
+   "bytes": 2321,
+   "packets": 39
+  },
+  "113": {
+   "bytes": 2573,
+   "packets": 44
+  },
+  "114": {
+   "bytes": 1933,
+   "packets": 35
+  },
+  "115": {
+   "bytes": 2243,
+   "packets": 41
+  },
+  "116": {
+   "bytes": 1908,
+   "packets": 37
+  },
+  "117": {
+   "bytes": 2421,
+   "packets": 42
+  },
+  "118": {
+   "bytes": 5175,
+   "packets": 45
+  },
+  "119": {
+   "bytes": 3146,
+   "packets": 12
+  },
+  "12": {
+   "bytes": 3054,
+   "packets": 3
+  },
+  "120": {
+   "bytes": 5319,
+   "packets": 20
+  },
+  "121": {
+   "bytes": 4223,
+   "packets": 30
+  },
+  "122": {
+   "bytes": 4186,
+   "packets": 29
+  },
+  "123": {
+   "bytes": 3588,
+   "packets": 42
+  },
+  "124": {
+   "bytes": 3520,
+   "packets": 61
+  },
+  "125": {
+   "bytes": 3698,
+   "packets": 64
+  },
+  "126": {
+   "bytes": 2354,
+   "packets": 42
+  },
+  "127": {
+   "bytes": 1873,
+   "packets": 36
+  },
+  "128": {
+   "bytes": 3042,
+   "packets": 51
+  },
+  "129": {
+   "bytes": 2340,
+   "packets": 42
+  },
+  "130": {
+   "bytes": 2544,
+   "packets": 46
+  },
+  "131": {
+   "bytes": 2098,
+   "packets": 36
+  },
+  "132": {
+   "bytes": 1870,
+   "packets": 35
+  },
+  "133": {
+   "bytes": 2228,
+   "packets": 40
+  },
+  "134": {
+   "bytes": 2346,
+   "packets": 42
+  },
+  "135": {
+   "bytes": 2680,
+   "packets": 48
+  },
+  "136": {
+   "bytes": 2510,
+   "packets": 40
+  },
+  "137": {
+   "bytes": 1647,
+   "packets": 32
+  },
+  "138": {
+   "bytes": 3317,
+   "packets": 54
+  },
+  "139": {
+   "bytes": 2160,
+   "packets": 38
+  },
+  "140": {
+   "bytes": 2126,
+   "packets": 38
+  },
+  "141": {
+   "bytes": 2514,
+   "packets": 44
+  },
+  "142": {
+   "bytes": 1734,
+   "packets": 34
+  },
+  "143": {
+   "bytes": 2568,
+   "packets": 46
+  },
+  "144": {
+   "bytes": 2476,
+   "packets": 43
+  },
+  "145": {
+   "bytes": 2180,
+   "packets": 39
+  },
+  "146": {
+   "bytes": 2459,
+   "packets": 58
+  },
+  "147": {
+   "bytes": 3293,
+   "packets": 65
+  },
+  "148": {
+   "bytes": 4000,
+   "packets": 75
+  },
+  "149": {
+   "bytes": 2512,
+   "packets": 56
+  },
+  "150": {
+   "bytes": 978,
+   "packets": 26
+  },
+  "151": {
+   "bytes": 232,
+   "packets": 2
+  },
+  "152": {
+   "bytes": 992,
+   "packets": 14
+  },
+  "153": {
+   "bytes": 1820,
+   "packets": 25
+  },
+  "154": {
+   "bytes": 1920,
+   "packets": 26
+  },
+  "155": {
+   "bytes": 1820,
+   "packets": 25
+  },
+  "156": {
+   "bytes": 1840,
+   "packets": 26
+  },
+  "157": {
+   "bytes": 1760,
+   "packets": 25
+  },
+  "158": {
+   "bytes": 1820,
+   "packets": 25
+  },
+  "159": {
+   "bytes": 2416,
+   "packets": 20
+  },
+  "160": {
+   "bytes": 2416,
+   "packets": 20
+  },
+  "161": {
+   "bytes": 2548,
+   "packets": 21
+  },
+  "162": {
+   "bytes": 2316,
+   "packets": 19
+  },
+  "163": {
+   "bytes": 2352,
+   "packets": 20
+  },
+  "166": {
+   "bytes": 328,
+   "packets": 12
+  },
+  "2": {
+   "bytes": 5330,
+   "packets": 4
+  },
+  "23": {
+   "bytes": 7363,
+   "packets": 12
+  },
+  "24": {
+   "bytes": 1545,
+   "packets": 9
+  },
+  "25": {
+   "bytes": 7408,
+   "packets": 11
+  },
+  "26": {
+   "bytes": 6045,
+   "packets": 9
+  },
+  "27": {
+   "bytes": 3894,
+   "packets": 10
+  },
+  "28": {
+   "bytes": 3398,
+   "packets": 12
+  },
+  "29": {
+   "bytes": 4886,
+   "packets": 6
+  },
+  "3": {
+   "bytes": 3911,
+   "packets": 4
+  },
+  "30": {
+   "bytes": 4083,
+   "packets": 10
+  },
+  "31": {
+   "bytes": 3802,
+   "packets": 6
+  },
+  "32": {
+   "bytes": 3879,
+   "packets": 5
+  },
+  "33": {
+   "bytes": 874,
+   "packets": 11
+  },
+  "4": {
+   "bytes": 4037,
+   "packets": 4
+  },
+  "5": {
+   "bytes": 4404,
+   "packets": 4
+  },
+  "52": {
+   "bytes": 600,
+   "packets": 20
+  },
+  "53": {
+   "bytes": 744,
+   "packets": 18
+  },
+  "54": {
+   "bytes": 336,
+   "packets": 34
+  },
+  "55": {
+   "bytes": 328,
+   "packets": 9
+  },
+  "56": {
+   "bytes": 2044,
+   "packets": 44
+  },
+  "57": {
+   "bytes": 1320,
+   "packets": 34
+  },
+  "58": {
+   "bytes": 1428,
+   "packets": 30
+  },
+  "59": {
+   "bytes": 2172,
+   "packets": 48
+  },
+  "6": {
+   "bytes": 3104,
+   "packets": 3
+  },
+  "60": {
+   "bytes": 3288,
+   "packets": 74
+  },
+  "61": {
+   "bytes": 4608,
+   "packets": 98
+  },
+  "62": {
+   "bytes": 4996,
+   "packets": 89
+  },
+  "63": {
+   "bytes": 3668,
+   "packets": 81
+  },
+  "64": {
+   "bytes": 2484,
+   "packets": 87
+  },
+  "65": {
+   "bytes": 1544,
+   "packets": 46
+  },
+  "66": {
+   "bytes": 2256,
+   "packets": 80
+  },
+  "67": {
+   "bytes": 2400,
+   "packets": 46
+  },
+  "68": {
+   "bytes": 1772,
+   "packets": 45
+  },
+  "69": {
+   "bytes": 3036,
+   "packets": 61
+  },
+  "7": {
+   "bytes": 3564,
+   "packets": 4
+  },
+  "70": {
+   "bytes": 560,
+   "packets": 49
+  },
+  "71": {
+   "bytes": 2574,
+   "packets": 48
+  },
+  "72": {
+   "bytes": 3765,
+   "packets": 48
+  },
+  "73": {
+   "bytes": 2054,
+   "packets": 42
+  },
+  "74": {
+   "bytes": 1250,
+   "packets": 37
+  },
+  "75": {
+   "bytes": 2102,
+   "packets": 42
+  },
+  "76": {
+   "bytes": 3587,
+   "packets": 72
+  },
+  "77": {
+   "bytes": 2391,
+   "packets": 48
+  },
+  "78": {
+   "bytes": 2228,
+   "packets": 44
+  },
+  "79": {
+   "bytes": 3246,
+   "packets": 56
+  },
+  "8": {
+   "bytes": 4334,
+   "packets": 4
+  },
+  "80": {
+   "bytes": 2778,
+   "packets": 49
+  },
+  "81": {
+   "bytes": 2090,
+   "packets": 38
+  },
+  "82": {
+   "bytes": 2251,
+   "packets": 40
+  },
+  "83": {
+   "bytes": 2027,
+   "packets": 38
+  },
+  "84": {
+   "bytes": 1946,
+   "packets": 36
+  },
+  "85": {
+   "bytes": 2150,
+   "packets": 42
+  },
+  "86": {
+   "bytes": 1902,
+   "packets": 34
+  },
+  "87": {
+   "bytes": 2308,
+   "packets": 42
+  },
+  "88": {
+   "bytes": 2583,
+   "packets": 44
+  },
+  "89": {
+   "bytes": 2095,
+   "packets": 38
+  },
+  "9": {
+   "bytes": 4454,
+   "packets": 4
+  },
+  "90": {
+   "bytes": 2012,
+   "packets": 38
+  },
+  "91": {
+   "bytes": 1994,
+   "packets": 36
+  },
+  "92": {
+   "bytes": 2320,
+   "packets": 42
+  },
+  "93": {
+   "bytes": 2280,
+   "packets": 39
+  },
+  "94": {
+   "bytes": 2228,
+   "packets": 40
+  },
+  "95": {
+   "bytes": 2169,
+   "packets": 41
+  },
+  "96": {
+   "bytes": 2187,
+   "packets": 41
+  },
+  "97": {
+   "bytes": 2378,
+   "packets": 44
+  },
+  "98": {
+   "bytes": 2184,
+   "packets": 39
+  },
+  "99": {
+   "bytes": 2456,
+   "packets": 44
+  }
+ },
+ "runDir": "/tmp/h2run.7qNQKG",
+ "summaries": {
+  "SLA": [
+   {
+    "ackProbeErrors": 0,
+    "ackProbes": 20,
+    "ackRttLossPct": 0,
+    "ackRttLost": 0,
+    "ackRttMaxMs": 4564,
+    "ackRttMinMs": 235,
+    "ackRttP50Ms": 279.0,
+    "ackRttP95Ms": 1203.0,
+    "ackRttSamples": 20,
+    "adaptationDecisions": 1,
+    "adaptationLog": [
+     "initiator: MediaPolicyDecision(medium -> minimal: severe loss 25.0%)"
+    ],
+    "adaptationProfileInitiator": "minimal",
+    "adaptationProfileReceiver": "medium",
+    "bothConnected": true,
+    "connectMs": 24827,
+    "mediaMode": "realAudio",
+    "notes": [],
+    "preventedFreezes": 3,
+    "recoveryConnectedMs": 922,
+    "recoveryFirstCandidateMs": 922,
+    "recoveryNewCandidates": 1,
+    "recoveryStatusLog": [],
+    "sentinelFirstGrounds": "projectedScore -1.57 <= floor 0.2",
+    "sentinelLeadMs": null,
+    "sentinelWarns": 5,
+    "stillConnectedAtEnd": true
+   }
+  ]
+ },
+ "trendSeries": [
+  {
+   "proj": null,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": null,
+   "t": 2,
+   "verdict": "unknown"
+  },
+  {
+   "proj": null,
+   "role": "initiator",
+   "score": 0.8571,
+   "slope": null,
+   "t": 3,
+   "verdict": "unknown"
+  },
+  {
+   "proj": -1.57,
+   "role": "initiator",
+   "score": 0.5714,
+   "slope": -0.21414,
+   "t": 4,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.4284,
+   "role": "initiator",
+   "score": 0.7143,
+   "slope": -0.11427,
+   "t": 5,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.8568,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": -0.01432,
+   "t": 6,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.6234,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": -0.01544,
+   "t": 7,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.4058,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": -0.02609,
+   "t": 8,
+   "verdict": "slipping"
+  },
+  {
+   "proj": -0.0243,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.04687,
+   "t": 9,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1851,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.03704,
+   "t": 10,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0325,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.0412,
+   "t": 11,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.5978,
+   "role": "initiator",
+   "score": 0.8889,
+   "slope": -0.02911,
+   "t": 12,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.1851,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.03704,
+   "t": 13,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4497,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.01059,
+   "t": 14,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.3783,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00662,
+   "t": 15,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.7857,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.0119,
+   "t": 16,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9365,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": 0.01587,
+   "t": 17,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6084,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.00529,
+   "t": 18,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3836,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.0172,
+   "t": 19,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.4048,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00397,
+   "t": 20,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4895,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00661,
+   "t": 21,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0741,
+   "role": "initiator",
+   "score": 0.8889,
+   "slope": 0.01853,
+   "t": 22,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5159,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00396,
+   "t": 23,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5027,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00529,
+   "t": 24,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4312,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00133,
+   "t": 25,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5159,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00397,
+   "t": 26,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8968,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": 0.0119,
+   "t": 27,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4761,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00795,
+   "t": 28,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.574,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": -0.00927,
+   "t": 29,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4841,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.00396,
+   "t": 30,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.365,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00795,
+   "t": 31,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8835,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": 0.01057,
+   "t": 32,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.693,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.00264,
+   "t": 33,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4761,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00794,
+   "t": 34,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6085,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.00529,
+   "t": 35,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.7593,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.00926,
+   "t": 36,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.299,
+   "role": "initiator",
+   "score": 0.8889,
+   "slope": 0.04101,
+   "t": 37,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.7144,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.01588,
+   "t": 38,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4365,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.0119,
+   "t": 39,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.2857,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.01587,
+   "t": 40,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.4101,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.01454,
+   "t": 41,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.9418,
+   "role": "initiator",
+   "score": 0.8889,
+   "slope": 0.00529,
+   "t": 42,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.246,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.01984,
+   "t": 43,
+   "verdict": "slipping"
+  },
+  {
+   "proj": -0.2672,
+   "role": "initiator",
+   "score": 0.2222,
+   "slope": -0.04894,
+   "t": 44,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.6217,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.06217,
+   "t": 45,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.4922,
+   "role": "initiator",
+   "score": 0.2222,
+   "slope": -0.07145,
+   "t": 46,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1057,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.04498,
+   "t": 47,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.1563,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.04896,
+   "t": 48,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.7644,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": -0.00134,
+   "t": 49,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.9527,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.09527,
+   "t": 50,
+   "verdict": "steady"
+  },
+  {
+   "proj": 2.4155,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.14155,
+   "t": 51,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.6931,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.11376,
+   "t": 52,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0978,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.05423,
+   "t": 53,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8121,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.01455,
+   "t": 54,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2593,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.01851,
+   "t": 55,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.7353,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": -0.02647,
+   "t": 56,
+   "verdict": "slipping"
+  },
+  {
+   "proj": -0.0451,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.04896,
+   "t": 57,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2512,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.03044,
+   "t": 58,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.5423,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00132,
+   "t": 59,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2592,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.01853,
+   "t": 60,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 1.1323,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.01323,
+   "t": 61,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8519,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.01852,
+   "t": 62,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.463,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00926,
+   "t": 63,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9577,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.02911,
+   "t": 64,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6217,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.00662,
+   "t": 65,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.1006,
+   "role": "initiator",
+   "score": 0.8889,
+   "slope": 0.02117,
+   "t": 65,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3518,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00927,
+   "t": 67,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3623,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": -0.03044,
+   "t": 67,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.2856,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.01588,
+   "t": 68,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.2062,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.02382,
+   "t": 69,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.8756,
+   "role": "initiator",
+   "score": 0.8889,
+   "slope": -0.00133,
+   "t": 70,
+   "verdict": "steady"
+  }
+ ],
+ "tsvJoinGapS": 5,
+ "tsvRow": {
+  "ack_loss": "0",
+  "ack_p50": "279.0",
+  "ack_p95": "1203.0",
+  "alive": "True",
+  "connect_ms": "24827",
+  "date": "2026-08-11T11:19:09Z",
+  "elapsed_ms": "281496",
+  "loss_pct": "0.0",
+  "note": "criterion=sla; All tests passed!",
+  "packets": "4789",
+  "profile": "narrow",
+  "recovery_ms": "922",
+  "rtt_ms": "43.113",
+  "test": "sla_thresholds_test.dart",
+  "verdict": "PASS"
+ }
+}

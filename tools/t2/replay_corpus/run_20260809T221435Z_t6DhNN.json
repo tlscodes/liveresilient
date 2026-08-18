@@ -1,0 +1,126 @@
+{
+ "capturedUtc": "2026-08-09T22:14:35Z",
+ "events": [],
+ "packetSeries": {
+  "0": {
+   "bytes": 0,
+   "packets": 2
+  },
+  "1": {
+   "bytes": 652,
+   "packets": 9
+  },
+  "10": {
+   "bytes": 36999,
+   "packets": 41
+  },
+  "11": {
+   "bytes": 222472,
+   "packets": 231
+  },
+  "12": {
+   "bytes": 192215,
+   "packets": 226
+  },
+  "13": {
+   "bytes": 75786,
+   "packets": 90
+  },
+  "14": {
+   "bytes": 279248,
+   "packets": 311
+  },
+  "15": {
+   "bytes": 221587,
+   "packets": 240
+  },
+  "16": {
+   "bytes": 89851,
+   "packets": 102
+  },
+  "17": {
+   "bytes": 40620,
+   "packets": 47
+  },
+  "18": {
+   "bytes": 11435,
+   "packets": 13
+  },
+  "19": {
+   "bytes": 2464,
+   "packets": 2
+  },
+  "2": {
+   "bytes": 227,
+   "packets": 4
+  },
+  "21": {
+   "bytes": 2464,
+   "packets": 2
+  },
+  "23": {
+   "bytes": 1232,
+   "packets": 1
+  },
+  "24": {
+   "bytes": 194,
+   "packets": 4
+  },
+  "29": {
+   "bytes": 2464,
+   "packets": 2
+  },
+  "3": {
+   "bytes": 4018,
+   "packets": 25
+  },
+  "32": {
+   "bytes": 51,
+   "packets": 1
+  },
+  "4": {
+   "bytes": 56247,
+   "packets": 110
+  },
+  "5": {
+   "bytes": 33361,
+   "packets": 88
+  },
+  "6": {
+   "bytes": 433834,
+   "packets": 490
+  },
+  "7": {
+   "bytes": 78810,
+   "packets": 96
+  },
+  "8": {
+   "bytes": 46545,
+   "packets": 67
+  },
+  "9": {
+   "bytes": 1087,
+   "packets": 6
+  }
+ },
+ "runDir": "/tmp/h2run.t6DhNN",
+ "summaries": {},
+ "tsvJoinGapS": 2,
+ "tsvRow": {
+  "ack_loss": "-",
+  "ack_p50": "-",
+  "ack_p95": "-",
+  "alive": "-",
+  "connect_ms": "-",
+  "date": "2026-08-09T22:14:38Z",
+  "elapsed_ms": "118142",
+  "loss_pct": "80.0",
+  "note": "flutter could not attach to the device",
+  "packets": "2210",
+  "profile": "loss60",
+  "recovery_ms": "-",
+  "rtt_ms": "0.984",
+  "test": "sla_thresholds_test.dart",
+  "verdict": "TOOLING/NO-ATTACH"
+ }
+}

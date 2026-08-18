@@ -1,0 +1,7262 @@
+{
+ "capturedUtc": "2026-08-11T10:33:43Z",
+ "events": [
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 0
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "initiator",
+   "t_s": 7
+  },
+  {
+   "kind": "phase",
+   "name": "negotiating",
+   "role": "receiver",
+   "t_s": 9
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 12
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 12
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 14
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 16
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 19
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 19
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 20
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 22
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 23
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 25
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 27
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 28
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 29
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 33
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 40
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 43
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 46
+  },
+  {
+   "detail": "[CallControllerException(media_failed): Media connection became failed]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 46
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 46
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 51
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 55
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "initiator",
+   "t_s": 60
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 61
+  },
+  {
+   "detail": "[CallControllerException(media_failed): Media connection became failed]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 61
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connecting",
+   "role": "receiver",
+   "t_s": 63
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 63
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 67
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 72
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 81
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 90
+  },
+  {
+   "detail": "[TimeoutException after 0:00:36.459000: Timed out while attempting to send answer]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 99
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 103
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 109
+  },
+  {
+   "detail": "[TimeoutException after 0:00:36.459000: Timed out while attempting to send local ICE can...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "receiver",
+   "t_s": 136
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 152
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 154
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 154
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 161
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "receiver",
+   "t_s": 163
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 164
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 166
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 166
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 169
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 170
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 170
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 171
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 173
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 174
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 177
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 181
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 182
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 189
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 196
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 212
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 225
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 236
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 246
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 254
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 272
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 281
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 289
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 305
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 312
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 328
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 339
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 348
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 356
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 364
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 375
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 386
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "initiator",
+   "t_s": 402
+  },
+  {
+   "detail": "[CallControllerException(media_failed): Media connection became failed]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 402
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "initiator",
+   "t_s": 402
+  },
+  {
+   "kind": "pcStatus",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 407
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 416
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 416
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 427
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 429
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 431
+  },
+  {
+   "detail": "[CallControllerException(media_disconnected): Media connection stayed disconnected past ...]",
+   "kind": "phase",
+   "name": "reconnecting",
+   "role": "initiator",
+   "t_s": 431
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 432
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 433
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 433
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 433
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 436
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 439
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 440
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 442
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 442
+  },
+  {
+   "kind": "phase",
+   "name": "connected",
+   "role": "initiator",
+   "t_s": 445
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 445
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 447
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 447
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 457
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 460
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 461
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 462
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 466
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 466
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 467
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 475
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 483
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 492
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 509
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 522
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 529
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 536
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 545
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 557
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 564
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 574
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 581
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 592
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 604
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "receiver",
+   "t_s": 611
+  },
+  {
+   "kind": "in",
+   "name": "callControl",
+   "role": "initiator",
+   "t_s": 618
+  },
+  {
+   "kind": "in",
+   "name": "offer",
+   "role": "receiver",
+   "t_s": 621
+  },
+  {
+   "kind": "in",
+   "name": "answer",
+   "role": "initiator",
+   "t_s": 623
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 623
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 625
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "receiver",
+   "t_s": 627
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "initiator",
+   "t_s": 627
+  },
+  {
+   "kind": "localCand",
+   "name": "relay",
+   "role": "receiver",
+   "t_s": 630
+  },
+  {
+   "kind": "in",
+   "name": "iceCandidate",
+   "role": "initiator",
+   "t_s": 631
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 644
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 647
+  },
+  {
+   "kind": "pcStatus",
+   "name": "disconnected",
+   "role": "receiver",
+   "t_s": 664
+  },
+  {
+   "kind": "pcStatus",
+   "name": "failed",
+   "role": "receiver",
+   "t_s": 679
+  }
+ ],
+ "packetSeries": {
+  "0": {
+   "bytes": 0,
+   "packets": 3
+  },
+  "101": {
+   "bytes": 246,
+   "packets": 2
+  },
+  "102": {
+   "bytes": 353,
+   "packets": 2
+  },
+  "103": {
+   "bytes": 39,
+   "packets": 1
+  },
+  "104": {
+   "bytes": 183,
+   "packets": 2
+  },
+  "105": {
+   "bytes": 165,
+   "packets": 3
+  },
+  "106": {
+   "bytes": 165,
+   "packets": 3
+  },
+  "107": {
+   "bytes": 143,
+   "packets": 1
+  },
+  "108": {
+   "bytes": 328,
+   "packets": 2
+  },
+  "109": {
+   "bytes": 143,
+   "packets": 1
+  },
+  "161": {
+   "bytes": 40,
+   "packets": 2
+  },
+  "162": {
+   "bytes": 248,
+   "packets": 26
+  },
+  "163": {
+   "bytes": 96,
+   "packets": 6
+  },
+  "164": {
+   "bytes": 1056,
+   "packets": 47
+  },
+  "165": {
+   "bytes": 288,
+   "packets": 14
+  },
+  "166": {
+   "bytes": 624,
+   "packets": 31
+  },
+  "167": {
+   "bytes": 84,
+   "packets": 5
+  },
+  "168": {
+   "bytes": 168,
+   "packets": 10
+  },
+  "169": {
+   "bytes": 0,
+   "packets": 10
+  },
+  "170": {
+   "bytes": 0,
+   "packets": 9
+  },
+  "172": {
+   "bytes": 0,
+   "packets": 7
+  },
+  "174": {
+   "bytes": 216,
+   "packets": 18
+  },
+  "175": {
+   "bytes": 88,
+   "packets": 7
+  },
+  "176": {
+   "bytes": 208,
+   "packets": 6
+  },
+  "177": {
+   "bytes": 688,
+   "packets": 28
+  },
+  "178": {
+   "bytes": 184,
+   "packets": 7
+  },
+  "179": {
+   "bytes": 188,
+   "packets": 11
+  },
+  "180": {
+   "bytes": 84,
+   "packets": 4
+  },
+  "181": {
+   "bytes": 852,
+   "packets": 10
+  },
+  "182": {
+   "bytes": 1932,
+   "packets": 31
+  },
+  "183": {
+   "bytes": 1480,
+   "packets": 26
+  },
+  "184": {
+   "bytes": 1424,
+   "packets": 30
+  },
+  "185": {
+   "bytes": 1320,
+   "packets": 31
+  },
+  "186": {
+   "bytes": 1480,
+   "packets": 39
+  },
+  "187": {
+   "bytes": 1360,
+   "packets": 30
+  },
+  "188": {
+   "bytes": 1600,
+   "packets": 37
+  },
+  "189": {
+   "bytes": 1400,
+   "packets": 33
+  },
+  "190": {
+   "bytes": 1440,
+   "packets": 32
+  },
+  "191": {
+   "bytes": 1320,
+   "packets": 32
+  },
+  "192": {
+   "bytes": 1320,
+   "packets": 28
+  },
+  "193": {
+   "bytes": 1320,
+   "packets": 21
+  },
+  "194": {
+   "bytes": 1320,
+   "packets": 17
+  },
+  "195": {
+   "bytes": 1320,
+   "packets": 16
+  },
+  "196": {
+   "bytes": 1056,
+   "packets": 8
+  },
+  "197": {
+   "bytes": 0,
+   "packets": 6
+  },
+  "198": {
+   "bytes": 120,
+   "packets": 6
+  },
+  "199": {
+   "bytes": 60,
+   "packets": 6
+  },
+  "200": {
+   "bytes": 912,
+   "packets": 19
+  },
+  "201": {
+   "bytes": 1680,
+   "packets": 15
+  },
+  "202": {
+   "bytes": 1600,
+   "packets": 28
+  },
+  "203": {
+   "bytes": 1424,
+   "packets": 14
+  },
+  "204": {
+   "bytes": 1372,
+   "packets": 15
+  },
+  "205": {
+   "bytes": 1320,
+   "packets": 20
+  },
+  "206": {
+   "bytes": 1320,
+   "packets": 14
+  },
+  "207": {
+   "bytes": 1320,
+   "packets": 20
+  },
+  "208": {
+   "bytes": 1320,
+   "packets": 24
+  },
+  "209": {
+   "bytes": 1320,
+   "packets": 24
+  },
+  "210": {
+   "bytes": 1360,
+   "packets": 23
+  },
+  "211": {
+   "bytes": 1340,
+   "packets": 21
+  },
+  "212": {
+   "bytes": 1380,
+   "packets": 16
+  },
+  "213": {
+   "bytes": 1360,
+   "packets": 13
+  },
+  "214": {
+   "bytes": 1964,
+   "packets": 23
+  },
+  "215": {
+   "bytes": 2800,
+   "packets": 48
+  },
+  "216": {
+   "bytes": 1584,
+   "packets": 32
+  },
+  "217": {
+   "bytes": 3312,
+   "packets": 93
+  },
+  "218": {
+   "bytes": 4136,
+   "packets": 98
+  },
+  "219": {
+   "bytes": 4004,
+   "packets": 72
+  },
+  "220": {
+   "bytes": 3172,
+   "packets": 63
+  },
+  "221": {
+   "bytes": 4152,
+   "packets": 79
+  },
+  "222": {
+   "bytes": 3092,
+   "packets": 96
+  },
+  "223": {
+   "bytes": 4388,
+   "packets": 60
+  },
+  "224": {
+   "bytes": 3476,
+   "packets": 83
+  },
+  "225": {
+   "bytes": 2616,
+   "packets": 62
+  },
+  "226": {
+   "bytes": 2848,
+   "packets": 57
+  },
+  "227": {
+   "bytes": 4108,
+   "packets": 84
+  },
+  "228": {
+   "bytes": 2704,
+   "packets": 49
+  },
+  "229": {
+   "bytes": 2228,
+   "packets": 46
+  },
+  "230": {
+   "bytes": 2084,
+   "packets": 32
+  },
+  "231": {
+   "bytes": 2468,
+   "packets": 35
+  },
+  "232": {
+   "bytes": 2360,
+   "packets": 41
+  },
+  "233": {
+   "bytes": 4164,
+   "packets": 68
+  },
+  "234": {
+   "bytes": 3825,
+   "packets": 33
+  },
+  "235": {
+   "bytes": 2448,
+   "packets": 39
+  },
+  "236": {
+   "bytes": 3648,
+   "packets": 45
+  },
+  "237": {
+   "bytes": 952,
+   "packets": 43
+  },
+  "238": {
+   "bytes": 752,
+   "packets": 43
+  },
+  "239": {
+   "bytes": 4644,
+   "packets": 49
+  },
+  "240": {
+   "bytes": 2044,
+   "packets": 28
+  },
+  "241": {
+   "bytes": 1408,
+   "packets": 21
+  },
+  "242": {
+   "bytes": 3788,
+   "packets": 38
+  },
+  "243": {
+   "bytes": 2068,
+   "packets": 29
+  },
+  "244": {
+   "bytes": 1812,
+   "packets": 25
+  },
+  "245": {
+   "bytes": 1959,
+   "packets": 22
+  },
+  "246": {
+   "bytes": 1112,
+   "packets": 19
+  },
+  "247": {
+   "bytes": 2292,
+   "packets": 33
+  },
+  "248": {
+   "bytes": 601,
+   "packets": 13
+  },
+  "249": {
+   "bytes": 1891,
+   "packets": 29
+  },
+  "250": {
+   "bytes": 1164,
+   "packets": 23
+  },
+  "251": {
+   "bytes": 1216,
+   "packets": 20
+  },
+  "252": {
+   "bytes": 846,
+   "packets": 13
+  },
+  "253": {
+   "bytes": 550,
+   "packets": 10
+  },
+  "254": {
+   "bytes": 2509,
+   "packets": 33
+  },
+  "255": {
+   "bytes": 5544,
+   "packets": 50
+  },
+  "256": {
+   "bytes": 1461,
+   "packets": 45
+  },
+  "257": {
+   "bytes": 5210,
+   "packets": 62
+  },
+  "258": {
+   "bytes": 2723,
+   "packets": 53
+  },
+  "259": {
+   "bytes": 1373,
+   "packets": 54
+  },
+  "260": {
+   "bytes": 866,
+   "packets": 43
+  },
+  "261": {
+   "bytes": 2859,
+   "packets": 81
+  },
+  "262": {
+   "bytes": 3150,
+   "packets": 77
+  },
+  "263": {
+   "bytes": 1438,
+   "packets": 47
+  },
+  "264": {
+   "bytes": 2283,
+   "packets": 48
+  },
+  "265": {
+   "bytes": 3643,
+   "packets": 76
+  },
+  "266": {
+   "bytes": 2286,
+   "packets": 75
+  },
+  "267": {
+   "bytes": 3658,
+   "packets": 59
+  },
+  "268": {
+   "bytes": 3679,
+   "packets": 58
+  },
+  "269": {
+   "bytes": 3515,
+   "packets": 62
+  },
+  "270": {
+   "bytes": 2969,
+   "packets": 43
+  },
+  "271": {
+   "bytes": 2586,
+   "packets": 42
+  },
+  "272": {
+   "bytes": 2766,
+   "packets": 44
+  },
+  "273": {
+   "bytes": 2224,
+   "packets": 33
+  },
+  "274": {
+   "bytes": 3156,
+   "packets": 47
+  },
+  "275": {
+   "bytes": 1286,
+   "packets": 21
+  },
+  "276": {
+   "bytes": 2935,
+   "packets": 43
+  },
+  "277": {
+   "bytes": 2890,
+   "packets": 45
+  },
+  "278": {
+   "bytes": 2749,
+   "packets": 42
+  },
+  "279": {
+   "bytes": 3770,
+   "packets": 59
+  },
+  "280": {
+   "bytes": 2979,
+   "packets": 55
+  },
+  "281": {
+   "bytes": 3190,
+   "packets": 63
+  },
+  "282": {
+   "bytes": 3868,
+   "packets": 60
+  },
+  "283": {
+   "bytes": 3058,
+   "packets": 57
+  },
+  "284": {
+   "bytes": 3954,
+   "packets": 73
+  },
+  "285": {
+   "bytes": 4626,
+   "packets": 65
+  },
+  "286": {
+   "bytes": 2258,
+   "packets": 45
+  },
+  "287": {
+   "bytes": 4434,
+   "packets": 72
+  },
+  "288": {
+   "bytes": 3381,
+   "packets": 67
+  },
+  "289": {
+   "bytes": 2355,
+   "packets": 55
+  },
+  "290": {
+   "bytes": 3643,
+   "packets": 71
+  },
+  "291": {
+   "bytes": 2711,
+   "packets": 38
+  },
+  "292": {
+   "bytes": 2925,
+   "packets": 56
+  },
+  "293": {
+   "bytes": 2357,
+   "packets": 44
+  },
+  "294": {
+   "bytes": 1913,
+   "packets": 37
+  },
+  "295": {
+   "bytes": 2719,
+   "packets": 45
+  },
+  "296": {
+   "bytes": 1575,
+   "packets": 33
+  },
+  "297": {
+   "bytes": 2237,
+   "packets": 38
+  },
+  "298": {
+   "bytes": 1930,
+   "packets": 34
+  },
+  "299": {
+   "bytes": 1554,
+   "packets": 29
+  },
+  "300": {
+   "bytes": 2055,
+   "packets": 33
+  },
+  "301": {
+   "bytes": 1036,
+   "packets": 20
+  },
+  "302": {
+   "bytes": 2162,
+   "packets": 39
+  },
+  "303": {
+   "bytes": 1670,
+   "packets": 30
+  },
+  "304": {
+   "bytes": 1783,
+   "packets": 34
+  },
+  "305": {
+   "bytes": 1942,
+   "packets": 33
+  },
+  "306": {
+   "bytes": 1717,
+   "packets": 31
+  },
+  "307": {
+   "bytes": 1991,
+   "packets": 35
+  },
+  "308": {
+   "bytes": 1812,
+   "packets": 32
+  },
+  "309": {
+   "bytes": 2630,
+   "packets": 43
+  },
+  "310": {
+   "bytes": 2425,
+   "packets": 39
+  },
+  "311": {
+   "bytes": 3369,
+   "packets": 47
+  },
+  "312": {
+   "bytes": 2698,
+   "packets": 41
+  },
+  "313": {
+   "bytes": 3077,
+   "packets": 41
+  },
+  "314": {
+   "bytes": 3752,
+   "packets": 48
+  },
+  "315": {
+   "bytes": 3178,
+   "packets": 40
+  },
+  "316": {
+   "bytes": 3068,
+   "packets": 47
+  },
+  "317": {
+   "bytes": 3376,
+   "packets": 46
+  },
+  "318": {
+   "bytes": 1769,
+   "packets": 29
+  },
+  "319": {
+   "bytes": 4021,
+   "packets": 65
+  },
+  "320": {
+   "bytes": 2141,
+   "packets": 37
+  },
+  "321": {
+   "bytes": 3353,
+   "packets": 61
+  },
+  "322": {
+   "bytes": 2758,
+   "packets": 46
+  },
+  "323": {
+   "bytes": 4259,
+   "packets": 70
+  },
+  "324": {
+   "bytes": 3147,
+   "packets": 51
+  },
+  "325": {
+   "bytes": 3900,
+   "packets": 66
+  },
+  "326": {
+   "bytes": 4434,
+   "packets": 54
+  },
+  "327": {
+   "bytes": 4127,
+   "packets": 68
+  },
+  "328": {
+   "bytes": 4806,
+   "packets": 69
+  },
+  "329": {
+   "bytes": 3572,
+   "packets": 52
+  },
+  "330": {
+   "bytes": 4389,
+   "packets": 67
+  },
+  "331": {
+   "bytes": 4187,
+   "packets": 53
+  },
+  "332": {
+   "bytes": 3874,
+   "packets": 60
+  },
+  "333": {
+   "bytes": 3234,
+   "packets": 50
+  },
+  "334": {
+   "bytes": 3962,
+   "packets": 54
+  },
+  "335": {
+   "bytes": 4538,
+   "packets": 64
+  },
+  "336": {
+   "bytes": 3955,
+   "packets": 54
+  },
+  "337": {
+   "bytes": 3693,
+   "packets": 48
+  },
+  "338": {
+   "bytes": 3815,
+   "packets": 58
+  },
+  "339": {
+   "bytes": 3853,
+   "packets": 50
+  },
+  "340": {
+   "bytes": 4633,
+   "packets": 60
+  },
+  "341": {
+   "bytes": 2809,
+   "packets": 47
+  },
+  "342": {
+   "bytes": 3274,
+   "packets": 49
+  },
+  "343": {
+   "bytes": 3048,
+   "packets": 45
+  },
+  "344": {
+   "bytes": 2247,
+   "packets": 53
+  },
+  "345": {
+   "bytes": 2093,
+   "packets": 39
+  },
+  "346": {
+   "bytes": 1937,
+   "packets": 36
+  },
+  "347": {
+   "bytes": 1749,
+   "packets": 33
+  },
+  "348": {
+   "bytes": 1586,
+   "packets": 32
+  },
+  "349": {
+   "bytes": 1875,
+   "packets": 36
+  },
+  "350": {
+   "bytes": 1748,
+   "packets": 33
+  },
+  "351": {
+   "bytes": 1966,
+   "packets": 36
+  },
+  "352": {
+   "bytes": 20999,
+   "packets": 53
+  },
+  "353": {
+   "bytes": 1772,
+   "packets": 33
+  },
+  "354": {
+   "bytes": 1666,
+   "packets": 30
+  },
+  "355": {
+   "bytes": 1839,
+   "packets": 14
+  },
+  "356": {
+   "bytes": 4431,
+   "packets": 16
+  },
+  "357": {
+   "bytes": 6320,
+   "packets": 35
+  },
+  "358": {
+   "bytes": 8421,
+   "packets": 53
+  },
+  "359": {
+   "bytes": 8821,
+   "packets": 58
+  },
+  "360": {
+   "bytes": 8679,
+   "packets": 57
+  },
+  "361": {
+   "bytes": 8356,
+   "packets": 52
+  },
+  "362": {
+   "bytes": 9140,
+   "packets": 60
+  },
+  "363": {
+   "bytes": 5246,
+   "packets": 63
+  },
+  "364": {
+   "bytes": 5568,
+   "packets": 79
+  },
+  "365": {
+   "bytes": 4462,
+   "packets": 49
+  },
+  "366": {
+   "bytes": 5549,
+   "packets": 57
+  },
+  "367": {
+   "bytes": 5789,
+   "packets": 84
+  },
+  "368": {
+   "bytes": 3824,
+   "packets": 66
+  },
+  "369": {
+   "bytes": 4031,
+   "packets": 65
+  },
+  "370": {
+   "bytes": 3802,
+   "packets": 58
+  },
+  "371": {
+   "bytes": 3793,
+   "packets": 66
+  },
+  "372": {
+   "bytes": 4290,
+   "packets": 65
+  },
+  "373": {
+   "bytes": 3465,
+   "packets": 55
+  },
+  "374": {
+   "bytes": 3370,
+   "packets": 52
+  },
+  "375": {
+   "bytes": 3764,
+   "packets": 64
+  },
+  "376": {
+   "bytes": 2397,
+   "packets": 41
+  },
+  "377": {
+   "bytes": 2197,
+   "packets": 41
+  },
+  "378": {
+   "bytes": 1609,
+   "packets": 32
+  },
+  "379": {
+   "bytes": 2125,
+   "packets": 36
+  },
+  "380": {
+   "bytes": 1650,
+   "packets": 33
+  },
+  "381": {
+   "bytes": 1203,
+   "packets": 22
+  },
+  "382": {
+   "bytes": 1903,
+   "packets": 35
+  },
+  "383": {
+   "bytes": 1426,
+   "packets": 28
+  },
+  "384": {
+   "bytes": 1785,
+   "packets": 31
+  },
+  "385": {
+   "bytes": 1813,
+   "packets": 37
+  },
+  "386": {
+   "bytes": 1504,
+   "packets": 28
+  },
+  "387": {
+   "bytes": 2062,
+   "packets": 38
+  },
+  "388": {
+   "bytes": 1572,
+   "packets": 30
+  },
+  "389": {
+   "bytes": 1463,
+   "packets": 26
+  },
+  "390": {
+   "bytes": 1752,
+   "packets": 34
+  },
+  "391": {
+   "bytes": 1644,
+   "packets": 30
+  },
+  "392": {
+   "bytes": 1931,
+   "packets": 35
+  },
+  "393": {
+   "bytes": 1944,
+   "packets": 36
+  },
+  "394": {
+   "bytes": 2248,
+   "packets": 41
+  },
+  "395": {
+   "bytes": 1687,
+   "packets": 30
+  },
+  "396": {
+   "bytes": 1968,
+   "packets": 39
+  },
+  "397": {
+   "bytes": 1537,
+   "packets": 29
+  },
+  "398": {
+   "bytes": 1909,
+   "packets": 36
+  },
+  "399": {
+   "bytes": 1868,
+   "packets": 35
+  },
+  "400": {
+   "bytes": 1783,
+   "packets": 32
+  },
+  "401": {
+   "bytes": 1865,
+   "packets": 36
+  },
+  "402": {
+   "bytes": 1839,
+   "packets": 34
+  },
+  "403": {
+   "bytes": 1812,
+   "packets": 34
+  },
+  "404": {
+   "bytes": 1977,
+   "packets": 38
+  },
+  "405": {
+   "bytes": 1698,
+   "packets": 31
+  },
+  "406": {
+   "bytes": 2032,
+   "packets": 40
+  },
+  "407": {
+   "bytes": 1552,
+   "packets": 28
+  },
+  "408": {
+   "bytes": 1722,
+   "packets": 32
+  },
+  "409": {
+   "bytes": 1657,
+   "packets": 31
+  },
+  "410": {
+   "bytes": 1494,
+   "packets": 27
+  },
+  "411": {
+   "bytes": 1625,
+   "packets": 31
+  },
+  "412": {
+   "bytes": 1823,
+   "packets": 34
+  },
+  "413": {
+   "bytes": 1581,
+   "packets": 29
+  },
+  "414": {
+   "bytes": 2125,
+   "packets": 40
+  },
+  "415": {
+   "bytes": 8731,
+   "packets": 39
+  },
+  "416": {
+   "bytes": 2202,
+   "packets": 42
+  },
+  "417": {
+   "bytes": 2384,
+   "packets": 18
+  },
+  "418": {
+   "bytes": 4589,
+   "packets": 17
+  },
+  "419": {
+   "bytes": 5515,
+   "packets": 26
+  },
+  "420": {
+   "bytes": 4456,
+   "packets": 14
+  },
+  "421": {
+   "bytes": 5224,
+   "packets": 24
+  },
+  "422": {
+   "bytes": 6278,
+   "packets": 45
+  },
+  "423": {
+   "bytes": 4600,
+   "packets": 35
+  },
+  "424": {
+   "bytes": 4627,
+   "packets": 29
+  },
+  "425": {
+   "bytes": 3378,
+   "packets": 51
+  },
+  "426": {
+   "bytes": 5513,
+   "packets": 46
+  },
+  "427": {
+   "bytes": 3869,
+   "packets": 51
+  },
+  "428": {
+   "bytes": 3886,
+   "packets": 65
+  },
+  "429": {
+   "bytes": 2161,
+   "packets": 39
+  },
+  "430": {
+   "bytes": 3125,
+   "packets": 33
+  },
+  "431": {
+   "bytes": 2050,
+   "packets": 37
+  },
+  "432": {
+   "bytes": 1668,
+   "packets": 31
+  },
+  "433": {
+   "bytes": 1878,
+   "packets": 34
+  },
+  "434": {
+   "bytes": 1691,
+   "packets": 32
+  },
+  "435": {
+   "bytes": 1845,
+   "packets": 33
+  },
+  "436": {
+   "bytes": 1908,
+   "packets": 36
+  },
+  "437": {
+   "bytes": 1998,
+   "packets": 34
+  },
+  "438": {
+   "bytes": 2160,
+   "packets": 40
+  },
+  "439": {
+   "bytes": 1897,
+   "packets": 35
+  },
+  "440": {
+   "bytes": 1695,
+   "packets": 33
+  },
+  "441": {
+   "bytes": 1862,
+   "packets": 33
+  },
+  "442": {
+   "bytes": 2076,
+   "packets": 38
+  },
+  "443": {
+   "bytes": 8904,
+   "packets": 38
+  },
+  "444": {
+   "bytes": 1872,
+   "packets": 36
+  },
+  "445": {
+   "bytes": 1969,
+   "packets": 15
+  },
+  "446": {
+   "bytes": 4733,
+   "packets": 20
+  },
+  "447": {
+   "bytes": 4369,
+   "packets": 17
+  },
+  "448": {
+   "bytes": 4383,
+   "packets": 15
+  },
+  "449": {
+   "bytes": 4980,
+   "packets": 39
+  },
+  "450": {
+   "bytes": 3504,
+   "packets": 65
+  },
+  "451": {
+   "bytes": 2512,
+   "packets": 39
+  },
+  "452": {
+   "bytes": 1925,
+   "packets": 36
+  },
+  "453": {
+   "bytes": 2206,
+   "packets": 41
+  },
+  "454": {
+   "bytes": 1914,
+   "packets": 35
+  },
+  "455": {
+   "bytes": 1910,
+   "packets": 35
+  },
+  "456": {
+   "bytes": 1726,
+   "packets": 33
+  },
+  "457": {
+   "bytes": 1808,
+   "packets": 32
+  },
+  "458": {
+   "bytes": 1597,
+   "packets": 31
+  },
+  "459": {
+   "bytes": 1852,
+   "packets": 34
+  },
+  "460": {
+   "bytes": 1820,
+   "packets": 34
+  },
+  "461": {
+   "bytes": 2029,
+   "packets": 39
+  },
+  "462": {
+   "bytes": 1757,
+   "packets": 32
+  },
+  "463": {
+   "bytes": 1862,
+   "packets": 35
+  },
+  "464": {
+   "bytes": 1756,
+   "packets": 33
+  },
+  "465": {
+   "bytes": 7424,
+   "packets": 43
+  },
+  "466": {
+   "bytes": 9134,
+   "packets": 39
+  },
+  "467": {
+   "bytes": 1837,
+   "packets": 33
+  },
+  "468": {
+   "bytes": 1934,
+   "packets": 13
+  },
+  "469": {
+   "bytes": 4611,
+   "packets": 18
+  },
+  "470": {
+   "bytes": 6668,
+   "packets": 42
+  },
+  "471": {
+   "bytes": 4873,
+   "packets": 19
+  },
+  "472": {
+   "bytes": 4340,
+   "packets": 15
+  },
+  "473": {
+   "bytes": 5662,
+   "packets": 29
+  },
+  "474": {
+   "bytes": 5257,
+   "packets": 25
+  },
+  "475": {
+   "bytes": 6554,
+   "packets": 40
+  },
+  "476": {
+   "bytes": 3904,
+   "packets": 62
+  },
+  "477": {
+   "bytes": 4905,
+   "packets": 72
+  },
+  "478": {
+   "bytes": 3856,
+   "packets": 61
+  },
+  "479": {
+   "bytes": 3220,
+   "packets": 55
+  },
+  "480": {
+   "bytes": 2627,
+   "packets": 44
+  },
+  "481": {
+   "bytes": 1716,
+   "packets": 33
+  },
+  "482": {
+   "bytes": 2039,
+   "packets": 37
+  },
+  "483": {
+   "bytes": 1995,
+   "packets": 37
+  },
+  "484": {
+   "bytes": 2015,
+   "packets": 37
+  },
+  "485": {
+   "bytes": 2202,
+   "packets": 37
+  },
+  "486": {
+   "bytes": 1768,
+   "packets": 34
+  },
+  "487": {
+   "bytes": 2140,
+   "packets": 39
+  },
+  "488": {
+   "bytes": 1455,
+   "packets": 27
+  },
+  "489": {
+   "bytes": 1757,
+   "packets": 34
+  },
+  "490": {
+   "bytes": 1938,
+   "packets": 35
+  },
+  "491": {
+   "bytes": 1595,
+   "packets": 29
+  },
+  "492": {
+   "bytes": 2184,
+   "packets": 40
+  },
+  "493": {
+   "bytes": 1833,
+   "packets": 33
+  },
+  "494": {
+   "bytes": 1488,
+   "packets": 28
+  },
+  "495": {
+   "bytes": 2013,
+   "packets": 35
+  },
+  "496": {
+   "bytes": 1299,
+   "packets": 26
+  },
+  "497": {
+   "bytes": 2294,
+   "packets": 38
+  },
+  "498": {
+   "bytes": 1661,
+   "packets": 31
+  },
+  "499": {
+   "bytes": 1946,
+   "packets": 35
+  },
+  "500": {
+   "bytes": 2096,
+   "packets": 36
+  },
+  "501": {
+   "bytes": 1549,
+   "packets": 31
+  },
+  "502": {
+   "bytes": 1904,
+   "packets": 34
+  },
+  "503": {
+   "bytes": 1921,
+   "packets": 35
+  },
+  "504": {
+   "bytes": 1736,
+   "packets": 34
+  },
+  "505": {
+   "bytes": 2009,
+   "packets": 36
+  },
+  "506": {
+   "bytes": 1764,
+   "packets": 35
+  },
+  "507": {
+   "bytes": 1787,
+   "packets": 34
+  },
+  "508": {
+   "bytes": 1826,
+   "packets": 33
+  },
+  "509": {
+   "bytes": 1580,
+   "packets": 31
+  },
+  "510": {
+   "bytes": 1978,
+   "packets": 34
+  },
+  "511": {
+   "bytes": 1664,
+   "packets": 33
+  },
+  "512": {
+   "bytes": 1698,
+   "packets": 31
+  },
+  "513": {
+   "bytes": 1739,
+   "packets": 32
+  },
+  "514": {
+   "bytes": 1827,
+   "packets": 36
+  },
+  "515": {
+   "bytes": 1878,
+   "packets": 33
+  },
+  "516": {
+   "bytes": 1646,
+   "packets": 31
+  },
+  "517": {
+   "bytes": 1911,
+   "packets": 37
+  },
+  "518": {
+   "bytes": 1665,
+   "packets": 30
+  },
+  "519": {
+   "bytes": 1694,
+   "packets": 34
+  },
+  "520": {
+   "bytes": 1976,
+   "packets": 36
+  },
+  "521": {
+   "bytes": 1303,
+   "packets": 26
+  },
+  "522": {
+   "bytes": 1981,
+   "packets": 39
+  },
+  "523": {
+   "bytes": 1856,
+   "packets": 33
+  },
+  "524": {
+   "bytes": 1796,
+   "packets": 34
+  },
+  "525": {
+   "bytes": 2409,
+   "packets": 42
+  },
+  "526": {
+   "bytes": 1810,
+   "packets": 32
+  },
+  "527": {
+   "bytes": 2156,
+   "packets": 37
+  },
+  "528": {
+   "bytes": 1664,
+   "packets": 29
+  },
+  "529": {
+   "bytes": 2029,
+   "packets": 36
+  },
+  "530": {
+   "bytes": 1922,
+   "packets": 36
+  },
+  "531": {
+   "bytes": 1972,
+   "packets": 36
+  },
+  "532": {
+   "bytes": 1887,
+   "packets": 37
+  },
+  "533": {
+   "bytes": 1636,
+   "packets": 30
+  },
+  "534": {
+   "bytes": 1946,
+   "packets": 35
+  },
+  "535": {
+   "bytes": 1125,
+   "packets": 22
+  },
+  "536": {
+   "bytes": 1780,
+   "packets": 33
+  },
+  "537": {
+   "bytes": 2206,
+   "packets": 38
+  },
+  "538": {
+   "bytes": 1820,
+   "packets": 35
+  },
+  "539": {
+   "bytes": 6591,
+   "packets": 37
+  },
+  "540": {
+   "bytes": 10948,
+   "packets": 41
+  },
+  "541": {
+   "bytes": 15473,
+   "packets": 43
+  },
+  "542": {
+   "bytes": 4234,
+   "packets": 15
+  },
+  "543": {
+   "bytes": 3871,
+   "packets": 30
+  },
+  "544": {
+   "bytes": 4485,
+   "packets": 19
+  },
+  "545": {
+   "bytes": 5338,
+   "packets": 34
+  },
+  "546": {
+   "bytes": 4318,
+   "packets": 15
+  },
+  "547": {
+   "bytes": 4248,
+   "packets": 14
+  },
+  "548": {
+   "bytes": 7654,
+   "packets": 44
+  },
+  "549": {
+   "bytes": 6094,
+   "packets": 52
+  },
+  "550": {
+   "bytes": 4221,
+   "packets": 13
+  },
+  "551": {
+   "bytes": 4714,
+   "packets": 18
+  },
+  "552": {
+   "bytes": 6892,
+   "packets": 42
+  },
+  "553": {
+   "bytes": 6790,
+   "packets": 41
+  },
+  "554": {
+   "bytes": 4848,
+   "packets": 23
+  },
+  "555": {
+   "bytes": 5403,
+   "packets": 47
+  },
+  "556": {
+   "bytes": 5824,
+   "packets": 79
+  },
+  "557": {
+   "bytes": 4867,
+   "packets": 68
+  },
+  "558": {
+   "bytes": 5438,
+   "packets": 74
+  },
+  "559": {
+   "bytes": 6117,
+   "packets": 75
+  },
+  "560": {
+   "bytes": 4149,
+   "packets": 50
+  },
+  "561": {
+   "bytes": 6615,
+   "packets": 83
+  },
+  "562": {
+   "bytes": 4565,
+   "packets": 65
+  },
+  "563": {
+   "bytes": 3917,
+   "packets": 52
+  },
+  "564": {
+   "bytes": 4413,
+   "packets": 66
+  },
+  "565": {
+   "bytes": 3603,
+   "packets": 60
+  },
+  "566": {
+   "bytes": 2681,
+   "packets": 43
+  },
+  "567": {
+   "bytes": 2060,
+   "packets": 40
+  },
+  "568": {
+   "bytes": 2525,
+   "packets": 44
+  },
+  "569": {
+   "bytes": 2380,
+   "packets": 44
+  },
+  "570": {
+   "bytes": 1404,
+   "packets": 34
+  },
+  "571": {
+   "bytes": 2670,
+   "packets": 49
+  },
+  "572": {
+   "bytes": 1731,
+   "packets": 36
+  },
+  "573": {
+   "bytes": 1755,
+   "packets": 34
+  },
+  "574": {
+   "bytes": 2236,
+   "packets": 45
+  },
+  "575": {
+   "bytes": 2131,
+   "packets": 39
+  },
+  "576": {
+   "bytes": 2492,
+   "packets": 50
+  },
+  "577": {
+   "bytes": 2133,
+   "packets": 47
+  },
+  "578": {
+   "bytes": 2265,
+   "packets": 42
+  },
+  "579": {
+   "bytes": 1747,
+   "packets": 38
+  },
+  "580": {
+   "bytes": 2167,
+   "packets": 38
+  },
+  "581": {
+   "bytes": 2723,
+   "packets": 43
+  },
+  "582": {
+   "bytes": 1428,
+   "packets": 26
+  },
+  "583": {
+   "bytes": 2633,
+   "packets": 49
+  },
+  "584": {
+   "bytes": 1812,
+   "packets": 39
+  },
+  "585": {
+   "bytes": 1233,
+   "packets": 28
+  },
+  "586": {
+   "bytes": 2938,
+   "packets": 66
+  },
+  "587": {
+   "bytes": 1595,
+   "packets": 35
+  },
+  "588": {
+   "bytes": 2771,
+   "packets": 61
+  },
+  "589": {
+   "bytes": 2210,
+   "packets": 49
+  },
+  "590": {
+   "bytes": 2262,
+   "packets": 57
+  },
+  "591": {
+   "bytes": 2622,
+   "packets": 58
+  },
+  "592": {
+   "bytes": 1640,
+   "packets": 43
+  },
+  "593": {
+   "bytes": 2750,
+   "packets": 52
+  },
+  "594": {
+   "bytes": 1981,
+   "packets": 39
+  },
+  "595": {
+   "bytes": 2476,
+   "packets": 53
+  },
+  "596": {
+   "bytes": 2780,
+   "packets": 48
+  },
+  "597": {
+   "bytes": 1969,
+   "packets": 44
+  },
+  "598": {
+   "bytes": 2208,
+   "packets": 43
+  },
+  "599": {
+   "bytes": 2290,
+   "packets": 48
+  },
+  "600": {
+   "bytes": 1711,
+   "packets": 37
+  },
+  "601": {
+   "bytes": 2154,
+   "packets": 39
+  },
+  "602": {
+   "bytes": 1821,
+   "packets": 42
+  },
+  "603": {
+   "bytes": 2242,
+   "packets": 42
+  },
+  "604": {
+   "bytes": 1839,
+   "packets": 34
+  },
+  "605": {
+   "bytes": 1646,
+   "packets": 32
+  },
+  "606": {
+   "bytes": 1907,
+   "packets": 33
+  },
+  "607": {
+   "bytes": 2056,
+   "packets": 41
+  },
+  "608": {
+   "bytes": 1798,
+   "packets": 33
+  },
+  "609": {
+   "bytes": 2129,
+   "packets": 39
+  },
+  "610": {
+   "bytes": 1411,
+   "packets": 28
+  },
+  "611": {
+   "bytes": 1961,
+   "packets": 38
+  },
+  "612": {
+   "bytes": 1879,
+   "packets": 38
+  },
+  "613": {
+   "bytes": 2052,
+   "packets": 39
+  },
+  "614": {
+   "bytes": 2306,
+   "packets": 44
+  },
+  "615": {
+   "bytes": 2198,
+   "packets": 45
+  },
+  "616": {
+   "bytes": 2240,
+   "packets": 43
+  },
+  "617": {
+   "bytes": 2678,
+   "packets": 49
+  },
+  "618": {
+   "bytes": 2681,
+   "packets": 52
+  },
+  "619": {
+   "bytes": 2305,
+   "packets": 43
+  },
+  "620": {
+   "bytes": 1684,
+   "packets": 44
+  },
+  "621": {
+   "bytes": 2367,
+   "packets": 51
+  },
+  "622": {
+   "bytes": 2111,
+   "packets": 55
+  },
+  "623": {
+   "bytes": 1912,
+   "packets": 46
+  },
+  "624": {
+   "bytes": 2153,
+   "packets": 48
+  },
+  "625": {
+   "bytes": 1838,
+   "packets": 39
+  },
+  "626": {
+   "bytes": 2027,
+   "packets": 40
+  },
+  "627": {
+   "bytes": 1983,
+   "packets": 43
+  },
+  "628": {
+   "bytes": 1830,
+   "packets": 36
+  },
+  "629": {
+   "bytes": 2010,
+   "packets": 37
+  },
+  "630": {
+   "bytes": 1875,
+   "packets": 38
+  },
+  "631": {
+   "bytes": 2383,
+   "packets": 47
+  },
+  "632": {
+   "bytes": 1830,
+   "packets": 37
+  },
+  "633": {
+   "bytes": 1933,
+   "packets": 37
+  },
+  "634": {
+   "bytes": 1904,
+   "packets": 38
+  },
+  "635": {
+   "bytes": 1662,
+   "packets": 32
+  },
+  "636": {
+   "bytes": 2142,
+   "packets": 43
+  },
+  "637": {
+   "bytes": 1588,
+   "packets": 31
+  },
+  "638": {
+   "bytes": 2183,
+   "packets": 42
+  },
+  "639": {
+   "bytes": 1873,
+   "packets": 34
+  },
+  "640": {
+   "bytes": 1537,
+   "packets": 30
+  },
+  "641": {
+   "bytes": 2167,
+   "packets": 38
+  },
+  "642": {
+   "bytes": 1569,
+   "packets": 31
+  },
+  "643": {
+   "bytes": 1720,
+   "packets": 32
+  },
+  "644": {
+   "bytes": 2075,
+   "packets": 36
+  },
+  "645": {
+   "bytes": 1678,
+   "packets": 33
+  },
+  "646": {
+   "bytes": 1943,
+   "packets": 35
+  },
+  "647": {
+   "bytes": 1812,
+   "packets": 39
+  },
+  "648": {
+   "bytes": 1994,
+   "packets": 39
+  },
+  "649": {
+   "bytes": 2066,
+   "packets": 39
+  },
+  "650": {
+   "bytes": 1594,
+   "packets": 31
+  },
+  "651": {
+   "bytes": 2328,
+   "packets": 42
+  },
+  "652": {
+   "bytes": 1583,
+   "packets": 30
+  },
+  "653": {
+   "bytes": 1717,
+   "packets": 29
+  },
+  "654": {
+   "bytes": 1929,
+   "packets": 35
+  },
+  "655": {
+   "bytes": 1995,
+   "packets": 34
+  },
+  "656": {
+   "bytes": 1798,
+   "packets": 32
+  },
+  "657": {
+   "bytes": 2002,
+   "packets": 36
+  },
+  "658": {
+   "bytes": 1826,
+   "packets": 34
+  },
+  "659": {
+   "bytes": 1915,
+   "packets": 35
+  },
+  "660": {
+   "bytes": 1387,
+   "packets": 27
+  },
+  "661": {
+   "bytes": 2165,
+   "packets": 39
+  },
+  "662": {
+   "bytes": 1660,
+   "packets": 32
+  },
+  "663": {
+   "bytes": 1610,
+   "packets": 30
+  },
+  "664": {
+   "bytes": 2160,
+   "packets": 39
+  },
+  "665": {
+   "bytes": 1535,
+   "packets": 28
+  },
+  "666": {
+   "bytes": 2413,
+   "packets": 43
+  },
+  "667": {
+   "bytes": 1866,
+   "packets": 33
+  },
+  "668": {
+   "bytes": 1984,
+   "packets": 37
+  },
+  "669": {
+   "bytes": 2147,
+   "packets": 39
+  },
+  "670": {
+   "bytes": 1704,
+   "packets": 31
+  },
+  "671": {
+   "bytes": 2247,
+   "packets": 37
+  },
+  "672": {
+   "bytes": 1793,
+   "packets": 35
+  },
+  "673": {
+   "bytes": 1803,
+   "packets": 33
+  },
+  "674": {
+   "bytes": 1806,
+   "packets": 32
+  },
+  "675": {
+   "bytes": 1522,
+   "packets": 30
+  },
+  "676": {
+   "bytes": 2036,
+   "packets": 36
+  },
+  "677": {
+   "bytes": 1485,
+   "packets": 29
+  },
+  "678": {
+   "bytes": 1445,
+   "packets": 28
+  },
+  "679": {
+   "bytes": 2003,
+   "packets": 37
+  },
+  "680": {
+   "bytes": 1499,
+   "packets": 30
+  },
+  "681": {
+   "bytes": 1469,
+   "packets": 25
+  },
+  "682": {
+   "bytes": 1862,
+   "packets": 36
+  },
+  "683": {
+   "bytes": 1671,
+   "packets": 29
+  },
+  "684": {
+   "bytes": 1767,
+   "packets": 32
+  },
+  "685": {
+   "bytes": 2011,
+   "packets": 38
+  },
+  "686": {
+   "bytes": 1924,
+   "packets": 35
+  },
+  "687": {
+   "bytes": 1979,
+   "packets": 35
+  },
+  "688": {
+   "bytes": 1684,
+   "packets": 33
+  },
+  "689": {
+   "bytes": 2056,
+   "packets": 36
+  },
+  "690": {
+   "bytes": 1728,
+   "packets": 32
+  },
+  "691": {
+   "bytes": 1826,
+   "packets": 35
+  },
+  "692": {
+   "bytes": 1583,
+   "packets": 30
+  },
+  "693": {
+   "bytes": 1915,
+   "packets": 36
+  },
+  "694": {
+   "bytes": 1640,
+   "packets": 30
+  },
+  "695": {
+   "bytes": 1571,
+   "packets": 29
+  },
+  "696": {
+   "bytes": 1987,
+   "packets": 36
+  },
+  "697": {
+   "bytes": 1493,
+   "packets": 28
+  },
+  "698": {
+   "bytes": 1809,
+   "packets": 33
+  },
+  "699": {
+   "bytes": 2076,
+   "packets": 38
+  },
+  "700": {
+   "bytes": 1367,
+   "packets": 26
+  },
+  "701": {
+   "bytes": 2170,
+   "packets": 40
+  },
+  "702": {
+   "bytes": 1431,
+   "packets": 28
+  },
+  "703": {
+   "bytes": 1798,
+   "packets": 32
+  },
+  "704": {
+   "bytes": 2302,
+   "packets": 41
+  },
+  "705": {
+   "bytes": 1593,
+   "packets": 29
+  },
+  "706": {
+   "bytes": 2114,
+   "packets": 39
+  },
+  "707": {
+   "bytes": 1868,
+   "packets": 34
+  },
+  "708": {
+   "bytes": 1609,
+   "packets": 31
+  },
+  "709": {
+   "bytes": 1863,
+   "packets": 33
+  },
+  "710": {
+   "bytes": 1856,
+   "packets": 37
+  },
+  "711": {
+   "bytes": 1956,
+   "packets": 35
+  },
+  "712": {
+   "bytes": 1896,
+   "packets": 36
+  },
+  "713": {
+   "bytes": 1717,
+   "packets": 34
+  },
+  "714": {
+   "bytes": 2003,
+   "packets": 34
+  },
+  "715": {
+   "bytes": 1963,
+   "packets": 35
+  },
+  "716": {
+   "bytes": 2411,
+   "packets": 40
+  },
+  "717": {
+   "bytes": 2608,
+   "packets": 42
+  },
+  "718": {
+   "bytes": 1921,
+   "packets": 36
+  },
+  "719": {
+   "bytes": 2420,
+   "packets": 40
+  },
+  "720": {
+   "bytes": 2016,
+   "packets": 35
+  },
+  "721": {
+   "bytes": 1795,
+   "packets": 32
+  },
+  "722": {
+   "bytes": 1980,
+   "packets": 33
+  },
+  "723": {
+   "bytes": 1627,
+   "packets": 32
+  },
+  "724": {
+   "bytes": 1903,
+   "packets": 33
+  },
+  "725": {
+   "bytes": 2040,
+   "packets": 34
+  },
+  "726": {
+   "bytes": 2037,
+   "packets": 36
+  },
+  "727": {
+   "bytes": 2044,
+   "packets": 35
+  },
+  "728": {
+   "bytes": 1725,
+   "packets": 32
+  },
+  "729": {
+   "bytes": 2292,
+   "packets": 41
+  },
+  "730": {
+   "bytes": 1279,
+   "packets": 25
+  },
+  "731": {
+   "bytes": 2041,
+   "packets": 37
+  },
+  "732": {
+   "bytes": 1745,
+   "packets": 33
+  },
+  "733": {
+   "bytes": 1719,
+   "packets": 32
+  },
+  "734": {
+   "bytes": 1801,
+   "packets": 31
+  },
+  "735": {
+   "bytes": 1732,
+   "packets": 34
+  },
+  "736": {
+   "bytes": 2051,
+   "packets": 38
+  },
+  "737": {
+   "bytes": 2608,
+   "packets": 39
+  },
+  "738": {
+   "bytes": 2031,
+   "packets": 37
+  },
+  "739": {
+   "bytes": 2639,
+   "packets": 42
+  },
+  "740": {
+   "bytes": 1759,
+   "packets": 34
+  },
+  "741": {
+   "bytes": 2139,
+   "packets": 37
+  },
+  "742": {
+   "bytes": 2161,
+   "packets": 39
+  },
+  "743": {
+   "bytes": 1678,
+   "packets": 30
+  },
+  "744": {
+   "bytes": 2257,
+   "packets": 40
+  },
+  "745": {
+   "bytes": 1571,
+   "packets": 30
+  },
+  "746": {
+   "bytes": 1766,
+   "packets": 33
+  },
+  "747": {
+   "bytes": 2001,
+   "packets": 36
+  },
+  "748": {
+   "bytes": 1688,
+   "packets": 33
+  },
+  "749": {
+   "bytes": 1974,
+   "packets": 36
+  },
+  "750": {
+   "bytes": 1719,
+   "packets": 32
+  },
+  "751": {
+   "bytes": 1831,
+   "packets": 35
+  },
+  "752": {
+   "bytes": 1803,
+   "packets": 31
+  },
+  "753": {
+   "bytes": 1878,
+   "packets": 35
+  },
+  "754": {
+   "bytes": 2229,
+   "packets": 38
+  },
+  "755": {
+   "bytes": 1914,
+   "packets": 35
+  },
+  "756": {
+   "bytes": 2706,
+   "packets": 42
+  },
+  "757": {
+   "bytes": 2004,
+   "packets": 37
+  },
+  "758": {
+   "bytes": 1988,
+   "packets": 32
+  },
+  "759": {
+   "bytes": 2197,
+   "packets": 39
+  },
+  "760": {
+   "bytes": 1558,
+   "packets": 30
+  },
+  "761": {
+   "bytes": 1948,
+   "packets": 37
+  },
+  "762": {
+   "bytes": 2084,
+   "packets": 37
+  },
+  "763": {
+   "bytes": 1812,
+   "packets": 34
+  },
+  "764": {
+   "bytes": 2018,
+   "packets": 36
+  },
+  "765": {
+   "bytes": 1845,
+   "packets": 34
+  },
+  "766": {
+   "bytes": 2057,
+   "packets": 37
+  },
+  "767": {
+   "bytes": 1763,
+   "packets": 30
+  },
+  "768": {
+   "bytes": 2102,
+   "packets": 39
+  },
+  "769": {
+   "bytes": 2071,
+   "packets": 36
+  },
+  "770": {
+   "bytes": 2250,
+   "packets": 40
+  },
+  "771": {
+   "bytes": 2024,
+   "packets": 36
+  },
+  "772": {
+   "bytes": 1846,
+   "packets": 34
+  },
+  "773": {
+   "bytes": 2245,
+   "packets": 46
+  },
+  "774": {
+   "bytes": 1720,
+   "packets": 31
+  },
+  "775": {
+   "bytes": 2722,
+   "packets": 58
+  },
+  "776": {
+   "bytes": 2368,
+   "packets": 43
+  },
+  "777": {
+   "bytes": 2579,
+   "packets": 57
+  },
+  "778": {
+   "bytes": 2686,
+   "packets": 53
+  },
+  "779": {
+   "bytes": 2745,
+   "packets": 45
+  },
+  "780": {
+   "bytes": 2666,
+   "packets": 62
+  },
+  "781": {
+   "bytes": 2931,
+   "packets": 49
+  },
+  "782": {
+   "bytes": 1948,
+   "packets": 50
+  },
+  "783": {
+   "bytes": 2260,
+   "packets": 49
+  },
+  "784": {
+   "bytes": 1987,
+   "packets": 52
+  },
+  "785": {
+   "bytes": 1931,
+   "packets": 47
+  },
+  "786": {
+   "bytes": 1376,
+   "packets": 40
+  },
+  "787": {
+   "bytes": 1598,
+   "packets": 46
+  },
+  "788": {
+   "bytes": 649,
+   "packets": 17
+  },
+  "789": {
+   "bytes": 1181,
+   "packets": 23
+  },
+  "790": {
+   "bytes": 1022,
+   "packets": 33
+  },
+  "791": {
+   "bytes": 1297,
+   "packets": 29
+  },
+  "792": {
+   "bytes": 1502,
+   "packets": 39
+  },
+  "793": {
+   "bytes": 1785,
+   "packets": 45
+  },
+  "794": {
+   "bytes": 2064,
+   "packets": 32
+  },
+  "795": {
+   "bytes": 3217,
+   "packets": 50
+  },
+  "796": {
+   "bytes": 3226,
+   "packets": 39
+  },
+  "797": {
+   "bytes": 4653,
+   "packets": 51
+  },
+  "798": {
+   "bytes": 3978,
+   "packets": 42
+  },
+  "799": {
+   "bytes": 3961,
+   "packets": 43
+  },
+  "800": {
+   "bytes": 4373,
+   "packets": 46
+  },
+  "801": {
+   "bytes": 3712,
+   "packets": 38
+  },
+  "802": {
+   "bytes": 2868,
+   "packets": 31
+  },
+  "803": {
+   "bytes": 2056,
+   "packets": 21
+  },
+  "804": {
+   "bytes": 1056,
+   "packets": 14
+  },
+  "806": {
+   "bytes": 52,
+   "packets": 2
+  },
+  "812": {
+   "bytes": 60,
+   "packets": 3
+  },
+  "813": {
+   "bytes": 20,
+   "packets": 1
+  },
+  "814": {
+   "bytes": 352,
+   "packets": 5
+  },
+  "815": {
+   "bytes": 156,
+   "packets": 2
+  },
+  "816": {
+   "bytes": 220,
+   "packets": 3
+  },
+  "817": {
+   "bytes": 52,
+   "packets": 1
+  },
+  "818": {
+   "bytes": 928,
+   "packets": 14
+  },
+  "819": {
+   "bytes": 1428,
+   "packets": 22
+  },
+  "820": {
+   "bytes": 1532,
+   "packets": 32
+  },
+  "821": {
+   "bytes": 1372,
+   "packets": 35
+  },
+  "822": {
+   "bytes": 1372,
+   "packets": 31
+  },
+  "823": {
+   "bytes": 1320,
+   "packets": 27
+  },
+  "824": {
+   "bytes": 1320,
+   "packets": 33
+  },
+  "825": {
+   "bytes": 1320,
+   "packets": 28
+  },
+  "826": {
+   "bytes": 1320,
+   "packets": 33
+  },
+  "827": {
+   "bytes": 1320,
+   "packets": 28
+  },
+  "828": {
+   "bytes": 1320,
+   "packets": 32
+  },
+  "829": {
+   "bytes": 1320,
+   "packets": 31
+  },
+  "830": {
+   "bytes": 1452,
+   "packets": 32
+  },
+  "831": {
+   "bytes": 1320,
+   "packets": 31
+  },
+  "832": {
+   "bytes": 1320,
+   "packets": 30
+  },
+  "833": {
+   "bytes": 660,
+   "packets": 23
+  },
+  "834": {
+   "bytes": 0,
+   "packets": 10
+  },
+  "835": {
+   "bytes": 0,
+   "packets": 7
+  },
+  "836": {
+   "bytes": 0,
+   "packets": 1
+  },
+  "837": {
+   "bytes": 0,
+   "packets": 2
+  },
+  "846": {
+   "bytes": 104,
+   "packets": 1
+  },
+  "849": {
+   "bytes": 80,
+   "packets": 1
+  },
+  "855": {
+   "bytes": 104,
+   "packets": 3
+  },
+  "98": {
+   "bytes": 74,
+   "packets": 2
+  },
+  "99": {
+   "bytes": 74,
+   "packets": 2
+  }
+ },
+ "runDir": "/tmp/h2run.NJamVb",
+ "summaries": {
+  "SLA": [
+   {
+    "ackProbeErrors": 0,
+    "ackProbes": 40,
+    "ackRttLossPct": 0,
+    "ackRttLost": 0,
+    "ackRttMaxMs": 24539,
+    "ackRttMinMs": 4231,
+    "ackRttP50Ms": 7674.0,
+    "ackRttP95Ms": 13757.0,
+    "ackRttSamples": 40,
+    "adaptationDecisions": 3,
+    "adaptationLog": [
+     "initiator: MediaPolicyDecision(medium -> minimal: severe loss 38.5%)",
+     "initiator: MediaPolicyDecision(minimal -> audioOnly: sustained loss/delay (loss 0.0%, rtt 5446ms))",
+     "initiator: MediaPolicyDecision(audioOnly -> lowRateVoice: severe loss 25.0%)"
+    ],
+    "adaptationProfileInitiator": "lowRateVoice",
+    "adaptationProfileReceiver": "lowRateVoice",
+    "bothConnected": true,
+    "connectMs": 163848,
+    "mediaMode": "realAudio",
+    "notes": [],
+    "preventedFreezes": 58,
+    "recoveryConnectedMs": 6856,
+    "recoveryFirstCandidateMs": 6856,
+    "recoveryNewCandidates": 1,
+    "recoveryStatusLog": [],
+    "sentinelFirstGrounds": "projectedScore -2.0017 <= floor 0.2",
+    "sentinelLeadMs": null,
+    "sentinelWarns": 63,
+    "stillConnectedAtEnd": true
+   }
+  ]
+ },
+ "trendSeries": [
+  {
+   "proj": null,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": null,
+   "t": 2,
+   "verdict": "unknown"
+  },
+  {
+   "proj": null,
+   "role": "initiator",
+   "score": 0.25,
+   "slope": null,
+   "t": 3,
+   "verdict": "unknown"
+  },
+  {
+   "proj": -2.0017,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": -0.25017,
+   "t": 4,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -1.2502,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": -0.16252,
+   "t": 5,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.3754,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": -0.08754,
+   "t": 6,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.3394,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": -0.07144,
+   "t": 7,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0536,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": -0.04464,
+   "t": 8,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.2559,
+   "role": "initiator",
+   "score": 0.25,
+   "slope": -0.05059,
+   "t": 9,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.8185,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": 0.01935,
+   "t": 10,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3453,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": -0.00297,
+   "t": 11,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5893,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": 0.00893,
+   "t": 12,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8036,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": 0.01786,
+   "t": 13,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2799,
+   "role": "initiator",
+   "score": 0.25,
+   "slope": 0.00299,
+   "t": 14,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9733,
+   "role": "initiator",
+   "score": 0.75,
+   "slope": 0.02233,
+   "t": 15,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5238,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": 0.01488,
+   "t": 16,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6696,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": 0.00446,
+   "t": 17,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.878,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": 0.0253,
+   "t": 18,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8185,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": 0.01935,
+   "t": 19,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.0833,
+   "role": "initiator",
+   "score": 0.125,
+   "slope": -0.02083,
+   "t": 20,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0327,
+   "role": "initiator",
+   "score": 0.25,
+   "slope": -0.02827,
+   "t": 21,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4971,
+   "role": "initiator",
+   "score": 0.75,
+   "slope": -0.02529,
+   "t": 22,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.4853,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": -0.00147,
+   "t": 23,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3811,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": -0.01189,
+   "t": 24,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.0567,
+   "role": "initiator",
+   "score": 0.25,
+   "slope": -0.01933,
+   "t": 25,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.759,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": 0.0134,
+   "t": 26,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0863,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": 0.04613,
+   "t": 27,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8779,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": 0.02529,
+   "t": 28,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4552,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": -0.00448,
+   "t": 29,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4046,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": 0.00296,
+   "t": 30,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5296,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": 0.00296,
+   "t": 31,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5296,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": 0.00296,
+   "t": 32,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4911,
+   "role": "initiator",
+   "score": 0.625,
+   "slope": -0.01339,
+   "t": 33,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.1815,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": -0.01935,
+   "t": 34,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1815,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": -0.01935,
+   "t": 35,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2411,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": -0.01339,
+   "t": 36,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.2262,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": -0.01488,
+   "t": 37,
+   "verdict": "slipping"
+  },
+  {
+   "proj": -0.5804,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.05804,
+   "t": 38,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.7886,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.07886,
+   "t": 39,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.8779,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.08779,
+   "t": 40,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.7142,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.07142,
+   "t": 41,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.6695,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.06695,
+   "t": 42,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.5356,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.05356,
+   "t": 43,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.3124,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.03124,
+   "t": 44,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": 0.0,
+   "t": 45,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 1.375,
+   "role": "initiator",
+   "score": 0.75,
+   "slope": 0.0625,
+   "t": 46,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9049,
+   "role": "initiator",
+   "score": 0.25,
+   "slope": 0.06549,
+   "t": 47,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8751,
+   "role": "initiator",
+   "score": 0.25,
+   "slope": 0.06251,
+   "t": 48,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0151,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": 0.06401,
+   "t": 49,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9406,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": 0.05656,
+   "t": 50,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0062,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": 0.05062,
+   "t": 51,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8276,
+   "role": "initiator",
+   "score": 0.5,
+   "slope": 0.03276,
+   "t": 52,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3007,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": -0.00743,
+   "t": 53,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.3005,
+   "role": "initiator",
+   "score": 0.75,
+   "slope": 0.05505,
+   "t": 54,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.3899,
+   "role": "initiator",
+   "score": 0.75,
+   "slope": 0.06399,
+   "t": 55,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.3602,
+   "role": "initiator",
+   "score": 0.75,
+   "slope": 0.06102,
+   "t": 56,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6577,
+   "role": "initiator",
+   "score": 0.375,
+   "slope": 0.02827,
+   "t": 57,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.4762,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.04762,
+   "t": 58,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0436,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.0377,
+   "t": 59,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4973,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.00528,
+   "t": 60,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0525,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.0392,
+   "t": 61,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4004,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": -0.02663,
+   "t": 62,
+   "verdict": "slipping"
+  },
+  {
+   "proj": -0.0652,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.03986,
+   "t": 63,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0983,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.04316,
+   "t": 64,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.2301,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.06745,
+   "t": 65,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0238,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.03572,
+   "t": 66,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.5026,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.0053,
+   "t": 67,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3915,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.0053,
+   "t": 68,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3915,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.0053,
+   "t": 69,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8334,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.02778,
+   "t": 70,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4259,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": 0.00926,
+   "t": 71,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2408,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.00926,
+   "t": 72,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5821,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.00265,
+   "t": 73,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3519,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00925,
+   "t": 74,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6482,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.00926,
+   "t": 75,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3069,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.00264,
+   "t": 76,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.418,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00264,
+   "t": 77,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3334,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": 0.0,
+   "t": 78,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.0291,
+   "role": "initiator",
+   "score": 0.2222,
+   "slope": -0.02513,
+   "t": 79,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3571,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.01985,
+   "t": 80,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.1878,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.01455,
+   "t": 81,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3783,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00661,
+   "t": 82,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5767,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.01323,
+   "t": 83,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5635,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.0119,
+   "t": 84,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8465,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.02909,
+   "t": 85,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8729,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.03174,
+   "t": 86,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3201,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.00132,
+   "t": 87,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9312,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.02645,
+   "t": 88,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.537,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.00925,
+   "t": 89,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4576,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.00132,
+   "t": 90,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3782,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.00662,
+   "t": 91,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2988,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.01456,
+   "t": 92,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.1348,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.01985,
+   "t": 93,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3385,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.01059,
+   "t": 94,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.4233,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.01323,
+   "t": 95,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.701,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.01455,
+   "t": 96,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5635,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.0119,
+   "t": 97,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.537,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.00926,
+   "t": 98,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5106,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.00661,
+   "t": 99,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.3307,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.03307,
+   "t": 100,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.7408,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.07408,
+   "t": 101,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.7486,
+   "role": "initiator",
+   "score": 0.1111,
+   "slope": -0.08597,
+   "t": 102,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.8728,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.08728,
+   "t": 103,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.754,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.0754,
+   "t": 104,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.2142,
+   "role": "initiator",
+   "score": 0.2222,
+   "slope": -0.04364,
+   "t": 105,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.5636,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.01191,
+   "t": 106,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.119,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": 0.06746,
+   "t": 107,
+   "verdict": "steady"
+  },
+  {
+   "proj": 2.2169,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.12169,
+   "t": 108,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.9102,
+   "role": "initiator",
+   "score": 0.6667,
+   "slope": 0.12435,
+   "t": 109,
+   "verdict": "steady"
+  },
+  {
+   "proj": 2.1006,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": 0.13228,
+   "t": 110,
+   "verdict": "steady"
+  },
+  {
+   "proj": 2.3094,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.13094,
+   "t": 111,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.2434,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.06879,
+   "t": 112,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3201,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.00132,
+   "t": 113,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0344,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.04101,
+   "t": 114,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.1587,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.07142,
+   "t": 115,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.3015,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.06349,
+   "t": 116,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.4205,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.07539,
+   "t": 117,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.1375,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.0582,
+   "t": 118,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1481,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": -0.01852,
+   "t": 119,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 1.0423,
+   "role": "initiator",
+   "score": 0.7778,
+   "slope": 0.02645,
+   "t": 120,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.7936,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.0238,
+   "t": 121,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4259,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": 0.00925,
+   "t": 122,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4259,
+   "role": "initiator",
+   "score": 0.3333,
+   "slope": 0.00925,
+   "t": 123,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6481,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": 0.00925,
+   "t": 124,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3915,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.0053,
+   "t": 125,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5423,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.00133,
+   "t": 126,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2327,
+   "role": "initiator",
+   "score": 0.4444,
+   "slope": -0.02117,
+   "t": 127,
+   "verdict": "slipping"
+  },
+  {
+   "proj": -0.3308,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.03308,
+   "t": 128,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.2991,
+   "role": "initiator",
+   "score": 0.1111,
+   "slope": -0.04102,
+   "t": 129,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.7144,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.07144,
+   "t": 130,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.9391,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.09391,
+   "t": 131,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1719,
+   "role": "initiator",
+   "score": 0.5556,
+   "slope": -0.03837,
+   "t": 132,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 1.4231,
+   "role": "initiator",
+   "score": 1.0,
+   "slope": 0.04231,
+   "t": 133,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.2295,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.0768,
+   "t": 134,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.1958,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.08881,
+   "t": 135,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8722,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.05645,
+   "t": 136,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.7355,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.03509,
+   "t": 137,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3377,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00469,
+   "t": 138,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.4337,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.06645,
+   "t": 139,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.3701,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.06778,
+   "t": 140,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.011,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.02198,
+   "t": 141,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0751,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01557,
+   "t": 142,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4524,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": -0.00092,
+   "t": 143,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2802,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00275,
+   "t": 144,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4853,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01007,
+   "t": 145,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6135,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.02289,
+   "t": 146,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4359,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01282,
+   "t": 147,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3993,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00916,
+   "t": 148,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.0019,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.01557,
+   "t": 149,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0513,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.02564,
+   "t": 150,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.3846,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.03846,
+   "t": 151,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.5678,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.05678,
+   "t": 152,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.4542,
+   "role": "initiator",
+   "score": 0.0769,
+   "slope": -0.05311,
+   "t": 153,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.4854,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.04854,
+   "t": 154,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.4304,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.04304,
+   "t": 155,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.3022,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.03022,
+   "t": 156,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.2656,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.02656,
+   "t": 157,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1136,
+   "role": "initiator",
+   "score": 0.0769,
+   "slope": 0.00366,
+   "t": 158,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.9873,
+   "role": "initiator",
+   "score": 0.5385,
+   "slope": 0.04488,
+   "t": 159,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.1301,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.06686,
+   "t": 160,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.3223,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.08607,
+   "t": 161,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.9178,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.0687,
+   "t": 162,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.8299,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.05222,
+   "t": 163,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5918,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.02841,
+   "t": 164,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1394,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00914,
+   "t": 165,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0678,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.03755,
+   "t": 166,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.229,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.01556,
+   "t": 167,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.1209,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01098,
+   "t": 168,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.5036,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.0119,
+   "t": 169,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3626,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00549,
+   "t": 170,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3626,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00549,
+   "t": 171,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3626,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00549,
+   "t": 172,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2802,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00275,
+   "t": 173,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1209,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01099,
+   "t": 174,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4212,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00366,
+   "t": 175,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.685,
+   "role": "initiator",
+   "score": 0.5385,
+   "slope": 0.01465,
+   "t": 176,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1813,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": 0.00274,
+   "t": 177,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3168,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00091,
+   "t": 178,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2985,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00092,
+   "t": 179,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1392,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00916,
+   "t": 180,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0751,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01557,
+   "t": 181,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3699,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": -0.00916,
+   "t": 182,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5439,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.00824,
+   "t": 183,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4414,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.02106,
+   "t": 184,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2308,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.0,
+   "t": 185,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5897,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.01282,
+   "t": 186,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3992,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00916,
+   "t": 187,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5622,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.01007,
+   "t": 188,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0933,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01374,
+   "t": 189,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2435,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00642,
+   "t": 190,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3534,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00457,
+   "t": 191,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2527,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.0055,
+   "t": 192,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1337,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.0174,
+   "t": 193,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1025,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01282,
+   "t": 194,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.1026,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.02564,
+   "t": 195,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3938,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00092,
+   "t": 196,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1484,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00824,
+   "t": 197,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2802,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00275,
+   "t": 198,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4762,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00916,
+   "t": 199,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4359,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01282,
+   "t": 199,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4726,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01649,
+   "t": 201,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5678,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01832,
+   "t": 202,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.185,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00458,
+   "t": 203,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.467,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00824,
+   "t": 204,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 205,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2528,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00549,
+   "t": 206,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2985,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00092,
+   "t": 207,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4212,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00366,
+   "t": 208,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3077,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.0,
+   "t": 209,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2125,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00183,
+   "t": 210,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.489,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.00275,
+   "t": 211,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3627,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.0055,
+   "t": 212,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.326,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00183,
+   "t": 213,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4304,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00458,
+   "t": 214,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2985,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00091,
+   "t": 215,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.467,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00824,
+   "t": 216,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1942,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00366,
+   "t": 217,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.13,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.02839,
+   "t": 218,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3114,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00733,
+   "t": 219,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3754,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00092,
+   "t": 219,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4212,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00366,
+   "t": 221,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3901,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00824,
+   "t": 222,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0897,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.00642,
+   "t": 223,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0788,
+   "role": "initiator",
+   "score": 0.0769,
+   "slope": -0.01558,
+   "t": 224,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.403,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.0403,
+   "t": 225,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.3956,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.05494,
+   "t": 226,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.5768,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.05768,
+   "t": 227,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0897,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.03205,
+   "t": 228,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.2197,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.02197,
+   "t": 229,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.1099,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.01099,
+   "t": 230,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0915,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.00915,
+   "t": 231,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3041,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.00733,
+   "t": 232,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.0733,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.00733,
+   "t": 233,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.055,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.0055,
+   "t": 234,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0238,
+   "role": "initiator",
+   "score": 0.0769,
+   "slope": -0.01007,
+   "t": 235,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0183,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": 0.00183,
+   "t": 236,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.055,
+   "role": "initiator",
+   "score": 0.0,
+   "slope": -0.0055,
+   "t": 237,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.9998,
+   "role": "initiator",
+   "score": 0.6154,
+   "slope": 0.03845,
+   "t": 238,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.1519,
+   "role": "initiator",
+   "score": 0.5385,
+   "slope": 0.06134,
+   "t": 239,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.6411,
+   "role": "initiator",
+   "score": 0.6154,
+   "slope": 0.10257,
+   "t": 240,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.1503,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.08426,
+   "t": 241,
+   "verdict": "steady"
+  },
+  {
+   "proj": 1.0349,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.06502,
+   "t": 242,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5512,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.03204,
+   "t": 243,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3845,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -1e-05,
+   "t": 244,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.1685,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.04762,
+   "t": 245,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0586,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.03663,
+   "t": 246,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.6062,
+   "role": "initiator",
+   "score": 0.6154,
+   "slope": -0.00092,
+   "t": 247,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6043,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.02197,
+   "t": 248,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5585,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01739,
+   "t": 249,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4359,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01282,
+   "t": 250,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3846,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.0,
+   "t": 251,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2436,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00641,
+   "t": 252,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.3077,
+   "role": "initiator",
+   "score": 0.0769,
+   "slope": -0.03846,
+   "t": 253,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4139,
+   "role": "initiator",
+   "score": 0.6154,
+   "slope": -0.02015,
+   "t": 254,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 255,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0165,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.01373,
+   "t": 256,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2345,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00732,
+   "t": 257,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3755,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00091,
+   "t": 258,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2216,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00091,
+   "t": 259,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.599,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.01374,
+   "t": 260,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1796,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01281,
+   "t": 261,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.436,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01283,
+   "t": 262,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.718,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.02565,
+   "t": 263,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3627,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.0055,
+   "t": 264,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 265,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2985,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00091,
+   "t": 266,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1612,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01465,
+   "t": 267,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0293,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.01832,
+   "t": 268,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4065,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": -0.0055,
+   "t": 268,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3571,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00275,
+   "t": 269,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5311,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01465,
+   "t": 271,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1355,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.00184,
+   "t": 272,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2893,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00184,
+   "t": 273,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4304,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00457,
+   "t": 273,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.053,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.01008,
+   "t": 275,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0604,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.02473,
+   "t": 276,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2069,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01008,
+   "t": 277,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.4487,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00641,
+   "t": 278,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.7545,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.02929,
+   "t": 279,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2948,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.0064,
+   "t": 280,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3534,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00457,
+   "t": 281,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6996,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.0238,
+   "t": 282,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2033,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00274,
+   "t": 283,
+   "verdict": "steady"
+  },
+  {
+   "proj": -0.0568,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.02106,
+   "t": 283,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2198,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.01648,
+   "t": 285,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.0476,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01831,
+   "t": 286,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 287,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3847,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 1e-05,
+   "t": 288,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1667,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.0064,
+   "t": 289,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.5678,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01832,
+   "t": 289,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4451,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01374,
+   "t": 291,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2985,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00092,
+   "t": 292,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5036,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.0119,
+   "t": 293,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.467,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00824,
+   "t": 294,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1941,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00367,
+   "t": 295,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3168,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00091,
+   "t": 296,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4982,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.00366,
+   "t": 297,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3535,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00458,
+   "t": 298,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5806,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.01191,
+   "t": 299,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3352,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00275,
+   "t": 300,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.326,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00183,
+   "t": 301,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4762,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00916,
+   "t": 302,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2436,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00641,
+   "t": 303,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.293,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00916,
+   "t": 304,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.271,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00366,
+   "t": 305,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1978,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01099,
+   "t": 306,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4304,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00458,
+   "t": 307,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2985,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00092,
+   "t": 308,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2436,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00641,
+   "t": 309,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4121,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00275,
+   "t": 310,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1392,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00916,
+   "t": 311,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2619,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00458,
+   "t": 312,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2436,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00641,
+   "t": 313,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3663,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00183,
+   "t": 314,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4762,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00916,
+   "t": 315,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3626,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00549,
+   "t": 316,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.326,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00183,
+   "t": 317,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3718,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00641,
+   "t": 318,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2711,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00366,
+   "t": 319,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5165,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.0055,
+   "t": 320,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 321,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2986,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00091,
+   "t": 322,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.326,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00183,
+   "t": 323,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 324,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2528,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00549,
+   "t": 325,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4982,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.00366,
+   "t": 326,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.13,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01008,
+   "t": 327,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3168,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00091,
+   "t": 327,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1575,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00733,
+   "t": 329,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.6575,
+   "role": "initiator",
+   "score": 0.5385,
+   "slope": 0.0119,
+   "t": 330,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5128,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01282,
+   "t": 331,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3626,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00549,
+   "t": 331,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 333,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.522,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01374,
+   "t": 334,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1667,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00641,
+   "t": 335,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0934,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.02472,
+   "t": 335,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.1813,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.04121,
+   "t": 337,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4066,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": -0.00549,
+   "t": 338,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1942,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00366,
+   "t": 339,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0257,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.01282,
+   "t": 339,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3938,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00092,
+   "t": 341,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1722,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": 0.00184,
+   "t": 342,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.6356,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.0174,
+   "t": 343,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3718,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00641,
+   "t": 344,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3077,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.0,
+   "t": 345,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4725,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01648,
+   "t": 346,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2857,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.0055,
+   "t": 347,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0934,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01374,
+   "t": 348,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4121,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00275,
+   "t": 349,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4707,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.00091,
+   "t": 349,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4267,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.0119,
+   "t": 351,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4084,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01007,
+   "t": 352,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5311,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01465,
+   "t": 353,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4175,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01099,
+   "t": 354,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2985,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00092,
+   "t": 355,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1611,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01465,
+   "t": 355,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.1117,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.02656,
+   "t": 357,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": -0.0934,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.02473,
+   "t": 357,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2564,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.01282,
+   "t": 359,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.2161,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00916,
+   "t": 359,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1941,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00366,
+   "t": 360,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4854,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01008,
+   "t": 361,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3223,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.00916,
+   "t": 363,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4725,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01648,
+   "t": 364,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2399,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.00092,
+   "t": 364,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.207,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01007,
+   "t": 365,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.4487,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00641,
+   "t": 366,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3901,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00824,
+   "t": 368,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.185,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00458,
+   "t": 369,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.6447,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.01831,
+   "t": 369,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2674,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.00366,
+   "t": 371,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4853,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01007,
+   "t": 372,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1666,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00641,
+   "t": 373,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0842,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01466,
+   "t": 373,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3846,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.0,
+   "t": 374,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4487,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00641,
+   "t": 376,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.13,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01008,
+   "t": 377,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3535,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00458,
+   "t": 378,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 379,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5128,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01282,
+   "t": 380,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4945,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01099,
+   "t": 381,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0165,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.01373,
+   "t": 381,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.5165,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.0055,
+   "t": 383,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4085,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01008,
+   "t": 384,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3077,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.0,
+   "t": 384,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2711,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00366,
+   "t": 385,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2345,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00732,
+   "t": 387,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4213,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00367,
+   "t": 388,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6722,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.02107,
+   "t": 388,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1575,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00733,
+   "t": 390,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.185,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00458,
+   "t": 391,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2436,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00641,
+   "t": 392,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2252,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00824,
+   "t": 392,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2069,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01008,
+   "t": 394,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.0476,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01832,
+   "t": 395,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.207,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01007,
+   "t": 396,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.5311,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01465,
+   "t": 397,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4084,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01007,
+   "t": 397,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3443,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00366,
+   "t": 398,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4854,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01007,
+   "t": 400,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5312,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01466,
+   "t": 401,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5586,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.0174,
+   "t": 402,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3443,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00367,
+   "t": 402,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2711,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00366,
+   "t": 404,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5623,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.01007,
+   "t": 405,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3169,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00092,
+   "t": 406,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0843,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01465,
+   "t": 406,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.0293,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.02015,
+   "t": 407,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.011,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.02198,
+   "t": 408,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3114,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00732,
+   "t": 410,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2345,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00732,
+   "t": 410,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0934,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01373,
+   "t": 412,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4945,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01099,
+   "t": 413,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3132,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": 0.00824,
+   "t": 414,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3626,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.0055,
+   "t": 415,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4579,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00733,
+   "t": 415,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1575,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00733,
+   "t": 417,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3168,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00091,
+   "t": 417,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3351,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00275,
+   "t": 419,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.271,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00367,
+   "t": 419,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4945,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01099,
+   "t": 420,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.6172,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.01557,
+   "t": 422,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4084,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.01007,
+   "t": 422,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5769,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01923,
+   "t": 424,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3627,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.0055,
+   "t": 424,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4304,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00458,
+   "t": 426,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.262,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00457,
+   "t": 427,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1704,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01373,
+   "t": 428,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1612,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.01465,
+   "t": 428,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2528,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00549,
+   "t": 429,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2161,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00916,
+   "t": 430,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.403,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00183,
+   "t": 432,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2894,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00183,
+   "t": 432,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4762,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00916,
+   "t": 434,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.5037,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01191,
+   "t": 434,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3718,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00641,
+   "t": 435,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4579,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00733,
+   "t": 437,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1667,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00641,
+   "t": 437,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4708,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.00092,
+   "t": 439,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0257,
+   "role": "initiator",
+   "score": 0.1538,
+   "slope": -0.01281,
+   "t": 439,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.2839,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.01007,
+   "t": 440,
+   "verdict": "slipping"
+  },
+  {
+   "proj": 0.3755,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00091,
+   "t": 442,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3261,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00184,
+   "t": 442,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2895,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00182,
+   "t": 444,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4762,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.00916,
+   "t": 444,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2803,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00274,
+   "t": 445,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3901,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00824,
+   "t": 446,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.0659,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.01648,
+   "t": 447,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.3297,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": -0.00549,
+   "t": 448,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2985,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00092,
+   "t": 449,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1392,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00916,
+   "t": 450,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4982,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.00367,
+   "t": 452,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3901,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00824,
+   "t": 453,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.3718,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": 0.00641,
+   "t": 454,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.4945,
+   "role": "initiator",
+   "score": 0.3846,
+   "slope": 0.01099,
+   "t": 455,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.1577,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00731,
+   "t": 455,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.1394,
+   "role": "initiator",
+   "score": 0.2308,
+   "slope": -0.00914,
+   "t": 456,
+   "verdict": "failingSoon"
+  },
+  {
+   "proj": 0.4983,
+   "role": "initiator",
+   "score": 0.4615,
+   "slope": 0.00368,
+   "t": 458,
+   "verdict": "steady"
+  },
+  {
+   "proj": 0.2254,
+   "role": "initiator",
+   "score": 0.3077,
+   "slope": -0.00823,
+   "t": 458,
+   "verdict": "steady"
+  }
+ ],
+ "tsvJoinGapS": 3,
+ "tsvRow": {
+  "ack_loss": "0",
+  "ack_p50": "7674.0",
+  "ack_p95": "13757.0",
+  "alive": "True",
+  "connect_ms": "163848",
+  "date": "2026-08-11T10:33:47Z",
+  "elapsed_ms": "871082",
+  "loss_pct": "10.0",
+  "note": "criterion=stress(connect<=195s,recovery<=210s,independent); survived: connect 163848ms, recovered 6856ms, alive; All tests passed!",
+  "packets": "25151",
+  "profile": "extreme",
+  "recovery_ms": "6856",
+  "rtt_ms": "2043.562",
+  "test": "sla_thresholds_test.dart",
+  "verdict": "PASS/STRESS"
+ }
+}

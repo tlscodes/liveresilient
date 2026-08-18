@@ -40,6 +40,18 @@ enum {
   PT_SHIM_ERR_UNLINKED = -1, /* stub build: the backend is not in this image */
   PT_SHIM_ERR_ARG = -2,      /* buf is NULL with cap > 0, or cap is negative */
   PT_SHIM_ERR_INTERNAL = -3, /* the backend refused a call while composing    */
+  PT_SHIM_ERR_ECH_REJECTED = -4, /* the peer read the configuration and refused it */
+  PT_SHIM_ERR_TIMEOUT = -5,      /* the bounded wait expired before an outcome  */
+  PT_SHIM_ERR_UNREACHABLE = -6,  /* nothing answered at that address           */
+};
+
+/* The two ways the exchange can FINISH. Both are positive and neither is zero,
+ * so a caller who reaches for the usual `== 0` habit matches nothing and fails
+ * loudly rather than quietly treating "the peer ignored it" as success — which
+ * is the one distinction this probe exists to report. */
+enum {
+  PT_SHIM_ECH_APPLIED = 1, /* finished, and the peer used the supplied config */
+  PT_SHIM_ECH_IGNORED = 2, /* finished, and the peer did not use it           */
 };
 
 /* 1 when the backend is compiled and linked into this image, 0 when this is a
@@ -62,6 +74,28 @@ PT_SHIM_EXPORT int32_t pt_shim_build_pin(char *buf, int32_t cap);
  *
  * Stub build: PT_SHIM_ERR_UNLINKED. */
 PT_SHIM_EXPORT int32_t pt_shim_first_record(uint8_t *buf, int32_t cap);
+
+/* Performs one exchange with a cooperating peer at host:port, offering the
+ * caller-supplied configuration blob and asking for `inner_name`, and reports
+ * what the peer did with that configuration: PT_SHIM_ECH_APPLIED,
+ * PT_SHIM_ECH_IGNORED, or one of the negative codes above.
+ *
+ * MEASUREMENT ONLY, AND THE NAME SAYS SO
+ * This probe does NOT check the peer's credentials. That is necessary to
+ * measure the extension against a locally-run peer whose certificate no
+ * authority signed, and it is exactly why this is named as a probe, takes no
+ * payload, returns no connection, and cannot be reused as a general client:
+ * there is nothing here to send or receive on.
+ *
+ * timeout_ms bounds the whole exchange. No value means "forever" — 0 is a
+ * single non-blocking attempt and a negative value is PT_SHIM_ERR_ARG — so a
+ * caller that wants to wait indefinitely must write the loop itself, in sight
+ * of whoever reads it. Stub build: PT_SHIM_ERR_UNLINKED. */
+PT_SHIM_EXPORT int32_t pt_shim_ech_probe(const char *host, int32_t port,
+                                         const uint8_t *config,
+                                         int32_t config_len,
+                                         const char *inner_name,
+                                         int32_t timeout_ms);
 
 #ifdef __cplusplus
 }

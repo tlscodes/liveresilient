@@ -26,6 +26,15 @@
 
 #ifdef PT_SHIM_HAVE_BORINGSSL
 
+#include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
@@ -161,6 +170,138 @@ done:
   return result;
 }
 
+/* Accepts any credential. This exists only so the probe below can measure the
+ * extension against a peer started for the measurement, whose certificate no
+ * authority signed. It is deliberately not reachable from anything else in this
+ * file, and the only function that installs it is named as a probe. */
+static enum ssl_verify_result_t pt_shim_accept_any_credential(SSL *ssl,
+                                                              uint8_t *out_alert) {
+  (void)ssl;
+  (void)out_alert;
+  return ssl_verify_ok;
+}
+
+static int pt_shim_wait_writable(int fd, int32_t timeout_ms) {
+  fd_set write_set;
+  struct timeval tv;
+  FD_ZERO(&write_set);
+  FD_SET(fd, &write_set);
+  tv.tv_sec = timeout_ms / 1000;
+  tv.tv_usec = (timeout_ms % 1000) * 1000;
+  return select(fd + 1, NULL, &write_set, NULL, &tv);
+}
+
+int32_t pt_shim_ech_probe(const char *host, int32_t port, const uint8_t *config,
+                          int32_t config_len, const char *inner_name,
+                          int32_t timeout_ms) {
+  if (host == NULL || inner_name == NULL || config == NULL || config_len <= 0 ||
+      port <= 0 || port > 65535 || timeout_ms < 0) {
+    return PT_SHIM_ERR_ARG;
+  }
+
+  int32_t result = PT_SHIM_ERR_INTERNAL;
+  int fd = -1;
+  SSL_CTX *ctx = NULL;
+  SSL *ssl = NULL;
+  struct addrinfo hints;
+  struct addrinfo *addresses = NULL;
+  char port_text[8];
+
+  snprintf(port_text, sizeof(port_text), "%d", (int)port);
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  if (getaddrinfo(host, port_text, &hints, &addresses) != 0 || addresses == NULL) {
+    return PT_SHIM_ERR_UNREACHABLE;
+  }
+
+  fd = socket(addresses->ai_family, addresses->ai_socktype, addresses->ai_protocol);
+  if (fd < 0) {
+    result = PT_SHIM_ERR_UNREACHABLE;
+    goto done;
+  }
+
+  /* Connect without blocking, then wait at most the caller's budget. A phone
+   * whose screen has locked can otherwise sit here far longer than the test
+   * that called it is willing to live. */
+  {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags >= 0) fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    int rc = connect(fd, addresses->ai_addr, addresses->ai_addrlen);
+    if (rc != 0) {
+      if (errno != EINPROGRESS) {
+        result = PT_SHIM_ERR_UNREACHABLE;
+        goto done;
+      }
+      int ready = pt_shim_wait_writable(fd, timeout_ms);
+      if (ready == 0) {
+        result = PT_SHIM_ERR_TIMEOUT;
+        goto done;
+      }
+      if (ready < 0) {
+        result = PT_SHIM_ERR_UNREACHABLE;
+        goto done;
+      }
+      int sock_error = 0;
+      socklen_t len = sizeof(sock_error);
+      if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_error, &len) != 0 ||
+          sock_error != 0) {
+        result = PT_SHIM_ERR_UNREACHABLE;
+        goto done;
+      }
+    }
+    if (flags >= 0) fcntl(fd, F_SETFL, flags);
+  }
+
+  /* The same budget bounds the exchange itself, so no phase is unbounded. */
+  {
+    struct timeval tv;
+    int32_t bound = timeout_ms > 0 ? timeout_ms : 1;
+    tv.tv_sec = bound / 1000;
+    tv.tv_usec = (bound % 1000) * 1000;
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+  }
+
+  ctx = SSL_CTX_new(TLS_method());
+  if (ctx == NULL) goto done;
+  SSL_CTX_set_custom_verify(ctx, SSL_VERIFY_PEER, pt_shim_accept_any_credential);
+
+  ssl = SSL_new(ctx);
+  if (ssl == NULL) goto done;
+  SSL_set_connect_state(ssl);
+  if (!SSL_set_fd(ssl, fd)) goto done;
+  if (!SSL_set_tlsext_host_name(ssl, inner_name)) goto done;
+  if (!SSL_set1_ech_config_list(ssl, config, (size_t)config_len)) {
+    /* The blob the caller handed us is not a configuration list at all, which
+     * is an argument fault rather than anything the peer did. */
+    result = PT_SHIM_ERR_ARG;
+    goto done;
+  }
+
+  ERR_clear_error();
+  if (SSL_connect(ssl) == 1) {
+    result = SSL_ech_accepted(ssl) ? PT_SHIM_ECH_APPLIED : PT_SHIM_ECH_IGNORED;
+  } else {
+    uint32_t reason = ERR_GET_REASON(ERR_peek_last_error());
+    if (reason == SSL_R_ECH_REJECTED) {
+      /* A failure that still proves the other side read the configuration. */
+      result = PT_SHIM_ERR_ECH_REJECTED;
+    } else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ETIMEDOUT) {
+      result = PT_SHIM_ERR_TIMEOUT;
+    } else {
+      result = PT_SHIM_ERR_INTERNAL;
+    }
+  }
+
+done:
+  if (ssl != NULL) SSL_free(ssl);
+  if (ctx != NULL) SSL_CTX_free(ctx);
+  if (fd >= 0) close(fd);
+  if (addresses != NULL) freeaddrinfo(addresses);
+  return result;
+}
+
 #else /* the backend is not in this image */
 
 int32_t pt_shim_backend_linked(void) { return 0; }
@@ -174,6 +315,18 @@ int32_t pt_shim_build_pin(char *buf, int32_t cap) {
 int32_t pt_shim_first_record(uint8_t *buf, int32_t cap) {
   (void)buf;
   (void)cap;
+  return PT_SHIM_ERR_UNLINKED;
+}
+
+int32_t pt_shim_ech_probe(const char *host, int32_t port, const uint8_t *config,
+                          int32_t config_len, const char *inner_name,
+                          int32_t timeout_ms) {
+  (void)host;
+  (void)port;
+  (void)config;
+  (void)config_len;
+  (void)inner_name;
+  (void)timeout_ms;
   return PT_SHIM_ERR_UNLINKED;
 }
 

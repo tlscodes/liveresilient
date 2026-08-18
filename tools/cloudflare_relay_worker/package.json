@@ -4,6 +4,6 @@
   "type": "module",
   "description": "Border relay worker: call lanes plus the broadcast archive routes.",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test 'test/*.test.mjs'"
   }
 }
