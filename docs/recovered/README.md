@@ -16,11 +16,19 @@ taking a `List<String> Function()`. The committed version of that class has no
 citation mechanism at all, so this was a feature in progress, not a one-line
 setter.
 
-**What survives.** Its caller, preserved as a diff in this directory:
+**What survives.** Its caller AND the tests written against it, preserved as
+diffs in this directory:
 
 ```
 docs/recovered/intelligence_director_uncommitted_2026-08-18.diff
+docs/recovered/intelligence_director_test_uncommitted_2026-08-18.diff
 ```
+
+The test half was found the way it should be: the workspace suite went red on
+`intelligence_director_test.dart` — two cases expecting the citation feature —
+after the caller had been reverted. Both halves are now back at the same
+committed state, so the tree is consistent rather than half-migrated, and both
+diffs are here.
 
 It shows the intended design clearly: the assistant cites the newest ids from
 the hub's persisted evidence ring, and each connectivity snapshot journals the
