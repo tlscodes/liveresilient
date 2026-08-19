@@ -122,8 +122,10 @@ class TlsClientHello {
     return null;
   }
 
-  /// The SNI host name, or null when the hello carries no `server_name`
-  /// (which is the case when SNI is hidden inside ECH).
+  /// The SNI host name per RFC 6066, or null when this hello carries no
+  /// `server_name` extension — which is what an outer ClientHello looks like
+  /// under Encrypted Client Hello (draft-ietf-tls-esni), where the real name
+  /// travels in the encrypted inner hello instead.
   String? get serverName {
     final ext = extension(TlsExtensionType.serverName);
     if (ext == null || ext.data.length < 5) return null;

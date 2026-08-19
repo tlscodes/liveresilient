@@ -118,9 +118,10 @@ TOOLS THAT DECIDE       tools/gate_ratchet.py      rebuilds the gate table from
                                   public one as a LOCATED witness
 ```
 
-Steps 5 and 7 together are the anti-blocking property: the helper is configured
-with two different names, and step 7 is the evidence that only the harmless one
-travels.
+Steps 5 and 7 are a pair: step 5 configures the helper with a public front name
+distinct from the backend name, and step 7 is the measurement that only the public
+one appears in cleartext on the wire — the same SNI-in-cleartext property that TLS
+1.3 Encrypted Client Hello (RFC 9180 / draft-ietf-tls-esni) addresses.
 
 ## Status, and the difference between recorded and measured
 
