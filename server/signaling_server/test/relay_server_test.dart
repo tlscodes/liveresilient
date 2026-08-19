@@ -30,8 +30,12 @@ Future<void> main() async {
     return WebSocket.connect('wss://localhost:$port/', customClient: client);
   }
 
-  String envelope(String callId, {String body = 'hello'}) =>
-      jsonEncode({'callId': callId, 'body': body});
+  // Room membership is identity-keyed (senderKeyId), so a protocol-valid
+  // frame ALWAYS carries one — exactly like real `SignalEnvelope` traffic.
+  // Frames without it are dropped before pairing (and there is a dedicated
+  // test asserting that).
+  String envelope(String callId, {String body = 'hello', String from = 'a'}) =>
+      jsonEncode({'callId': callId, 'senderKeyId': '$from-key', 'body': body});
 
   /// Connects two peers, attaches collectors on both BEFORE any traffic (so
   /// the room-join buffer flush is captured deterministically), then joins
@@ -57,8 +61,8 @@ Future<void> main() async {
     final aSub = a.listen((event) => aFrames.add(event as String));
     final bSub = b.listen((event) => bFrames.add(event as String));
 
-    a.add(envelope(callId, body: '__seed__'));
-    b.add(envelope(callId, body: '__seed__'));
+    a.add(envelope(callId, body: '__seed__', from: 'a'));
+    b.add(envelope(callId, body: '__seed__', from: 'b'));
     await aFrames.waitForCount(1, '$callId: seed from b relayed to a');
     await bFrames.waitForCount(1, '$callId: seed from a flushed to b');
 
@@ -111,7 +115,7 @@ Future<void> main() async {
     final b = await connectClient(server.port);
     final received = FrameCollector();
     b.listen((event) => received.add(event as String));
-    b.add(envelope('call-buffer', body: 'joins'));
+    b.add(envelope('call-buffer', body: 'joins', from: 'b'));
 
     // The flush is triggered by b's join frame; ordering within the room is
     // FIFO, so awaiting the count IS awaiting the flush — no sleep needed
@@ -137,7 +141,9 @@ Future<void> main() async {
     final c = await connectClient(server.port);
     final closeCode = Completer<int?>();
     c.listen((_) {}, onDone: () => closeCode.complete(c.closeCode));
-    c.add(envelope('call-full', body: 'reject-me'));
+    // A third IDENTITY: with identity-keyed membership, "full" means two
+    // other identities are seated — not merely two sockets.
+    c.add(envelope('call-full', body: 'reject-me', from: 'c'));
 
     final code = await closeCode.future.timeout(frameWaitTimeout);
     expect(code, 4409);
@@ -145,6 +151,73 @@ Future<void> main() async {
 
     await pair.a.close();
     await pair.b.close();
+  });
+
+  test(
+    'a reconnecting identity JOINS its seat (multi-socket, raised '
+    '2026-08-09): sockets coexist up to the cap, frames fan out to all, '
+    'and only overflow beyond the cap evicts the OLDEST (no lockout ever)',
+    () async {
+      final server = await SignalingRelayServer.bind(
+        security: buildServerSecurityContext(),
+      );
+      addTearDown(server.close);
+
+      final pair = await connectAndPair(server.port, 'call-resume');
+
+      // b's old socket goes silent-zombie and b reconnects: the fresh
+      // socket JOINS the seat (no supersede below the cap of 3).
+      final b2 = await connectClient(server.port);
+      final b2Frames = FrameCollector();
+      b2.listen((event) => b2Frames.add(event as String));
+      final oldClosed = Completer<int?>();
+      pair.bSub.onDone(() => oldClosed.complete(pair.b.closeCode));
+      b2.add(envelope('call-resume', body: '__resumed__', from: 'b'));
+
+      // The peer receives b's post-resume frame — the room stayed alive.
+      await pair.aFrames.waitForCount(1, 'resumed frame relayed to a');
+      expect(pair.aFrames.frames, [
+        envelope('call-resume', body: '__resumed__', from: 'b'),
+      ]);
+      expect(server.activeRooms, 1);
+
+      // A frame from the peer fans out to EVERY socket of b's seat —
+      // the hedge: whichever stream is not stalled delivers first.
+      pair.a.add(envelope('call-resume', body: 'after-resume'));
+      await b2Frames.waitForCount(1, 'frame relayed to resumed socket');
+
+      // Two more joins overflow the cap (3): only then is the OLDEST
+      // (the zombie) actively closed as superseded (4410).
+      final b3 = await connectClient(server.port);
+      b3.listen((_) {});
+      b3.add(envelope('call-resume', body: '__resumed3__', from: 'b'));
+      final b4 = await connectClient(server.port);
+      b4.listen((_) {});
+      b4.add(envelope('call-resume', body: '__resumed4__', from: 'b'));
+      final code = await oldClosed.future.timeout(frameWaitTimeout);
+      expect(code, supersededCloseCode);
+      expect(server.activeRooms, 1);
+
+      await pair.a.close();
+      await b2.close();
+      await b3.close();
+      await b4.close();
+    },
+  );
+
+  test('a join frame without a sender identity is dropped, not paired',
+      () async {
+    final server = await SignalingRelayServer.bind(
+      security: buildServerSecurityContext(),
+    );
+    addTearDown(server.close);
+
+    final a = await connectClient(server.port);
+    a.add(jsonEncode({'callId': 'call-anon', 'body': 'no-identity'}));
+    // Give the frame time to be processed, then confirm no room formed.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(server.activeRooms, 0);
+    await a.close();
   });
 
   test(
@@ -199,22 +272,52 @@ Future<void> main() async {
     await pair.b.close();
   });
 
-  test('disconnect closes the surviving peer with code 1000', () async {
-    final server = await SignalingRelayServer.bind(
-      security: buildServerSecurityContext(),
-    );
-    addTearDown(server.close);
+  test(
+    'a member disconnect only vacates its seat: the survivor keeps its '
+    'socket and the returning identity resumes the same room (raised '
+    '2026-08-07 — the old close-the-peer-with-1000 behavior turned every '
+    'one-sided flap under loss into a two-sided from-zero rebuild)',
+    () async {
+      final server = await SignalingRelayServer.bind(
+        security: buildServerSecurityContext(),
+      );
+      addTearDown(server.close);
 
-    final pair = await connectAndPair(server.port, 'call-disconnect');
+      final pair = await connectAndPair(server.port, 'call-disconnect');
 
-    final closeCode = Completer<int?>();
-    pair.bSub.onDone(() => closeCode.complete(pair.b.closeCode));
+      await pair.a.close();
+      // Let the server observe the disconnect and vacate the seat BEFORE
+      // b transmits — a frame relayed into the still-closing socket would
+      // be lost instead of buffered (client close() resolves before the
+      // server's stream-done fires).
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      // The room survives with b seated; a buffered frame from b waits for
+      // a's return.
+      pair.b.add(envelope('call-disconnect', body: 'while-you-were-out'));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(server.activeRooms, 1);
+      expect(pair.b.closeCode, isNull, reason: 'survivor must stay open');
 
-    await pair.a.close();
+      // a's identity returns on a fresh socket and receives the OTHER
+      // side's recent history — including frames already delivered to
+      // its predecessor socket. Raised 2026-08-09 (loss60): the ring is
+      // no longer cleared on flush, because a TCP write into a zombie
+      // seat is not delivery and the server cannot tell the difference;
+      // the client adapter's dedup absorbs the re-delivery.
+      final a2 = await connectClient(server.port);
+      final a2Frames = FrameCollector();
+      a2.listen((event) => a2Frames.add(event as String));
+      a2.add(envelope('call-disconnect', body: '__back__', from: 'a'));
+      await a2Frames.waitForCount(2, 'buffered frames flushed on resume');
+      expect(a2Frames.frames, [
+        envelope('call-disconnect', body: '__seed__', from: 'b'),
+        envelope('call-disconnect', body: 'while-you-were-out'),
+      ]);
 
-    final code = await closeCode.future.timeout(frameWaitTimeout);
-    expect(code, 1000);
-  });
+      await a2.close();
+      await pair.b.close();
+    },
+  );
 
   test('different callIds are isolated from each other', () async {
     final server = await SignalingRelayServer.bind(

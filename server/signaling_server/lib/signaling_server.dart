@@ -3,5 +3,6 @@
 library;
 
 export 'src/abuse_controls.dart';
+export 'src/datagram_relay.dart';
 export 'src/dev_certificate.dart';
 export 'src/relay_server.dart';

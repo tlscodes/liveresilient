@@ -1,17 +1,40 @@
-# Threat Model — VoiceCallKit v2
+# Threat Model — VoiceCallKit v3
 
-Scope: the v2 calling stack (apps/, packages/, server/, infra/) as laid out
-in `docs/ARCHITECTURE.md`. Method: STRIDE per component, plus an explicit
-adversary catalogue because this product is designed for degraded and
-unreliable, high-packet-loss network environments.
+Scope: the v3 stack (apps/, packages/, server/, infra/, the deployed relay
+worker) as laid out in `docs/ARCHITECTURE.md`. Method: STRIDE per component,
+plus an explicit adversary catalogue because this product is designed for
+degraded and unreliable, high-packet-loss network environments.
 
 Data flow and trust boundaries are diagrammed in `docs/DATA_FLOW.md`.
+
+## Version note (2026-07-31)
+
+Sections 1–7 below were written for **v2** and are kept verbatim, because
+every one of their 24 threats still applies to code that still ships —
+identity, signed config, device link, telemetry, log redaction, TURN
+credentials. **Section 8 is the v3 delta**: the components that did not
+exist in v2 (broadcast, connection_orchestrator, the deployed Cloudflare
+relay, the HTTP long-poll lane, the low-rate codec, the DTN bundle queue),
+their threats, and the two claims v3 must NOT make.
+
+The architecture review dated 2026-07-27 recorded "no `THREAT_MODEL.md`
+exists". That was wrong about the file and right about the substance: the
+file existed, but it covered v2 only. This version closes that gap; it does
+not pretend the gap never existed.
+
+Constraint that binds every entry here: `tool/architecture_guard.dart` fails
+CI on any excluded legacy transport component (sing-box, VLESS, Reality,
+front-domain, obfuscation profiles, manual Host-header overrides, TLS
+fragmentation/padding). Nothing in this document may be mitigated by
+protocol mimicry — v3 keeps the project's own red line: **no attempt is made
+to disguise call traffic as some other protocol.**
 
 ## Status legend (evidence discipline)
 
 Every mitigation below is tagged with one status, and every tag names the
-file(s)/test(s) that back it as of this review (2026-07-16, phase-4/security-identity
-branch). A status with no evidence is a bug in this document, not a fact
+file(s)/test(s) that back it. Sections 1–7 were tagged as of 2026-07-16
+(phase-4/security-identity branch); section 8 as of 2026-07-31 on `main`.
+A status with no evidence is a bug in this document, not a fact
 about the code — report it instead of leaving it unmarked.
 
 - **implemented** — real code + passing tests exist; both are cited.
@@ -58,7 +81,8 @@ about the code — report it instead of leaving it unmarked.
 
 Out of scope: a fully compromised OS/device while unlocked (no client
 design survives that), and legal/policy responses to service blocking —
-v2 deliberately implements only standard IETF transport (ICE/TURN/WSS); if the
+the stack deliberately implements only standard IETF transport
+(ICE/TURN/WSS, plus the HTTPS relay and long-poll lane added in v3); if the
 service is unreachable, the app reports that honestly to the user.
 
 ## 3. Trust boundaries
@@ -88,7 +112,7 @@ it" table.
 | T10 | Push-payload leakage (I) | A2 | Push messages are wake-up signals only (no names, numbers, or content); fetch-on-wake over TLS | **not yet built** — push wake-up (`PushWakeup`) is scoped for Phase 8 (`docs/EXECUTION_PLAYBOOK.md:133`); no push code exists in this repo yet | `docs/EXECUTION_PLAYBOOK.md:133` |
 | T11 | Malicious update / dependency (T) | all | Reproducible-build goal, dependency review, `tool/architecture_guard.dart` in CI (blocks excluded legacy components), no runtime code download, no AI-generated runtime code updates | Architecture guard: **implemented**. Reproducible-build pipeline: **not yet built** (tracked as a goal in `security/SECURITY.md`, no CI step yet) | `tool/architecture_guard.dart` (present, wired as `melos run guard` per `README.md`) |
 | T12 | Telemetry as a side channel (I) | A2 | Opt-in only, fixed allowlist, aggregate-only export, no identifiers | **implemented** | `packages/privacy_telemetry/lib/src/privacy_telemetry.dart` — `privacy_telemetry_test.dart` (7/7 pass) |
-| T13 | TURN credential abuse (E) | A6 | Short-lived credentials minted per session by config service | Credential-minting logic (coturn `use-auth-secret` HMAC scheme, expiry check): **implemented and tested** — known-vector + expiry-boundary tests (`turn_credentials_test.dart`, 10 tests, 100% line coverage). Wiring into a live config/signaling service that actually hands these to clients per-call: **not yet built** | `packages/security/lib/src/turn_credentials.dart` (`TurnCredentialsIssuer`, `TurnCredentials.isExpired`) — no test file found under `packages/security/test/` as of this review |
+| T13 | TURN credential abuse (E) | A6 | Short-lived credentials minted per session by config service | Credential-minting logic (coturn `use-auth-secret` HMAC scheme, expiry check): **implemented and tested** — known-vector + expiry-boundary tests (`turn_credentials_test.dart`, 10 tests, 100% line coverage). Wiring into a live config/signaling service that actually hands these to clients per-call: **not yet built** | `packages/security/lib/src/turn_credentials.dart` (`TurnCredentialsIssuer`, `TurnCredentials.isExpired`) — `packages/security/test/turn_credentials_test.dart` (verified present 2026-07-31; the earlier "no test file found" note in this row was stale and contradicted the row's own status, so it is removed) |
 | T14 | Log exfiltration (I) | A2 | Mandatory `LogRedactor` in front of every sink; SDP/candidate summarization | **implemented** | `packages/security/lib/src/log_redactor.dart` — `log_redactor_test.dart` (5/5 pass, incl. `redactSdp` candidate/connection-line handling) |
 | T15 | Stolen device identity key (E) | A3, A4 | Key regeneration on suspected compromise; peers see an explicit key-change warning and must re-verify safety numbers before trusting the new key | Key-change detection logic: **implemented**. User-facing regenerate action + safety-number re-verify UI: **not yet built** (no call UI yet) | `packages/security/lib/src/identity_store.dart` (`RemoteIdentityCheck.changed`) — `identity_store_e2e_test.dart` ("a different key on later contact is reported as changed", pass); policy stated in `security/SECURITY.md` "Key rotation and revocation" |
 | T16 | Replayed TURN credential (S/E) | A6 | HMAC-based credential carries its own expiry (coturn `use-auth-secret`); a captured/logged credential stops working once `expiresAt` passes; default TTL 1 hour | **implemented and tested** — same code as T13 (`turn_credentials_test.dart`, expiry boundary covered) | `packages/security/lib/src/turn_credentials.dart` |
@@ -104,8 +128,9 @@ it" table.
 ## 5. Residual risks (accepted, stated honestly)
 
 - R1. Traffic analysis of encrypted flows can reveal that a call is
-  happening and approximate duration. v2 uses standard, observable transport and does not reshape its
-  traffic as something else.
+  happening and approximate duration. The stack uses standard, observable
+  transport and does not reshape its traffic as something else. See R6/T27
+  for what v3 measured about this — which is: nothing yet.
 - R2. The signaling server necessarily learns call metadata (A2). Server
   data-minimization and retention limits (see `SECURITY.md`) reduce, but
   cannot eliminate, this. See T18: no app-layer encryption of signaling
@@ -145,3 +170,89 @@ it" table.
 This document is reviewed at every milestone release and whenever a new
 component crosses a trust boundary. Changes require security sign-off per
 `INCIDENT_RESPONSE.md` ownership.
+
+---
+
+## 8. The v3 delta
+
+Everything in this section covers components that did not exist when
+sections 1–7 were written. Same evidence discipline: a status with no
+evidence is a bug in this document.
+
+### 8.1 New assets
+
+- A8. Broadcast root signing key and the delegated publishing key
+  (`packages/broadcast`) — the anchor of every post a reader trusts.
+- A9. Relay session identifier. The deployed Cloudflare relay pairs two
+  peers by session id and authenticates nobody, so **the session id is a
+  secret**, not a name. Anyone holding it is a peer.
+- A10. DTN bundle queue contents (`DtnBundleQueue`) — payloads parked on
+  the device while every lane is down.
+- A11. Relay quota/budget. Not a confidentiality asset; an availability and
+  cost asset. It is the asset the architecture review named first.
+
+### 8.2 New adversaries
+
+- ADV11. **Traffic classifier on the path** (DPI or equivalent) trying to
+  decide *this flow is this product* from packet sizes and timing alone —
+  not to read the content, which DTLS-SRTP already denies it.
+- ADV12. **Quota-burn attacker** posting to the relay with no intent to
+  call, to exhaust the free tier and take the service down by invoice.
+- ADV13. **Relay operator or anyone who observes the relay** — the relay
+  passes bytes through untouched and holds no persistence, but it sees
+  pairing, size and timing.
+- ADV14. **Broadcast forger / equivocator** — an adversary who tries to
+  publish under someone else's identity, or to show two different readers
+  two different chains from the same author.
+
+### 8.3 New trust boundaries
+
+- TB6. Device ⇄ Cloudflare relay worker (HTTPS; unauthenticated pairing by
+  session id; bytes passed through unmodified).
+- TB7. Device ⇄ device over the local mesh / carrier lane
+  (`connection_orchestrator`), consent-gated exactly as TB4.
+- TB8. Reader ⇄ broadcast chain (data at rest on any host; trust comes from
+  the signature over the descriptor, never from the host that served it).
+
+### 8.4 New threats
+
+| # | Threat (STRIDE) | Asset | Mitigation | Status | Evidence |
+|---|---|---|---|---|---|
+| T25 | Relay quota exhaustion / denial by invoice (D) | A11 | Per-session frame cap (256 frames, 4 MB) and a bounded 25 s hold; no unbounded fan-out | **implemented, partial** — the caps exist and bound one session, but the relay authenticates no peer, so an attacker can open sessions without limit. Per-peer authentication: **not yet built**; it is the architecture review's own "needed for economics, not for confidentiality" finding | `tools/cloudflare_relay_worker/src/worker.js` (queue cap, 25 s hold); `docs/ARCHITECTURE_REVIEW_2026.md` (relay-auth finding) |
+| T26 | Session-id disclosure gives a stranger a peer seat (S) | A9 | The session id is generated per call and treated as a secret; it is never logged (`LogRedactor`) and never put in a URL that is shown to a third party | **implemented for the client side**; the relay itself has **no** peer authentication, so the id is the only thing standing between a stranger and the session | `packages/security/lib/src/log_redactor.dart` — `log_redactor_test.dart`; relay limitation recorded in `DOCS-ALL/FINAL-REPORT.md` §10a |
+| T27 | Flow classification by size and timing (I) | A2 | None claimed. The HTTP long-poll lane's fixed 25 s cadence is a strong fingerprint; the audit's cheap remedy (randomise the hold to 15–25 s and pad onto a size lattice) is **not implemented** | **not yet built** — and, decisively, **not measured**: no test in this repo scores the indistinguishability of the product's own traffic. This is the largest open gap in v3 | `docs/ARCHITECTURE_REVIEW_2026.md` (25 s cadence finding); gap tracked as B-1/B-5 in `../questions/REMAINING-AND-MERGE-PLAN.md` |
+| T28 | Parked bundles read off a lost device (I) | A10, A1 | The DTN queue is bounded (bundle count + byte cap) and drops rather than growing; contents live only in process memory today | **implemented** for the bounds. At-rest encryption of a persisted queue: **not yet built** — there is no persistent queue yet, so there is nothing encrypted and nothing to claim | `packages/device_link/lib/src/dtn_bundle_queue.dart` — `dtn_bundle_queue_test.dart`; overflow behaviour pinned by `packages/connection_orchestrator/test/chaos_fabric_test.dart` ("the queue drops rather than growing without bound", "a critical payload outlives bulk when the queue overflows") |
+| T29 | Forged or equivocating broadcast author (S/T) | A8 | Fixed-length descriptor committing to each layer's hash, signed by a delegated publishing key that chains to the root key; an expired certificate still validates the posts of its own period; a fork is reportable as a <600 B fork report carrying both conflicting descriptors | **implemented** | `packages/broadcast/` — 303 tests green in the 2026-07-29 gate (`docs/PROJECT_STATE_2026-07-29.md`) |
+| T30 | Fabric picks a lane that silently swallows payloads (D) | A1 | The fabric reports what it actually did — live send, queued for later — and never reports success on a caller's behalf; a lane that lies cannot be detected at this layer and that is stated rather than papered over | **implemented, with the limit stated** | `packages/connection_orchestrator/test/chaos_fabric_test.dart` ("a lane that lies about carrying is survivable end to end"); 12 fixed chaos seeds + a frozen-digest reproducibility gate in the same file |
+
+### 8.5 New residual risks
+
+- R6. **Indistinguishability is unmeasured, so it is not claimed.** v3 has
+  no metric, no gate, and no number for how distinguishable its traffic is.
+  Until one exists, any statement that this product's traffic is hard to
+  classify is unsupported and must not be made (T27).
+- R7. **The relay authenticates no peer.** Confidentiality does not depend
+  on it — media is DTLS-SRTP end to end — but availability and cost do
+  (T25), and the session id carries the whole access decision (T26).
+- R8. **The low-rate codec is a last resort, not a privacy feature.** The
+  project's own documents state that speaker identity does not survive at
+  that rate; that is a consequence of the rate, not a protection anyone
+  should rely on. The 31.8 bps figure is labelled "measured on a recording,
+  not on a live call" everywhere it appears, and stays labelled that way.
+- R9. **Battery, data, and real capacity are unmeasured** (device-blocked).
+  No claim is made about any of them.
+
+### 8.6 v3 open blockers (dated)
+
+- Indistinguishability metric and CI gate (T27, R6): open 2026-07-31.
+  Depends on a leak-metric implementation; tracked as B-1.
+- Size/timing shaping for the long-poll lane (T27): open 2026-07-31.
+  Cheap partial remedy (randomised 15–25 s hold) is not implemented.
+- Relay peer authentication (T25, T26, R7): open 2026-07-31.
+- Two-device call with deliberate disconnection, TURN fallback proof,
+  budget alert: blocked 2026-07-16 — no cloud account. Unchanged from
+  section 6.
+- `micro_datagram_lane.dart:32` padding overflow when `mtuBlockSize > 224`
+  (found by the 2026-07-27 framing audit, `docs/AUDIT_PLAN_media_transport_framing.md`
+  §1): open. It is a memory-safety defect on a padding path, so it belongs
+  here and not only in the audit plan.

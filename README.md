@@ -39,7 +39,7 @@ evidence discipline applied to security claims specifically).
 
 ```
 voice_call_kit_v2/
-├── apps/resilient_call/        # Flutter app shell (UI, permissions, adapters)
+├── apps/reference_app/         # Flutter app shell (UI, permissions, adapters)
 ├── packages/
 │   ├── call_core/              # call state machine, controller, reconnect policy
 │   ├── media_webrtc/           # media engine, stats sampler, adaptive quality

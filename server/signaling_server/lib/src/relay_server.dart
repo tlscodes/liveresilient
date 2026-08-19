@@ -31,6 +31,10 @@ const int roomFullCloseCode = 4409;
 /// partner disconnected.
 const int peerDisconnectedCloseCode = 1000;
 
+/// WebSocket close code sent to a member's PREVIOUS socket when the same
+/// identity reconnects and takes its seat (session resumption).
+const int supersededCloseCode = 4410;
+
 /// Redaction-safe logging hook. Receives only structural event names and
 /// non-sensitive metadata (callId, byte counts, error types) — callers must
 /// never pass frame payloads or envelope contents through [error].
@@ -48,38 +52,89 @@ class _Room {
   /// Last time a frame was relayed/buffered or a peer joined; drives the
   /// idle-room TTL sweep.
   DateTime lastActivity;
-  final List<WebSocket> sockets = <WebSocket>[];
-  final List<Object> _pending = <Object>[];
 
-  WebSocket? _peerOf(WebSocket sender) {
-    for (final socket in sockets) {
-      if (!identical(socket, sender)) return socket;
+  /// Membership is keyed by the envelope's `senderKeyId` — an IDENTITY —
+  /// not by socket. Measured 2026-08-07 (T2 loss60): a client that
+  /// abandons a stalled connection under heavy loss leaves a ZOMBIE socket
+  /// here (its FIN never delivers, so its stream never ends), and while
+  /// membership was socket-keyed the zombie held the seat: every
+  /// reconnection by the same peer was rejected `room_rejected_full`, the
+  /// relay log showed exactly that four times in one run, and no recovery
+  /// architecture on the client side could ever succeed — the door was
+  /// locked from the outside. A returning identity now REPLACES its dead
+  /// socket (session resumption); "full" means two OTHER identities.
+  /// MULTI-SOCKET SEATS (raised 2026-08-09): under heavy loss a single
+  /// TCP stream stalls tens of seconds on retransmission. A seat may hold
+  /// up to [maxSocketsPerSeat] concurrent sockets; every frame fans out
+  /// to ALL of the peer seat's sockets (first arrival wins — the client
+  /// adapter already drops duplicates), and a join beyond the cap
+  /// supersedes the seat's OLDEST socket, so zombies age out instead of
+  /// locking the seat.
+  final Map<String, List<WebSocket>> members = <String, List<WebSocket>>{};
+
+  /// The room's replayable recent history: (senderKeyId, frame) pairs,
+  /// capped at [maxBufferedFramesPerRoom] (drop-oldest). See
+  /// [relayOrBuffer] — a TCP write is not delivery, so every frame is
+  /// ring-buffered and re-delivered on every fresh join.
+  final List<(String?, Object)> _pending = <(String?, Object)>[];
+
+  static const int maxSocketsPerSeat = 3;
+
+  Iterable<WebSocket> get sockets =>
+      members.values.expand((seat) => seat);
+
+  bool isMember(WebSocket socket) => members.values
+      .any((seat) => seat.any((s) => identical(s, socket)));
+
+  List<WebSocket> _peerSocketsOf(WebSocket sender) {
+    final result = <WebSocket>[];
+    for (final seat in members.values) {
+      if (seat.any((s) => identical(s, sender))) continue;
+      result.addAll(seat);
+    }
+    return result;
+  }
+
+  String? _seatKeyOf(WebSocket sender) {
+    for (final entry in members.entries) {
+      if (entry.value.any((s) => identical(s, sender))) {
+        return entry.key;
+      }
     }
     return null;
   }
 
-  /// Relays [raw] to the other peer if present, otherwise buffers it
-  /// (dropping the oldest buffered frame once [maxBufferedFramesPerRoom] is
-  /// exceeded).
+  /// Ring-buffers [raw] ALWAYS, and relays it to every socket of the
+  /// other seat when one exists. Raised 2026-08-09 (loss60): a TCP write
+  /// into a seat is NOT delivery — under heavy loss the peer seat can
+  /// hold only zombie sockets (client-abandoned, their FIN never
+  /// crossed), and a frame written there was counted relayed and lost
+  /// forever, costing the sender a full outbox backoff per frame. The
+  /// ring keeps the last [maxBufferedFramesPerRoom] frames; every fresh
+  /// join replays the other identity's frames (the client adapter drops
+  /// duplicates), so a live socket replacing a zombie immediately hears
+  /// everything sent into the dead window.
   void relayOrBuffer(WebSocket sender, Object raw) {
-    final peer = _peerOf(sender);
-    if (peer != null) {
-      peer.add(raw);
-      return;
-    }
-    _pending.add(raw);
+    _pending.add((_seatKeyOf(sender), raw));
     while (_pending.length > maxBufferedFramesPerRoom) {
       _pending.removeAt(0);
     }
-  }
-
-  /// Flushes buffered frames (from the first peer) to a newly-joined
-  /// [socket], in original order, then clears the buffer.
-  void flushPendingTo(WebSocket socket) {
-    for (final raw in _pending) {
+    for (final socket in _peerSocketsOf(sender)) {
       socket.add(raw);
     }
-    _pending.clear();
+  }
+
+  /// Replays the ring to a newly-joined [socket] of [joiningKey], in
+  /// original order, skipping that identity's own frames. The ring is
+  /// NOT cleared — it is the room's replayable recent history and the
+  /// cap bounds it (see [relayOrBuffer]).
+  void flushPendingTo(WebSocket socket, String joiningKey) {
+    for (final (senderKey, raw) in _pending) {
+      if (senderKey == joiningKey) {
+        continue;
+      }
+      socket.add(raw);
+    }
   }
 }
 
@@ -206,6 +261,15 @@ class SignalingRelayServer {
         }
 
         if (room == null) {
+          // Membership is identity-keyed (see _Room), so the join frame's
+          // sender identity is validated exactly like the callId.
+          final senderKeyField = decoded['senderKeyId'];
+          if (senderKeyField is! String ||
+              senderKeyField.isEmpty ||
+              senderKeyField.length > 128) {
+            _logSink('frame_dropped_bad_sender_key', callId: callIdField);
+            continue;
+          }
           final admission = _guard.admitRoomJoin(
             sourceKey: sourceKey,
             callId: callIdField,
@@ -217,7 +281,7 @@ class SignalingRelayServer {
             await _safeClose(socket, admission.closeCode, admission.reason);
             return;
           }
-          room = _joinRoom(callIdField, socket);
+          room = _joinRoom(callIdField, senderKeyField, socket);
           if (room == null) {
             _guard.leaveRoom(sourceKey, callIdField);
             _logSink('room_rejected_full', callId: callIdField);
@@ -234,7 +298,35 @@ class SignalingRelayServer {
     } finally {
       if (room != null) {
         _guard.leaveRoom(sourceKey, room.callId);
-        _closeRoom(room, socket);
+        // A SUPERSEDED socket's stream ending must not tear the room down:
+        // its seat already belongs to the member's fresh socket, and this
+        // late death is exactly the zombie whose seat-holding caused the
+        // room_rejected_full lockout.
+        //
+        // A CURRENT member's death VACATES ITS SEAT — nothing more. The
+        // pre-resumption behavior (close the room, force-close the peer
+        // with 1000) actively destroyed the HEALTHY side's socket and the
+        // room's frame buffer every time one side flapped; measured
+        // 2026-08-07 on loss60, that turned every single-sided reconnect
+        // into a two-sided from-zero rebuild and no cycle ever finished.
+        // The peer keeps its socket and its seat, the buffer survives,
+        // and the vacated identity resumes into the SAME room. Empty
+        // rooms are removed at once; abandoned one-seat rooms age out via
+        // the idle-TTL sweep. Deliberate call ends still propagate at the
+        // signaling layer (hangup envelopes), not by socket teardown.
+        if (room.isMember(socket)) {
+          for (final seat in room.members.values) {
+            seat.removeWhere((s) => identical(s, socket));
+          }
+          room.members.removeWhere((_, seat) => seat.isEmpty);
+          room.lastActivity = _now();
+          _logSink('room_member_left', callId: room.callId);
+          if (room.members.isEmpty &&
+              identical(_rooms[room.callId], room)) {
+            _rooms.remove(room.callId);
+            _logSink('room_closed', callId: room.callId);
+          }
+        }
       }
     }
   }
@@ -255,40 +347,54 @@ class SignalingRelayServer {
     }
   }
 
-  /// Registers [socket] into the room for [callId], creating the room if
-  /// needed. Returns `null` if the room already has two other sockets
-  /// (caller must reject the connection).
-  _Room? _joinRoom(String callId, WebSocket socket) {
+  /// Registers [socket] as [senderKey]'s seat in the room for [callId],
+  /// creating the room if needed. A returning identity replaces its own
+  /// previous socket (session resumption — see the membership note on
+  /// [_Room]); the old socket is closed as superseded. Returns `null` only
+  /// when the room already seats two OTHER identities.
+  _Room? _joinRoom(String callId, String senderKey, WebSocket socket) {
     final room = _rooms.putIfAbsent(callId, () => _Room(callId, _now()));
-    if (room.sockets.any((s) => identical(s, socket))) {
+    final seat = room.members[senderKey];
+    if (seat != null) {
+      if (seat.any((s) => identical(s, socket))) {
+        return room;
+      }
+      seat.add(socket);
+      room.lastActivity = _now();
+      WebSocket? superseded;
+      if (seat.length > _Room.maxSocketsPerSeat) {
+        superseded = seat.removeAt(0);
+      }
+      _logSink('room_member_replaced', callId: callId);
+      if (superseded != null) {
+        unawaited(
+          _safeClose(
+            superseded,
+            supersededCloseCode,
+            'superseded by reconnect',
+          ),
+        );
+      }
+      if (room.members.length == 2) {
+        room.flushPendingTo(socket, senderKey);
+      }
       return room;
     }
-    if (room.sockets.length >= 2) {
+    if (room.members.length >= 2) {
       return null;
     }
-    room.sockets.add(socket);
+    room.members[senderKey] = <WebSocket>[socket];
     room.lastActivity = _now();
-    if (room.sockets.length == 2) {
-      room.flushPendingTo(socket);
+    if (room.members.length == 2) {
+      room.flushPendingTo(socket, senderKey);
     }
     return room;
   }
 
-  void _closeRoom(_Room room, WebSocket disconnected) {
-    if (!identical(_rooms[room.callId], room)) {
-      // Already torn down by the peer's disconnect handler.
-      return;
-    }
-    _rooms.remove(room.callId);
-    _logSink('room_closed', callId: room.callId);
-    for (final socket in room.sockets) {
-      if (!identical(socket, disconnected)) {
-        unawaited(
-          _safeClose(socket, peerDisconnectedCloseCode, 'peer disconnected'),
-        );
-      }
-    }
-  }
+  // _closeRoom (close the whole room and force-close the peer on any member
+  // death) was removed 2026-08-07: with identity-keyed session resumption a
+  // member's death only vacates its seat — see the finally block in
+  // _handleSocket. Deliberate call ends travel as hangup envelopes.
 
   Future<void> _safeClose(WebSocket socket, int code, String reason) async {
     try {
