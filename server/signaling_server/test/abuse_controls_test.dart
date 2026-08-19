@@ -30,8 +30,10 @@ Future<void> main() async {
     return WebSocket.connect('wss://localhost:$port/', customClient: client);
   }
 
-  String envelope(String callId, {String body = 'hello'}) =>
-      jsonEncode({'callId': callId, 'body': body});
+  // Identity-keyed rooms: a protocol-valid frame always carries a
+  // senderKeyId (join frames without one are dropped before pairing).
+  String envelope(String callId, {String body = 'hello', String from = 'a'}) =>
+      jsonEncode({'callId': callId, 'senderKeyId': '$from-key', 'body': body});
 
   /// Attaches a collector to [socket]; the returned future completes with
   /// the close code once the socket is closed by the server.
@@ -66,8 +68,8 @@ Future<void> main() async {
     final aObs = observe(a);
     final bObs = observe(b);
 
-    a.add(envelope(callId, body: '__seed__'));
-    b.add(envelope(callId, body: '__seed__'));
+    a.add(envelope(callId, body: '__seed__', from: 'a'));
+    b.add(envelope(callId, body: '__seed__', from: 'b'));
     await aObs.frames.waitForCount(1, '$callId: seed from b relayed to a');
     await bObs.frames.waitForCount(1, '$callId: seed from a flushed to b');
 
@@ -199,9 +201,12 @@ Future<void> main() async {
       // First pair consumes the single new-callId slot for this source.
       final first = await connectAndPair(server.port, 'call-reconnect');
 
-      // Caller drops; the relay tears the room down and closes the peer.
+      // Caller drops; its SEAT vacates while the survivor keeps its socket
+      // (raised 2026-08-07 — the peer-force-close amplified every
+      // one-sided flap under loss). Closing the survivor too empties the
+      // room, which is removed at once.
       await first.a.close();
-      expect(await first.bClose, peerDisconnectedCloseCode);
+      await first.b.close();
       await waitForActiveRooms(server, 0);
 
       // Reconnect to the SAME callId: must be admitted (rejoin is free) and

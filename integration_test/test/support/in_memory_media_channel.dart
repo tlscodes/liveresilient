@@ -40,6 +40,10 @@ class InMemoryMediaChannel implements MediaDataChannel {
   @override
   Stream<List<int>> get inbound => _inbound.stream;
 
+  // In-memory pair: frames hand over synchronously, nothing ever queues.
+  @override
+  int? get bufferedAmount => null;
+
   @override
   Stream<MediaDataChannelState> get state => _state.stream;
 

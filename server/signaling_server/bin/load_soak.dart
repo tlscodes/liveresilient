@@ -258,8 +258,16 @@ class _RoomHarness {
   final Completer<void> _bSawPeerSeed = Completer<void>();
   Completer<String>? _pendingEcho;
 
-  String _envelope(String body) =>
-      jsonEncode(<String, Object?>{'callId': callId, 'body': body});
+  // Identity-keyed rooms: join frames must carry a senderKeyId, and each
+  // role uses its own so the pair SEATS as two members (a duplicate
+  // identity would be treated as a session resumption, not a peer).
+  String _envelope(String body, {required String from}) => jsonEncode(
+        <String, Object?>{
+          'callId': callId,
+          'senderKeyId': '$from-key',
+          'body': body,
+        },
+      );
 
   Future<WebSocket> _connect() async {
     // Dedicated HttpClient per socket: the dev certificate is self-signed,
@@ -278,7 +286,9 @@ class _RoomHarness {
       final a = _a = await _connect();
       a.listen((Object? raw) {
         final frame = raw is String ? raw : '';
-        if (!_aSawPeerSeed.isCompleted && frame == _envelope(_seedBody)) {
+        // a hears the PEER's seed (b's identity).
+        if (!_aSawPeerSeed.isCompleted &&
+            frame == _envelope(_seedBody, from: 'b')) {
           _aSawPeerSeed.complete();
           return;
         }
@@ -287,12 +297,14 @@ class _RoomHarness {
           pending.complete(frame);
         }
       }, onError: (Object _) => errors++);
-      a.add(_envelope(_seedBody));
+      a.add(_envelope(_seedBody, from: 'a'));
 
       final b = _b = await _connect();
       b.listen((Object? raw) {
         final frame = raw is String ? raw : '';
-        if (!_bSawPeerSeed.isCompleted && frame == _envelope(_seedBody)) {
+        // b hears the PEER's seed (a's identity).
+        if (!_bSawPeerSeed.isCompleted &&
+            frame == _envelope(_seedBody, from: 'a')) {
           _bSawPeerSeed.complete();
           return;
         }
@@ -300,7 +312,7 @@ class _RoomHarness {
           b.add(frame); // Echo verbatim -> completes a's round trip.
         }
       }, onError: (Object _) => errors++);
-      b.add(_envelope(_seedBody));
+      b.add(_envelope(_seedBody, from: 'b'));
 
       await Future.wait(<Future<void>>[
         _aSawPeerSeed.future,
@@ -317,7 +329,7 @@ class _RoomHarness {
   Future<void> exchange(int messages) async {
     if (setupMicros == null) return; // Setup failed; already counted.
     for (var i = 0; i < messages; i++) {
-      final frame = _envelope('$_pingPrefix$i');
+      final frame = _envelope('$_pingPrefix$i', from: 'a');
       final pending = _pendingEcho = Completer<String>();
       final stopwatch = Stopwatch()..start();
       framesSent++;

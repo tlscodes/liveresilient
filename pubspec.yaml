@@ -25,9 +25,12 @@ workspace:
   - packages/media_webrtc
   - packages/messaging
   - packages/messaging_webrtc_adapter
+  - packages/native_transport
   - packages/on_device_assistant
   - packages/privacy_telemetry
+  - packages/quality_governor
   - packages/security
+  - packages/seed_lineage
   - packages/signaling
   - packages/signed_config
   - server/signaling_server
