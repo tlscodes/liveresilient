@@ -23,14 +23,13 @@ library;
 // ignore_for_file: avoid_print
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:messaging/messaging.dart';
 
 import '../integration_test/support/datagram_lane_port.dart';
+import 'support/relay_process.dart';
 
 /// Deterministic i.i.d. drop-on-send wrapper — same PRNG family as the
 /// messaging package's lossy harness.
@@ -72,25 +71,11 @@ Uint8List deterministicVideo(int length) {
 void main() {
   test('4 MiB fountain transfer through the real datagram relay under 60% '
       'i.i.d. loss delivers intact within the official window', () async {
-    // Spawn the REAL bin on an ephemeral port; parse the readiness line.
-    final repoRoot = Directory.current.parent.parent.path;
-    final relayDir = '$repoRoot/server/signaling_server';
-    final proc = await Process.start(
-      'dart',
-      ['run', 'bin/datagram_relay.dart', '--port', '0'],
-      workingDirectory: relayDir,
-    );
-    addTearDown(proc.kill);
-    final stderrBuf = StringBuffer();
-    proc.stderr.transform(const SystemEncoding().decoder).listen(stderrBuf.write);
-    final readiness = await proc.stdout
-        .transform(const SystemEncoding().decoder)
-        .transform(const LineSplitter())
-        .firstWhere((l) => l.contains('datagram relay listening on'))
-        .timeout(const Duration(seconds: 60), onTimeout: () {
-      throw StateError('relay bin never became ready; stderr: $stderrBuf');
-    });
-    final relayPort = int.parse(readiness.split(':').last.trim());
+    // Spawn the REAL bin (AOT-cached by RelayProcess) on an ephemeral port;
+    // the helper owns readiness and reports full process state on failure.
+    final relay = await RelayProcess.start();
+    addTearDown(relay.kill);
+    final relayPort = relay.port;
 
     final key = DatagramLanePort.roomKeyFromCallId('probe-4mib-loss60');
     final txRaw = await DatagramLanePort.bind(

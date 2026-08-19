@@ -10,14 +10,13 @@ library;
 // ignore_for_file: avoid_print
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:messaging/messaging.dart';
 
 import '../integration_test/support/datagram_lane_port.dart';
+import 'support/relay_process.dart';
 
 final class _LossySend implements DataChannelPort {
   _LossySend(this._inner, this.lossPerMille, this.seed);
@@ -71,20 +70,9 @@ Uint8List _bytes(int n, int seed) {
 void main() {
   test('staged-photo-sized transfers (15KB then 96KB, one sender) through '
       'the real relay under 60% loss must not crawl', () async {
-    final repoRoot = Directory.current.parent.parent.path;
-    final relayDir = '$repoRoot/server/signaling_server';
-    final proc = await Process.start(
-      'dart',
-      ['run', 'bin/datagram_relay.dart', '--port', '0'],
-      workingDirectory: relayDir,
-    );
-    addTearDown(proc.kill);
-    final readiness = await proc.stdout
-        .transform(const SystemEncoding().decoder)
-        .transform(const LineSplitter())
-        .firstWhere((l) => l.contains('datagram relay listening on'))
-        .timeout(const Duration(seconds: 60));
-    final relayPort = int.parse(readiness.split(':').last.trim());
+    final relay = await RelayProcess.start();
+    addTearDown(relay.kill);
+    final relayPort = relay.port;
 
     final key = DatagramLanePort.roomKeyFromCallId('probe-staged-small');
     final txRaw = await DatagramLanePort.bind(

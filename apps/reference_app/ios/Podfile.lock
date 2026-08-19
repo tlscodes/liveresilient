@@ -3,6 +3,7 @@ PODS:
   - flutter_webrtc (1.4.0):
     - Flutter
     - WebRTC-SDK (= 144.7559.09)
+  - NativeCodecs (0.1.0)
   - pt_transport_darwin (1.0.0):
     - Flutter
   - WebRTC-SDK (144.7559.09)
@@ -10,6 +11,7 @@ PODS:
 DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_webrtc (from `.symlinks/plugins/flutter_webrtc/ios`)
+  - NativeCodecs (from `NativeCodecs`)
   - pt_transport_darwin (from `.symlinks/plugins/pt_transport_darwin/ios`)
 
 SPEC REPOS:
@@ -21,15 +23,18 @@ EXTERNAL SOURCES:
     :path: Flutter
   flutter_webrtc:
     :path: ".symlinks/plugins/flutter_webrtc/ios"
+  NativeCodecs:
+    :path: NativeCodecs
   pt_transport_darwin:
     :path: ".symlinks/plugins/pt_transport_darwin/ios"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_webrtc: ea1e854207d820fc0538ffa5632eb1e9193b0efc
+  NativeCodecs: 364909cf8c67ceeaa8bd31528ccb5bfb5ee7ca4d
   pt_transport_darwin: 9a42cfba883d70721500de36fb8827e5d833a01d
   WebRTC-SDK: e6006119cd730d6315d875e4a421b6cc8bb88833
 
-PODFILE CHECKSUM: 709619396eae1d18c080928153a4b440cb7f2962
+PODFILE CHECKSUM: 2ee7a56e8e0cef89dc761312ed882a8fed43ba77
 
 COCOAPODS: 1.15.2

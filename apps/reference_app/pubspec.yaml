@@ -78,6 +78,10 @@ dependencies:
   file_selector: ^1.1.0
   image: ^4.9.1
   image_picker: ^1.2.3
+  broadcast_media:
+    path: ../../packages/broadcast_media
+  hamseda_codec:
+    path: ../../packages/hamseda_codec
 
 dev_dependencies:
   flutter_test:
