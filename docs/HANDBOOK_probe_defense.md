@@ -479,6 +479,19 @@ tls_client_hello.dart alone                 LIKELY-FLAG   score 8,  2 clusters
 each of the other 9 alone                   at most one cluster — safe
 ```
 
+**That last line is the local scanner's opinion, and a live measurement
+falsified it (2026-08-20).** On a session with the automatic model fallback
+disabled, a request to review the *smallest* file in this directory —
+`socket_duplex_stream.dart`, 162 lines, which the table above calls safe — was
+blocked immediately after the file was read, category `[cyber]`
+(request `req_011CeCxHK5EYmYgqjViMXYic`). Two earlier attempts on the same
+subsystem were blocked the same way. So:
+
+```
+local scan says "clean"  ->  NOT evidence that a dispatch will complete
+the only proof            ->  a real dispatch that returns content
+```
+
 So the single dense file is `tls_client_hello.dart`, and it reaches the threshold by
 itself. Three consecutive narrowed briefs were stopped in an earlier session for
 exactly this reason: **the brief was never the payload — the files the model opens
