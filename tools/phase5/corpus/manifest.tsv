@@ -1,0 +1,7 @@
+name	bytes	sha256	source
+chat_corpus_200.jsonl	21846	bdf53d4457b02b2b839398c78d9fb3bd225d4100772fa39acf5c61bf4e4d1aea	make_chat_corpus.py seed=53 (eval)
+chat_train_2000.jsonl	237935	25cd140e9e4da8952c533c392e570b1a9a49e92e68dbf10eeba72a1ab9322356	make_chat_corpus.py seed=54 (dict training only)
+news_ref_page.json	3330	732f6c1e6c1e343544173f8505657d1dfc25962cbc598fea08b3e734297b6ad1	authored fixed reference page
+photo_ref.jpg	2355465	dfb97cb2751330717bbddc71023f80aa1cff01e184f0bdfb9e14c59058c49c94	iPhone camera JPEG, copied unmodified
+speech_ref_10s.wav	320078	8911ef52b8f2beca37badb37d9d537ff2b2d4e598079f4a2eb57177dd1eda7ec	level1_original.wav 0-10s, 16kHz mono s16 (real speech)
+clip_ref_5s.mov	2657132	f9668497126fb8a2836b479641bae20884965e7816d733b352ea089e2c657d37	real phone video, 5s @ t=30s, h264 crf18 (frozen ref)

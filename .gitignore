@@ -43,3 +43,8 @@ tools/t2/step5_work/
 # including unrelated personal traffic. Its sha256, size and scan transcript are
 # recorded in docs/evidence/step7_trace_analysis.txt, which is what the check reads.
 docs/evidence/step7_trace_raw.pcap
+
+# Phase 5 / full-test heavy artifacts (rebuildable — never in history)
+Archive.zip
+tools/phase5/native/
+apps/reference_app/ios/NativeCodecs/
