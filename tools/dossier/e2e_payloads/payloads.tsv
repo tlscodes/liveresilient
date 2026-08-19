@@ -1,0 +1,6 @@
+name	bytes	sha256	source
+text_29b.bin	29	674b021442a7468cb710b21abcbd7ccaf83e6ea52b2d32fa018d9d668054482f	h3 Text p50; corpus msg id=3; measurer zstd flags
+news_1160b.bin	1160	1cd85b1855a56a8b86ec0b89efdf37257ecd1ac829dc4d49d5c05cb350848b69	h3 NewsPage; corpus news_ref_page.json; brotli -q 11
+voice_879b.bin	879	11203640b430423f2f24caa5b88a91214667de15b8d2521b0bc88781a136df40	h3 VoiceNote; c2enc 700C of speech_ref_10s.wav; codec bit-pack
+photo_2682b.avif	2682	08203652451a63c1f3eccc73393c7359db0b23fbee4a535c516b26e32eaf9be9	h3 Photo; artifact photo_ref_3k.avif
+video_5926b.bin	5926	0d38600a44014f5a4b22e7539a308d831891b2d7d2576e5466142c10b810dbc5	h3 VideoNote; artifact video_note_15k.bin

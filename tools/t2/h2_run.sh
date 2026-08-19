@@ -55,6 +55,13 @@ profile_args() {
     loss10)   echo "-        -     0.10" ;;  # threshold 5, PLC / retransmit
     loss60)   echo "-        -     0.60" ;;  # threshold 2, i.i.d. (see note)
     extreme)  echo "16Kbit/s 1000  0.15" ;;  # threshold 7, everything at once
+    # FULL_TEST_PLAN track 3: 2Kbps / 60% end-to-end / rtt 2000ms. Loss is
+    # stated PER CROSSING at 1-sqrt(1-0.6)=0.3675 so the datagram path's
+    # double crossing composes to the claimed 60% end-to-end — the datagram
+    # probes' own convention ("matching, not doubling", see
+    # apps/reference_app/test/datagram_lane_probe_test.dart header) and the
+    # only reading under which the plan's own chat<=3s derivation holds.
+    t3x)      echo "2Kbit/s  1000  0.3675" ;;
     clean)    echo "-        -     0.0" ;;   # shaped path, no impairment
     # `jitter` is deliberately absent. dummynet applies a FIXED delay; it has
     # no delay distribution, so a jitter profile could only be faked by calling

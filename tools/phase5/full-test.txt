@@ -1,0 +1,2 @@
+# منسوخ — نسخه‌ی گیت‌دار و تصحیح‌شده: tools/phase5/FULL_TEST_PLAN.md
+# (بکاپ متن اصلی: .backups/'424'-tools-phase5-full-test.txt.bak)

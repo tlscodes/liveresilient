@@ -1,0 +1,1 @@
+879 codec2-700c ok /Users/behnam/Downloads/voice_call_kit_v3/tools/phase5/artifacts/voice_ref_codec2-700c.wav
