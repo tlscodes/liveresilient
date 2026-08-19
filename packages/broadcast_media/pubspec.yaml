@@ -18,9 +18,11 @@ dependencies:
     path: ../broadcast
   connection_orchestrator:
     path: ../connection_orchestrator
+  ffi: ^2.2.0
   hamseda_codec:
     path: ../hamseda_codec
 
 dev_dependencies:
   test: ^1.25.0
   clock: ^1.1.1
+  ffigen: ^21.0.0
