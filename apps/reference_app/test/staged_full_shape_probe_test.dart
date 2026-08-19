@@ -11,14 +11,13 @@ library;
 // ignore_for_file: avoid_print
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:messaging/messaging.dart';
 
 import '../integration_test/support/datagram_lane_port.dart';
+import 'support/relay_process.dart';
 
 final class _LossySend implements DataChannelPort {
   _LossySend(this._inner, this.lossPerMille, this.seed);
@@ -81,19 +80,9 @@ void main() {
   test('full 5b shape x5 seeds: announcement over ReliableMessenger + '
       'fountain lanes over the real relay at 60% loss — ladder must verify '
       'every time the sender finishes', () async {
-    final repoRoot = Directory.current.parent.parent.path;
-    final proc = await Process.start(
-      'dart',
-      ['run', 'bin/datagram_relay.dart', '--port', '0'],
-      workingDirectory: '$repoRoot/server/signaling_server',
-    );
-    addTearDown(proc.kill);
-    final readiness = await proc.stdout
-        .transform(const SystemEncoding().decoder)
-        .transform(const LineSplitter())
-        .firstWhere((l) => l.contains('datagram relay listening on'))
-        .timeout(const Duration(seconds: 60));
-    final relayPort = int.parse(readiness.split(':').last.trim());
+    final relay = await RelayProcess.start();
+    addTearDown(relay.kill);
+    final relayPort = relay.port;
 
     for (var round = 0; round < 5; round++) {
       final key = DatagramLanePort.roomKeyFromCallId('probe-5b-r$round');

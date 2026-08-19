@@ -33,6 +33,10 @@ target 'Runner' do
   use_frameworks!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  # T2: vendored codec frameworks (codec2/dav1d/SVT-AV1/avif) for Dart FFI —
+  # built by tools/phase5/native/build_ios_xcframeworks.sh, pinned in
+  # PROVENANCE.tsv. Local path pod; nothing fetched from the network.
+  pod 'NativeCodecs', :path => 'NativeCodecs'
   target 'RunnerTests' do
     inherit! :search_paths
   end
