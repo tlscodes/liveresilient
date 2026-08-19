@@ -518,10 +518,14 @@ also includes the derivation.
 
 ```
 gate ledger    40 declared · 0 without proof · 0 blocked · 0 in flight
+               (ratchet: blocked=0 unproven_unlisted=0 —
+                tools/dossier/logs/gate_t1b_probe.log, 2026-08-19T13:47:30Z)
 step table     all 7 marked done — "unverified", because plan_check runs nothing
 step 7         re-run 2026-08-19: RECHECK PASSED, upgraded to a live re-measurement
                over all 68,511,532 bytes of the full capture
 steps 1-6      not re-run on 2026-08-19; they need native builds for the phone
-full suite     73 of 74 rows PASS · 0 FAIL · 1 row never run (stopped early to free
-               the machine), which is deliberately not written up as green
+full suite     74 of 74 rows PASS · 0 FAIL · no missing rows
+               (tools/suite-logs/20260819T224338Z/SUMMARY.tsv, the newest run;
+                the probe verified the earlier run 20260819T133223Z the same way:
+                rows=74 expected=74 fails=0 — gate_t1b_probe.log)
 ```
