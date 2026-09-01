@@ -28,6 +28,12 @@ DynamicLibrary _openPart(String stem, String iosFramework) {
   for (final p in [
     '/usr/local/opt/brotli/lib/lib$stem.dylib',
     '/opt/homebrew/opt/brotli/lib/lib$stem.dylib',
+    // Linux: distribution packages install the versioned soname; the bare
+    // .so exists only when the -dev package is present.
+    '/usr/lib/x86_64-linux-gnu/lib$stem.so.1',
+    '/usr/lib/x86_64-linux-gnu/lib$stem.so',
+    '/usr/lib/aarch64-linux-gnu/lib$stem.so.1',
+    '/usr/lib/aarch64-linux-gnu/lib$stem.so',
   ]) {
     if (File(p).existsSync()) return DynamicLibrary.open(p);
   }

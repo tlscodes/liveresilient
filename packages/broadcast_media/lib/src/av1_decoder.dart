@@ -25,6 +25,11 @@ DynamicLibrary _open() {
   for (final p in [
     '/usr/local/opt/dav1d/lib/libdav1d.dylib',
     '/opt/homebrew/opt/dav1d/lib/libdav1d.dylib',
+    // Linux: same reasoning as brotli — versioned soname first.
+    '/usr/lib/x86_64-linux-gnu/libdav1d.so.7',
+    '/usr/lib/x86_64-linux-gnu/libdav1d.so',
+    '/usr/lib/aarch64-linux-gnu/libdav1d.so.7',
+    '/usr/lib/aarch64-linux-gnu/libdav1d.so',
   ]) {
     if (File(p).existsSync()) return DynamicLibrary.open(p);
   }
