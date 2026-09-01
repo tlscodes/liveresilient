@@ -73,8 +73,10 @@ void main() {
       if (previous != null) {
         final delta = summary.rssAfterBytes - previous.rssAfterBytes;
         deltas.add(delta);
-        print('G8 100-tier RSS growth run ${run - 1} -> run $run: '
-            '$delta bytes');
+        print(
+          'G8 100-tier RSS growth run ${run - 1} -> run $run: '
+          '$delta bytes',
+        );
       }
       previous = summary;
       // Plateau observed — no need to burn more runs.
@@ -84,9 +86,11 @@ void main() {
     }
 
     final steadyStateGrowth = deltas.reduce(math.min);
-    print('G8 100-tier steady-state RSS growth '
-        '(min over ${deltas.length} consecutive-run deltas): '
-        '$steadyStateGrowth bytes');
+    print(
+      'G8 100-tier steady-state RSS growth '
+      '(min over ${deltas.length} consecutive-run deltas): '
+      '$steadyStateGrowth bytes',
+    );
     expect(
       steadyStateGrowth,
       lessThan(maxSteadyStateRssGrowthBytes),
