@@ -269,10 +269,10 @@ Uint8List _load(String path, int cap) {
 void main() {
   const cap = 131072; // 128KB per sample keeps the lab fast
   final samples = <String, String>{
-    'PDF (invoice)': '/Users/behnam/Downloads/TPNL00403986.pdf',
+    'PDF (invoice)': Platform.environment['LAB_PDF'] ?? '',
     'PDF (system card)':
-        '/Users/behnam/Downloads/Claude_Mythos_Preview_System_Card.pdf',
-    'PNG (screenshot)': '/Users/behnam/Downloads/IMG_4689.PNG',
+        Platform.environment['LAB_PDF2'] ?? '',
+    'PNG (screenshot)': Platform.environment['LAB_PNG'] ?? '',
     'JPG (photo)': '/Users/behnam/Downloads/rotonde-fietspad.jpg',
     'WAV PCM (voice)':
         '/Users/behnam/Downloads/voice_call_kit_v3/demo_audio/gift_24k.wav',

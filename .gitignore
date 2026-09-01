@@ -55,3 +55,7 @@ apps/reference_app/ios/NativeCodecs/
 # One-shot migration scripts from earlier phases (kept locally, not published)
 tools/apply_*.py
 tools/make_slices.py
+
+# Generated coverage output and prebuilt native binaries (rebuildable)
+**/coverage/
+*.so
