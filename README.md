@@ -1,167 +1,116 @@
-# VoiceCallKit v2
+# LiveResilient
 
-A standards-based, resilient audio/video calling stack for degraded and
-unstable network environments. Media is WebRTC (ICE/STUN/TURN, DTLS-SRTP),
-signaling is WSS, configuration is an Ed25519-signed HTTPS manifest.
-Standard protocols only — no custom traffic-shaping, no custom cryptography, no runtime code download —
-enforced in CI by `tool/architecture_guard.dart`.
+A calling and messaging kit that keeps working when the network barely does.
+Voice, text, images, voice notes and short video notes are carried over
+standard WebRTC media and a rateless transport lane, and every capability is
+gated on a measured byte and time budget rather than on an opinion.
 
-## Current status (2026-07-16)
+The design target is a link at **2 kbit/s with 60% packet loss and a 2-second
+round trip** — conditions under which mainstream messengers do not complete a
+single transfer.
 
-Phase numbers follow `docs/EXECUTION_PLAYBOOK.md`. A phase is only marked
-closed once its declared gate has passed with evidence — "code exists" is
-not the same as "closed" (see `security/THREAT_MODEL.md` for the same
-evidence discipline applied to security claims specifically).
+## What is measured, and where the numbers come from
 
-- **Phase 0 (Freeze/Baseline/doc honesty) — closed.**
-- **Phase 1 (Buildable foundation + CI) — closed.**
-- **Phase 2 (Deterministic core tests + concurrency) — closed.**
-- **Phase 3 (First runnable vertical slice) — loopback-closed, with dated
-  blockers.** Signaling server, adapters, and the full pure-Dart E2E
-  signaling loopback are done and tested (100-cycle soak, no leak). Two
-  blockers remain open and dated (2026-07-15): native media (`flutter_webrtc`)
-  needs full Xcode (only CommandLineTools installed); the real-2-device
-  call test needs physical hardware. Neither blocks the loopback-scope work
-  that has landed.
-- **Phase 4 (Security + identity base) — in progress.** Real Ed25519
-  identity keys, TOFU trust store, log redaction, manifest verification
-  logic, and TURN credential issuance logic exist with test coverage
-  (see `security/THREAT_MODEL.md` for the per-item evidence and honest
-  gaps — notably: the real-crypto manifest verifier has 2 failing tests
-  as of this review, and platform Keystore/Keychain-backed key storage is
-  blocked pending the app shell). Threat model and data-flow diagram are
-  current as of this date (`security/THREAT_MODEL.md`, `docs/DATA_FLOW.md`).
-- **Phases 5-11 — not started** (media quality, path continuity, signed
-  discovery, restored v1 values, mobile integration, observability,
-  chaos/scale/audit/rollout).
+Every number below was produced by a script in this repository and is
+reproducible with the command next to it. Nothing here is an estimate.
 
-## Repository layout (Dart monorepo, melos-style)
+### Compression, measured on a fixed corpus (`tools/phase5/h3_results.tsv`)
 
-```
-voice_call_kit_v2/
-├── apps/reference_app/         # Flutter app shell (UI, permissions, adapters)
-├── packages/
-│   ├── call_core/              # call state machine, controller, reconnect policy
-│   ├── media_webrtc/           # media engine, stats sampler, adaptive quality
-│   ├── signaling/              # envelopes, reliable outbox, WSS client
-│   ├── adaptive_transport/    # EWMA health, channel router, circuit breaker
-│   ├── signed_config/          # signed endpoint manifest: model/verifier/cache
-│   ├── device_link/             # consent-gated nearby link (degraded mode only)
-│   ├── privacy_telemetry/      # opt-in aggregate-only telemetry
-│   └── security/               # identity store (TOFU), log redactor
-├── server/                     # signaling + config services
-├── infra/                      # coturn, monitoring
-├── integration_test/
-├── security/                   # THREAT_MODEL, SECURITY, INCIDENT_RESPONSE
-├── docs/                       # ARCHITECTURE, PRIVACY, ACCESSIBILITY, HUMAN_RIGHTS_DESIGN
-├── tool/architecture_guard.dart
-└── UPGRADE_BLUEPRINT_V2.md     # v1 → v2 migration map
+| Feature    | Original   | On the wire | Wire time @2 kbit/s | Status |
+|------------|-----------|-------------|---------------------|--------|
+| Text       | 39 B      | **29 B**    | 0.1 s               | PASS |
+| News page  | 3,330 B   | **1,160 B** | 4.6 s               | PASS |
+| Photo      | 2,355,465 B | **2,682 B** | 10.7 s            | PASS |
+| Voice note (10 s) | 320,078 B | **879 B** | 3.5 s        | PASS |
+| Video note (5 s)  | 2,657,132 B | **5,926 B** | 23.7 s   | PASS |
+| Push-to-talk (60 s) | 1,920,000 B | **5,220 B** | 20.9 s | PASS (codec2-450) |
+
+```bash
+bash tools/phase5/goal_verify.sh     # re-runs every gate; exit 0 means the table above still holds
 ```
 
-## Package conventions
+### End-to-end on a physical iPhone (`tools/dossier/e2e_ios_results.tsv`)
 
-- Package name == directory name under `packages/` (snake_case); e.g. the
-  transport package is `name: adaptive_transport` and is imported as
-  `package:adaptive_transport/adaptive_transport.dart`.
-- Each package exposes one barrel file `lib/<package_name>.dart` that
-  exports everything under `lib/src/`; nothing imports another package's
-  `src/` directly.
-- Cross-package dependencies are path dependencies within the workspace
-  (melos links them at bootstrap); packages are pure Dart — platform
-  plugins are wrapped behind ports (`PeerConnectionPort`,
-  `SignalingSocket`, `LocalLinkPort`, storage/crypto adapters) implemented
-  in `apps/`.
-- All packages are `publish_to: none` and versioned in lockstep (2.x).
+Same six features, running on an iPhone over a shaped link, each inside a
+budget derived from the link physics rather than chosen by hand:
 
-## Getting started
+| Feature    | Budget | Measured | Status |
+|------------|--------|----------|--------|
+| chat       | 4.8 s  | **2.5 s**  | PASS |
+| news page  | 52.3 s | **17.0 s** | PASS |
+| voice note | 42.3 s | **13.9 s** | PASS |
+| photo      | 49.6 s | **23.2 s** | PASS |
+| video note | 82.0 s | **45.4 s** | PASS |
+| push-to-talk | live | 60 s continuous | PASS |
 
-```
-dart pub global activate melos
-melos bootstrap
-melos run analyze
-melos run test
-melos run guard      # architecture guard (also a required CI check)
-```
+These rows are **measured on a device, not on CI**. A CI runner cannot shape a
+radio link, so the workflow does not pretend to reproduce them; the reproduction
+script for a reviewer with their own hardware is
+`tools/dossier/reproduce_conditions.sh`.
 
-`tools/workspace_gate.sh` runs analysis and tests over every package and
-the app in one pass, choosing `flutter test` for Flutter packages, and
-prints a per-package count with a total.
+### Transport survival (`tools/t2/h2_results.tsv`)
 
-## Fallback lanes and the border relay
+The transport layer is separately gated across a 24-row matrix of impairment
+profiles — voice, messaging and video, each from a clean link down to 60% loss
+and to a 2 kbit/s bandwidth ceiling. All 24 rows pass. The video row at 60%
+loss delivers a 4 MiB object with 2.54× symbol overhead against a theoretical
+floor of 2.5× — the rateless lane doing exactly what the arithmetic says it can.
 
-When the live WebRTC path dies, `ConnectionFabric` fails over to the
-resilient lanes: direct UDP, a WebSocket relay, an HTTP long-poll, and a
-local peer mesh. Each lane is registered only when it has an endpoint —
-a lane aimed at nowhere would look healthy to the ranker while delivering
-nothing, which is worse than no lane at all.
+## How it works, briefly
 
-The two WAN lanes terminate on a border relay. One is deployed:
+- **Media**: standard WebRTC — ICE, STUN, TURN, DTLS-SRTP. No custom
+  cryptography.
+- **Bulk transfer on lossy links**: a rateless lane (systematic random linear
+  network coding over GF(256)). Loss costs proportional extra symbols instead
+  of a round trip, which is why a 60%-loss link still completes a transfer.
+  It runs over plain UDP because a loss-reactive congestion controller
+  underneath collapses to about 2 packets per second at that loss rate — that
+  collapse is measured, not assumed.
+- **Codecs**: purpose-built ultralight paths per medium — a dictionary-trained
+  text codec, CBOR + Brotli for pages, AVIF for images, Codec2 for speech, and
+  raw AV1 with a 12-byte header for video notes (no container: an MP4 header
+  alone would exceed the whole budget).
+- **Gates**: every claim in this repository is tied to a test. CI enforces that
+  a declared gate reaches a real test, that the count of unproven gates never
+  rises, and that verification commands do not truncate their own output.
 
-```
-voice-call-relay.tlscodes-com.workers.dev
-```
-
-Source is `tools/cloudflare_relay_worker/` (see its README for the
-protocol and for the deploy command). The app uses it by default, keying
-the relay session on the call id and the role on the call role. Anything
-in the environment overrides that:
-
-```
-FALLBACK_RELAY_HOST      swap the relay host
-FALLBACK_RELAY_SESSION   relay session id (a shared secret, not a call number)
-FALLBACK_RELAY_ROLE      a | b
-FALLBACK_WS_ENDPOINT     override that one lane with a full URI
-FALLBACK_HTTP_ENDPOINT   override that one lane with a full URI
-FALLBACK_UDP_ENDPOINT    host:port for a direct media endpoint
-```
-
-Because the call id doubles as the relay session id, call ids must be
-unguessable: anyone holding one can attach to the relay as the missing
-side. `newSecureCallId()` mints one from `Random.secure()` — 128 bits in
-the relay's own alphabet, so it needs no sanitising. Payloads are sealed
-by the call's own session keys before they reach the relay, so what leaks
-is the connection, not the content.
-
-### Behaviour at the bottom of the link
-
-The floor these lanes are built for is Hamseda v4's warm rate: **31.8 bps,
-roughly four bytes per second.** At that budget the framing is not a
-rounding error — a 4-byte media frame carries a 5-byte gRPC header, so it
-costs 9 bytes, more than two seconds of link. That header is the
-protocol's and cannot be tuned to zero here; what this code guarantees is
-that it sends the frame **once**, unpadded and unre-framed, and that the
-HTTP lane's liveness probe (`HEAD`) never consumes a queued frame.
-
-What the fabric adds at that floor is survival rather than speed. Under a
-simulated 4 bytes/sec budget with 90% loss, every frame is either sent or
-parked in the delay-tolerant queue — never rejected, never dropped, never
-timed out — and the backlog drains **in order** the moment capacity
-returns. That is asserted, not asserted-by-comment, in
-`packages/connection_orchestrator/test/resilient_fallback_lanes_test.dart`
-under "ultra-low bitrate survival".
-
-### Running the fallback simulations
-
-Both suites are in-memory or loopback only — neither reaches the deployed
-relay, because a test pointed at it would be measuring Cloudflare's uptime
-rather than this code.
+## Repository layout
 
 ```
-# failover: media keeps its sequence when the live path dies mid-stream
-cd apps/reference_app && flutter test test/fallback_lane_failover_e2e_test.dart
-
-# relay protocol: the real lanes against a loopback server implementing
-# the same routes as the worker
-cd packages/connection_orchestrator && dart test test/cloudflare_relay_protocol_test.dart
+apps/reference_app/     Flutter app shell and the on-device test matrix
+packages/               call core, media, signalling, transport, codecs
+server/                 signalling server and the datagram forwarder (AGPL-3.0)
+tools/phase5/           corpus, byte-budget gates, results table
+tools/t2/               link-shaping rig and the transport matrix
+tools/dossier/          evidence collection and reviewer reproduction scripts
+docs/                   architecture, threat model, engineering handbooks
 ```
 
-## Design and governance documents
+## Running it
 
-- `docs/ARCHITECTURE.md` — layering, package responsibilities, call flow.
-- `docs/PRIVACY.md` — what each component can and cannot see.
-- `docs/ACCESSIBILITY.md` — WCAG 2.2 AA requirements for the app.
-- `security/` — threat model, security policy, incident-response runbook.
-- `docs/DATA_FLOW.md` — data-flow diagram, trust boundaries, key-material
-  locations (companion to `security/THREAT_MODEL.md`).
-- `UPGRADE_BLUEPRINT_V2.md` — what was ported from v1, what was replaced,
-  and the excluded legacy list.
+```bash
+dart pub get
+dart analyze                          # infos are fatal
+bash tools/run_suites.sh              # the full suite; logs under tools/suite-logs/
+bash tools/phase5/goal_verify.sh      # the byte-budget gates
+```
+
+Building for a device needs the native codecs; see `tools/phase5/gates/` for
+the build steps each gate expects.
+
+## Status and honesty
+
+- Phase 5 (the ultralight codec layer) is complete: 6 of 6 gates green.
+- The transport matrix is complete: 24 of 24 rows green.
+- The on-device matrix is complete: 6 of 6 features inside budget.
+- **No independent security audit has been performed.** See `SECURITY.md`
+  for the trust boundaries, including the two known gaps: the datagram lane
+  has no end-to-end encryption layer of its own yet, and the prebuilt WebRTC
+  binary is outside our audit surface.
+
+## Licence
+
+Apache-2.0 for the client and all reusable packages; AGPL-3.0 for `server/`.
+Running a modified server as a network service means publishing those changes;
+clients that merely talk to a server are unaffected. See `CONTRIBUTING.md`
+for the DCO sign-off used on contributions.
