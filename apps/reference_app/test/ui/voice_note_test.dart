@@ -10,6 +10,7 @@
 ///    must report a mirrored fraction under RTL.
 library;
 
+@Tags(['golden'])
 import 'dart:async';
 
 import 'package:flutter/material.dart';

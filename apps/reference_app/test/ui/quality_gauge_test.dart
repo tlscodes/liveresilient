@@ -1,3 +1,6 @@
+@Tags(['golden'])
+library;
+
 import 'package:call_core/call_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

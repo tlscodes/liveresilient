@@ -9,6 +9,7 @@
 /// SAME icons rather than the MessageStatusBadge set.
 library;
 
+@Tags(['golden'])
 import 'dart:async';
 import 'dart:typed_data';
 

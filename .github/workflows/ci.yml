@@ -110,7 +110,12 @@ jobs:
             mkdir -p "$PWD/test-reports"
             if grep -q 'sdk: flutter' "${d}pubspec.yaml" 2>/dev/null; then
               echo "== testing ${d} (flutter)"
-              (cd "$d" && flutter test --coverage \
+              # Goldens are excluded on Linux by design: Flutter rasterises
+              # text with the host font stack, so a PNG captured on macOS
+              # cannot match a Linux runner. They are not skipped silently —
+              # the tag names what is not covered here, and the same suite
+              # runs them on macOS.
+              (cd "$d" && flutter test --coverage --exclude-tags golden \
                  --file-reporter="json:${report}")
             else
               echo "== testing ${d} (dart)"

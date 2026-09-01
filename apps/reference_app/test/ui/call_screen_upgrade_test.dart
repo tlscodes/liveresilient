@@ -3,6 +3,7 @@
 /// labels, button types/labels, privacy line).
 library;
 
+@Tags(['golden'])
 import 'dart:async';
 
 import 'package:call_core/call_core.dart';
