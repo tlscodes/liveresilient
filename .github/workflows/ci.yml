@@ -49,6 +49,22 @@ jobs:
       - name: Native codec libraries (the FFI tests link against these)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libbrotli-dev libdav1d-dev
 
+      - name: Build codec2 at the pinned commit (mode 450 was removed upstream)
+        run: |
+          set -e
+          # The phase-5 voice numbers were measured against this exact source.
+          # A distribution package is a different library and would silently
+          # answer a different question.
+          git clone -q https://github.com/drowe67/codec2.git /tmp/codec2_src
+          git -C /tmp/codec2_src checkout -q 9f5e2de
+          cmake -S /tmp/codec2_src -B /tmp/codec2_build \
+                -DCMAKE_BUILD_TYPE=Release >/dev/null
+          cmake --build /tmp/codec2_build -j 4 --target codec2 >/dev/null
+          lib="$(find /tmp/codec2_build -name 'libcodec2.so*' -type f | head -1)"
+          [ -n "$lib" ] || { echo "::error::codec2 build produced no shared library"; exit 1; }
+          echo "CODEC2_LIB_PATH=$lib" >> "$GITHUB_ENV"
+          echo "codec2 built: $lib"
+
       - name: Install the coverage formatter
         run: dart pub global activate coverage
 
