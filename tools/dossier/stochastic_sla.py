@@ -64,7 +64,7 @@ def main():
     for f, (s, mech, pace) in FEATURES.items():
         rows.append(f"{f}\t{s}\t{mech}\t{pace:g}\t{t99(s, mech, pace):.1f}")
     out = "\n".join(rows) + "\n"
-    with open("/Users/behnam/Downloads/voice_call_kit_v3/tools/dossier/"
+    with open(str(pathlib.Path(__file__).resolve().parent) + "/"
               "derived_budgets.tsv", "w") as fh:
         fh.write(out)
     print(out)

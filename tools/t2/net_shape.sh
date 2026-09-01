@@ -3,7 +3,7 @@
 #
 # WHY IT IS ONE FILE. Everything that needs root lives here so a single scoped
 # sudoers entry can allow it without granting anything else:
-#   behnam ALL=(root) NOPASSWD: /Users/behnam/Downloads/voice_call_kit_v3/tools/t2/net_shape.sh
+#   <user> ALL=(root) NOPASSWD: <repo>/tools/t2/net_shape.sh
 #
 # ---------------------------------------------------------------------------
 # WHY THE feth DESIGN FAILED, AND WHAT REPLACED IT  (2026-08-03)

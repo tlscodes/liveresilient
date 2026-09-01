@@ -17,7 +17,7 @@
 #
 # Grant it with the exact absolute path, never ALL:
 #   sudo visudo -f /etc/sudoers.d/t2rig-extra
-#   behnam ALL=(root) NOPASSWD: /Users/behnam/Downloads/voice_call_kit_v3/tools/t2/step7_trace.sh
+#   behnam ALL=(root) NOPASSWD: $REPO/tools/t2/step7_trace.sh
 #
 # Then always call it as `sudo -n`, so a missing rule fails loudly and at once
 # instead of hanging an unattended run behind a password prompt nobody is awake
