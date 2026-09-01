@@ -1,9 +1,9 @@
 /// The upgraded live-call screen: real-stats gauge card, adaptive-ladder
 /// display, voice-note banner, and the unchanged pinned contract (phase
 /// labels, button types/labels, privacy line).
+@Tags(['golden'])
 library;
 
-@Tags(['golden'])
 import 'dart:async';
 
 import 'package:call_core/call_core.dart';

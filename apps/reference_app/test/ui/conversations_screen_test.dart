@@ -6,9 +6,9 @@
 ///    indeterminate progress ring, which would keep `pumpAndSettle` spinning.
 ///  * The entrance animation is one-shot, so `pumpAndSettle` completes and
 ///    goldens capture the settled layout.
+@Tags(['golden'])
 library;
 
-@Tags(['golden'])
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/ui/conversations_screen.dart';

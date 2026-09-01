@@ -8,9 +8,9 @@
 ///    renders whatever amplitude stream it is given.
 ///  * Seek assertions use LOGICAL fractions: the same physical tap point
 ///    must report a mirrored fraction under RTL.
+@Tags(['golden'])
 library;
 
-@Tags(['golden'])
 import 'dart:async';
 
 import 'package:flutter/material.dart';

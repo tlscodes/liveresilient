@@ -7,9 +7,9 @@
 /// and `Icons.verified_outlined` for the sha pill. The restyle keeps that
 /// exact vocabulary green (recolored from tokens), so these tests pin the
 /// SAME icons rather than the MessageStatusBadge set.
+@Tags(['golden'])
 library;
 
-@Tags(['golden'])
 import 'dart:async';
 import 'dart:typed_data';
 
