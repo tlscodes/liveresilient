@@ -25,7 +25,19 @@ note() { printf '%-6s %s\n' "$1" "$2"; }
 check_binary() {
   local bin=$1 label=$2
   local bad
-  bad=$(otool -L "$bin" | tail -n +2 | awk '{print $1}' \
+  # Inspect EVERY slice of the binary, and parse otool structurally, not
+  # positionally. `otool -L` picks a slice per the host toolchain's own rules,
+  # and for a universal binary some toolchains (first seen: the macos-26 CI
+  # image, default Xcode 26.6) print every slice with an unindented
+  # "<path> (architecture <arch>):" header per slice. The old
+  # `tail -n +2 | awk '{print $1}'` dropped only the first header, so the
+  # second slice's header — the binary's own absolute path — was misread as a
+  # linked path and failed the gate on an artifact that was in fact correct.
+  # Load-command entries are always tab-indented; headers never are. So:
+  # `-arch all` pins the output to one format on every toolchain and checks
+  # x86_64 as well as arm64, and the awk keeps only real load-command lines.
+  # The allowed-prefix list is unchanged.
+  bad=$(otool -arch all -L "$bin" | awk '/^\t/ {print $1}' | sort -u \
         | grep -vE '^(/usr/lib/|/System/|@rpath/|@executable_path/|@loader_path/)' || true)
   if [ -n "$bad" ]; then
     note FAIL "$label links paths that will not exist on a user's machine:"
@@ -35,14 +47,21 @@ check_binary() {
     note ok "$label has no build-machine paths"
   fi
 
-  local n
-  n=$(nm -gU "$bin" 2>/dev/null | grep -c ' T ')
-  if [ "$n" = "$EXPECTED_EXPORTS" ]; then
-    note ok "$label exports $n symbols"
-  else
-    note FAIL "$label exports $n symbols, expected $EXPECTED_EXPORTS"
-    fail=1
-  fi
+  # Same discipline for the export count: count per slice, so the result does
+  # not depend on which slice the host's nm decides to read, and a slice that
+  # lost its exports cannot hide behind a healthy one.
+  local n arch archs
+  archs=$(lipo -archs "$bin" 2>/dev/null)
+  [ -n "$archs" ] || archs=unknown
+  for arch in $archs; do
+    n=$(nm -gU -arch "$arch" "$bin" 2>/dev/null | grep -c ' T ')
+    if [ "$n" = "$EXPECTED_EXPORTS" ]; then
+      note ok "$label ($arch) exports $n symbols"
+    else
+      note FAIL "$label ($arch) exports $n symbols, expected $EXPECTED_EXPORTS"
+      fail=1
+    fi
+  done
 }
 
 check_bundle() {
