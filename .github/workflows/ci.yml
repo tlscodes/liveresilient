@@ -46,6 +46,24 @@ jobs:
       - name: Resolve workspace (native pub workspace)
         run: flutter pub get
 
+      - name: Install the coverage formatter
+        run: dart pub global activate coverage
+
+      - name: Resolve packages outside the workspace
+        run: |
+          set -e
+          # A package without `resolution: workspace` is invisible to the root
+          # resolve, and analysis then fails on imports that work locally only
+          # because a stale .dart_tool exists there. Find them and resolve each.
+          for p in apps/*/pubspec.yaml server/*/pubspec.yaml; do
+            [ -f "$p" ] || continue
+            grep -q '^resolution: *workspace' "$p" && continue
+            d="$(dirname "$p")"
+            echo "== resolving $d (outside the workspace)"
+            if grep -q 'sdk: flutter' "$p"; then (cd "$d" && flutter pub get)
+            else (cd "$d" && dart pub get); fi
+          done
+
       # ── Phase-1 exit gate mirrored as CI ────────────────────────────
       - name: Format check
         run: dart format --output=none --set-exit-if-changed .
@@ -82,11 +100,10 @@ jobs:
               # dart test writes raw VM JSON, not LCOV. Without this the merge
               # step below sees nothing and the coverage gate is only as real
               # as whatever lcov.info happens to sit in the working tree.
-              (cd "$d" && dart pub global activate coverage >/dev/null 2>&1 || true
-               dart pub global run coverage:format_coverage \
+              (cd "$d" && dart pub global run coverage:format_coverage \
                  --lcov --in=coverage --out=coverage/lcov.info \
                  --report-on=lib --packages=.dart_tool/package_config.json \
-                 >/dev/null 2>&1 || echo "  (no lib/ coverage for ${d})")
+                 || echo "  (no lib/ coverage for ${d})")
             fi
             found=1
           done

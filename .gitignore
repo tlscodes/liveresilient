@@ -58,4 +58,3 @@ tools/make_slices.py
 
 # Generated coverage output and prebuilt native binaries (rebuildable)
 **/coverage/
-*.so

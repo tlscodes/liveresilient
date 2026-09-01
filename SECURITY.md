@@ -34,6 +34,12 @@ every security property below as *designed and tested by the authors*, not
 - **The signalling server** sees connection metadata by construction: which
   identifiers are talking, and when. It is not designed to see message
   content.
+- **The Android transport library ships prebuilt.** `libpt_transport.so`
+  (arm64-v8a and x86_64) is committed under `apps/reference_app/android/`
+  because the Android build consumes it directly and no source build exists in
+  this repository yet. A reader cannot currently reproduce those two files from
+  source; building them from source is open work, and until it lands they carry
+  the same caveat as any vendored binary.
 - **Prebuilt native dependencies** are outside our audit surface. The WebRTC
   implementation arrives as a prebuilt binary through its package; we do not
   build it from source, and we cannot vouch for what upstream shipped. The
