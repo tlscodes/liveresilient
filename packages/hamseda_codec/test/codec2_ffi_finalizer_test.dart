@@ -36,28 +36,29 @@ void main() {
     u.dispose();
   });
 
-  test('finalizer-managed churn: abandoned instances never crash the VM',
-      () async {
-    final frame = tone(320);
-    for (var round = 0; round < 40; round++) {
-      // abandon a batch with NO dispose — lifetime belongs to the finalizer
-      for (var i = 0; i < 50; i++) {
-        final c = Codec2(i.isEven ? codec2Mode700C : codec2Mode450);
-        c.encodeFrame(frame);
+  test(
+    'finalizer-managed churn: abandoned instances never crash the VM',
+    () async {
+      final frame = tone(320);
+      for (var round = 0; round < 40; round++) {
+        // abandon a batch with NO dispose — lifetime belongs to the finalizer
+        for (var i = 0; i < 50; i++) {
+          final c = Codec2(i.isEven ? codec2Mode700C : codec2Mode450);
+          c.encodeFrame(frame);
+        }
+        // allocate garbage so the GC has a reason to run finalizers
+        List<int>.filled(200000, round);
+        await Future<void>.delayed(Duration.zero);
       }
-      // allocate garbage so the GC has a reason to run finalizers
-      List<int>.filled(200000, round);
-      await Future<void>.delayed(Duration.zero);
-    }
-    // still alive and functional after ~2000 abandoned native states
-    final c = Codec2(codec2Mode700C);
-    final decoded = c.decodeFrame(c.encodeFrame(frame));
-    expect(decoded.length, 320);
-    c.dispose();
-  });
+      // still alive and functional after ~2000 abandoned native states
+      final c = Codec2(codec2Mode700C);
+      final decoded = c.decodeFrame(c.encodeFrame(frame));
+      expect(decoded.length, 320);
+      c.dispose();
+    },
+  );
 
-  test('eager dispose detaches the finalizer; reuse-after-dispose throws',
-      () {
+  test('eager dispose detaches the finalizer; reuse-after-dispose throws', () {
     final c = Codec2(codec2Mode450);
     final bits = c.encodeFrame(tone(320));
     expect(bits.length, 3); // ceil(18/8) bytes
@@ -66,8 +67,7 @@ void main() {
     expect(() => c.encodeFrame(tone(320)), throwsStateError);
   });
 
-  test('250-frame round trip stays byte-exact in width and sane in energy',
-      () {
+  test('250-frame round trip stays byte-exact in width and sane in energy', () {
     final c = Codec2(codec2Mode700C);
     var energy = 0.0;
     for (var f = 0; f < 250; f++) {

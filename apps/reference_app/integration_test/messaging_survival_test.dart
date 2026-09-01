@@ -71,9 +71,8 @@ const int voiceBytes = 24 * 1024;
 const int stagedPhotoBytes = 96 * 1024;
 const int stagedPreviewBytes = 15 * 1024;
 
-final AdaptiveConnectionBudget _budget = AdaptiveConnectionBudget.fromConditions(
-  e2eShapedConditions,
-);
+final AdaptiveConnectionBudget _budget =
+    AdaptiveConnectionBudget.fromConditions(e2eShapedConditions);
 
 /// One modeled signaling round trip under the shaped conditions — the unit
 /// the retry/window arithmetic below is built from.
@@ -95,8 +94,9 @@ final Duration msgRetryAfter = () {
   final bw = e2eShapedConditions.bandwidthBps;
   if (bw != null && bw > 0) {
     const chunkWireBits = 12 * 1024 * 8 * 1.45;
-    final drain =
-        Duration(milliseconds: (chunkWireBits * 1000 / (0.3 * bw) * 1.5).round());
+    final drain = Duration(
+      milliseconds: (chunkWireBits * 1000 / (0.3 * bw) * 1.5).round(),
+    );
     if (drain > pace) pace = drain;
   }
   return pace;
@@ -214,12 +214,12 @@ void main() {
             : appConnectBudget;
         final connectStarted = DateTime.now();
         await Future.wait([
-          initiator.controller
-              .start()
-              .then((_) => initiator.waitForConnected(timeout: connectBudget)),
-          receiver.controller
-              .start()
-              .then((_) => receiver.waitForConnected(timeout: connectBudget)),
+          initiator.controller.start().then(
+            (_) => initiator.waitForConnected(timeout: connectBudget),
+          ),
+          receiver.controller.start().then(
+            (_) => receiver.waitForConnected(timeout: connectBudget),
+          ),
         ]).timeout(
           connectBudget + const Duration(seconds: 5),
           onTimeout: () => throw TimeoutException(
@@ -230,8 +230,9 @@ void main() {
             'error=${receiver.controller.state.error}',
           ),
         );
-        summary['connectMs'] =
-            DateTime.now().difference(connectStarted).inMilliseconds;
+        summary['connectMs'] = DateTime.now()
+            .difference(connectStarted)
+            .inMilliseconds;
 
         // -------------------------------------------------------------
         // 2. THE MESSAGING STACK — the product's own path: negotiated
@@ -243,8 +244,8 @@ void main() {
         final attachmentWindowMax = attachmentWindow(photoBytes);
         final maxAttempts =
             (attachmentWindowMax.inMilliseconds / msgRetryAfter.inMilliseconds)
-                    .ceil() +
-                2;
+                .ceil() +
+            2;
         final senderMessenger = ReliableMessenger(
           MediaChannelDataPort(await initiator.media.openDataChannel()),
           peerId: 'msg-initiator',
@@ -291,8 +292,9 @@ void main() {
         await receiver
             .waitForConnected(timeout: connectBudget)
             .timeout(connectBudget + const Duration(seconds: 5));
-        summary['renegotiatedMs'] =
-            DateTime.now().difference(connectStarted).inMilliseconds;
+        summary['renegotiatedMs'] = DateTime.now()
+            .difference(connectStarted)
+            .inMilliseconds;
 
         StagedPhotoReceiver? stagedPhotoReceiver;
         final attachmentReceiver = AttachmentReceiver();
@@ -360,8 +362,9 @@ void main() {
         textLatencies.sort();
         summary['textDelivered'] = receivedTexts.length;
         summary['textP50Ms'] = _percentile(textLatencies, 0.50);
-        summary['textMaxMs'] =
-            textLatencies.isEmpty ? null : textLatencies.last;
+        summary['textMaxMs'] = textLatencies.isEmpty
+            ? null
+            : textLatencies.last;
 
         // -------------------------------------------------------------
         // 4. PHOTO — one deterministic image attachment, verified
@@ -418,7 +421,6 @@ void main() {
           seed: 13,
         );
 
-
         // -------------------------------------------------------------
         // 5b. STAGED PHOTO (§0.2) — announcement with the thumbhash
         //     INSIDE it on the reliable text path; preview then
@@ -444,10 +446,12 @@ void main() {
         }
         final artifacts = StagedPhotoArtifacts(
           thumbHash: ThumbHash.encodeRgba(32, 24, thumbRgba),
-          preview:
-              Uint8List.fromList(deterministicBytes(stagedPreviewBytes, 21)),
-          original:
-              Uint8List.fromList(deterministicBytes(stagedPhotoBytes, 23)),
+          preview: Uint8List.fromList(
+            deterministicBytes(stagedPreviewBytes, 21),
+          ),
+          original: Uint8List.fromList(
+            deterministicBytes(stagedPhotoBytes, 23),
+          ),
           width: 2048,
           height: 1536,
         );
@@ -457,20 +461,25 @@ void main() {
         if (useFountainPhoto) {
           // Same safety argument as the video row: unbudgeted spray is
           // only argued safe on uncapped links — fail loud otherwise.
-          expect(bwBps, isNull,
-              reason: 'fountain lane is only argued safe on uncapped rows; '
-                  'a bandwidth-capped lossy row needs a budgeted sender '
-                  'before it may ride this lane');
-          const dgramPort =
-              int.fromEnvironment('E2E_DGRAM_PORT', defaultValue: 3737);
+          expect(
+            bwBps,
+            isNull,
+            reason:
+                'fountain lane is only argued safe on uncapped rows; '
+                'a bandwidth-capped lossy row needs a budgeted sender '
+                'before it may ride this lane',
+          );
+          const dgramPort = int.fromEnvironment(
+            'E2E_DGRAM_PORT',
+            defaultValue: 3737,
+          );
           final relayHost =
               InternetAddress.tryParse(relay.endpoint.host) != null
-                  ? relay.endpoint.host
-                  : '127.0.0.1';
+              ? relay.endpoint.host
+              : '127.0.0.1';
           // A room of our own on the learned-seat relay: keyed off the
           // photo sub-id so no other lane's seats can collide.
-          final roomKey =
-              DatagramLanePort.roomKeyFromCallId('$callId#photo');
+          final roomKey = DatagramLanePort.roomKeyFromCallId('$callId#photo');
           final laneTx = await DatagramLanePort.bind(
             relayHost: relayHost,
             relayPort: dgramPort,
@@ -511,14 +520,16 @@ void main() {
             negotiatedId: 9,
             ordered: false,
           );
-          final txChannel =
-              await initiator.media.openDataChannel(photoChannel);
-          final rxChannel =
-              await receiver.media.openDataChannel(photoChannel);
-          final lanePortTx =
-              MediaChannelDataPort(txChannel, maxPendingFrames: 128);
-          final lanePortRx =
-              MediaChannelDataPort(rxChannel, maxPendingFrames: 128);
+          final txChannel = await initiator.media.openDataChannel(photoChannel);
+          final rxChannel = await receiver.media.openDataChannel(photoChannel);
+          final lanePortTx = MediaChannelDataPort(
+            txChannel,
+            maxPendingFrames: 128,
+          );
+          final lanePortRx = MediaChannelDataPort(
+            rxChannel,
+            maxPendingFrames: 128,
+          );
           final rx = StagedPhotoReceiver.arq(lanePortRx);
           stagedPhotoReceiver = rx;
           addTearDown(rx.close);
@@ -543,8 +554,7 @@ void main() {
         final stagedVerified = Completer<void>();
         final stagedSub = stagedPhotoReceiver.updates.listen((u) {
           stagedStages.add(u.stage);
-          summary['stagedStages'] =
-              stagedStages.map((s) => s.name).toList();
+          summary['stagedStages'] = stagedStages.map((s) => s.name).toList();
           if (u.stage == PhotoStage.originalVerified &&
               !stagedVerified.isCompleted) {
             stagedVerified.complete();
@@ -565,7 +575,9 @@ void main() {
         final stagedWindow = attachmentWindow(stagedPhotoBytes);
         summary['stagedWindowMs'] = stagedWindow.inMilliseconds;
         final stagedStart = DateTime.now();
-        final res1 = await stagedSender.deliver(artifacts).timeout(
+        final res1 = await stagedSender
+            .deliver(artifacts)
+            .timeout(
               stagedWindow,
               onTimeout: () => throw TimeoutException(
                 'staged photo not delivered within '
@@ -586,30 +598,34 @@ void main() {
         } on TimeoutException {
           summary['stagedLadderDump'] = {
             'photos': stagedPhotoReceiver.photos.map(
-              (k, v) => MapEntry(k.substring(0, 8),
-                  '${v.stage.name}/sha=${v.sha256Verified}'),
+              (k, v) => MapEntry(
+                k.substring(0, 8),
+                '${v.stage.name}/sha=${v.sha256Verified}',
+              ),
             ),
             'orphans': stagedPhotoReceiver.orphanCount,
             'announceDelivery': summary['stagedAnnounceDelivery'],
           };
           rethrow;
         }
-        summary['stagedPhotoMs'] =
-            DateTime.now().difference(stagedStart).inMilliseconds;
+        summary['stagedPhotoMs'] = DateTime.now()
+            .difference(stagedStart)
+            .inMilliseconds;
         summary['stagedAnnounceMs'] = res1.announceElapsed.inMilliseconds;
         summary['stagedPreviewMs'] = res1.previewElapsed.inMilliseconds;
         summary['stagedOriginalMs'] = res1.originalElapsed.inMilliseconds;
         summary['stagedSentSymbols'] = res1.sentSymbols;
         summary['stagedTotalSourceSymbols'] = res1.totalSourceSymbols;
 
-        final ladder =
-            stagedPhotoReceiver.photos[res1.announcement.photoId];
-        final stagedOrderOk = stagedStages.length >= 3 &&
+        final ladder = stagedPhotoReceiver.photos[res1.announcement.photoId];
+        final stagedOrderOk =
+            stagedStages.length >= 3 &&
             stagedStages[0] == PhotoStage.announced &&
             stagedStages[1] == PhotoStage.previewReady &&
             stagedStages[2] == PhotoStage.originalVerified;
         summary['stagedOrderOk'] = stagedOrderOk;
-        final stagedIntact = ladder != null &&
+        final stagedIntact =
+            ladder != null &&
             ladder.sha256Verified &&
             ladder.original != null &&
             bytesEqual(ladder.original!, artifacts.original) &&
@@ -619,52 +635,76 @@ void main() {
         summary['photoIntact'] = stagedIntact;
         summary['photoMs'] = summary['stagedPhotoMs'];
         if (!stagedOrderOk || !stagedIntact) {
-          notes.add('staged ladder: stages=$stagedStages '
-              'sha=${ladder?.sha256Verified}');
+          notes.add(
+            'staged ladder: stages=$stagedStages '
+            'sha=${ladder?.sha256Verified}',
+          );
         }
 
         // DEDUP-RESUME — the same photo again: content addressing must
         // answer from the receiver's held bytes, no payload re-transfer.
         final ackedBefore = stagedSender.arqAckedChunks;
         final dedupStart = DateTime.now();
-        final res2 = await stagedSender.deliver(artifacts).timeout(
+        final res2 = await stagedSender
+            .deliver(artifacts)
+            .timeout(
               const Duration(seconds: 120),
               onTimeout: () => throw TimeoutException(
                 'dedup re-send not answered within 120s',
               ),
             );
-        summary['stagedDedupMs'] =
-            DateTime.now().difference(dedupStart).inMilliseconds;
+        summary['stagedDedupMs'] = DateTime.now()
+            .difference(dedupStart)
+            .inMilliseconds;
         final stagedDedupOk = useFountainPhoto
-            ? (res2.deduplicated ||
-                res2.sentSymbols < res2.totalSourceSymbols)
-            : (res2.deduplicated ||
-                stagedSender.arqAckedChunks == ackedBefore);
+            ? (res2.deduplicated || res2.sentSymbols < res2.totalSourceSymbols)
+            : (res2.deduplicated || stagedSender.arqAckedChunks == ackedBefore);
         summary['stagedDedupOk'] = stagedDedupOk;
 
         summary['stillConnectedAtEnd'] =
             initiator.controller.state.phase == CallPhase.connected ||
-                initiator.controller.state.phase == CallPhase.degraded;
+            initiator.controller.state.phase == CallPhase.degraded;
 
         // -------------------------------------------------------------
         // 6. SURVIVAL ASSERTS — delivery + integrity on every tier.
         //    Time bounds are the rig's independent judgment, not ours.
         // -------------------------------------------------------------
-        expect(receivedTexts.length, textCount,
-            reason: 'every chat text must deliver');
-        expect(summary['photoIntact'], true,
-            reason: 'the photo must arrive byte-for-byte intact');
-        expect(summary['voiceIntact'], true,
-            reason: 'the voice-note must arrive byte-for-byte intact');
-        expect(summary['stagedOrderOk'], true,
-            reason: 'the staged ladder must climb announced -> preview -> '
-                'verified original, in order');
-        expect(summary['stagedPhotoIntact'], true,
-            reason: 'the staged original must match the announced full '
-                'sha256 and the preview must match its content address');
-        expect(summary['stagedDedupOk'], true,
-            reason: 're-sending the same photo must be answered from held '
-                'bytes without payload re-transfer');
+        expect(
+          receivedTexts.length,
+          textCount,
+          reason: 'every chat text must deliver',
+        );
+        expect(
+          summary['photoIntact'],
+          true,
+          reason: 'the photo must arrive byte-for-byte intact',
+        );
+        expect(
+          summary['voiceIntact'],
+          true,
+          reason: 'the voice-note must arrive byte-for-byte intact',
+        );
+        expect(
+          summary['stagedOrderOk'],
+          true,
+          reason:
+              'the staged ladder must climb announced -> preview -> '
+              'verified original, in order',
+        );
+        expect(
+          summary['stagedPhotoIntact'],
+          true,
+          reason:
+              'the staged original must match the announced full '
+              'sha256 and the preview must match its content address',
+        );
+        expect(
+          summary['stagedDedupOk'],
+          true,
+          reason:
+              're-sending the same photo must be answered from held '
+              'bytes without payload re-transfer',
+        );
       } finally {
         summary['notes'] = notes;
         print('MSG_SUMMARY ${jsonEncode(summary)}');

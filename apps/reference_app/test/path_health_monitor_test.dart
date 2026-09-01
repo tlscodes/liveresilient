@@ -211,13 +211,11 @@ void main() {
       expect(await channel.probe(), isTrue);
     });
 
-    test(
-        'loss is judged against the path baseline: the first measured '
+    test('loss is judged against the path baseline: the first measured '
         'interval defines normal, a +margin departure is transient, and '
         '>=50% is always a blackout (raised 2026-08-10 — the flat gate '
         'scored the 15%-by-design extreme profile permanently unhealthy '
-        'and its recovery cycle, not the network, killed delivery)',
-        () async {
+        'and its recovery cycle, not the network, killed delivery)', () async {
       var received = 0;
       var lost = 0;
       final channel = WebRtcPathChannel(
@@ -236,10 +234,7 @@ void main() {
       // A clear departure (+>15pt over baseline) is degraded.
       received += 100;
       lost += 400;
-      expect(
-        (await channel.send(const <int>[0])).status,
-        SendStatus.transient,
-      );
+      expect((await channel.send(const <int>[0])).status, SendStatus.transient);
       // Blackout floor: >=50% is degraded even on the FIRST measured
       // interval — a blackout must never seed the baseline.
       var r2 = 0;

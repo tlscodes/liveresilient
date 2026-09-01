@@ -37,8 +37,7 @@ void main() {
       expect(advisor(byteLength: 100, isImage: false), isNull);
     });
 
-    test('a non-finite estimate reaches the router, which routes it as BAD',
-        () {
+    test('a non-finite estimate reaches the router, which routes it as BAD', () {
       // This test used to assert `lossEstimate.isFinite`, and passing it was
       // the bug: the only way to satisfy that here was to substitute 0.0
       // BEFORE the router saw the value, which deleted the router's non-finite
@@ -91,7 +90,8 @@ void main() {
         expect(
           d.actuallyUsedCliffFree,
           isFalse,
-          reason: 'the send path has not switched yet, so nothing may say it '
+          reason:
+              'the send path has not switched yet, so nothing may say it '
               'did',
         );
       }
@@ -108,7 +108,8 @@ void main() {
       expect(
         smallText.isShadowed,
         isFalse,
-        reason: 'the acknowledged path is what actually happens, so this row '
+        reason:
+            'the acknowledged path is what actually happens, so this row '
             'is not a deferred decision',
       );
     });

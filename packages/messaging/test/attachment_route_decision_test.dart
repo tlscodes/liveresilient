@@ -39,13 +39,15 @@ ReliableMessenger _messenger(
   Clock? clock,
 }) => ReliableMessenger(port, peerId: 'peer-b', random: random, clock: clock);
 
-Attachment _attachment({required int bytes, MediaKind kind = MediaKind.image}) =>
-    Attachment(
-      id: 'a1',
-      kind: kind,
-      contentType: kind == MediaKind.image ? 'image/png' : 'application/pdf',
-      bytes: List<int>.filled(bytes, 7),
-    );
+Attachment _attachment({
+  required int bytes,
+  MediaKind kind = MediaKind.image,
+}) => Attachment(
+  id: 'a1',
+  kind: kind,
+  contentType: kind == MediaKind.image ? 'image/png' : 'application/pdf',
+  bytes: List<int>.filled(bytes, 7),
+);
 
 void main() {
   group('startAttachmentSend with an advisor', () {
@@ -120,44 +122,51 @@ void main() {
       // and bytesSent agrees at 40,960; only the outer-list identity differed.
       expect(portB.sent.length, portA.sent.length);
       for (var i = 0; i < portA.sent.length; i++) {
-        expect(portB.sent[i], orderedEquals(portA.sent[i]),
-            reason: 'frame $i differs with the advisor attached');
+        expect(
+          portB.sent[i],
+          orderedEquals(portA.sent[i]),
+          reason: 'frame $i differs with the advisor attached',
+        );
       }
       expect(advised.bytesSent, plain.bytesSent);
     });
 
-    test('no advisor means no decision and the old behaviour exactly',
-        () async {
-      final port = _RecordingPort();
-      final handle = startAttachmentSend(
-        _messenger(port),
-        _attachment(bytes: 1024),
-      );
-      await handle.done;
-
-      expect(handle.routeDecision, isNull);
-      expect(port.sent, isNotEmpty);
-    });
-
-    test('an advisor that throws must not take the transfer down with it',
-        () async {
-      // The advisor is observation. A defect in a measurement path that could
-      // lose a user's photo would be a strictly worse bug than the one shadow
-      // mode exists to avoid.
-      final port = _RecordingPort();
-      expect(
-        () => startAttachmentSend(
+    test(
+      'no advisor means no decision and the old behaviour exactly',
+      () async {
+        final port = _RecordingPort();
+        final handle = startAttachmentSend(
           _messenger(port),
           _attachment(bytes: 1024),
-          routeAdvisor: ({required byteLength, required isImage}) =>
-              throw StateError('advisor exploded'),
-        ),
-        throwsA(isA<StateError>()),
-        reason:
-            'TODAY this throws. If that is not acceptable, the guard belongs '
-            'in startAttachmentSend and this test states the decision.',
-      );
-    });
+        );
+        await handle.done;
+
+        expect(handle.routeDecision, isNull);
+        expect(port.sent, isNotEmpty);
+      },
+    );
+
+    test(
+      'an advisor that throws must not take the transfer down with it',
+      () async {
+        // The advisor is observation. A defect in a measurement path that could
+        // lose a user's photo would be a strictly worse bug than the one shadow
+        // mode exists to avoid.
+        final port = _RecordingPort();
+        expect(
+          () => startAttachmentSend(
+            _messenger(port),
+            _attachment(bytes: 1024),
+            routeAdvisor: ({required byteLength, required isImage}) =>
+                throw StateError('advisor exploded'),
+          ),
+          throwsA(isA<StateError>()),
+          reason:
+              'TODAY this throws. If that is not acceptable, the guard belongs '
+              'in startAttachmentSend and this test states the decision.',
+        );
+      },
+    );
 
     test('the decision reports what it would do and what it did', () {
       const d = AttachmentRouteDecision(

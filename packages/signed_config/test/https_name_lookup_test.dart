@@ -57,10 +57,7 @@ void main() {
     );
 
     test('6c  bounds must be positive', () {
-      expect(
-        () => lookupWith(timeout: Duration.zero),
-        throwsArgumentError,
-      );
+      expect(() => lookupWith(timeout: Duration.zero), throwsArgumentError);
       expect(() => lookupWith(maxResponseBytes: 0), throwsArgumentError);
     });
   });
@@ -80,11 +77,14 @@ void main() {
       },
     );
 
-    test('6c  a numeric host needs no lookup and is returned as given', () async {
-      final lookup = lookupWith();
-      expect(await lookup.lookup('198.51.100.7'), '198.51.100.7');
-      expect(await lookup.lookup('::1'), '::1');
-    });
+    test(
+      '6c  a numeric host needs no lookup and is returned as given',
+      () async {
+        final lookup = lookupWith();
+        expect(await lookup.lookup('198.51.100.7'), '198.51.100.7');
+        expect(await lookup.lookup('::1'), '::1');
+      },
+    );
 
     test('6c  an empty host is null, not a query', () async {
       expect(await lookupWith().lookup(''), isNull);
@@ -129,7 +129,8 @@ void main() {
         expect(
           elapsed,
           lessThan(const Duration(seconds: 5)),
-          reason: 'the aggregate deadline must cut this; a per-phase cap '
+          reason:
+              'the aggregate deadline must cut this; a per-phase cap '
               'would let the trickle run for the full 200 seconds',
         );
       },
@@ -194,18 +195,22 @@ void main() {
       expect(await answerWith(<String, Object?>{'Status': 0}), isNull);
     });
 
-    test('6c  a record that is not an address record is not returned', () async {
-      expect(
-        await answerWith(<String, Object?>{
-          'Answer': [
-            {'type': 5, 'data': 'alias.example'},
-          ],
-        }),
-        isNull,
-        reason: 'an alias is not an address and must not be handed back as '
-            'though it were',
-      );
-    });
+    test(
+      '6c  a record that is not an address record is not returned',
+      () async {
+        expect(
+          await answerWith(<String, Object?>{
+            'Answer': [
+              {'type': 5, 'data': 'alias.example'},
+            ],
+          }),
+          isNull,
+          reason:
+              'an alias is not an address and must not be handed back as '
+              'though it were',
+        );
+      },
+    );
 
     test('6c  a record whose data is not an address is not returned', () async {
       expect(

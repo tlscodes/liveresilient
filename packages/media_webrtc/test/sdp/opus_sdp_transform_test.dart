@@ -4,7 +4,8 @@ import 'package:test/test.dart';
 /// A minimal but realistic offer: two m-lines, a BUNDLE group, rtcp-mux, and an
 /// Opus payload type that is deliberately NOT 111 — a hardcoded 111 would edit
 /// the wrong codec here, which is the trap this suite exists to catch.
-const _sdp = 'v=0\r\n'
+const _sdp =
+    'v=0\r\n'
     'o=- 46117 2 IN IP4 127.0.0.1\r\n'
     's=-\r\n'
     't=0 0\r\n'
@@ -48,7 +49,10 @@ void main() {
     test('dtx is off unless asked for, and settable', () {
       final off = applyOpusPolicy(_sdp, OpusSdpPolicy());
       expect(_fmtpFor(off, '96'), isNot(contains('usedtx')));
-      final on = applyOpusPolicy(_sdp, OpusSdpPolicy(silence: OpusSilenceHandling.discontinuous));
+      final on = applyOpusPolicy(
+        _sdp,
+        OpusSdpPolicy(silence: OpusSilenceHandling.discontinuous),
+      );
       expect(_fmtpFor(on, '96'), contains('usedtx=1'));
     });
 
@@ -76,30 +80,40 @@ void main() {
       }
       // The only permitted growth is the ptime line; here there is none.
       expect(after.length, equals(before.length));
-      expect(after.where((l) => l.startsWith('m=')).length,
-          equals(before.where((l) => l.startsWith('m=')).length));
+      expect(
+        after.where((l) => l.startsWith('m=')).length,
+        equals(before.where((l) => l.startsWith('m=')).length),
+      );
     });
 
     test('adds an fmtp line when the offer has none', () {
-      final noFmtp = _sdp.replaceFirst('a=fmtp:96 minptime=10;stereo=0\r\n', '');
+      final noFmtp = _sdp.replaceFirst(
+        'a=fmtp:96 minptime=10;stereo=0\r\n',
+        '',
+      );
       final out = applyOpusPolicy(noFmtp, OpusSdpPolicy());
       expect(_fmtpFor(out, '96'), contains('useinbandfec=1'));
       // and it lands right after the rtpmap line it belongs to
       final ls = _lines(out);
-      expect(ls[ls.indexOf('a=rtpmap:96 opus/48000/2') + 1],
-          startsWith('a=fmtp:96 '));
+      expect(
+        ls[ls.indexOf('a=rtpmap:96 opus/48000/2') + 1],
+        startsWith('a=fmtp:96 '),
+      );
     });
 
     test('rewrites ptime rather than appending a second one', () {
       final withPtime = _sdp.replaceFirst(
-          'a=rtpmap:8 PCMA/8000\r\n', 'a=ptime:20\r\na=rtpmap:8 PCMA/8000\r\n');
+        'a=rtpmap:8 PCMA/8000\r\n',
+        'a=ptime:20\r\na=rtpmap:8 PCMA/8000\r\n',
+      );
       final out = applyOpusPolicy(withPtime, OpusSdpPolicy(ptimeMs: 60));
       expect(_lines(out).where((l) => l.startsWith('a=ptime:')).length, 1);
       expect(out, contains('a=ptime:60'));
     });
 
     test('leaves an SDP with no Opus alone', () {
-      const noOpus = 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 8\r\n'
+      const noOpus =
+          'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 8\r\n'
           'a=rtpmap:8 PCMA/8000\r\n';
       expect(applyOpusPolicy(noOpus, OpusSdpPolicy()), equals(noOpus));
     });

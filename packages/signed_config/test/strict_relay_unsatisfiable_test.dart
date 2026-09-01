@@ -15,9 +15,8 @@ void main() {
   EndpointManifest manifestWith(List<IceServerEntry> servers) =>
       buildManifest(revision: 1, iceServers: servers);
 
-  IceServerEntry stun(String host) => IceServerEntry(
-    urls: [Uri.parse('stun:$host:3478')],
-  );
+  IceServerEntry stun(String host) =>
+      IceServerEntry(urls: [Uri.parse('stun:$host:3478')]);
 
   IceServerEntry turns(String host) => IceServerEntry(
     urls: [Uri.parse('turns:$host:443')],
@@ -31,7 +30,8 @@ void main() {
       expect(
         () => buildRtcIceConfig(manifest, profile: IceProfile.strictRelay),
         throwsA(isA<StrictRelayUnsatisfiableException>()),
-        reason: 'an empty server list under a relay-only policy cannot gather '
+        reason:
+            'an empty server list under a relay-only policy cannot gather '
             'a single candidate; returning it as a valid config hides that',
       );
     });
@@ -65,23 +65,26 @@ void main() {
       );
     });
 
-    test('3b  the non-strict path is untouched: every server is still offered',
-        () {
-      final manifest = manifestWith([stun('a.example'), turns('r.example')]);
-      final config = buildRtcIceConfig(manifest);
-      expect(config.iceTransportPolicy, 'all');
-      expect(
-        config.iceServers,
-        hasLength(2),
-        reason: 'ordering expresses preference; dropping a server can only '
-            'lose a path that might have worked',
-      );
-      expect(
-        (config.iceServers.first['urls']! as List).single,
-        contains('turns:'),
-        reason: 'turns on 443 ranks first',
-      );
-    });
+    test(
+      '3b  the non-strict path is untouched: every server is still offered',
+      () {
+        final manifest = manifestWith([stun('a.example'), turns('r.example')]);
+        final config = buildRtcIceConfig(manifest);
+        expect(config.iceTransportPolicy, 'all');
+        expect(
+          config.iceServers,
+          hasLength(2),
+          reason:
+              'ordering expresses preference; dropping a server can only '
+              'lose a path that might have worked',
+        );
+        expect(
+          (config.iceServers.first['urls']! as List).single,
+          contains('turns:'),
+          reason: 'turns on 443 ranks first',
+        );
+      },
+    );
 
     test('3b  a STUN-only manifest is fine when the profile is not strict', () {
       final manifest = manifestWith([stun('a.example')]);

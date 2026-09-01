@@ -95,8 +95,7 @@ void main() {
     expect(PhotoAnnouncement.tryDecode('{"t":"photo","v":9}'), isNull);
   });
 
-  test(
-      'CONTRACT: three rungs climb in order under 30% loss on the ARQ lane, '
+  test('CONTRACT: three rungs climb in order under 30% loss on the ARQ lane, '
       'original full-sha verified', () async {
     final (sp, rp) = _pair(300);
     final rx = StagedPhotoReceiver.arq(rp);
@@ -125,44 +124,49 @@ void main() {
     await rx.close();
   });
 
-  test('CONTRACT: re-sending the same photo is answered from held bytes',
-      () async {
-    final (sp, rp) = _pair(300, seed: 7);
-    final rx = StagedPhotoReceiver.arq(rp);
-    final updates = <StagedPhotoUpdate>[];
-    rx.updates.listen(updates.add);
-    final tx = StagedPhotoSender.arq(
-      sp,
-      announce: (text) async => rx.offerText(text),
-      retransmitAfter: const Duration(milliseconds: 60),
-      chunkBytes: 4 * 1024,
-    );
-    final a = _artifacts();
+  test(
+    'CONTRACT: re-sending the same photo is answered from held bytes',
+    () async {
+      final (sp, rp) = _pair(300, seed: 7);
+      final rx = StagedPhotoReceiver.arq(rp);
+      final updates = <StagedPhotoUpdate>[];
+      rx.updates.listen(updates.add);
+      final tx = StagedPhotoSender.arq(
+        sp,
+        announce: (text) async => rx.offerText(text),
+        retransmitAfter: const Duration(milliseconds: 60),
+        chunkBytes: 4 * 1024,
+      );
+      final a = _artifacts();
 
-    final sw1 = Stopwatch()..start();
-    await tx.deliver(a);
-    sw1.stop();
-    await _pump();
-    final updatesAfterFirst = updates.length;
+      final sw1 = Stopwatch()..start();
+      await tx.deliver(a);
+      sw1.stop();
+      await _pump();
+      final updatesAfterFirst = updates.length;
 
-    final sw2 = Stopwatch()..start();
-    await tx.deliver(a);
-    sw2.stop();
-    await _pump();
+      final sw2 = Stopwatch()..start();
+      await tx.deliver(a);
+      sw2.stop();
+      await _pump();
 
-    // The repeat announcement renders instantly from held rungs...
-    final dedupUpdates = updates.sublist(updatesAfterFirst);
-    expect(dedupUpdates, hasLength(1));
-    expect(dedupUpdates.single.stage, PhotoStage.originalVerified);
-    expect(dedupUpdates.single.deduplicated, isTrue);
-    // ...and the lane answers both blobs from its completed-id cache
-    // instead of re-shipping payload — measurably faster than the first
-    // delivery even on the same lossy link.
-    expect(sw2.elapsed, lessThan(sw1.elapsed));
-    expect(sw2.elapsed, lessThan(const Duration(seconds: 2)),
-        reason: 'dedup re-send must be answered without payload transfer');
-    await rx.close();
-  });
+      // The repeat announcement renders instantly from held rungs...
+      final dedupUpdates = updates.sublist(updatesAfterFirst);
+      expect(dedupUpdates, hasLength(1));
+      expect(dedupUpdates.single.stage, PhotoStage.originalVerified);
+      expect(dedupUpdates.single.deduplicated, isTrue);
+      // ...and the lane answers both blobs from its completed-id cache
+      // instead of re-shipping payload — measurably faster than the first
+      // delivery even on the same lossy link.
+      expect(sw2.elapsed, lessThan(sw1.elapsed));
+      expect(
+        sw2.elapsed,
+        lessThan(const Duration(seconds: 2)),
+        reason: 'dedup re-send must be answered without payload transfer',
+      );
+      await rx.close();
+    },
+  );
 
   test('CONTRACT: fountain lane climbs the ladder under 60% loss', () async {
     final (sp, rp) = _pair(600, seed: 11);
@@ -213,8 +217,11 @@ void main() {
     final a = _artifacts(originalBytes: 16 * 1024);
     await tx.deliver(a);
     await _pump();
-    expect(rx.photos, isEmpty,
-        reason: 'no announcement yet — blobs wait in the orphan stash');
+    expect(
+      rx.photos,
+      isEmpty,
+      reason: 'no announcement yet — blobs wait in the orphan stash',
+    );
 
     expect(rx.offerText(heldAnnouncement!), isTrue);
     await _pump();
@@ -229,45 +236,52 @@ void main() {
     await rx.close();
   });
 
-  test('tiny photo (preview == original) climbs both rungs from one blob',
-      () async {
-    final (sp, rp) = _pair(0, seed: 13);
-    final rx = StagedPhotoReceiver.arq(rp);
-    final updates = <StagedPhotoUpdate>[];
-    rx.updates.listen(updates.add);
-    final tx = StagedPhotoSender.arq(
-      sp,
-      announce: (text) async => rx.offerText(text),
-      retransmitAfter: const Duration(milliseconds: 40),
-      chunkBytes: 4 * 1024,
-    );
-    final tiny = _bytes(8 * 1024, 21);
-    final a = StagedPhotoArtifacts(
-      thumbHash: ThumbHash.encodeRgba(32, 32, _gradientRgba(32, 32)),
-      preview: tiny,
-      original: tiny,
-      width: 640,
-      height: 640,
-    );
-    expect(PhotoAnnouncement.fromArtifacts(a).singleBlob, isTrue);
-    await tx.deliver(a);
-    await _pump();
-    expect(updates.map((u) => u.stage).toList(), [
-      PhotoStage.announced,
-      PhotoStage.originalVerified,
-    ]);
-    final st = rx.photos.values.single;
-    expect(st.preview, equals(tiny));
-    expect(st.original, equals(tiny));
-    expect(st.sha256Verified, isTrue);
-    await rx.close();
-  });
+  test(
+    'tiny photo (preview == original) climbs both rungs from one blob',
+    () async {
+      final (sp, rp) = _pair(0, seed: 13);
+      final rx = StagedPhotoReceiver.arq(rp);
+      final updates = <StagedPhotoUpdate>[];
+      rx.updates.listen(updates.add);
+      final tx = StagedPhotoSender.arq(
+        sp,
+        announce: (text) async => rx.offerText(text),
+        retransmitAfter: const Duration(milliseconds: 40),
+        chunkBytes: 4 * 1024,
+      );
+      final tiny = _bytes(8 * 1024, 21);
+      final a = StagedPhotoArtifacts(
+        thumbHash: ThumbHash.encodeRgba(32, 32, _gradientRgba(32, 32)),
+        preview: tiny,
+        original: tiny,
+        width: 640,
+        height: 640,
+      );
+      expect(PhotoAnnouncement.fromArtifacts(a).singleBlob, isTrue);
+      await tx.deliver(a);
+      await _pump();
+      expect(updates.map((u) => u.stage).toList(), [
+        PhotoStage.announced,
+        PhotoStage.originalVerified,
+      ]);
+      final st = rx.photos.values.single;
+      expect(st.preview, equals(tiny));
+      expect(st.original, equals(tiny));
+      expect(st.sha256Verified, isTrue);
+      await rx.close();
+    },
+  );
 
   test('ordinary chat text is not consumed by the photo receiver', () {
     final (_, rp) = _pair(0, seed: 1);
     final rx = StagedPhotoReceiver.arq(rp);
     expect(rx.offerText('just a message'), isFalse);
-    expect(rx.offerText('{"t":"attach","aid":"a","kind":"file","ct":"x",'
-        '"i":0,"n":1,"d":""}'), isFalse);
+    expect(
+      rx.offerText(
+        '{"t":"attach","aid":"a","kind":"file","ct":"x",'
+        '"i":0,"n":1,"d":""}',
+      ),
+      isFalse,
+    );
   });
 }

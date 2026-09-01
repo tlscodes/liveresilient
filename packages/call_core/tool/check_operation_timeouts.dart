@@ -32,8 +32,10 @@ const classANominalRoundTrips = 1;
 final profiles = <String, NetworkConditions>{
   'clean': const NetworkConditions(rtt: Duration(milliseconds: 4), loss: 0),
   'normal': const NetworkConditions(rtt: Duration(milliseconds: 80), loss: 0),
-  'latency':
-      const NetworkConditions(rtt: Duration(milliseconds: 1800), loss: 0),
+  'latency': const NetworkConditions(
+    rtt: Duration(milliseconds: 1800),
+    loss: 0,
+  ),
   'bandwidth': const NetworkConditions(
     rtt: Duration(milliseconds: 4),
     loss: 0,
@@ -44,10 +46,8 @@ final profiles = <String, NetworkConditions>{
     loss: 0,
     bandwidthBps: 16000,
   ),
-  'loss10':
-      const NetworkConditions(rtt: Duration(milliseconds: 4), loss: 0.10),
-  'loss60':
-      const NetworkConditions(rtt: Duration(milliseconds: 4), loss: 0.60),
+  'loss10': const NetworkConditions(rtt: Duration(milliseconds: 4), loss: 0.10),
+  'loss60': const NetworkConditions(rtt: Duration(milliseconds: 4), loss: 0.60),
   'extreme': const NetworkConditions(
     rtt: Duration(milliseconds: 2000),
     loss: 0.15,
@@ -77,10 +77,7 @@ void main() {
     final b = AdaptiveConnectionBudget.fromConditions(c);
     final tA = maxOf(
       legacyOperation,
-      b.operationBudget(
-        roundTrips: sendRoundTrips,
-        detectionFloor: liveness,
-      ),
+      b.operationBudget(roundTrips: sendRoundTrips, detectionFloor: liveness),
     );
     final tB = maxOf(
       legacyConnection,

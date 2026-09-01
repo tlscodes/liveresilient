@@ -170,8 +170,10 @@ String applyOpusPolicy(String sdp, OpusSdpPolicy policy) {
   // The Opus payload type, from the rtpmap line inside this section only.
   String? opusPt;
   for (var i = audioStart; i < audioEnd; i++) {
-    final m = RegExp(r'^a=rtpmap:(\d+)\s+opus/48000(/2)?\s*$', caseSensitive: false)
-        .firstMatch(lines[i].trim());
+    final m = RegExp(
+      r'^a=rtpmap:(\d+)\s+opus/48000(/2)?\s*$',
+      caseSensitive: false,
+    ).firstMatch(lines[i].trim());
     if (m != null) {
       opusPt = m.group(1);
       break;
@@ -205,7 +207,9 @@ String applyOpusPolicy(String sdp, OpusSdpPolicy policy) {
 
     if (inAudio && line.startsWith('a=fmtp:$opusPt ')) {
       fmtpSeen = true;
-      out.add('a=fmtp:$opusPt ${_mergeParams(line.substring('a=fmtp:$opusPt '.length), wanted)}');
+      out.add(
+        'a=fmtp:$opusPt ${_mergeParams(line.substring('a=fmtp:$opusPt '.length), wanted)}',
+      );
       continue;
     }
 
@@ -233,8 +237,7 @@ String applyOpusPolicy(String sdp, OpusSdpPolicy policy) {
     if (!fmtpSeen && wanted.isNotEmpty)
       'a=fmtp:$opusPt ${_mergeParams('', wanted)}',
     if (!ptimeSeen && policy.ptimeMs != null) 'a=ptime:${policy.ptimeMs}',
-    if (!maxPtimeSeen && policy.ptimeMs != null)
-      'a=maxptime:${policy.ptimeMs}',
+    if (!maxPtimeSeen && policy.ptimeMs != null) 'a=maxptime:${policy.ptimeMs}',
   ];
   if (inserts.isNotEmpty && rtpmapIndex >= 0) {
     out.insertAll(rtpmapIndex + 1, inserts);

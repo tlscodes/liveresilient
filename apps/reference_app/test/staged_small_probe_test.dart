@@ -40,9 +40,9 @@ final class _LossySend implements DataChannelPort {
 
   @override
   Stream<List<int>> get inbound => _inner.inbound.map((f) {
-        _count('in', f, false);
-        return f;
-      });
+    _count('in', f, false);
+    return f;
+  });
 
   @override
   Future<void> send(List<int> frame) {
@@ -76,9 +76,15 @@ void main() {
 
     final key = DatagramLanePort.roomKeyFromCallId('probe-staged-small');
     final txRaw = await DatagramLanePort.bind(
-        relayHost: '127.0.0.1', relayPort: relayPort, roomKey: key);
+      relayHost: '127.0.0.1',
+      relayPort: relayPort,
+      roomKey: key,
+    );
     final rxRaw = await DatagramLanePort.bind(
-        relayHost: '127.0.0.1', relayPort: relayPort, roomKey: key);
+      relayHost: '127.0.0.1',
+      relayPort: relayPort,
+      roomKey: key,
+    );
     addTearDown(txRaw.close);
     addTearDown(rxRaw.close);
     final tx = _LossySend(txRaw, 600, 0x1234);
@@ -110,21 +116,27 @@ void main() {
       print('RX_COUNTS ${rx.typeCounts}');
     }
     final previewMs = sw.elapsedMilliseconds;
-    final r2 = await sender
-        .send(original)
-        .timeout(const Duration(minutes: 4));
+    final r2 = await sender.send(original).timeout(const Duration(minutes: 4));
     final originalMs = sw.elapsedMilliseconds - previewMs;
 
-    print('SMALL_PROBE previewMs=$previewMs originalMs=$originalMs '
-        'previewSent=${r1.sentSymbols}/${r1.totalSourceSymbols} '
-        'originalSent=${r2.sentSymbols}/${r2.totalSourceSymbols} '
-        'txSent=${txRaw.sentDatagrams} rxReceived=${rxRaw.receivedDatagrams}');
+    print(
+      'SMALL_PROBE previewMs=$previewMs originalMs=$originalMs '
+      'previewSent=${r1.sentSymbols}/${r1.totalSourceSymbols} '
+      'originalSent=${r2.sentSymbols}/${r2.totalSourceSymbols} '
+      'txSent=${txRaw.sentDatagrams} rxReceived=${rxRaw.receivedDatagrams}',
+    );
     expect(blobs.length, 2);
     // The stall signature from the rig was ~0.1 symbols/s. On an unshaped
     // host both transfers must finish in seconds, not minutes.
-    expect(previewMs, lessThan(60000),
-        reason: 'a 15KB rung must not crawl on an unshaped host');
-    expect(originalMs, lessThan(120000),
-        reason: 'a 96KB rung must not crawl on an unshaped host');
+    expect(
+      previewMs,
+      lessThan(60000),
+      reason: 'a 15KB rung must not crawl on an unshaped host',
+    );
+    expect(
+      originalMs,
+      lessThan(120000),
+      reason: 'a 96KB rung must not crawl on an unshaped host',
+    );
   });
 }

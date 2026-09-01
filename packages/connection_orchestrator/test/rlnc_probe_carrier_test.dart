@@ -156,25 +156,26 @@ void main() {
       expect(fabric.sends, 6);
     });
 
-    test('a symbol budget bounds the window even with a stopped clock',
-        () async {
-      var sends = 0;
-      final carrier = RlncProbeCarrier(
-        sendOnLane: (_, _) async {
-          sends++;
-          return const SendResult(SendStatus.ok, rttMs: 10);
-        },
-        readInnovativeRank: () => 0,
-        nowMs: () => 0, // time never advances: the hang case
-        maxSymbolsPerWindow: 8,
-      );
+    test(
+      'a symbol budget bounds the window even with a stopped clock',
+      () async {
+        var sends = 0;
+        final carrier = RlncProbeCarrier(
+          sendOnLane: (_, _) async {
+            sends++;
+            return const SendResult(SendStatus.ok, rttMs: 10);
+          },
+          readInnovativeRank: () => 0,
+          nowMs: () => 0, // time never advances: the hang case
+          maxSymbolsPerWindow: 8,
+        );
 
-      await carrier.windowFor(_encoder())(['a'], const Duration(seconds: 30));
-      expect(sends, 8);
-    });
+        await carrier.windowFor(_encoder())(['a'], const Duration(seconds: 30));
+        expect(sends, 8);
+      },
+    );
 
-    test('stops at the ESI ceiling instead of throwing mid-transfer',
-        () async {
+    test('stops at the ESI ceiling instead of throwing mid-transfer', () async {
       var sends = 0;
       var clock = 0;
       final carrier = RlncProbeCarrier(
@@ -248,8 +249,7 @@ void main() {
       expect(verdict.gainFactor, lessThanOrEqualTo(1.2)); // gate C14
     });
 
-    test('no back-channel means no rank, which means no aggregation',
-        () async {
+    test('no back-channel means no rank, which means no aggregation', () async {
       var clock = 0;
       final carrier = RlncProbeCarrier(
         sendOnLane: (_, _) async {
@@ -274,42 +274,45 @@ void main() {
       final carrier = _carrierOver(fabric, owd: () => fabric.owd(laneCount));
       final inner = carrier.windowFor(_encoder());
 
-      final verdict = await LaneAggregationProbe(
-        carryWindow: (lanes, w) {
-          laneCount = lanes.length;
-          return inner(lanes, w);
-        },
-        window: _window,
-      ).run(
-        networkFingerprint: 'bloat',
-        candidates: const [
-          LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
-          LaneCandidate(laneId: 'udp1', interfaceId: 'cell', score: 0.8),
-        ],
-      );
+      final verdict =
+          await LaneAggregationProbe(
+            carryWindow: (lanes, w) {
+              laneCount = lanes.length;
+              return inner(lanes, w);
+            },
+            window: _window,
+          ).run(
+            networkFingerprint: 'bloat',
+            candidates: const [
+              LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
+              LaneCandidate(laneId: 'udp1', interfaceId: 'cell', score: 0.8),
+            ],
+          );
 
       expect(verdict.abortedByDelay, isTrue);
       expect(verdict.admitted, ['udp0']);
     });
 
-    test('probeLanesForTransfer rebinds and returns the same decision',
-        () async {
-      final fabric = _Fabric(perFlow: true);
-      final verdict = await probeLanesForTransfer(
-        probe: LaneAggregationProbe(
-          carryWindow: (_, _) async => throw StateError('placeholder port'),
-          window: _window,
-        ),
-        carrier: _carrierOver(fabric),
-        tier0Encoder: _encoder(),
-        networkFingerprint: 'rebound',
-        candidates: _candidates,
-      );
+    test(
+      'probeLanesForTransfer rebinds and returns the same decision',
+      () async {
+        final fabric = _Fabric(perFlow: true);
+        final verdict = await probeLanesForTransfer(
+          probe: LaneAggregationProbe(
+            carryWindow: (_, _) async => throw StateError('placeholder port'),
+            window: _window,
+          ),
+          carrier: _carrierOver(fabric),
+          tier0Encoder: _encoder(),
+          networkFingerprint: 'rebound',
+          candidates: _candidates,
+        );
 
-      expect(verdict.admitted.length, 3);
-      expect(verdict.classification, BottleneckClass.perFlow);
-      expect(verdict.syntheticProbeBytes, 0);
-    });
+        expect(verdict.admitted.length, 3);
+        expect(verdict.classification, BottleneckClass.perFlow);
+        expect(verdict.syntheticProbeBytes, 0);
+      },
+    );
 
     test('the verdict becomes a router setting', () async {
       const base = RouterConfig(maxFailover: 2, fanout: 1);
@@ -341,22 +344,24 @@ void main() {
       expect(saving.fanout, 1);
     });
 
-    test('the policy turns a per-device verdict into single-lane transport',
-        () async {
-      final fabric = _Fabric(perFlow: false);
-      final verdict = await LaneAggregationProbe(
-        carryWindow: _carrierOver(fabric).windowFor(_encoder()),
-        window: _window,
-      ).run(networkFingerprint: 'policy', candidates: _candidates);
+    test(
+      'the policy turns a per-device verdict into single-lane transport',
+      () async {
+        final fabric = _Fabric(perFlow: false);
+        final verdict = await LaneAggregationProbe(
+          carryWindow: _carrierOver(fabric).windowFor(_encoder()),
+          window: _window,
+        ).run(networkFingerprint: 'policy', candidates: _candidates);
 
-      final policy = AdaptiveAggregationPolicy(
-        verdict: verdict,
-        distinctInterfaces: 2,
-      );
-      expect(policy.lanesToUse, 1);
-      expect(policy.shouldOffloadToSecondInterface, isTrue);
-      expect(policy.deferEnhancementLayers, isTrue);
-      expect(policy.blockSizeFor(laneMtuBytes: 1200), 55);
-    });
+        final policy = AdaptiveAggregationPolicy(
+          verdict: verdict,
+          distinctInterfaces: 2,
+        );
+        expect(policy.lanesToUse, 1);
+        expect(policy.shouldOffloadToSecondInterface, isTrue);
+        expect(policy.deferEnhancementLayers, isTrue);
+        expect(policy.blockSizeFor(laneMtuBytes: 1200), 55);
+      },
+    );
   });
 }

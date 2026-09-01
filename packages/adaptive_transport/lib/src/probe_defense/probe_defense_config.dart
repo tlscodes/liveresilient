@@ -261,11 +261,15 @@ class ProbeDefenseConfig {
     final out = <int>[];
     for (final raw in value) {
       if (raw is! num) {
-        throw ProbeDefenseConfigError('lengthBuckets entry "$raw" is not a number');
+        throw ProbeDefenseConfigError(
+          'lengthBuckets entry "$raw" is not a number',
+        );
       }
       final length = raw.toInt();
       if (length <= 0) {
-        throw ProbeDefenseConfigError('lengthBuckets entry $length is not positive');
+        throw ProbeDefenseConfigError(
+          'lengthBuckets entry $length is not positive',
+        );
       }
       if (out.isNotEmpty && length <= out.last) {
         throw ProbeDefenseConfigError(

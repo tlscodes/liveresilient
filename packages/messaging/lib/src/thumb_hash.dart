@@ -133,10 +133,12 @@ class ThumbHash {
     final qCoef = unpack(lAcN + cAcN, cAcN, pqScale)..[0] = qDc;
 
     final aspect = lx / ly;
-    final w =
-        aspect >= 1 ? longSidePx : math.max(1, (longSidePx * aspect).round());
-    final h =
-        aspect >= 1 ? math.max(1, (longSidePx / aspect).round()) : longSidePx;
+    final w = aspect >= 1
+        ? longSidePx
+        : math.max(1, (longSidePx * aspect).round());
+    final h = aspect >= 1
+        ? math.max(1, (longSidePx / aspect).round())
+        : longSidePx;
 
     final rgba = Uint8List(w * h * 4);
     for (var y = 0; y < h; y++) {
@@ -169,9 +171,7 @@ class ThumbHash {
         for (var y = 0; y < h; y++) {
           final fy = math.cos(math.pi * cy * (y + 0.5) / h);
           for (var x = 0; x < w; x++) {
-            sum += ch[y * w + x] *
-                fy *
-                math.cos(math.pi * cx * (x + 0.5) / w);
+            sum += ch[y * w + x] * fy * math.cos(math.pi * cx * (x + 0.5) / w);
           }
         }
         out[cy * nx + cx] = 2.0 * sum / (w * h);
@@ -181,13 +181,21 @@ class ThumbHash {
   }
 
   static double _idctAt(
-      List<double> coef, int nx, int ny, int x, int y, int w, int h) {
+    List<double> coef,
+    int nx,
+    int ny,
+    int x,
+    int y,
+    int w,
+    int h,
+  ) {
     var v = 0.0;
     for (var cy = 0; cy < ny; cy++) {
       final fy = math.cos(math.pi * cy * (y + 0.5) / h);
       for (var cx = 0; cx < nx; cx++) {
         final nz = (cx > 0 ? 1 : 0) + (cy > 0 ? 1 : 0);
-        v += coef[cy * nx + cx] *
+        v +=
+            coef[cy * nx + cx] *
             fy *
             math.cos(math.pi * cx * (x + 0.5) / w) *
             math.pow(2.0, nz - 1);

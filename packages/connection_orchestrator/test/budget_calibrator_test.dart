@@ -125,10 +125,7 @@ void main() {
           rttMs: cellA.rtt,
         );
       }
-      expect(
-        cal.correction(lossFraction: cellA.loss, rttMs: cellA.rtt),
-        128.0,
-      );
+      expect(cal.correction(lossFraction: cellA.loss, rttMs: cellA.rtt), 128.0);
     });
   });
 
@@ -163,17 +160,10 @@ void main() {
         1.0,
       );
       expect(
-        cal.budgetQuantile(
-          lossFraction: cellA.loss,
-          rttMs: cellA.rtt,
-          p: 0.81,
-        ),
+        cal.budgetQuantile(lossFraction: cellA.loss, rttMs: cellA.rtt, p: 0.81),
         4.0,
       );
-      expect(
-        cal.correction(lossFraction: cellA.loss, rttMs: cellA.rtt),
-        1.0,
-      );
+      expect(cal.correction(lossFraction: cellA.loss, rttMs: cellA.rtt), 1.0);
     });
   });
 
@@ -292,8 +282,7 @@ void main() {
       });
       // Only the k=0 mass-3 global entry survived.
       expect(restored.correction(), 1.0);
-      final all =
-          (restored.toJson()['all']! as Map<String, Object?>);
+      final all = (restored.toJson()['all']! as Map<String, Object?>);
       expect(all.length, 1);
       expect(all['0'], 3.0);
     });

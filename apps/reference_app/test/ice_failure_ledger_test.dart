@@ -26,7 +26,8 @@ void main() {
       expect(
         ledger.failureCountFor('call-a'),
         greaterThanOrEqualTo(2),
-        reason: 'two failures on the same call is the threshold the profile '
+        reason:
+            'two failures on the same call is the threshold the profile '
             'rule tests; below this it could never be reached',
       );
     });

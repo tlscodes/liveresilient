@@ -77,8 +77,7 @@ class ShimProbe {
     required Uint8List configList,
     required String innerName,
     Duration timeout = const Duration(seconds: 10),
-  }) =>
-      EchProbeOutcome.noBackendInThisProcess;
+  }) => EchProbeOutcome.noBackendInThisProcess;
 }
 
 /// Stub of the FFI bindings. Every way of obtaining one throws.

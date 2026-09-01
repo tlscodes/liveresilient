@@ -216,10 +216,7 @@ class ManifestCache {
         case LenientAccepted(:final manifest):
           _current = manifest;
         case LenientAcceptedStale(:final manifest, :final fault):
-          final effectiveNow = _laterOf(
-            _clock().toUtc(),
-            _effectiveFloorUtc(),
-          );
+          final effectiveNow = _laterOf(_clock().toUtc(), _effectiveFloorUtc());
           if (_shouldAdoptStale(manifest, fault, effectiveNow)) {
             _current = manifest;
           }

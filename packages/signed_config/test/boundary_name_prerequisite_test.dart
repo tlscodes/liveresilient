@@ -52,50 +52,56 @@ void main() {
   });
 
   group('gate 6f — are all names known at the boundary?', () {
-    test('6f  a redirect introduces a hostname the caller never supplied',
-        () async {
-      final origin = await TestOrigin.start(serverContext);
-      final destination = await TestOrigin.start(serverContext);
-      addTearDown(() async {
-        await origin.stop();
-        await destination.stop();
-      });
-      destination.body = <int>[123, 125]; // `{}`; the body is not the subject
+    test(
+      '6f  a redirect introduces a hostname the caller never supplied',
+      () async {
+        final origin = await TestOrigin.start(serverContext);
+        final destination = await TestOrigin.start(serverContext);
+        addTearDown(() async {
+          await origin.stop();
+          await destination.stop();
+        });
+        destination.body = <int>[123, 125]; // `{}`; the body is not the subject
 
-      // The caller asks for ONE name. The certificate covers both `localhost`
-      // and `127.0.0.1`, so the second hop verifies normally — the only thing
-      // that differs between the two hops is the name itself.
-      final asked = <String>[];
-      final fetcher = IoManifestFetcher(
-        securityContext: clientContext,
-        resolveAddress: (host) async {
-          asked.add(host);
-          return null; // record only; let the platform resolve as usual
-        },
-      );
-      origin.redirectTo = destination.manifestUri.toString();
+        // The caller asks for ONE name. The certificate covers both `localhost`
+        // and `127.0.0.1`, so the second hop verifies normally — the only thing
+        // that differs between the two hops is the name itself.
+        final asked = <String>[];
+        final fetcher = IoManifestFetcher(
+          securityContext: clientContext,
+          resolveAddress: (host) async {
+            asked.add(host);
+            return null; // record only; let the platform resolve as usual
+          },
+        );
+        origin.redirectTo = destination.manifestUri.toString();
 
-      await fetcher.fetch(origin.manifestUriByName);
+        await fetcher.fetch(origin.manifestUriByName);
 
-      expect(
-        asked.first,
-        'localhost',
-        reason: 'the boundary name is the one the caller supplied',
-      );
-      final unforeseen = asked.skip(1).where((h) => h != asked.first).toList();
-      expect(
-        unforeseen,
-        isNotEmpty,
-        reason: 'this is the whole gate: a name arrived that the caller could '
-            'not have resolved in advance, because the server chose it. '
-            'Names asked, in order: $asked',
-      );
-      expect(
-        unforeseen,
-        contains('127.0.0.1'),
-        reason: 'and it is the name the redirect named, not an artefact',
-      );
-    });
+        expect(
+          asked.first,
+          'localhost',
+          reason: 'the boundary name is the one the caller supplied',
+        );
+        final unforeseen = asked
+            .skip(1)
+            .where((h) => h != asked.first)
+            .toList();
+        expect(
+          unforeseen,
+          isNotEmpty,
+          reason:
+              'this is the whole gate: a name arrived that the caller could '
+              'not have resolved in advance, because the server chose it. '
+              'Names asked, in order: $asked',
+        );
+        expect(
+          unforeseen,
+          contains('127.0.0.1'),
+          reason: 'and it is the name the redirect named, not an artefact',
+        );
+      },
+    );
 
     test('6f  the seam is consulted per attempt, not once per call', () async {
       // The consequence for the design: since the second name only exists
@@ -128,61 +134,64 @@ void main() {
       );
     });
 
-    test('6f  the count of names is bounded but not known in advance',
-        () async {
-      // Bounded matters as much as unknown: an unbounded chain would be a
-      // different defect (a redirect loop), and the fetcher refuses one. So
-      // the honest statement is "at most maxRedirects + 1 names, and which
-      // ones is up to the server" — which is still incompatible with
-      // resolving the set at the boundary.
-      final hop1 = await TestOrigin.start(serverContext);
-      final hop2 = await TestOrigin.start(serverContext);
-      final hop3 = await TestOrigin.start(serverContext);
-      addTearDown(() async {
-        await hop1.stop();
-        await hop2.stop();
-        await hop3.stop();
-      });
-      hop3.body = <int>[123, 125];
+    test(
+      '6f  the count of names is bounded but not known in advance',
+      () async {
+        // Bounded matters as much as unknown: an unbounded chain would be a
+        // different defect (a redirect loop), and the fetcher refuses one. So
+        // the honest statement is "at most maxRedirects + 1 names, and which
+        // ones is up to the server" — which is still incompatible with
+        // resolving the set at the boundary.
+        final hop1 = await TestOrigin.start(serverContext);
+        final hop2 = await TestOrigin.start(serverContext);
+        final hop3 = await TestOrigin.start(serverContext);
+        addTearDown(() async {
+          await hop1.stop();
+          await hop2.stop();
+          await hop3.stop();
+        });
+        hop3.body = <int>[123, 125];
 
-      final asked = <String>[];
-      final fetcher = IoManifestFetcher(
-        securityContext: clientContext,
-        maxRedirects: 5,
-        resolveAddress: (host) async {
-          asked.add(host);
-          return null;
-        },
-      );
-      // Alternate the NAME each hop, so each hop's name is chosen by the
-      // previous server rather than by the caller.
-      hop1.redirectTo = hop2.manifestUri.toString();
-      hop2.redirectTo = hop3.manifestUriByName.toString();
+        final asked = <String>[];
+        final fetcher = IoManifestFetcher(
+          securityContext: clientContext,
+          maxRedirects: 5,
+          resolveAddress: (host) async {
+            asked.add(host);
+            return null;
+          },
+        );
+        // Alternate the NAME each hop, so each hop's name is chosen by the
+        // previous server rather than by the caller.
+        hop1.redirectTo = hop2.manifestUri.toString();
+        hop2.redirectTo = hop3.manifestUriByName.toString();
 
-      await fetcher.fetch(hop1.manifestUriByName);
+        await fetcher.fetch(hop1.manifestUriByName);
 
-      expect(asked.length, 3, reason: 'three connections: $asked');
-      expect(
-        asked,
-        ['localhost', '127.0.0.1', 'localhost'],
-        reason: 'the sequence of names is authored by the servers, one hop at '
-            'a time',
-      );
+        expect(asked.length, 3, reason: 'three connections: $asked');
+        expect(
+          asked,
+          ['localhost', '127.0.0.1', 'localhost'],
+          reason:
+              'the sequence of names is authored by the servers, one hop at '
+              'a time',
+        );
 
-      // And the bound is real: a chain longer than maxRedirects is refused
-      // rather than followed forever.
-      final loop = await TestOrigin.start(serverContext);
-      addTearDown(() => loop.stop());
-      loop.redirectTo = loop.manifestUri.toString();
-      final bounded = IoManifestFetcher(
-        securityContext: clientContext,
-        maxRedirects: 2,
-        resolveAddress: (host) async => null,
-      );
-      await expectLater(
-        bounded.fetch(loop.manifestUriByName),
-        throwsA(isA<ManifestFetchException>()),
-      );
-    });
+        // And the bound is real: a chain longer than maxRedirects is refused
+        // rather than followed forever.
+        final loop = await TestOrigin.start(serverContext);
+        addTearDown(() => loop.stop());
+        loop.redirectTo = loop.manifestUri.toString();
+        final bounded = IoManifestFetcher(
+          securityContext: clientContext,
+          maxRedirects: 2,
+          resolveAddress: (host) async => null,
+        );
+        await expectLater(
+          bounded.fetch(loop.manifestUriByName),
+          throwsA(isA<ManifestFetchException>()),
+        );
+      },
+    );
   });
 }

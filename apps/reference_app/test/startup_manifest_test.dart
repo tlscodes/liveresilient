@@ -75,13 +75,19 @@ void main() {
       expect(s.source, isNot(ManifestSource.signedConfig));
     });
 
-    test('nothing configured falls to public STUN, and says what that buys',
-        () async {
-      final s = await loadStartupManifest(environment: const {});
-      expect(s.source, ManifestSource.publicStunFallback);
-      expect(s.describe(), contains('relaying does not'));
-      expect(s.failure, isNull, reason: 'nothing was tried, so nothing failed');
-    });
+    test(
+      'nothing configured falls to public STUN, and says what that buys',
+      () async {
+        final s = await loadStartupManifest(environment: const {});
+        expect(s.source, ManifestSource.publicStunFallback);
+        expect(s.describe(), contains('relaying does not'));
+        expect(
+          s.failure,
+          isNull,
+          reason: 'nothing was tried, so nothing failed',
+        );
+      },
+    );
 
     test('with the fallback disabled the honest answer is none', () async {
       final s = await loadStartupManifest(
@@ -106,32 +112,36 @@ void main() {
       expect(s.describe(), contains('but note'));
     });
 
-    test('a malformed file is named too, and is not silently ignored',
-        () async {
-      final dir = await Directory.systemTemp.createTemp('startup_manifest');
-      addTearDown(() => dir.delete(recursive: true));
-      final file = File('${dir.path}/broken.json');
-      await file.writeAsString('{ this is not json');
+    test(
+      'a malformed file is named too, and is not silently ignored',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('startup_manifest');
+        addTearDown(() => dir.delete(recursive: true));
+        final file = File('${dir.path}/broken.json');
+        await file.writeAsString('{ this is not json');
 
-      final s = await loadStartupManifest(
-        environment: {'ENDPOINT_MANIFEST_FILE': file.path},
-      );
-      expect(s.failure, isNotNull);
-      expect(s.describe(), contains('but note'));
-    });
+        final s = await loadStartupManifest(
+          environment: {'ENDPOINT_MANIFEST_FILE': file.path},
+        );
+        expect(s.failure, isNotNull);
+        expect(s.describe(), contains('but note'));
+      },
+    );
 
-    test('valid JSON that is not a manifest is distinguished from unreadable',
-        () async {
-      final dir = await Directory.systemTemp.createTemp('startup_manifest');
-      addTearDown(() => dir.delete(recursive: true));
-      final file = File('${dir.path}/array.json');
-      await file.writeAsString(jsonEncode([1, 2, 3]));
+    test(
+      'valid JSON that is not a manifest is distinguished from unreadable',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('startup_manifest');
+        addTearDown(() => dir.delete(recursive: true));
+        final file = File('${dir.path}/array.json');
+        await file.writeAsString(jsonEncode([1, 2, 3]));
 
-      final s = await loadStartupManifest(
-        environment: {'ENDPOINT_MANIFEST_FILE': file.path},
-      );
-      expect(s.failure, contains('not a manifest object'));
-    });
+        final s = await loadStartupManifest(
+          environment: {'ENDPOINT_MANIFEST_FILE': file.path},
+        );
+        expect(s.failure, contains('not a manifest object'));
+      },
+    );
 
     test('a good dev file is used, and reports no failure', () async {
       final dir = await Directory.systemTemp.createTemp('startup_manifest');

@@ -52,12 +52,13 @@ final DynamicLibrary _lib = _openLibCodec2();
 final _create = _lib.lookupFunction<_CreateC, _CreateD>('codec2_create');
 final _encode = _lib.lookupFunction<_EncodeC, _EncodeD>('codec2_encode');
 final _decode = _lib.lookupFunction<_DecodeC, _DecodeD>('codec2_decode');
-final _samplesPerFrame =
-    _lib.lookupFunction<_IntOfPtrC, _IntOfPtrD>('codec2_samples_per_frame');
-final _bitsPerFrame =
-    _lib.lookupFunction<_IntOfPtrC, _IntOfPtrD>('codec2_bits_per_frame');
-final _destroyPtr =
-    _lib.lookup<NativeFunction<_VoidPtrC>>('codec2_destroy');
+final _samplesPerFrame = _lib.lookupFunction<_IntOfPtrC, _IntOfPtrD>(
+  'codec2_samples_per_frame',
+);
+final _bitsPerFrame = _lib.lookupFunction<_IntOfPtrC, _IntOfPtrD>(
+  'codec2_bits_per_frame',
+);
+final _destroyPtr = _lib.lookup<NativeFunction<_VoidPtrC>>('codec2_destroy');
 final _finalizer = NativeFinalizer(_destroyPtr.cast());
 // uplift 2026-08-20: the state finalizer only ran codec2_destroy — the
 // per-instance malloc'd scratch buffers LEAKED for every abandoned
@@ -99,7 +100,9 @@ class Codec2 implements Finalizable {
   Uint8List encodeFrame(Int16List speech) {
     _checkLive();
     if (speech.length != samplesPerFrame) {
-      throw ArgumentError('need $samplesPerFrame samples, got ${speech.length}');
+      throw ArgumentError(
+        'need $samplesPerFrame samples, got ${speech.length}',
+      );
     }
     _speech.asTypedList(samplesPerFrame).setAll(0, speech);
     _encode(_state, _bits, _speech);

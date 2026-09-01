@@ -24,7 +24,6 @@
 /// them would be the weakest link in the whole design.
 library;
 
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -143,10 +142,7 @@ class _ImportManifestSheetState extends State<ImportManifestSheet> {
         );
       }
       final bytes = await file.readAsBytes();
-      return widget.import.importBytes(
-        bytes,
-        source: OobManifestSource.file,
-      );
+      return widget.import.importBytes(bytes, source: OobManifestSource.file);
     });
   }
 
@@ -187,13 +183,11 @@ class _ImportManifestSheetState extends State<ImportManifestSheet> {
           ManifestRejection.rollback =>
             'Older than the settings this device already has, so it was '
                 'refused. That is rollback protection working.',
-          ManifestRejection.expired ||
-          ManifestRejection.notYetValid =>
+          ManifestRejection.expired || ManifestRejection.notYetValid =>
             'Outside its validity window — ask for a current one.',
           ManifestRejection.unsupportedAlgorithm =>
             'Made for a newer version of this app. Update, then retry.',
-          ManifestRejection.malformed =>
-            'Readable, but not a manifest.',
+          ManifestRejection.malformed => 'Readable, but not a manifest.',
         },
       );
     }
@@ -218,7 +212,10 @@ class _ImportManifestSheetState extends State<ImportManifestSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Import connection settings', style: theme.textTheme.titleLarge),
+            Text(
+              'Import connection settings',
+              style: theme.textTheme.titleLarge,
+            ),
             const SizedBox(height: Spacing.s8),
             Text(
               'For when this device cannot reach the network that would '
@@ -270,7 +267,10 @@ class _ImportManifestSheetState extends State<ImportManifestSheet> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.bug_report_outlined, color: theme.colorScheme.error),
+                  Icon(
+                    Icons.bug_report_outlined,
+                    color: theme.colorScheme.error,
+                  ),
                   const SizedBox(width: Spacing.s8),
                   Expanded(
                     child: Text(

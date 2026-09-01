@@ -80,19 +80,20 @@ void main() {
         final connectBudget = stressConnectWindow > appConnectBudget
             ? stressConnectWindow
             : appConnectBudget;
-        final connected = await Future.wait([
-          initiator.controller
-              .start()
-              .then((_) => initiator.waitForConnected(timeout: connectBudget)),
-          receiver.controller
-              .start()
-              .then((_) => receiver.waitForConnected(timeout: connectBudget)),
-        ]).timeout(
-          connectBudget + const Duration(seconds: 5),
-          onTimeout: () => throw TimeoutException(
-            'connect budget (${connectBudget.inSeconds}s + 5s) exhausted',
-          ),
-        );
+        final connected =
+            await Future.wait([
+              initiator.controller.start().then(
+                (_) => initiator.waitForConnected(timeout: connectBudget),
+              ),
+              receiver.controller.start().then(
+                (_) => receiver.waitForConnected(timeout: connectBudget),
+              ),
+            ]).timeout(
+              connectBudget + const Duration(seconds: 5),
+              onTimeout: () => throw TimeoutException(
+                'connect budget (${connectBudget.inSeconds}s + 5s) exhausted',
+              ),
+            );
 
         expect(connected[0].phase, CallPhase.connected);
         expect(connected[1].phase, CallPhase.connected);

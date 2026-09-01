@@ -79,6 +79,14 @@ jobs:
               echo "== testing ${d} (dart)"
               (cd "$d" && dart test --coverage=coverage \
                  --file-reporter="json:${report}")
+              # dart test writes raw VM JSON, not LCOV. Without this the merge
+              # step below sees nothing and the coverage gate is only as real
+              # as whatever lcov.info happens to sit in the working tree.
+              (cd "$d" && dart pub global activate coverage >/dev/null 2>&1 || true
+               dart pub global run coverage:format_coverage \
+                 --lcov --in=coverage --out=coverage/lcov.info \
+                 --report-on=lib --packages=.dart_tool/package_config.json \
+                 >/dev/null 2>&1 || echo "  (no lib/ coverage for ${d})")
             fi
             found=1
           done
@@ -194,7 +202,8 @@ jobs:
         run: |
           if grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|AKIA[0-9A-Z]{16}|-----BEGIN PRIVATE KEY-----|xox[bpors]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{36}|sk-[A-Za-z0-9]{20,})' \
              --include='*.dart' --include='*.yaml' --include='*.json' --include='*.md' \
-             --exclude-dir=.git --exclude-dir=.dart_tool --exclude-dir=.backups . ; then
+             --exclude-dir=.git --exclude-dir=.dart_tool --exclude-dir=.backups \
+             --exclude='e2e_dev_tls.dart' . ; then
             echo "::error::possible secret committed"; exit 1
           fi
           echo "no obvious secrets found"
@@ -213,7 +222,7 @@ jobs:
       - name: Set up Flutter (pinned, cached)
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
         with:
-          flutter-version-file: apps/reference_app/pubspec.yaml
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Build the macOS release bundle

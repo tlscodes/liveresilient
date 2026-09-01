@@ -111,7 +111,9 @@ bool recordSupportsTheGate(String record, {required String publicLabel}) {
 
   // The existential half: one witness, and located.
   if (_int(fields, 'witness_packet_index') == null) return false;
-  if (!(_one(fields, 'witness_in_packet_data_region') ?? '').startsWith('yes')) {
+  if (!(_one(fields, 'witness_in_packet_data_region') ?? '').startsWith(
+    'yes',
+  )) {
     return false;
   }
   if (_one(fields, 'witness_field_value') != publicLabel) return false;
@@ -125,32 +127,49 @@ void main() {
   final absentLabel = _read(kAbsentLabel);
   final presentLabel = _read(kPresentLabel);
 
-  test('4b the label that must not travel in the clear was found nowhere, '
-      'over a scan that covered the whole recording and proved it could see', () {
-    expect(_one(fields, 'absent_label_found'), 'no');
+  test(
+    '4b the label that must not travel in the clear was found nowhere, '
+    'over a scan that covered the whole recording and proved it could see',
+    () {
+      expect(_one(fields, 'absent_label_found'), 'no');
 
-    // Coverage is compared as numbers against the size of the very file it
-    // claims to have scanned. A short scan reporting "not found" is the exact
-    // false green this gate exists to refuse.
-    final covered = _int(fields, 'scan_coverage_bytes');
-    final size = _int(fields, 'full_bytes');
-    expect(covered, isNotNull, reason: 'coverage must be a number, not prose');
-    expect(size, isNotNull);
-    expect(covered, size);
-    expect(covered, greaterThan(0));
+      // Coverage is compared as numbers against the size of the very file it
+      // claims to have scanned. A short scan reporting "not found" is the exact
+      // false green this gate exists to refuse.
+      final covered = _int(fields, 'scan_coverage_bytes');
+      final size = _int(fields, 'full_bytes');
+      expect(
+        covered,
+        isNotNull,
+        reason: 'coverage must be a number, not prose',
+      );
+      expect(size, isNotNull);
+      expect(covered, size);
+      expect(covered, greaterThan(0));
 
-    expect((fields['scan_encoding'] ?? const <String>[]).toSet(), hasLength(3),
-        reason: 'a single-encoding scan cannot support "found nowhere"');
-    expect(_one(fields, 'scanner_self_test'), isNotNull,
-        reason: 'a scanner that never proved it can see has no verdict to give');
-  });
+      expect(
+        (fields['scan_encoding'] ?? const <String>[]).toSet(),
+        hasLength(3),
+        reason: 'a single-encoding scan cannot support "found nowhere"',
+      );
+      expect(
+        _one(fields, 'scanner_self_test'),
+        isNotNull,
+        reason: 'a scanner that never proved it can see has no verdict to give',
+      );
+    },
+  );
 
   test('4b the label that must appear was located inside a packet, not merely '
       'present somewhere in the file', () {
     expect(_int(fields, 'witness_packet_index'), isNotNull);
-    expect(_one(fields, 'witness_in_packet_data_region'), startsWith('yes'),
-        reason: 'a hit in the recorder\'s own metadata is not something the '
-            'device sent');
+    expect(
+      _one(fields, 'witness_in_packet_data_region'),
+      startsWith('yes'),
+      reason:
+          'a hit in the recorder\'s own metadata is not something the '
+          'device sent',
+    );
     expect(_int(fields, 'witness_offset_in_packet_data'), isNotNull);
     expect(_one(fields, 'witness_field_value'), presentLabel);
   });
@@ -163,17 +182,25 @@ void main() {
         .toList();
     expect(ids, contains(kExtensionUnderTest));
     expect(_one(fields, 'offered_extension_under_test_present'), 'yes');
-    expect(ids.length, _int(fields, 'offered_extension_count'),
-        reason: 'the recorded count and the recorded list must agree');
+    expect(
+      ids.length,
+      _int(fields, 'offered_extension_count'),
+      reason: 'the recorded count and the recorded list must agree',
+    );
   });
 
-  test('4b the record is about the two committed labels, and they are distinct',
-      () {
-    expect(_one(fields, 'absent_label'), absentLabel);
-    expect(_one(fields, 'present_label'), presentLabel);
-    expect(absentLabel.toLowerCase(), isNot(presentLabel.toLowerCase()),
-        reason: 'identical labels would make the two findings contradict');
-  });
+  test(
+    '4b the record is about the two committed labels, and they are distinct',
+    () {
+      expect(_one(fields, 'absent_label'), absentLabel);
+      expect(_one(fields, 'present_label'), presentLabel);
+      expect(
+        absentLabel.toLowerCase(),
+        isNot(presentLabel.toLowerCase()),
+        reason: 'identical labels would make the two findings contradict',
+      );
+    },
+  );
 
   test('4b the recording carries provenance: what recorded it, and when', () {
     final provenance = fieldsOf(_read(kProvenance));

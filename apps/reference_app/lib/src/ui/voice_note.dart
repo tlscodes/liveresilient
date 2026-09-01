@@ -143,7 +143,8 @@ class _VoiceNoteRecorderOverlayState extends State<VoiceNoteRecorderOverlay> {
   /// Ordered copy, oldest → newest (copy-before-paint contract).
   List<double> _orderedSamples() {
     final out = List<double>.filled(_filled, 0);
-    final start = (_next - _filled + recorderWaveformSampleCount) %
+    final start =
+        (_next - _filled + recorderWaveformSampleCount) %
         recorderWaveformSampleCount;
     for (var i = 0; i < _filled; i++) {
       out[i] = _ring[(start + i) % recorderWaveformSampleCount];
@@ -297,9 +298,10 @@ class _RecordingPulseDotState extends State<_RecordingPulseDot>
     final pulse = _pulse;
     if (pulse == null) return dot;
     return FadeTransition(
-      opacity: Tween<double>(begin: 0.35, end: 1).animate(
-        CurvedAnimation(parent: pulse, curve: AppMotion.standard),
-      ),
+      opacity: Tween<double>(
+        begin: 0.35,
+        end: 1,
+      ).animate(CurvedAnimation(parent: pulse, curve: AppMotion.standard)),
       child: dot,
     );
   }
@@ -449,11 +451,11 @@ class VoiceNotePlayerBar extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTapUp: seekable
                       ? (details) =>
-                          _seekTo(context, details.localPosition.dx, width)
+                            _seekTo(context, details.localPosition.dx, width)
                       : null,
                   onHorizontalDragUpdate: seekable
                       ? (details) =>
-                          _seekTo(context, details.localPosition.dx, width)
+                            _seekTo(context, details.localPosition.dx, width)
                       : null,
                   child: RepaintBoundary(
                     child: CustomPaint(
@@ -512,9 +514,7 @@ class _PlayerWaveformPainter extends CustomPainter {
       // Resample peaks onto the available slots.
       final peak = peaks[(i * peaks.length) ~/ slots];
       final logicalFraction = (i + 0.5) / slots;
-      final x = rtl
-          ? size.width - _barPitch * i - _barWidth
-          : _barPitch * i;
+      final x = rtl ? size.width - _barPitch * i - _barWidth : _barPitch * i;
       final h = math.max(2.0, peak * size.height);
       canvas.drawRRect(
         RRect.fromRectAndRadius(

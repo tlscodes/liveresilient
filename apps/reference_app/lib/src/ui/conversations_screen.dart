@@ -204,8 +204,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     } else {
       body = _buildList(context);
     }
-    final showFab =
-        widget.conversations.isNotEmpty && widget.onNewChat != null;
+    final showFab = widget.conversations.isNotEmpty && widget.onNewChat != null;
     return Scaffold(
       appBar: AppBar(title: const Text('Chats')),
       body: body,
@@ -382,8 +381,7 @@ class _ConversationTile extends StatelessWidget {
     if (summary.unreadCount > 0) {
       final scheme = Theme.of(context).colorScheme;
       final text = Theme.of(context).textTheme;
-      final label =
-          summary.unreadCount > 99 ? '99+' : '${summary.unreadCount}';
+      final label = summary.unreadCount > 99 ? '99+' : '${summary.unreadCount}';
       return Semantics(
         label: '${summary.unreadCount} unread',
         excludeSemantics: true,
@@ -434,8 +432,7 @@ class _IdenticonAvatar extends StatelessWidget {
     final h = seed & 0x7fffffff;
     final a = h % palette.length;
     final b =
-        (a + 1 + (h ~/ palette.length) % (palette.length - 1)) %
-        palette.length;
+        (a + 1 + (h ~/ palette.length) % (palette.length - 1)) % palette.length;
     return Container(
       width: AppSpacing.s48,
       height: AppSpacing.s48,

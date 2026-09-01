@@ -47,16 +47,30 @@ Uint8List _b64(String s) => base64Decode(s);
 Future<(DatagramLanePort, DatagramLanePort)> _lanePair(String call) async {
   final key = DatagramLanePort.roomKeyFromCallId(call);
   final tx = await DatagramLanePort.bind(
-      relayHost: _relayHost, relayPort: _dgramPort, roomKey: key);
+    relayHost: _relayHost,
+    relayPort: _dgramPort,
+    roomKey: key,
+  );
   final rx = await DatagramLanePort.bind(
-      relayHost: _relayHost, relayPort: _dgramPort, roomKey: key);
+    relayHost: _relayHost,
+    relayPort: _dgramPort,
+    roomKey: key,
+  );
   return (tx, rx);
 }
 
-void _row(String feature, String wire, String budget, double measured,
-    String status, String note) {
-  print('E2E_ROW\t$feature\t$wire\t$budget\t'
-      '${measured.toStringAsFixed(1)}\t$status\t$note');
+void _row(
+  String feature,
+  String wire,
+  String budget,
+  double measured,
+  String status,
+  String note,
+) {
+  print(
+    'E2E_ROW\t$feature\t$wire\t$budget\t'
+    '${measured.toStringAsFixed(1)}\t$status\t$note',
+  );
 }
 
 /// Continuous-resend ARQ for one-datagram payloads. The sender re-emits
@@ -92,10 +106,7 @@ Future<(double, int)> _arqDeliver({
     frame[1] = attempts & 0xFF;
     await tx.send(frame);
     attempts++;
-    await Future.any([
-      delivered.future,
-      Future<void>.delayed(pace),
-    ]);
+    await Future.any([delivered.future, Future<void>.delayed(pace)]);
   }
   await sub.cancel();
   if (!delivered.isCompleted) {
@@ -132,9 +143,14 @@ Future<double> _fountainDeliver({
   );
   final sw = Stopwatch()..start();
   final sendF = sender.send(payload);
-  unawaited(sendF.then<void>((_) {}, onError: (Object e, StackTrace st) {
-    if (!done.isCompleted) done.completeError(e, st);
-  }));
+  unawaited(
+    sendF.then<void>(
+      (_) {},
+      onError: (Object e, StackTrace st) {
+        if (!done.isCompleted) done.completeError(e, st);
+      },
+    ),
+  );
   final got = await done.future.timeout(cap);
   final secs = sw.elapsedMilliseconds / 1000.0;
   verify(got);
@@ -145,8 +161,9 @@ Future<double> _fountainDeliver({
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('shape barrier: attach unshaped, begin only under the profile',
-      (tester) async {
+  testWidgets('shape barrier: attach unshaped, begin only under the profile', (
+    tester,
+  ) async {
     await tester.runAsync(() async {
       // WHY: the CoreDevice debug tunnel is QUIC/UDP — launching under the
       // t3x profile (0.3675 plr per crossing) killed the attach (measured:
@@ -182,15 +199,21 @@ void main() {
       await sub.cancel();
       await tx.close();
       await rx.close();
-      print('SHAPE_OBSERVED rtt_ms=${lastRtt.toStringAsFixed(0)} '
-          'consecutive=$liveCount probes=$seq');
-      expect(liveCount >= 2, isTrue,
-          reason: 'shaping never became observable on the lane');
+      print(
+        'SHAPE_OBSERVED rtt_ms=${lastRtt.toStringAsFixed(0)} '
+        'consecutive=$liveCount probes=$seq',
+      );
+      expect(
+        liveCount >= 2,
+        isTrue,
+        reason: 'shaping never became observable on the lane',
+      );
     });
   });
 
-  testWidgets('chat: 29B compact frame — delivery + text integrity',
-      (tester) async {
+  testWidgets('chat: 29B compact frame — delivery + text integrity', (
+    tester,
+  ) async {
     await tester.runAsync(() async {
       final (tx, rx) = await _lanePair('t3-chat');
       final zstd = ZstdChat(_b64(kZstdChatDictB64));
@@ -206,11 +229,13 @@ void main() {
           pace: const Duration(milliseconds: 250),
           cap: const Duration(seconds: 12),
           verify: (bytes) {
-            final text = utf8.decode(decodeCompactText(
-              frame: CompactTextFrame.checked(bytes),
-              localDictVer: 1,
-              decompress: zstd.decompress,
-            ));
+            final text = utf8.decode(
+              decodeCompactText(
+                frame: CompactTextFrame.checked(bytes),
+                localDictVer: 1,
+                decompress: zstd.decompress,
+              ),
+            );
             if (text != kTextExpected) {
               throw StateError('text mismatch: $text');
             }
@@ -273,8 +298,9 @@ void main() {
     });
   });
 
-  testWidgets('voice_note: 879B — decode-complete (ready to play)',
-      (tester) async {
+  testWidgets('voice_note: 879B — decode-complete (ready to play)', (
+    tester,
+  ) async {
     await tester.runAsync(() async {
       final (tx, rx) = await _lanePair('t3-voice');
       double measured = -1;
@@ -343,8 +369,13 @@ void main() {
               throw StateError('decoded ${f.width}x${f.height}');
             }
             final done = Completer<ui.Image>();
-            ui.decodeImageFromPixels(f.rgba, f.width, f.height,
-                ui.PixelFormat.rgba8888, done.complete);
+            ui.decodeImageFromPixels(
+              f.rgba,
+              f.width,
+              f.height,
+              ui.PixelFormat.rgba8888,
+              done.complete,
+            );
             img = null; // set after await below
             unawaited(done.future.then((i) => img = i));
           },
@@ -394,8 +425,13 @@ void main() {
               }
             }
             final done = Completer<ui.Image>();
-            ui.decodeImageFromPixels(frames.first.rgba, 128, 96,
-                ui.PixelFormat.rgba8888, done.complete);
+            ui.decodeImageFromPixels(
+              frames.first.rgba,
+              128,
+              96,
+              ui.PixelFormat.rgba8888,
+              done.complete,
+            );
             unawaited(done.future.then((i) => first = i));
           },
         );
@@ -418,8 +454,7 @@ void main() {
     }
   });
 
-  testWidgets('ptt: 60s live stream — survival and continuity',
-      (tester) async {
+  testWidgets('ptt: 60s live stream — survival and continuity', (tester) async {
     await tester.runAsync(() async {
       final (tx, rx) = await _lanePair('t3-ptt');
       // On-device codec2-450 encode of a synthetic voice-band tone,
@@ -459,9 +494,12 @@ void main() {
           final buf = Uint8List(57);
           for (var i = 0; i < 25; i++) {
             for (var s = 0; s < 320; s++) {
-              pcm[s] = (6000 *
-                      (((sentBundles * 25 + i) * 320 + s) % 80 < 40 ? 1 : -1))
-                  .toInt();
+              pcm[s] =
+                  (6000 *
+                          (((sentBundles * 25 + i) * 320 + s) % 80 < 40
+                              ? 1
+                              : -1))
+                      .toInt();
             }
             final bits = enc.encodeFrame(pcm);
             // append 18 bits from this frame's 3 bytes
@@ -487,7 +525,8 @@ void main() {
         final ratio = sentBundles == 0 ? 0.0 : gotBundles / sentBundles;
         final alive = rxError == null && gotBundles > 0;
         if (alive) status = 'PASS';
-        note = 'sent=$sentBundles,got=$gotBundles,'
+        note =
+            'sent=$sentBundles,got=$gotBundles,'
             'ratio=${ratio.toStringAsFixed(3)},frames=$decodedFrames,'
             'maxGap=${maxGapS.toStringAsFixed(1)}s,'
             'err=${rxError ?? 'none'}';

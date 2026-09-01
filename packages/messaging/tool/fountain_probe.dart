@@ -76,16 +76,20 @@ Future<void> main() async {
   );
 
   final ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-    print('tick ${sender.diag()} txSent=${tx.sent} txDrop=${tx.dropped} '
-        'rxSent=${rx.sent} rxDrop=${rx.dropped}');
+    print(
+      'tick ${sender.diag()} txSent=${tx.sent} txDrop=${tx.dropped} '
+      'rxSent=${rx.sent} rxDrop=${rx.dropped}',
+    );
   });
 
   try {
     final result = await sender
         .send(content(64 * 1024))
         .timeout(const Duration(seconds: 25));
-    print('SENDER DONE sent=${result.sentSymbols} '
-        'of=${result.totalSourceSymbols}');
+    print(
+      'SENDER DONE sent=${result.sentSymbols} '
+      'of=${result.totalSourceSymbols}',
+    );
   } catch (e) {
     print('SENDER FAILED: $e');
   } finally {

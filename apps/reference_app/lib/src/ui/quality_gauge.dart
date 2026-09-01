@@ -335,8 +335,9 @@ class LadderRungIndicator extends StatelessWidget {
                       color: step == current
                           ? scheme.onPrimary
                           : scheme.onSecondaryContainer,
-                      fontWeight:
-                          step == current ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: step == current
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                     ),
                   ),
                 ),

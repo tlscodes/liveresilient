@@ -45,7 +45,6 @@ class _HoldingPort implements DataChannelPort {
   Future<void> close() => _inner.close();
 }
 
-
 /// A tiny hand-built 2x2 24-bit BMP — real decodable bytes so Image.memory
 /// never fails, with content that differs per color (distinct sha).
 Uint8List _tinyBmp(int r, int g, int b) {
@@ -101,7 +100,10 @@ void stagedPhotoTests() {
     );
     final state = StagedPhotoState(announcement);
     final entries = [
-      ChatEntry(message: _msg('peer', 0, '[photo]'), photoId: announcement.photoId),
+      ChatEntry(
+        message: _msg('peer', 0, '[photo]'),
+        photoId: announcement.photoId,
+      ),
     ];
     Widget build() => MaterialApp(
       home: Scaffold(
@@ -118,10 +120,7 @@ void stagedPhotoTests() {
     await tester.pump(); // thumbhash rasterization callback
     expect(find.byType(ThumbHashPlaceholder), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
-    expect(
-      find.bySemanticsLabel(RegExp('blurred preview')),
-      findsOneWidget,
-    );
+    expect(find.bySemanticsLabel(RegExp('blurred preview')), findsOneWidget);
 
     state
       ..preview = _tinyBmp(20, 200, 20)
@@ -130,10 +129,7 @@ void stagedPhotoTests() {
     await tester.pump();
     expect(find.byType(ThumbHashPlaceholder), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
-    expect(
-      find.bySemanticsLabel(RegExp('receiving original')),
-      findsOneWidget,
-    );
+    expect(find.bySemanticsLabel(RegExp('receiving original')), findsOneWidget);
 
     state
       ..original = _tinyBmp(200, 20, 20)
@@ -213,8 +209,11 @@ void stagedPhotoTests() {
       final inc = controller.incomingPhotos[photoId];
       settled = (out?.done ?? false) && (inc?.sha256Verified ?? false);
     }
-    expect(settled, isTrue,
-        reason: 'staged delivery must complete on a clean loopback');
+    expect(
+      settled,
+      isTrue,
+      reason: 'staged delivery must complete on a clean loopback',
+    );
     expect(
       find.bySemanticsLabel(RegExp('Photo from You — delivered')),
       findsOneWidget,

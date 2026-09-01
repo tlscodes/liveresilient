@@ -87,9 +87,15 @@ void main() {
     for (var round = 0; round < 5; round++) {
       final key = DatagramLanePort.roomKeyFromCallId('probe-5b-r$round');
       final txRaw = await DatagramLanePort.bind(
-          relayHost: '127.0.0.1', relayPort: relayPort, roomKey: key);
+        relayHost: '127.0.0.1',
+        relayPort: relayPort,
+        roomKey: key,
+      );
       final rxRaw = await DatagramLanePort.bind(
-          relayHost: '127.0.0.1', relayPort: relayPort, roomKey: key);
+        relayHost: '127.0.0.1',
+        relayPort: relayPort,
+        roomKey: key,
+      );
       final tx = _LossySend(txRaw, 600, 0x1111 + round);
       final rx = _LossySend(rxRaw, 600, 0x9999 + round);
 
@@ -108,8 +114,7 @@ void main() {
       final verified = Completer<void>();
       final sub = receiver.updates.listen((u) {
         stages.add(u.stage);
-        if (u.stage == PhotoStage.originalVerified &&
-            !verified.isCompleted) {
+        if (u.stage == PhotoStage.originalVerified && !verified.isCompleted) {
           verified.complete();
         }
       });
@@ -141,12 +146,16 @@ void main() {
         await verified.future.timeout(const Duration(seconds: 30));
       } on TimeoutException {
         final ladder = receiver.photos[res.announcement.photoId];
-        fail('round $round: sender finished but ladder silent — '
-            'stages=$stages photos=${receiver.photos.keys.toList()} '
-            'stage=${ladder?.stage} sha=${ladder?.sha256Verified}');
+        fail(
+          'round $round: sender finished but ladder silent — '
+          'stages=$stages photos=${receiver.photos.keys.toList()} '
+          'stage=${ladder?.stage} sha=${ladder?.sha256Verified}',
+        );
       }
-      print('ROUND $round ok stages=$stages '
-          'sent=${res.sentSymbols}/${res.totalSourceSymbols}');
+      print(
+        'ROUND $round ok stages=$stages '
+        'sent=${res.sentSymbols}/${res.totalSourceSymbols}',
+      );
 
       await sub.cancel();
       await receiver.close();

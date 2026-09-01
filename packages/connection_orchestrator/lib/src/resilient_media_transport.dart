@@ -432,11 +432,7 @@ class ResilientMediaTransport {
     }
 
     final batcher = linkBytesPerSecond == null
-        ? CliffFreeBatcher(
-            objectId: id,
-            type: type,
-            layerCount: layerCount,
-          )
+        ? CliffFreeBatcher(objectId: id, type: type, layerCount: layerCount)
         : CliffFreeBatcher.forLink(
             objectId: id,
             type: type,

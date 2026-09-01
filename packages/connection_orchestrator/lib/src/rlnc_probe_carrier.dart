@@ -188,7 +188,8 @@ class RlncProbeCarrier {
       final gained = rankAfter - rankBefore;
 
       final explicitOwd = await readOwdMs?.call();
-      final owd = explicitOwd ??
+      final owd =
+          explicitOwd ??
           (rtts.isEmpty
               ? 0
               : (rtts.reduce((a, b) => a + b) / rtts.length / 2).round());
@@ -206,8 +207,7 @@ class RlncProbeCarrier {
   }
 
   /// Total symbols this carrier has emitted across every window and lane.
-  int get symbolsEmitted =>
-      symbolsPerLane.values.fold(0, (a, b) => a + b);
+  int get symbolsEmitted => symbolsPerLane.values.fold(0, (a, b) => a + b);
 }
 
 /// Convenience: run the probe over a live transfer and return the lanes to use.
@@ -229,10 +229,7 @@ Future<LaneAggregationVerdict> probeLanesForTransfer({
 }) {
   return probe
       .rebind(carrier.windowFor(tier0Encoder, startEsi: startEsi))
-      .run(
-        networkFingerprint: networkFingerprint,
-        candidates: candidates,
-      );
+      .run(networkFingerprint: networkFingerprint, candidates: candidates);
 }
 
 /// Translates a verdict into the router setting that acts on it.

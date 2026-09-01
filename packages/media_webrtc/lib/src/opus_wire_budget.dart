@@ -164,11 +164,12 @@ enum OpusWireRefusalCause {
 ///    wire ([OpusWireBudget.frameBitsOnWire]).
 ///
 /// Returns true when a tick interval exists for the candidate.
-typedef TickIntervalProbe = bool Function({
-  required int wireRateBps,
-  required double perStreamBudgetBps,
-  required int frameBitsOnWire,
-});
+typedef TickIntervalProbe =
+    bool Function({
+      required int wireRateBps,
+      required double perStreamBudgetBps,
+      required int frameBitsOnWire,
+    });
 
 /// The result of asking whether a link admits an audio stream.
 ///
@@ -359,8 +360,7 @@ final class OpusWireBudget {
     int opusRateBps,
     int ptimeMs, {
     WireCarrier carrier = WireCarrier.assumed,
-  }) =>
-      opusRateBps + (carrier.headerBitsPerPacket * 1000 / ptimeMs).round();
+  }) => opusRateBps + (carrier.headerBitsPerPacket * 1000 / ptimeMs).round();
 
   /// Bits ONE frame of a (rate, ptime) pair puts on the wire under
   /// [carrier]: the payload a ptime-long frame carries at the candidate's
@@ -372,8 +372,7 @@ final class OpusWireBudget {
     int opusRateBps,
     int ptimeMs, {
     WireCarrier carrier = WireCarrier.assumed,
-  }) =>
-      (opusRateBps * ptimeMs / 1000).round() + carrier.headerBitsPerPacket;
+  }) => (opusRateBps * ptimeMs / 1000).round() + carrier.headerBitsPerPacket;
 
   /// This budget's own wire rate, under the carrier it was priced for.
   int get chosenWireRateBps =>
@@ -460,12 +459,14 @@ final class OpusWireBudget {
           probeRejectedFittingCandidate = true;
           continue;
         }
-        return OpusWireFitted(OpusWireBudget._(
-          opusRateBps: rate,
-          ptimeMs: ptime,
-          bandwidthBps: bw,
-          carrier: carrier,
-        ));
+        return OpusWireFitted(
+          OpusWireBudget._(
+            opusRateBps: rate,
+            ptimeMs: ptime,
+            bandwidthBps: bw,
+            carrier: carrier,
+          ),
+        );
       }
     }
     // No candidate fits. Compute the refusal's numbers from the same
@@ -515,5 +516,5 @@ final class OpusWireBudget {
       'OpusWireBudget(opus ${opusRateBps}bps @ ${ptimeMs}ms, '
       'wire ${chosenWireRateBps}bps'
       '${bandwidthBps == null ? '' : ' on ${bandwidthBps}bps link '
-          '(${(occupancy! * 100).toStringAsFixed(0)}%)'})';
+                '(${(occupancy! * 100).toStringAsFixed(0)}%)'})';
 }

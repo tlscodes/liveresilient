@@ -114,8 +114,10 @@ final class DatagramRelay {
 
   /// reuseAddress deliberately OFF: a stale relay (or a foreign daemon)
   /// already bound here must fail THIS bind loudly, not split the traffic.
-  static Future<DatagramRelay> bind(int port,
-      {InternetAddress? address}) async {
+  static Future<DatagramRelay> bind(
+    int port, {
+    InternetAddress? address,
+  }) async {
     final socket = await RawDatagramSocket.bind(
       address ?? InternetAddress.anyIPv4,
       port,
@@ -178,7 +180,10 @@ final class DatagramRelay {
         final tag = seat.tag ??= _allocateTag();
         _tags[tag] = (room, seat);
         _socket.send(
-            [_v2Magic0, _v2Magic1, tag >> 8, tag & 0xFF], d.address, d.port);
+          [_v2Magic0, _v2Magic1, tag >> 8, tag & 0xFF],
+          d.address,
+          d.port,
+        );
         continue;
       }
 

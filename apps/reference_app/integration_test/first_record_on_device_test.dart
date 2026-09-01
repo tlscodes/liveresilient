@@ -37,57 +37,63 @@ void main() {
   // Not named after any gate id, for the same reason as the sibling probe: the
   // ledger treats a leading gate id as a claim of proof, and this measurement
   // feeds a verdict rather than closing a numbered gate.
-  testWidgets('measurement: the process composes a first record on this device',
-      (WidgetTester tester) async {
-    final probe = ShimProbe.ofThisProcess();
+  testWidgets(
+    'measurement: the process composes a first record on this device',
+    (WidgetTester tester) async {
+      final probe = ShimProbe.ofThisProcess();
 
-    // A failure here is not a failure of the measurement — it says this build
-    // has no backend to measure, which is a different fact and deserves a
-    // different sentence.
-    expect(probe.state, ShimProbeState.presentBackendLinked,
-        reason: 'the shim reports ${probe.state}; a device build made where '
-            'the pinned archives were present reports presentBackendLinked');
+      // A failure here is not a failure of the measurement — it says this build
+      // has no backend to measure, which is a different fact and deserves a
+      // different sentence.
+      expect(
+        probe.state,
+        ShimProbeState.presentBackendLinked,
+        reason:
+            'the shim reports ${probe.state}; a device build made where '
+            'the pinned archives were present reports presentBackendLinked',
+      );
 
-    final pin = probe.buildPin();
-    expect(pin, isNotNull);
-    expect(pin, isNotEmpty);
+      final pin = probe.buildPin();
+      expect(pin, isNotNull);
+      expect(pin, isNotEmpty);
 
-    final record = probe.firstRecord();
-    expect(record, isNotNull, reason: 'the backend composed no bytes');
-    final bytes = record!;
-    expect(bytes.length, greaterThan(5));
-    expect(bytes[0], 22, reason: 'first byte of a handshake record');
-    expect(bytes[5], 1, reason: 'the first handshake message');
+      final record = probe.firstRecord();
+      expect(record, isNotNull, reason: 'the backend composed no bytes');
+      final bytes = record!;
+      expect(bytes.length, greaterThan(5));
+      expect(bytes[0], 22, reason: 'first byte of a handshake record');
+      expect(bytes[5], 1, reason: 'the first handshake message');
 
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    final now = DateTime.now().toUtc().toIso8601String().split('.').first;
+      final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      final now = DateTime.now().toUtc().toIso8601String().split('.').first;
 
-    // One line per field, marker-prefixed so the host driver can extract them
-    // from a log that also carries the framework's own chatter.
-    // Derived, never spelled out: a test that writes "arm64" into its own
-    // output is making the claim the comparison is supposed to check. This
-    // reads the architecture the code is actually executing as, so running the
-    // same test on a simulator reports x86_64 and the comparison rejects it.
-    final abi = Abi.current().toString();
-    final arch = abi.toLowerCase().contains('arm64')
-        ? 'arm64'
-        : abi.toLowerCase().contains('x64')
-            ? 'x86_64'
-            : abi;
+      // One line per field, marker-prefixed so the host driver can extract them
+      // from a log that also carries the framework's own chatter.
+      // Derived, never spelled out: a test that writes "arm64" into its own
+      // output is making the claim the comparison is supposed to check. This
+      // reads the architecture the code is actually executing as, so running the
+      // same test on a simulator reports x86_64 and the comparison rejects it.
+      final abi = Abi.current().toString();
+      final arch = abi.toLowerCase().contains('arm64')
+          ? 'arm64'
+          : abi.toLowerCase().contains('x64')
+          ? 'x86_64'
+          : abi;
 
-    final lines = <String>[
-      'arch: $arch',
-      'abi: $abi',
-      'host: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
-      'date: ${now}Z',
-      'source: integration_test/first_record_on_device_test.dart via pt_shim',
-      'pin: $pin',
-      'bytes: ${bytes.length}',
-      'hex: $hex',
-    ];
-    for (final line in lines) {
-      // ignore: avoid_print
-      print('RECORD|$line');
-    }
-  });
+      final lines = <String>[
+        'arch: $arch',
+        'abi: $abi',
+        'host: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+        'date: ${now}Z',
+        'source: integration_test/first_record_on_device_test.dart via pt_shim',
+        'pin: $pin',
+        'bytes: ${bytes.length}',
+        'hex: $hex',
+      ];
+      for (final line in lines) {
+        // ignore: avoid_print
+        print('RECORD|$line');
+      }
+    },
+  );
 }

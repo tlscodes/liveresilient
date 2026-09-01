@@ -31,8 +31,10 @@ File _decisionNote() {
     if (file.existsSync()) return file;
     final parent = dir.parent;
     if (parent.path == dir.path) {
-      throw StateError('docs/TICKET4_DECISION.md not found above '
-          '${Directory.current.path}');
+      throw StateError(
+        'docs/TICKET4_DECISION.md not found above '
+        '${Directory.current.path}',
+      );
     }
     dir = parent;
   }
@@ -62,8 +64,10 @@ bool _eachRejectionGivesAReason(String note) {
   final sections = note.split(RegExp(r'^#{1,4}\s+Option\s+', multiLine: true));
   if (sections.length < 3) return false; // preamble + two options
   for (final section in sections.skip(1)) {
-    if (!RegExp(r'Rejected (because|for)', caseSensitive: false)
-        .hasMatch(section)) {
+    if (!RegExp(
+      r'Rejected (because|for)',
+      caseSensitive: false,
+    ).hasMatch(section)) {
       return false;
     }
   }
@@ -95,8 +99,11 @@ void main() {
 ### Option A — through the standard library. REJECTED.
 Rejected because the API does not exist.
 ''';
-    expect(_rejectedOptionCount(oneOptionOnly), 1,
-        reason: 'the counter must count, not merely match');
+    expect(
+      _rejectedOptionCount(oneOptionOnly),
+      1,
+      reason: 'the counter must count, not merely match',
+    );
 
     const verdictWithoutReason = '''
 ### Option A — REJECTED.
@@ -104,8 +111,11 @@ Not suitable.
 ### Option B — REJECTED.
 Also not suitable.
 ''';
-    expect(_eachRejectionGivesAReason(verdictWithoutReason), isFalse,
-        reason: 'a verdict with no reason must not satisfy the gate');
+    expect(
+      _eachRejectionGivesAReason(verdictWithoutReason),
+      isFalse,
+      reason: 'a verdict with no reason must not satisfy the gate',
+    );
   });
 
   test('4c the note names what was chosen and points at its evidence', () {

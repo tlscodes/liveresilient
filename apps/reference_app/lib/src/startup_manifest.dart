@@ -242,7 +242,11 @@ enum StartupPhase {
 /// so the answer to "why is there no manifest" travels with the failure
 /// instead of having to be reconstructed from logs.
 class StartupBudgetExceeded implements Exception {
-  const StartupBudgetExceeded(this.cap, this.attemptsMade, this.attemptFailures);
+  const StartupBudgetExceeded(
+    this.cap,
+    this.attemptsMade,
+    this.attemptFailures,
+  );
 
   /// Which bound was hit, with its value — e.g. 'maxAttempts (3)' or
   /// 'totalDeadline (0:00:20.000000)'.
@@ -366,7 +370,9 @@ class StartupManifestGate {
         }
         attemptFailures.add('attempt $attempt: ${result.describe()}');
       } on TimeoutException {
-        attemptFailures.add('attempt $attempt: attemptDeadline ($deadline) hit');
+        attemptFailures.add(
+          'attempt $attempt: attemptDeadline ($deadline) hit',
+        );
       } on Object catch (e) {
         attemptFailures.add('attempt $attempt: $e');
       }

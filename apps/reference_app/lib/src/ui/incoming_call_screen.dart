@@ -304,12 +304,7 @@ class _IdenticonAvatar extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     // Computed (not literal) colors: hue is a pure function of the name.
     final hue = (name.hashCode % 360).abs().toDouble();
-    final start = HSLColor.fromAHSL(
-      1,
-      hue,
-      0.55,
-      dark ? 0.40 : 0.52,
-    ).toColor();
+    final start = HSLColor.fromAHSL(1, hue, 0.55, dark ? 0.40 : 0.52).toColor();
     final end = HSLColor.fromAHSL(
       1,
       (hue + 42) % 360,

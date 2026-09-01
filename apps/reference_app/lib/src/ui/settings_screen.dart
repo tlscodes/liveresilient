@@ -71,14 +71,8 @@ class SettingsScreen extends StatelessWidget {
                       value: ThemeMode.system,
                       label: Text('System'),
                     ),
-                    ButtonSegment(
-                      value: ThemeMode.light,
-                      label: Text('Light'),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.dark,
-                      label: Text('Dark'),
-                    ),
+                    ButtonSegment(value: ThemeMode.light, label: Text('Light')),
+                    ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
                   ],
                   selected: {themeMode},
                   showSelectedIcon: false,

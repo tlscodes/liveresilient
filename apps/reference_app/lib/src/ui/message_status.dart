@@ -44,10 +44,7 @@ class MessageStatusBadge extends StatelessWidget {
           key: const ValueKey('status-sending'),
           width: 12,
           height: 12,
-          child: CircularProgressIndicator(
-            strokeWidth: 1.6,
-            color: neutral,
-          ),
+          child: CircularProgressIndicator(strokeWidth: 1.6, color: neutral),
         ),
         'Sending',
       ),

@@ -88,27 +88,29 @@ void main() {
       expect(CliffFreeMediaSender().blockSize, 55);
     });
 
-    test('the base layer is funded before refinements under a tight budget',
-        () {
-      final layers = _layers();
-      final sender = CliffFreeMediaSender();
-      final baseBlocks = sender
-          .plan(layers, budgetBytes: 1 << 30)
-          .layers
-          .first
-          .blockCount;
+    test(
+      'the base layer is funded before refinements under a tight budget',
+      () {
+        final layers = _layers();
+        final sender = CliffFreeMediaSender();
+        final baseBlocks = sender
+            .plan(layers, budgetBytes: 1 << 30)
+            .layers
+            .first
+            .blockCount;
 
-      // Enough for L0 with margin, nowhere near enough for the rest.
-      final plan = sender.plan(
-        layers,
-        budgetBytes: baseBlocks * 60 * 3,
-        lossPrior: 0.2,
-      );
+        // Enough for L0 with margin, nowhere near enough for the rest.
+        final plan = sender.plan(
+          layers,
+          budgetBytes: baseBlocks * 60 * 3,
+          lossPrior: 0.2,
+        );
 
-      expect(plan.layers.first.sendCount, greaterThan(baseBlocks));
-      expect(plan.layers.first.fullyProtected, isTrue);
-      expect(plan.layers.last.sendCount, 0);
-    });
+        expect(plan.layers.first.sendCount, greaterThan(baseBlocks));
+        expect(plan.layers.first.fullyProtected, isTrue);
+        expect(plan.layers.last.sendCount, 0);
+      },
+    );
 
     test('rejects empty and oversized layer lists', () {
       final sender = CliffFreeMediaSender();
@@ -193,26 +195,28 @@ void main() {
       expect(report.overheadFactor(_sourceBytes(layers)), lessThan(1.16));
     });
 
-    test('cold start on a clean channel pays the insurance premium, visibly',
-        () async {
-      // The same send WITHOUT an estimate. The cold law (F-3) charges ~20%
-      // redundancy plus a 25% L0 margin because it cannot know the channel is
-      // clean. This test pins that price so it is a documented property, not a
-      // surprise: if someone "optimizes" the cold factor to 1.0, the 50%-loss
-      // test below is what they will break.
-      final layers = _layers();
-      final channel = _Channel(layers.length);
-      final report = await CliffFreeMediaSender().send(
-        layers,
-        sink: channel.accept,
-        budgetBytes: 10 * 1024 * 1024,
-      );
+    test(
+      'cold start on a clean channel pays the insurance premium, visibly',
+      () async {
+        // The same send WITHOUT an estimate. The cold law (F-3) charges ~20%
+        // redundancy plus a 25% L0 margin because it cannot know the channel is
+        // clean. This test pins that price so it is a documented property, not a
+        // surprise: if someone "optimizes" the cold factor to 1.0, the 50%-loss
+        // test below is what they will break.
+        final layers = _layers();
+        final channel = _Channel(layers.length);
+        final report = await CliffFreeMediaSender().send(
+          layers,
+          sink: channel.accept,
+          budgetBytes: 10 * 1024 * 1024,
+        );
 
-      expect(channel.reassembler.isComplete, isTrue);
-      final overhead = report.overheadFactor(_sourceBytes(layers));
-      expect(overhead, greaterThan(1.25));
-      expect(overhead, lessThan(1.45));
-    });
+        expect(channel.reassembler.isComplete, isTrue);
+        final overhead = report.overheadFactor(_sourceBytes(layers));
+        expect(overhead, greaterThan(1.25));
+        expect(overhead, lessThan(1.45));
+      },
+    );
 
     test('emission is base-layer first, never interleaved', () async {
       final layers = _layers();
@@ -240,21 +244,23 @@ void main() {
       expect(channel.bytesToFirstBase, greaterThan(0));
     });
 
-    test('a fixed low factor is what fails — the estimator is what saves it',
-        () async {
-      // The measured F-2 finding, as an executable statement: planning for a
-      // clean channel and then running at 50% loss must NOT decode the base
-      // layer, while planning WITH the estimate (previous test) does.
-      final layers = _layers();
-      final channel = _Channel(layers.length, loss: 0.5, seed: 11);
-      await CliffFreeMediaSender().send(
-        layers,
-        sink: channel.accept,
-        budgetBytes: 10 * 1024 * 1024,
-        lossPrior: 0.0,
-      );
-      expect(channel.reassembler.usableLayerCount, 0);
-    });
+    test(
+      'a fixed low factor is what fails — the estimator is what saves it',
+      () async {
+        // The measured F-2 finding, as an executable statement: planning for a
+        // clean channel and then running at 50% loss must NOT decode the base
+        // layer, while planning WITH the estimate (previous test) does.
+        final layers = _layers();
+        final channel = _Channel(layers.length, loss: 0.5, seed: 11);
+        await CliffFreeMediaSender().send(
+          layers,
+          sink: channel.accept,
+          budgetBytes: 10 * 1024 * 1024,
+          lossPrior: 0.0,
+        );
+        expect(channel.reassembler.usableLayerCount, 0);
+      },
+    );
 
     test('a layer past the ESI ceiling is capped, not thrown', () async {
       // The reachable crash: RlncEncoder refuses esi > 0xFFFF, and a ~300 KB
@@ -298,28 +304,30 @@ void main() {
       expect(report.esiCappedLayers, isEmpty);
     });
 
-    test('a refusing sink stops the pass without corrupting the prefix',
-        () async {
-      final layers = _layers();
-      final reassembler = CliffFreeReassembler(layerCount: layers.length);
-      var accepted = 0;
-      final report = await CliffFreeMediaSender().send(
-        layers,
-        budgetBytes: 10 * 1024 * 1024,
-        sink: (layerIndex, datagram) {
-          if (accepted >= 40) return false;
-          accepted++;
-          reassembler.addDatagram(layerIndex, datagram);
-          return true;
-        },
-      );
+    test(
+      'a refusing sink stops the pass without corrupting the prefix',
+      () async {
+        final layers = _layers();
+        final reassembler = CliffFreeReassembler(layerCount: layers.length);
+        var accepted = 0;
+        final report = await CliffFreeMediaSender().send(
+          layers,
+          budgetBytes: 10 * 1024 * 1024,
+          sink: (layerIndex, datagram) {
+            if (accepted >= 40) return false;
+            accepted++;
+            reassembler.addDatagram(layerIndex, datagram);
+            return true;
+          },
+        );
 
-      expect(report.stoppedEarly, isTrue);
-      expect(report.datagramsEmitted, 40);
-      // Whatever decoded is still exact; nothing is half-written.
-      for (var i = 0; i < reassembler.usableLayerCount; i++) {
-        expect(reassembler.layerData(i), layers[i].bytes);
-      }
-    });
+        expect(report.stoppedEarly, isTrue);
+        expect(report.datagramsEmitted, 40);
+        // Whatever decoded is still exact; nothing is half-written.
+        for (var i = 0; i < reassembler.usableLayerCount; i++) {
+          expect(reassembler.layerData(i), layers[i].bytes);
+        }
+      },
+    );
   });
 }

@@ -126,10 +126,7 @@ void main() {
       // The challenger learned; the champion's serialized state did not
       // move a byte.
       expect(jsonEncode(champion.calibrator.toJson()), championBefore);
-      expect(
-        jsonEncode(challenger.calibrator.toJson()),
-        isNot(championBefore),
-      );
+      expect(jsonEncode(challenger.calibrator.toJson()), isNot(championBefore));
     });
   });
 

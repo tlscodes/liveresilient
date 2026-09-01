@@ -26,7 +26,9 @@ void main() {
         'alt': 'تصویر آزمایشی',
       },
       'body': List.generate(
-          40, (i) => 'بند شماره‌ی $i از متن خبر برای فشرده‌سازی.').join(' '),
+        40,
+        (i) => 'بند شماره‌ی $i از متن خبر برای فشرده‌سازی.',
+      ).join(' '),
     };
     final wire = encodeNewsPage(page, brotliEncode);
     final back = decodeNewsPage(Uint8List.fromList(wire), brotliDecode);
@@ -40,12 +42,21 @@ void main() {
     final tmp = Directory.systemTemp.createTempSync('brffi');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final rawF = File('${tmp.path}/n.txt')..writeAsBytesSync(raw);
-    final r = Process.runSync(
-        'brotli', ['-q', '11', '-f', rawF.path, '-o', '${tmp.path}/n.br']);
+    final r = Process.runSync('brotli', [
+      '-q',
+      '11',
+      '-f',
+      rawF.path,
+      '-o',
+      '${tmp.path}/n.br',
+    ]);
     expect(r.exitCode, 0, reason: 'CLI compress failed: ${r.stderr}');
     final wire = File('${tmp.path}/n.br').readAsBytesSync();
-    expect(brotliDecode(Uint8List.fromList(wire)), raw,
-        reason: 'FFI decode must accept the measurer-produced stream');
+    expect(
+      brotliDecode(Uint8List.fromList(wire)),
+      raw,
+      reason: 'FFI decode must accept the measurer-produced stream',
+    );
   });
 
   test('oversize plaintext claim is rejected, not allocated', () {

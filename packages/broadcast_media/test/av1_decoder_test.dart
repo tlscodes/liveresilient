@@ -22,8 +22,11 @@ void main() {
     final note = VideoNote.decode(_artifact('video_note_15k.bin'));
     final frames = decodeAv1Frames(note.videoFrames);
     expect(frames.length, note.videoFrames.length);
-    expect(frames.length, 15,
-        reason: 'the phase-5 wire carries 15 frames (gate_4 log)');
+    expect(
+      frames.length,
+      15,
+      reason: 'the phase-5 wire carries 15 frames (gate_4 log)',
+    );
     for (final f in frames) {
       expect(f.width, 128);
       expect(f.height, 96);
@@ -32,9 +35,13 @@ void main() {
     // real content, not a black screen: some luma variance must exist
     final first = frames.first.rgba;
     final distinct = <int>{for (var i = 0; i < first.length; i += 4) first[i]};
-    expect(distinct.length, greaterThan(8),
-        reason: 'decoded pixels must vary — a constant frame means a broken '
-            'stride/convert path');
+    expect(
+      distinct.length,
+      greaterThan(8),
+      reason:
+          'decoded pixels must vary — a constant frame means a broken '
+          'stride/convert path',
+    );
   });
 
   test('photo_ref_3k.avif: mdat payload decodes to the 120x160 photo', () {
@@ -46,9 +53,13 @@ void main() {
   });
 
   test('garbage input fails loud, not quiet', () {
-    expect(() => decodeAv1Frames([Uint8List.fromList(List.filled(64, 0xAB))]),
-        throwsA(isA<MalformedAv1Stream>()));
-    expect(() => avifMdatPayload(Uint8List.fromList([1, 2, 3])),
-        throwsA(isA<MalformedAv1Stream>()));
+    expect(
+      () => decodeAv1Frames([Uint8List.fromList(List.filled(64, 0xAB))]),
+      throwsA(isA<MalformedAv1Stream>()),
+    );
+    expect(
+      () => avifMdatPayload(Uint8List.fromList([1, 2, 3])),
+      throwsA(isA<MalformedAv1Stream>()),
+    );
   });
 }

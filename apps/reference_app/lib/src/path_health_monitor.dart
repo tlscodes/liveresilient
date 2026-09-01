@@ -105,16 +105,17 @@ class WebRtcPathChannel implements TransportChannel {
     // that, degraded means loss exceeding the baseline by the configured
     // margin — which on a clean link (baseline ~0) reduces exactly to
     // the original flat gate. 50% stays the unconditional blackout floor.
-    final degraded = lossFraction >= 0.5 ||
+    final degraded =
+        lossFraction >= 0.5 ||
         (baseline != null &&
-            lossFraction >=
-                (baseline + _lossDegradedFraction).clamp(0.0, 0.5));
+            lossFraction >= (baseline + _lossDegradedFraction).clamp(0.0, 0.5));
     // Baseline learns AFTER judgment, and only from intervals that were
     // not themselves ruled degraded — a blackout must not teach the
     // monitor that blackouts are normal.
     if (!degraded) {
-      _lossBaseline =
-          baseline == null ? lossFraction : baseline * 0.8 + lossFraction * 0.2;
+      _lossBaseline = baseline == null
+          ? lossFraction
+          : baseline * 0.8 + lossFraction * 0.2;
     }
     if (degraded) {
       return SendResult(

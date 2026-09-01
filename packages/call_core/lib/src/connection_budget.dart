@@ -15,8 +15,10 @@ class NetworkConditions {
   });
 
   /// Conditions of a link with no impairment, used when nothing is known yet.
-  static const NetworkConditions pristine =
-      NetworkConditions(rtt: Duration(milliseconds: 70), loss: 0);
+  static const NetworkConditions pristine = NetworkConditions(
+    rtt: Duration(milliseconds: 70),
+    loss: 0,
+  );
 
   final Duration rtt;
   final double loss;
@@ -31,7 +33,8 @@ class NetworkConditions {
   final int? bandwidthBps;
 
   @override
-  String toString() => 'NetworkConditions(rtt: ${rtt.inMilliseconds}ms, '
+  String toString() =>
+      'NetworkConditions(rtt: ${rtt.inMilliseconds}ms, '
       'loss: $loss, bandwidthBps: $bandwidthBps)';
 }
 
@@ -254,7 +257,8 @@ class AdaptiveConnectionBudget {
     int retransmitMs,
     int tcpStallMs,
     int serializationMs,
-  }) _terms(NetworkConditions conditions) {
+  })
+  _terms(NetworkConditions conditions) {
     final effRttMs = math.max(
       conditions.rtt.inMilliseconds,
       minRtt.inMilliseconds,
@@ -268,9 +272,12 @@ class AdaptiveConnectionBudget {
     final bps = conditions.bandwidthBps;
     final serializationMs = (bps == null || bps <= 0)
         ? 0
-        : (handshakeBytes * 8 * 1000 / math.max(bps, minBandwidthBps) *
-                lossFactor)
-            .round();
+        : (handshakeBytes *
+                  8 *
+                  1000 /
+                  math.max(bps, minBandwidthBps) *
+                  lossFactor)
+              .round();
 
     // Retransmission under loss. `lossFactor` is the EXPECTED NUMBER of tries
     // a round trip needs; the timer DOUBLES between tries, so the time those
@@ -300,8 +307,8 @@ class AdaptiveConnectionBudget {
     // at-least-once outbox, aborting one stalled await early is free (the
     // envelope keeps retransmitting) while a fresh dial samples fresh TCP
     // luck. Zero at p=0, negligible on the low-loss profiles.
-    final tcpStallMs =
-        (retransmitMs * (tcpSerializedDeliveries - 1) * p).round();
+    final tcpStallMs = (retransmitMs * (tcpSerializedDeliveries - 1) * p)
+        .round();
 
     return (
       effRttMs: effRttMs,
@@ -317,14 +324,15 @@ class AdaptiveConnectionBudget {
   /// Every output is clamped, so out-of-range or absent measurements degrade
   /// into the bounds rather than into an [ArgumentError] downstream.
   factory AdaptiveConnectionBudget.fromConditions(
-      NetworkConditions conditions) {
+    NetworkConditions conditions,
+  ) {
     final t = _terms(conditions);
     final attemptMs =
         (t.effRttMs * handshakeRoundTrips * t.lossFactor).round() +
-            t.retransmitMs +
-            t.tcpStallMs +
-            t.serializationMs +
-            fixedCost.inMilliseconds;
+        t.retransmitMs +
+        t.tcpStallMs +
+        t.serializationMs +
+        fixedCost.inMilliseconds;
     final attemptCost = Duration(milliseconds: attemptMs);
 
     final maxElapsedMs = (attemptMs * attemptsAllowed).clamp(
@@ -385,7 +393,8 @@ class AdaptiveConnectionBudget {
       );
     }
     final t = _terms(conditions);
-    final rawMs = detectionFloor.inMilliseconds +
+    final rawMs =
+        detectionFloor.inMilliseconds +
         (t.effRttMs * roundTrips * t.lossFactor).round() +
         t.retransmitMs +
         t.serializationMs +
@@ -478,8 +487,8 @@ class AdaptiveConnectionBudget {
 
     final int spareBps = usableShareBps - offeredRateBps;
     final Duration minStep = Duration(
-      microseconds:
-          (frameBits * Duration.microsecondsPerSecond / spareBps).round(),
+      microseconds: (frameBits * Duration.microsecondsPerSecond / spareBps)
+          .round(),
     );
 
     if (minStep > maxStep) {
@@ -547,7 +556,8 @@ class AdaptiveConnectionBudget {
     Duration connectTimeout,
     int maxReconnectAttempts,
     Duration messageLifetime,
-  }) signalingTiming({
+  })
+  signalingTiming({
     required Duration heartbeatFloor,
     required Duration livenessFloor,
     required Duration connectTimeoutFloor,
@@ -602,7 +612,8 @@ class AdaptiveConnectionBudget {
   }
 
   @override
-  String toString() => 'AdaptiveConnectionBudget('
+  String toString() =>
+      'AdaptiveConnectionBudget('
       'attemptCost: ${attemptCost.inMilliseconds}ms, '
       'maxElapsed: ${maxElapsed.inSeconds}s, '
       'maxAttempts: $maxAttempts, '

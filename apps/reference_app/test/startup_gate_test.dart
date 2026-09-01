@@ -44,41 +44,41 @@ void main() {
       expect(() => gate.requireManifest(), throwsA(isA<StartupNotReady>()));
     });
 
-    test('a successful retrieval admits callers and names its source', () async {
-      final gate = StartupManifestGate();
-      final held = await gate.retrieve(
-        () async => StartupManifest(manifest(), ManifestSource.signedConfig),
-      );
-      expect(held.source, ManifestSource.signedConfig);
-      expect(gate.holdsUsableManifest, isTrue);
-      expect(gate.phase, StartupPhase.ready);
-      expect(gate.requireManifest().manifest, isNotNull);
-    });
-
     test(
-      'the attempt cap is a loud failure naming the cap, not a silent fall '
-      'to another rung',
+      'a successful retrieval admits callers and names its source',
       () async {
-        final policy = const StartupRetrievalPolicy(maxAttempts: 3);
-        final gate = StartupManifestGate(policy: policy);
-        var attempts = 0;
-        await expectLater(
-          gate.retrieve(() async {
-            attempts++;
-            return const StartupManifest(null, ManifestSource.none);
-          }),
-          throwsA(
-            isA<StartupBudgetExceeded>().having(
-              (e) => e.toString(),
-              'toString',
-              contains('maxAttempts'),
-            ),
-          ),
+        final gate = StartupManifestGate();
+        final held = await gate.retrieve(
+          () async => StartupManifest(manifest(), ManifestSource.signedConfig),
         );
-        expect(attempts, 3, reason: 'bounded, never an unbounded retry loop');
-        expect(gate.holdsUsableManifest, isFalse);
+        expect(held.source, ManifestSource.signedConfig);
+        expect(gate.holdsUsableManifest, isTrue);
+        expect(gate.phase, StartupPhase.ready);
+        expect(gate.requireManifest().manifest, isNotNull);
       },
     );
+
+    test('the attempt cap is a loud failure naming the cap, not a silent fall '
+        'to another rung', () async {
+      final policy = const StartupRetrievalPolicy(maxAttempts: 3);
+      final gate = StartupManifestGate(policy: policy);
+      var attempts = 0;
+      await expectLater(
+        gate.retrieve(() async {
+          attempts++;
+          return const StartupManifest(null, ManifestSource.none);
+        }),
+        throwsA(
+          isA<StartupBudgetExceeded>().having(
+            (e) => e.toString(),
+            'toString',
+            contains('maxAttempts'),
+          ),
+        ),
+      );
+      expect(attempts, 3, reason: 'bounded, never an unbounded retry loop');
+      expect(gate.holdsUsableManifest, isFalse);
+    });
 
     test('after the budget is spent, refusals name the same cap', () async {
       final gate = StartupManifestGate(
@@ -101,7 +101,8 @@ void main() {
             contains('maxAttempts'),
           ),
         ),
-        reason: 'a device with no document must be told why, not left to '
+        reason:
+            'a device with no document must be told why, not left to '
             'discover it as a call that never connects',
       );
     });
@@ -120,7 +121,8 @@ void main() {
           return StartupManifest(manifest(), ManifestSource.signedConfig);
         }),
         throwsA(isA<StartupBudgetExceeded>()),
-        reason: 'a slow source must not turn a refusal into an unbounded '
+        reason:
+            'a slow source must not turn a refusal into an unbounded '
             'startup delay',
       );
       expect(gate.holdsUsableManifest, isFalse);
@@ -133,7 +135,8 @@ void main() {
       var attempt = 0;
       final held = await gate.retrieve(() async {
         attempt++;
-        if (attempt < 3) return const StartupManifest(null, ManifestSource.none);
+        if (attempt < 3)
+          return const StartupManifest(null, ManifestSource.none);
         return StartupManifest(manifest(), ManifestSource.outOfBand);
       });
       expect(attempt, 3);
@@ -141,15 +144,12 @@ void main() {
       expect(gate.holdsUsableManifest, isTrue);
     });
 
-    test(
-      'the bootstrap bounds are compiled in, and that is deliberate: they '
-      'cap time and effort, not a quality property',
-      () {
-        const defaults = StartupRetrievalPolicy.defaults;
-        expect(defaults.attemptDeadline, greaterThan(Duration.zero));
-        expect(defaults.totalDeadline, greaterThan(defaults.attemptDeadline));
-        expect(defaults.maxAttempts, greaterThan(0));
-      },
-    );
+    test('the bootstrap bounds are compiled in, and that is deliberate: they '
+        'cap time and effort, not a quality property', () {
+      const defaults = StartupRetrievalPolicy.defaults;
+      expect(defaults.attemptDeadline, greaterThan(Duration.zero));
+      expect(defaults.totalDeadline, greaterThan(defaults.attemptDeadline));
+      expect(defaults.maxAttempts, greaterThan(0));
+    });
   });
 }

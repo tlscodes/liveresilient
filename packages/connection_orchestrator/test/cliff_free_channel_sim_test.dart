@@ -136,76 +136,97 @@ _RunResult _runInOrderBaseline(
 
 void main() {
   group('cliff-free simulated channel sweep', () {
-    test('loss sweep 0..0.9, 5 seeds: table, worst case, baseline compare',
-        () {
-      final layers = _layers();
-      final alloc = LayeredRedundancyAllocator();
-      final encs = [for (final l in layers) RlncEncoder(l, blockSize: _bs)];
-      final blockCounts = [for (final e in encs) e.blockCount];
-      final rawBytes = layers.fold<int>(0, (a, l) => a + l.length);
+    test(
+      'loss sweep 0..0.9, 5 seeds: table, worst case, baseline compare',
+      () {
+        final layers = _layers();
+        final alloc = LayeredRedundancyAllocator();
+        final encs = [for (final l in layers) RlncEncoder(l, blockSize: _bs)];
+        final blockCounts = [for (final e in encs) e.blockCount];
+        final rawBytes = layers.fold<int>(0, (a, l) => a + l.length);
 
-      // ignore: avoid_print
-      print('loss | worstL0bytes | worstLayers | worstAUC | baseLayers | '
-          'baseAUC | sent/raw');
-      for (var loss10 = 0; loss10 <= 9; loss10++) {
-        final loss = loss10 / 10;
-        final plan = alloc.allocate(
-          blockCounts: blockCounts,
-          budgetBytes: 1 << 31,
-          estimate: _memoryless(loss),
-          plannerTrials: 100,
-        );
-        var worstL0 = -1;
-        var worstLayers = 999;
-        var worstAuc = 2.0;
-        var worstBaseLayers = 999;
-        var worstBaseAuc = 2.0;
-        var sent = 0;
-        for (var seed = 0; seed < 5; seed++) {
-          final r =
-              _runLayered(layers, plan, loss, Random(7000 + seed));
-          final b = _runInOrderBaseline(
-              layers, r.bytesSent, loss, Random(7000 + seed));
-          sent = r.bytesSent;
-          if (r.bytesToFirstL0 > worstL0) worstL0 = r.bytesToFirstL0;
-          if (r.usableLayers < worstLayers) worstLayers = r.usableLayers;
-          if (r.auc < worstAuc) worstAuc = r.auc;
-          if (b.usableLayers < worstBaseLayers) {
-            worstBaseLayers = b.usableLayers;
-          }
-          if (b.auc < worstBaseAuc) worstBaseAuc = b.auc;
-        }
         // ignore: avoid_print
-        print('${(loss * 100).round().toString().padLeft(3)}% | '
+        print(
+          'loss | worstL0bytes | worstLayers | worstAUC | baseLayers | '
+          'baseAUC | sent/raw',
+        );
+        for (var loss10 = 0; loss10 <= 9; loss10++) {
+          final loss = loss10 / 10;
+          final plan = alloc.allocate(
+            blockCounts: blockCounts,
+            budgetBytes: 1 << 31,
+            estimate: _memoryless(loss),
+            plannerTrials: 100,
+          );
+          var worstL0 = -1;
+          var worstLayers = 999;
+          var worstAuc = 2.0;
+          var worstBaseLayers = 999;
+          var worstBaseAuc = 2.0;
+          var sent = 0;
+          for (var seed = 0; seed < 5; seed++) {
+            final r = _runLayered(layers, plan, loss, Random(7000 + seed));
+            final b = _runInOrderBaseline(
+              layers,
+              r.bytesSent,
+              loss,
+              Random(7000 + seed),
+            );
+            sent = r.bytesSent;
+            if (r.bytesToFirstL0 > worstL0) worstL0 = r.bytesToFirstL0;
+            if (r.usableLayers < worstLayers) worstLayers = r.usableLayers;
+            if (r.auc < worstAuc) worstAuc = r.auc;
+            if (b.usableLayers < worstBaseLayers) {
+              worstBaseLayers = b.usableLayers;
+            }
+            if (b.auc < worstBaseAuc) worstBaseAuc = b.auc;
+          }
+          // ignore: avoid_print
+          print(
+            '${(loss * 100).round().toString().padLeft(3)}% | '
             '${worstL0.toString().padLeft(11)} | '
             '${worstLayers.toString().padLeft(11)} | '
             '${worstAuc.toStringAsFixed(3).padLeft(8)} | '
             '${worstBaseLayers.toString().padLeft(10)} | '
             '${worstBaseAuc.toStringAsFixed(3).padLeft(7)} | '
-            '${(sent / rawBytes).toStringAsFixed(2)}x');
+            '${(sent / rawBytes).toStringAsFixed(2)}x',
+          );
 
-        // C13 core: estimator-driven allocation decodes L0 at EVERY loss
-        // point, worst seed — the cliff does not relocate.
-        expect(worstL0, greaterThan(0),
-            reason: 'L0 must decode at ${loss * 100}% loss on every seed');
-        expect(worstLayers, greaterThanOrEqualTo(1));
-        // The target schedule is 0.999/0.99/0.95/0.90 — refinement layers
-        // are ALLOWED to miss occasionally by design, so the worst-seed
-        // assertion is on the protected prefix, not on all four layers.
-        if (loss <= 0.5) {
-          expect(worstLayers, greaterThanOrEqualTo(2),
-              reason: 'L0 (0.999) and L1 (0.99) must both survive up to '
-                  '50% loss on every seed');
+          // C13 core: estimator-driven allocation decodes L0 at EVERY loss
+          // point, worst seed — the cliff does not relocate.
+          expect(
+            worstL0,
+            greaterThan(0),
+            reason: 'L0 must decode at ${loss * 100}% loss on every seed',
+          );
+          expect(worstLayers, greaterThanOrEqualTo(1));
+          // The target schedule is 0.999/0.99/0.95/0.90 — refinement layers
+          // are ALLOWED to miss occasionally by design, so the worst-seed
+          // assertion is on the protected prefix, not on all four layers.
+          if (loss <= 0.5) {
+            expect(
+              worstLayers,
+              greaterThanOrEqualTo(2),
+              reason:
+                  'L0 (0.999) and L1 (0.99) must both survive up to '
+                  '50% loss on every seed',
+            );
+          }
+          // The layered path beats the same-bytes in-order baseline on AUC
+          // whenever the channel is lossy at all.
+          if (loss >= 0.2) {
+            expect(
+              worstAuc,
+              greaterThan(worstBaseAuc),
+              reason:
+                  'same spend, lossy channel: layered must dominate '
+                  'in-order on area under the quality curve',
+            );
+          }
         }
-        // The layered path beats the same-bytes in-order baseline on AUC
-        // whenever the channel is lossy at all.
-        if (loss >= 0.2) {
-          expect(worstAuc, greaterThan(worstBaseAuc),
-              reason: 'same spend, lossy channel: layered must dominate '
-                  'in-order on area under the quality curve');
-        }
-      }
-    }, timeout: const Timeout(Duration(minutes: 4)));
+      },
+      timeout: const Timeout(Duration(minutes: 4)),
+    );
 
     test('red-line exhibit: fixed 1.6x still collapses at 50% loss', () {
       // Kept deliberately (spec C13): if this ever PASSES the sweep, the
@@ -225,13 +246,16 @@ void main() {
         }
         if (reasm.usableLayerCount == 0) l0Failures++;
       }
-      expect(l0Failures, greaterThan(0),
-          reason: 'a fixed factor must fail somewhere in the sweep — that '
-              'failure is the finding the allocator exists to fix');
+      expect(
+        l0Failures,
+        greaterThan(0),
+        reason:
+            'a fixed factor must fail somewhere in the sweep — that '
+            'failure is the finding the allocator exists to fix',
+      );
     });
 
-    test('stale-estimate drill: 20 pp low estimate, L0 margin still holds',
-        () {
+    test('stale-estimate drill: 20 pp low estimate, L0 margin still holds', () {
       // Spec C13 second clause: estimate deliberately 20 percentage points
       // below true loss; the 1.25x L0 margin must keep L0 alive in >= 70%
       // of trials.
@@ -257,9 +281,11 @@ void main() {
         if (dec.isComplete) ok++;
       }
       // ignore: avoid_print
-      print('stale-estimate drill: L0 decoded $ok/$trials '
-          '(sendCount ${plan.layers[0].sendCount}, '
-          'blocks ${enc.blockCount})');
+      print(
+        'stale-estimate drill: L0 decoded $ok/$trials '
+        '(sendCount ${plan.layers[0].sendCount}, '
+        'blocks ${enc.blockCount})',
+      );
       expect(ok / trials, greaterThanOrEqualTo(0.70));
     });
   });

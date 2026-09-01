@@ -55,48 +55,62 @@ void main() {
   test('gradient round-trips: luma error bounded, orientation preserved', () {
     const w = 64, h = 64;
     final src = _gradient(w, h);
-    final img = ThumbHash.decodeToRgba(ThumbHash.encodeRgba(w, h, src),
-        longSidePx: w);
+    final img = ThumbHash.decodeToRgba(
+      ThumbHash.encodeRgba(w, h, src),
+      longSidePx: w,
+    );
     expect(img.width, w);
     expect(img.height, h);
     var errSum = 0.0;
     for (var y = 0; y < h; y++) {
       for (var x = 0; x < w; x++) {
-        errSum +=
-            (_lumaOf(img.rgba, y * w + x) - _lumaOf(src, y * w + x)).abs();
+        errSum += (_lumaOf(img.rgba, y * w + x) - _lumaOf(src, y * w + x))
+            .abs();
       }
     }
-    expect(errSum / (w * h), lessThan(0.15 * 255),
-        reason: 'blurred placeholder must still resemble the photo');
+    expect(
+      errSum / (w * h),
+      lessThan(0.15 * 255),
+      reason: 'blurred placeholder must still resemble the photo',
+    );
     // The gradient brightens left-to-right; the decoded placeholder must
     // keep that shape.
-    expect(_lumaOf(img.rgba, h ~/ 2 * w + (w - 4)),
-        greaterThan(_lumaOf(img.rgba, h ~/ 2 * w + 3)));
+    expect(
+      _lumaOf(img.rgba, h ~/ 2 * w + (w - 4)),
+      greaterThan(_lumaOf(img.rgba, h ~/ 2 * w + 3)),
+    );
   });
 
   test('aspect survives the round trip via the coefficient grid', () {
     final wide = ThumbHash.decodeToRgba(
-        ThumbHash.encodeRgba(128, 64, _gradient(128, 64)));
+      ThumbHash.encodeRgba(128, 64, _gradient(128, 64)),
+    );
     expect(wide.width, greaterThan(wide.height));
     final tall = ThumbHash.decodeToRgba(
-        ThumbHash.encodeRgba(64, 128, _gradient(64, 128)));
+      ThumbHash.encodeRgba(64, 128, _gradient(64, 128)),
+    );
     expect(tall.height, greaterThan(tall.width));
   });
 
   test('corrupt input is rejected, never mis-rendered', () {
     expect(() => ThumbHash.decodeToRgba(Uint8List(3)), throwsArgumentError);
     expect(
-        () => ThumbHash.decodeToRgba(
-            Uint8List.fromList([9, 6, 6, 0, 0, 0, 0, 0])),
-        throwsArgumentError);
-    expect(() => ThumbHash.encodeRgba(300, 4, Uint8List(300 * 4 * 4)),
-        throwsArgumentError);
+      () =>
+          ThumbHash.decodeToRgba(Uint8List.fromList([9, 6, 6, 0, 0, 0, 0, 0])),
+      throwsArgumentError,
+    );
+    expect(
+      () => ThumbHash.encodeRgba(300, 4, Uint8List(300 * 4 * 4)),
+      throwsArgumentError,
+    );
     // Random noise with a valid header byte must either decode or throw a
     // typed error — never crash unclassified.
     final rng = math.Random(7);
     for (var round = 0; round < 50; round++) {
-      final junk = Uint8List.fromList(
-          [1, ...List.generate(30, (_) => rng.nextInt(256))]);
+      final junk = Uint8List.fromList([
+        1,
+        ...List.generate(30, (_) => rng.nextInt(256)),
+      ]);
       try {
         ThumbHash.decodeToRgba(junk);
       } on ArgumentError {

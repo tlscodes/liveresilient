@@ -20,7 +20,8 @@ void main() {
     Duration connectTimeout,
     int maxReconnectAttempts,
     Duration messageLifetime,
-  }) timingFor(NetworkConditions c) =>
+  })
+  timingFor(NetworkConditions c) =>
       AdaptiveConnectionBudget.fromConditions(c).signalingTiming(
         heartbeatFloor: hbFloor,
         livenessFloor: liveFloor,
@@ -76,24 +77,40 @@ void main() {
       for (final rttMs in [4, 80, 900, 2000]) {
         for (final loss in [0.0, 0.1, 0.35, 0.6, 0.9]) {
           for (final bw in [null, 16000, 32000, 1000000]) {
-            final t = timingFor(NetworkConditions(
-              rtt: Duration(milliseconds: rttMs),
-              loss: loss,
-              bandwidthBps: bw,
-            ));
+            final t = timingFor(
+              NetworkConditions(
+                rtt: Duration(milliseconds: rttMs),
+                loss: loss,
+                bandwidthBps: bw,
+              ),
+            );
             final why = 'rtt=$rttMs loss=$loss bw=$bw';
-            expect(t.heartbeatInterval, greaterThanOrEqualTo(hbFloor),
-                reason: why);
-            expect(t.livenessTimeout, greaterThanOrEqualTo(liveFloor),
-                reason: why);
-            expect(t.connectTimeout, greaterThanOrEqualTo(dialFloor),
-                reason: why);
-            expect(t.maxReconnectAttempts,
-                greaterThanOrEqualTo(attemptsFloor),
-                reason: why);
+            expect(
+              t.heartbeatInterval,
+              greaterThanOrEqualTo(hbFloor),
+              reason: why,
+            );
+            expect(
+              t.livenessTimeout,
+              greaterThanOrEqualTo(liveFloor),
+              reason: why,
+            );
+            expect(
+              t.connectTimeout,
+              greaterThanOrEqualTo(dialFloor),
+              reason: why,
+            );
+            expect(
+              t.maxReconnectAttempts,
+              greaterThanOrEqualTo(attemptsFloor),
+              reason: why,
+            );
             // The downstream SignalingClientConfig requires this ordering.
-            expect(t.livenessTimeout, greaterThan(t.heartbeatInterval),
-                reason: why);
+            expect(
+              t.livenessTimeout,
+              greaterThan(t.heartbeatInterval),
+              reason: why,
+            );
             // The socket layer never gives up before the call-level budget:
             // attempts x dial spans maxElapsed.
             final budget = AdaptiveConnectionBudget.fromConditions(
@@ -130,12 +147,14 @@ void main() {
         'less patience)', () {
       Duration last = Duration.zero;
       for (final loss in [0.0, 0.15, 0.3, 0.45, 0.6, 0.75]) {
-        final t = timingFor(NetworkConditions(
-          rtt: const Duration(milliseconds: 200),
-          loss: loss,
-        ));
-        expect(t.livenessTimeout, greaterThanOrEqualTo(last),
-            reason: 'loss=$loss');
+        final t = timingFor(
+          NetworkConditions(rtt: const Duration(milliseconds: 200), loss: loss),
+        );
+        expect(
+          t.livenessTimeout,
+          greaterThanOrEqualTo(last),
+          reason: 'loss=$loss',
+        );
         last = t.livenessTimeout;
       }
     });

@@ -181,8 +181,7 @@ class CompactManifestCode {
         if (seen == bare.length) {
           cut = i + 1;
           // Consume one separator immediately after the prefix, if present.
-          if (cut < text0.length &&
-              RegExp(r'[-\s]').hasMatch(text0[cut])) {
+          if (cut < text0.length && RegExp(r'[-\s]').hasMatch(text0[cut])) {
             cut++;
           }
           break;
@@ -234,7 +233,8 @@ class CompactManifestCode {
       );
     }
     final body = framed.sublist(0, framed.length - 2);
-    final expected = (framed[framed.length - 2] << 8) | framed[framed.length - 1];
+    final expected =
+        (framed[framed.length - 2] << 8) | framed[framed.length - 1];
     if (_crc16(body) != expected) {
       throw const CompactDecodeException(
         CompactDecodeError.checksumMismatch,
@@ -316,10 +316,9 @@ final class OobImportResult {
 
   bool get accepted => verification is ManifestAccepted;
 
-  EndpointManifest? get manifest =>
-      verification is ManifestAccepted
-          ? (verification! as ManifestAccepted).manifest
-          : null;
+  EndpointManifest? get manifest => verification is ManifestAccepted
+      ? (verification! as ManifestAccepted).manifest
+      : null;
 
   /// A line safe to show a user or write to a log: never key material, never
   /// the document itself.
@@ -397,7 +396,11 @@ class OobManifestImport {
     try {
       documentBytes = CompactManifestCode.decode(code);
     } on CompactDecodeException catch (e) {
-      return OobImportResult(source: source, verification: null, decodeError: e);
+      return OobImportResult(
+        source: source,
+        verification: null,
+        decodeError: e,
+      );
     }
     return importBytes(documentBytes, source: source, now: now);
   }

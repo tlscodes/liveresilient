@@ -76,8 +76,11 @@ final class RetransmitCapDataChannelInit extends rtc.RTCDataChannelInit {
 }
 
 final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
-  FlutterWebRtcPeerConnectionPort._(this._pc, this._localStream,
-      [this._opusPolicy]) {
+  FlutterWebRtcPeerConnectionPort._(
+    this._pc,
+    this._localStream, [
+    this._opusPolicy,
+  ]) {
     _pc.onConnectionState = (rtc.RTCPeerConnectionState state) {
       final mapped = mapConnectionState(state);
       if (mapped != null && !_statusController.isClosed) {
@@ -219,7 +222,8 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
     // touched — what the far end sent is what the far end wants. A rollback
     // carries no SDP to edit.
     final policy = _opusPolicy;
-    final sdp = (policy == null || policy.isNoop || description.type == 'rollback')
+    final sdp =
+        (policy == null || policy.isNoop || description.type == 'rollback')
         ? description.sdp
         : applyOpusPolicy(description.sdp, policy);
     await _pc.setLocalDescription(

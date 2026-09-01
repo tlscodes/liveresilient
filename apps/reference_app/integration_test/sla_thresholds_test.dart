@@ -217,34 +217,37 @@ void main() {
       final connectBudget = stressConnectWindow > appConnectBudget
           ? stressConnectWindow
           : appConnectBudget;
-      final connected = await Future.wait([
-        initiator.controller
-            .start()
-            .then((_) => initiator.waitForConnected(timeout: connectBudget)),
-        receiver.controller
-            .start()
-            .then((_) => receiver.waitForConnected(timeout: connectBudget)),
-      ]).timeout(
-        connectBudget + const Duration(seconds: 5),
-        // Named, because this backstop is what actually fires on the hostile
-        // profiles: `start()` blocks through its own recovery loop, so the
-        // per-role waits above may not even have begun when the budget runs
-        // out — the 2026-08-06 loss60/extreme rows died here as an anonymous
-        // "Future not completed" that hid which role and phase stalled.
-        onTimeout: () => throw TimeoutException(
-          'connect budget (${connectBudget.inSeconds}s + 5s) exhausted; '
-          'initiator phase=${initiator.controller.state.phase.name} '
-          'error=${initiator.controller.state.error}; '
-          'receiver phase=${receiver.controller.state.phase.name} '
-          'error=${receiver.controller.state.error}; '
-          'initiator timeline: ${initiator.recentPhases()}; '
-          'receiver timeline: ${receiver.recentPhases()}',
-        ),
+      final connected =
+          await Future.wait([
+            initiator.controller.start().then(
+              (_) => initiator.waitForConnected(timeout: connectBudget),
+            ),
+            receiver.controller.start().then(
+              (_) => receiver.waitForConnected(timeout: connectBudget),
+            ),
+          ]).timeout(
+            connectBudget + const Duration(seconds: 5),
+            // Named, because this backstop is what actually fires on the hostile
+            // profiles: `start()` blocks through its own recovery loop, so the
+            // per-role waits above may not even have begun when the budget runs
+            // out — the 2026-08-06 loss60/extreme rows died here as an anonymous
+            // "Future not completed" that hid which role and phase stalled.
+            onTimeout: () => throw TimeoutException(
+              'connect budget (${connectBudget.inSeconds}s + 5s) exhausted; '
+              'initiator phase=${initiator.controller.state.phase.name} '
+              'error=${initiator.controller.state.error}; '
+              'receiver phase=${receiver.controller.state.phase.name} '
+              'error=${receiver.controller.state.error}; '
+              'initiator timeline: ${initiator.recentPhases()}; '
+              'receiver timeline: ${receiver.recentPhases()}',
+            ),
+          );
+      summary['connectMs'] = DateTime.now()
+          .difference(connectStarted)
+          .inMilliseconds;
+      summary['bothConnected'] = connected.every(
+        (s) => s.phase == CallPhase.connected,
       );
-      summary['connectMs'] =
-          DateTime.now().difference(connectStarted).inMilliseconds;
-      summary['bothConnected'] =
-          connected.every((s) => s.phase == CallPhase.connected);
 
       // Closed-loop sentinel («هوشمندی v4» pillar 2): the same trend
       // detector the fabric acts on, instrumented over the live call so

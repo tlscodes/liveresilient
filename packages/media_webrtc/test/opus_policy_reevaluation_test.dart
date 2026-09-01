@@ -53,7 +53,8 @@ void main() {
       expect(
         first.target,
         isA<OpusPolicyPendingPtime>(),
-        reason: 'the disruption being counted toward is a ptime change, which '
+        reason:
+            'the disruption being counted toward is a ptime change, which '
             'is the thing that costs a renegotiation',
       );
       expect(
@@ -101,7 +102,8 @@ void main() {
       expect(
         refusal.minimumBandwidthBps,
         29715,
-        reason: 'a capacity refusal must name the bandwidth that would fix it, '
+        reason:
+            'a capacity refusal must name the bandwidth that would fix it, '
             'measured from the same formula admission uses',
       );
     });
@@ -129,7 +131,8 @@ void main() {
       expect(
         pendings,
         10,
-        reason: 'and the deferral is visible on every one of them, so a '
+        reason:
+            'and the deferral is visible on every one of them, so a '
             'suppressed disruption can be seen in a log instead of looking '
             'like a steady link',
       );
@@ -177,7 +180,8 @@ void main() {
       expect(
         change.policy.ptimeMs,
         120,
-        reason: 'the ptime is unchanged, which is exactly why no '
+        reason:
+            'the ptime is unchanged, which is exactly why no '
             'renegotiation is required',
       );
       expect(unit.policy.opusRateBps, 12000);
@@ -195,7 +199,8 @@ void main() {
       expect(
         steady.policy.bandwidthBps,
         60000,
-        reason: 'steady means the policy stands, not that the link report is '
+        reason:
+            'steady means the policy stands, not that the link report is '
             'discarded — occupancy must describe the link as it is now',
       );
     });
@@ -238,7 +243,8 @@ void main() {
         expect(
           unit.onBandwidthSample(16000),
           isA<OpusPolicyBelowFloor>(),
-          reason: 'a link that stays below the floor must keep saying so; '
+          reason:
+              'a link that stays below the floor must keep saying so; '
               'reporting it once would leave a caller that missed the one '
               'decision running a call the measurement says cannot work',
         );
@@ -267,7 +273,8 @@ void main() {
           initialPolicy: admitted(64000),
         ).onBandwidthSample(0),
         throwsArgumentError,
-        reason: 'an absent estimate is not a sample of zero; feeding nothing '
+        reason:
+            'an absent estimate is not a sample of zero; feeding nothing '
             'is how a caller says it does not know',
       );
     });
@@ -297,7 +304,8 @@ void main() {
       expect(
         refusal.minimumBandwidthBps,
         isNull,
-        reason: 'no bandwidth fixes a delay refusal, so the field that would '
+        reason:
+            'no bandwidth fixes a delay refusal, so the field that would '
             'name one stays absent instead of misleading the caller',
       );
     });

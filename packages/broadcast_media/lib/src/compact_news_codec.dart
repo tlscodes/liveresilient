@@ -26,7 +26,13 @@ class MalformedNewsPage implements Exception {
 }
 
 const List<String> newsPageKeys = [
-  'ver', 'title', 'dek', 'published', 'source', 'image', 'body',
+  'ver',
+  'title',
+  'dek',
+  'published',
+  'source',
+  'image',
+  'body',
 ];
 const List<String> newsImageKeys = ['type', 'hash', 'w', 'h', 'alt'];
 
@@ -34,9 +40,14 @@ void _cborUint(BytesBuilder b, int major, int n) {
   if (n < 24) {
     b.addByte(major << 5 | n);
   } else if (n < 256) {
-    b..addByte(major << 5 | 24)..addByte(n);
+    b
+      ..addByte(major << 5 | 24)
+      ..addByte(n);
   } else if (n < 65536) {
-    b..addByte(major << 5 | 25)..addByte(n >> 8)..addByte(n & 0xFF);
+    b
+      ..addByte(major << 5 | 25)
+      ..addByte(n >> 8)
+      ..addByte(n & 0xFF);
   } else {
     b.addByte(major << 5 | 26);
     b.add([n >> 24 & 0xFF, n >> 16 & 0xFF, n >> 8 & 0xFF, n & 0xFF]);
@@ -134,8 +145,7 @@ class _Reader {
 }
 
 /// Decodes wire bytes back to the page map; malformed input fails cleanly.
-Map<String, Object?> decodeNewsPage(
-    Uint8List wire, BrotliDecompress brotli) {
+Map<String, Object?> decodeNewsPage(Uint8List wire, BrotliDecompress brotli) {
   final cbor = brotli(wire);
   final v = _Reader(cbor).value();
   if (v is! Map<String, Object?>) throw MalformedNewsPage('root not a map');

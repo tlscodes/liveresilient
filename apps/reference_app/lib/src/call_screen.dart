@@ -171,7 +171,8 @@ class CallScreen extends StatelessWidget {
             // Mirrors the real degraded mode — active exactly when the call
             // is running on voice notes; zero height otherwise.
             VoiceNoteModeBanner(
-              active: phase == CallPhase.degraded &&
+              active:
+                  phase == CallPhase.degraded &&
                   degradedMode == DegradedMode.voiceNotes,
             ),
             if (phase == CallPhase.reconnecting) ...[

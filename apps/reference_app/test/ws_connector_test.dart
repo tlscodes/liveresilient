@@ -31,71 +31,67 @@ Future<HttpServer> _startEchoServer() async {
 
 void main() {
   group('ticket 6 — the resolution seam', () {
-    test(
-      '6a  the seam is asynchronous and is awaited, not called for its '
-      'side effect',
-      () async {
-        // The migration this gate covers moved the call out of the
-        // synchronous prologue and into the async body that already
-        // existed. If the connector ever stops awaiting it, the address
-        // never arrives and the connection silently uses the original
-        // host — which is indistinguishable from having no resolver at
-        // all, the exact defect ticket 6 exists to remove.
-        final server = await _startEchoServer();
-        addTearDown(() => server.close(force: true));
+    test('6a  the seam is asynchronous and is awaited, not called for its '
+        'side effect', () async {
+      // The migration this gate covers moved the call out of the
+      // synchronous prologue and into the async body that already
+      // existed. If the connector ever stops awaiting it, the address
+      // never arrives and the connection silently uses the original
+      // host — which is indistinguishable from having no resolver at
+      // all, the exact defect ticket 6 exists to remove.
+      final server = await _startEchoServer();
+      addTearDown(() => server.close(force: true));
 
-        var awaited = false;
-        Future<String?> resolver(String host) async {
-          // A real await, so a caller that does not await this receives a
-          // Future rather than the address.
-          await Future<void>.delayed(const Duration(milliseconds: 5));
-          awaited = true;
-          return InternetAddress.loopbackIPv4.address;
-        }
+      var awaited = false;
+      Future<String?> resolver(String host) async {
+        // A real await, so a caller that does not await this receives a
+        // Future rather than the address.
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        awaited = true;
+        return InternetAddress.loopbackIPv4.address;
+      }
 
-        final socket = await connectWebSocketWithCustomRules(
-          Uri.parse('ws://$_unresolvableHost:${server.port}/ws'),
-          hostResolver: resolver,
-        );
-        addTearDown(() => socket.close());
+      final socket = await connectWebSocketWithCustomRules(
+        Uri.parse('ws://$_unresolvableHost:${server.port}/ws'),
+        hostResolver: resolver,
+      );
+      addTearDown(() => socket.close());
 
-        expect(
-          awaited,
-          isTrue,
-          reason: 'the connection completed against a host that cannot '
-              'resolve, so the address can only have come from the seam',
-        );
-      },
-    );
+      expect(
+        awaited,
+        isTrue,
+        reason:
+            'the connection completed against a host that cannot '
+            'resolve, so the address can only have come from the seam',
+      );
+    });
 
-    test(
-      '6a  the seam is consulted once per attempt, with the host the stack '
-      'is about to connect to',
-      () async {
-        final server = await _startEchoServer();
-        addTearDown(() => server.close(force: true));
+    test('6a  the seam is consulted once per attempt, with the host the stack '
+        'is about to connect to', () async {
+      final server = await _startEchoServer();
+      addTearDown(() => server.close(force: true));
 
-        final asked = <String>[];
-        Future<String?> resolver(String host) async {
-          asked.add(host);
-          return InternetAddress.loopbackIPv4.address;
-        }
+      final asked = <String>[];
+      Future<String?> resolver(String host) async {
+        asked.add(host);
+        return InternetAddress.loopbackIPv4.address;
+      }
 
-        final socket = await connectWebSocketWithCustomRules(
-          Uri.parse('ws://$_unresolvableHost:${server.port}/ws'),
-          hostResolver: resolver,
-        );
-        addTearDown(() => socket.close());
+      final socket = await connectWebSocketWithCustomRules(
+        Uri.parse('ws://$_unresolvableHost:${server.port}/ws'),
+        hostResolver: resolver,
+      );
+      addTearDown(() => socket.close());
 
-        expect(asked, contains(_unresolvableHost));
-        expect(
-          asked,
-          hasLength(1),
-          reason: 'one attempt, one question — the name is an input the '
-              'stack produces at connect time, not a set held in advance',
-        );
-      },
-    );
+      expect(asked, contains(_unresolvableHost));
+      expect(
+        asked,
+        hasLength(1),
+        reason:
+            'one attempt, one question — the name is an input the '
+            'stack produces at connect time, not a set held in advance',
+      );
+    });
 
     test(
       '6g  the proxy path does not consult the seam, and that is deliberate',
@@ -127,7 +123,8 @@ void main() {
         expect(
           consulted,
           isFalse,
-          reason: 'consulting it here would apply a mapping the proxy path '
+          reason:
+              'consulting it here would apply a mapping the proxy path '
               'cannot use, and would hide that the proxy is the one '
               'resolving the name',
         );

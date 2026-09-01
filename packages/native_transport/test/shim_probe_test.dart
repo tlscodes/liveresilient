@@ -13,12 +13,14 @@ import 'package:test/test.dart';
 
 void main() {
   group('ShimProbe on a process with no shim linked', () {
-    test('constructing one does not throw, and reports the symbols are absent',
-        () {
-      final probe = ShimProbe.ofThisProcess();
-      expect(probe.state, ShimProbeState.symbolsAbsent);
-      expect(probe.backendLinked, isFalse);
-    });
+    test(
+      'constructing one does not throw, and reports the symbols are absent',
+      () {
+        final probe = ShimProbe.ofThisProcess();
+        expect(probe.state, ShimProbeState.symbolsAbsent);
+        expect(probe.backendLinked, isFalse);
+      },
+    );
 
     test('every question answers nothing rather than throwing', () {
       final probe = ShimProbe.ofThisProcess();
@@ -41,10 +43,14 @@ void main() {
       // The two facts a caller must never confuse: nothing to ask, versus asked
       // and told no. They are different enum members precisely so a caller
       // cannot collapse them, and this test fails if they are ever merged.
-      expect(ShimProbeState.symbolsAbsent,
-          isNot(ShimProbeState.presentBackendUnlinked));
-      expect(EchProbeOutcome.noBackendInThisProcess,
-          isNot(EchProbeOutcome.ignored));
+      expect(
+        ShimProbeState.symbolsAbsent,
+        isNot(ShimProbeState.presentBackendUnlinked),
+      );
+      expect(
+        EchProbeOutcome.noBackendInThisProcess,
+        isNot(EchProbeOutcome.ignored),
+      );
       expect(EchProbeOutcome.applied, isNot(EchProbeOutcome.ignored));
     });
   });

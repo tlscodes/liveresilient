@@ -519,7 +519,8 @@ CallSessionHandle? devConnectToLocalRelay({
       : buildRtcIceConfig(
           manifest,
           profile: iceProfileFor(
-            iceFailureCount: iceFailureCount ??
+            iceFailureCount:
+                iceFailureCount ??
                 devIceFailureLedger.failureCountFor(resolvedCallId),
             featureFlags: manifest.featureFlags,
           ),

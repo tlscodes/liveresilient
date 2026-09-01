@@ -27,7 +27,10 @@ enum IceProfile {
 
 /// The two values the peer connection config needs.
 final class RtcIceConfig {
-  const RtcIceConfig({required this.iceServers, required this.iceTransportPolicy});
+  const RtcIceConfig({
+    required this.iceServers,
+    required this.iceTransportPolicy,
+  });
 
   final List<Map<String, Object>> iceServers;
 

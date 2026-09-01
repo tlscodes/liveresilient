@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -101,8 +100,7 @@ void main() {
     // Complete-or-timeout: an absence claim is only as strong as "zero
     // candidates AT gathering-complete"; the backstop timer alone would be
     // "zero candidates in an arbitrary window", which is weaker.
-    await gatheringDone.future
-        .timeout(backstop, onTimeout: () {});
+    await gatheringDone.future.timeout(backstop, onTimeout: () {});
     final complete = gatheringDone.isCompleted;
     // Detach callbacks BEFORE close: platform-channel events can arrive
     // late, and a late append after the assertions read the list would be
@@ -121,8 +119,10 @@ void main() {
     }
     // Printed so the run produces an objective record, not just a pass mark.
     // ignore: avoid_print
-    print('[3f/device] policy=$policy candidates=${got.lines.length} '
-        'gatheringComplete=${got.complete} $byType');
+    print(
+      '[3f/device] policy=$policy candidates=${got.lines.length} '
+      'gatheringComplete=${got.complete} $byType',
+    );
     for (final line in got.lines) {
       // ignore: avoid_print
       print('[3f/device]   typ=${typeOf(line)} addr=${addressOf(line)}');
@@ -140,7 +140,8 @@ void main() {
         expect(
           hosts,
           isNotEmpty,
-          reason: 'if no host candidate appears even under "all", this device '
+          reason:
+              'if no host candidate appears even under "all", this device '
               'gathered nothing and the relay-only result below would be '
               'vacuously true — which is exactly the false green this test '
               'exists to prevent',
@@ -162,13 +163,15 @@ void main() {
         expect(
           leaked,
           isEmpty,
-          reason: 'these host addresses were gathered under a relay-only '
+          reason:
+              'these host addresses were gathered under a relay-only '
               'policy and would have been offered to the peer: $leaked',
         );
         expect(
           got.lines.where((line) => typeOf(line) == 'srflx'),
           isEmpty,
-          reason: 'a server-reflexive candidate is still an address of this '
+          reason:
+              'a server-reflexive candidate is still an address of this '
               'device as a reflector saw it; relay-only must not gather one',
         );
       },

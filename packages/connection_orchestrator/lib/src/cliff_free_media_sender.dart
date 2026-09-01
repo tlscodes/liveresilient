@@ -155,9 +155,7 @@ class CliffFreeMediaSender {
         throw ArgumentError('the lossless tail must be the last layer');
       }
     }
-    return [
-      for (final l in layers) RlncEncoder(l.bytes, blockSize: blockSize),
-    ];
+    return [for (final l in layers) RlncEncoder(l.bytes, blockSize: blockSize)];
   }
 
   /// Block counts come from the encoders themselves rather than from a copy of

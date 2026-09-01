@@ -80,11 +80,10 @@ class _Room {
 
   static const int maxSocketsPerSeat = 3;
 
-  Iterable<WebSocket> get sockets =>
-      members.values.expand((seat) => seat);
+  Iterable<WebSocket> get sockets => members.values.expand((seat) => seat);
 
-  bool isMember(WebSocket socket) => members.values
-      .any((seat) => seat.any((s) => identical(s, socket)));
+  bool isMember(WebSocket socket) =>
+      members.values.any((seat) => seat.any((s) => identical(s, socket)));
 
   List<WebSocket> _peerSocketsOf(WebSocket sender) {
     final result = <WebSocket>[];
@@ -321,8 +320,7 @@ class SignalingRelayServer {
           room.members.removeWhere((_, seat) => seat.isEmpty);
           room.lastActivity = _now();
           _logSink('room_member_left', callId: room.callId);
-          if (room.members.isEmpty &&
-              identical(_rooms[room.callId], room)) {
+          if (room.members.isEmpty && identical(_rooms[room.callId], room)) {
             _rooms.remove(room.callId);
             _logSink('room_closed', callId: room.callId);
           }

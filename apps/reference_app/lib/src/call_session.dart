@@ -150,6 +150,7 @@ CallSessionHandle buildWebRtcCallSession({
   required Uri endpoint,
   required String callId,
   required CallRole role,
+
   /// Maps a host name to an address, asynchronously, once per connection
   /// attempt (ticket 6). The name is an input the HTTP stack produces at
   /// connect time and a redirect can introduce a new one mid-flight, so this
@@ -160,6 +161,7 @@ CallSessionHandle buildWebRtcCallSession({
   SecurityContext? securityContext,
   ClipRecorder? recordVoiceClip,
   AudioFrameTap? audioFrameTap,
+
   /// Whether a fixed-tick emitter governs this call's output rate. It
   /// decides the codec's silence handling (gate 1e), so it is stated here
   /// rather than inferred: false is today's behaviour everywhere.
@@ -226,8 +228,9 @@ CallSessionHandle buildWebRtcCallSession({
 }) {
   final now = nowMs ?? () => DateTime.now().millisecondsSinceEpoch;
   final startedUtcMs = now();
-  final connectionBudget =
-      AdaptiveConnectionBudget.fromConditions(initialConditions);
+  final connectionBudget = AdaptiveConnectionBudget.fromConditions(
+    initialConditions,
+  );
   // What the AUDIO may cost on this link. Derived from the same conditions
   // as the connect budget so the two survival models cannot drift; 30% of
   // the link is reserved for the control plane (see OpusWireBudget).
@@ -253,11 +256,12 @@ CallSessionHandle buildWebRtcCallSession({
           required int frameBitsOnWire,
         }) =>
             connectionBudget.maxSchedulerStepFor(
-              initialConditions,
-              offeredRateBps: wireRateBps,
-              usableShareBps: perStreamBudgetBps.round(),
-              frameBits: frameBitsOnWire,
-            ) is SchedulerStepAdmissible,
+                  initialConditions,
+                  offeredRateBps: wireRateBps,
+                  usableShareBps: perStreamBudgetBps.round(),
+                  frameBits: frameBitsOnWire,
+                )
+                is SchedulerStepAdmissible,
   );
   // The refusal is binding. Placing the call at the cheapest configuration
   // anyway is what the old code did, and it survived only because the codec
@@ -271,12 +275,14 @@ CallSessionHandle buildWebRtcCallSession({
     OpusWireUnconstrained(:final budget) => budget,
     OpusWireNoCandidateFits() => throw CallAdmissionRefused(wireAdmission),
   };
-  final constrainedLink = initialConditions.bandwidthBps != null &&
+  final constrainedLink =
+      initialConditions.bandwidthBps != null &&
       initialConditions.bandwidthBps! > 0;
   // Gate 1e: silence handling is derived from the shaping state, not set by
   // hand. With the fixed-tick emitter off — the default everywhere today —
   // this yields exactly the previous policy: DTX on, constant bitrate off.
-  final effectiveOpusPolicy = opusPolicy ??
+  final effectiveOpusPolicy =
+      opusPolicy ??
       (constrainedLink
           ? OpusSdpPolicy.forShapingState(
               fixedTickEmitterRunning: fixedTickEmitterRunning,

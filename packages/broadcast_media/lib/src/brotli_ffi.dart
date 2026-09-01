@@ -43,24 +43,43 @@ final DynamicLibrary _enc = (() {
     return _openPart('brotlienc', 'brotlienc');
   } on ArgumentError catch (e) {
     throw StateError(
-        'brotli ENCODER library not available on this platform (the app '
-        'bundles decode-only frameworks; encode is a host/server path): $e');
+      'brotli ENCODER library not available on this platform (the app '
+      'bundles decode-only frameworks; encode is a host/server path): $e',
+    );
   }
 })();
 
-typedef _DecompressC = Int32 Function(
-    UintPtr, Pointer<Uint8>, Pointer<UintPtr>, Pointer<Uint8>);
-typedef _DecompressD = int Function(
-    int, Pointer<Uint8>, Pointer<UintPtr>, Pointer<Uint8>);
-typedef _CompressC = Int32 Function(Int32, Int32, Int32, UintPtr,
-    Pointer<Uint8>, Pointer<UintPtr>, Pointer<Uint8>);
-typedef _CompressD = int Function(
-    int, int, int, int, Pointer<Uint8>, Pointer<UintPtr>, Pointer<Uint8>);
+typedef _DecompressC =
+    Int32 Function(UintPtr, Pointer<Uint8>, Pointer<UintPtr>, Pointer<Uint8>);
+typedef _DecompressD =
+    int Function(int, Pointer<Uint8>, Pointer<UintPtr>, Pointer<Uint8>);
+typedef _CompressC =
+    Int32 Function(
+      Int32,
+      Int32,
+      Int32,
+      UintPtr,
+      Pointer<Uint8>,
+      Pointer<UintPtr>,
+      Pointer<Uint8>,
+    );
+typedef _CompressD =
+    int Function(
+      int,
+      int,
+      int,
+      int,
+      Pointer<Uint8>,
+      Pointer<UintPtr>,
+      Pointer<Uint8>,
+    );
 
-final _decompress =
-    _dec.lookupFunction<_DecompressC, _DecompressD>('BrotliDecoderDecompress');
-final _compress =
-    _enc.lookupFunction<_CompressC, _CompressD>('BrotliEncoderCompress');
+final _decompress = _dec.lookupFunction<_DecompressC, _DecompressD>(
+  'BrotliDecoderDecompress',
+);
+final _compress = _enc.lookupFunction<_CompressC, _CompressD>(
+  'BrotliEncoderCompress',
+);
 
 /// BROTLI_DECODER_RESULT_SUCCESS / BROTLI_TRUE from the C headers.
 const _decoderSuccess = 1;
@@ -94,8 +113,7 @@ Uint8List brotliEncode(Uint8List raw, {int quality = 11, int lgwin = 22}) {
   final dstP = malloc<Uint8>(cap);
   final outLen = malloc<UintPtr>()..value = cap;
   try {
-    final rc =
-        _compress(quality, lgwin, 0, raw.length, srcP, outLen, dstP);
+    final rc = _compress(quality, lgwin, 0, raw.length, srcP, outLen, dstP);
     if (rc != _encoderTrue) {
       throw StateError('BrotliEncoderCompress failed');
     }

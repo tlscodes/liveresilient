@@ -10,18 +10,25 @@ void main() {
     test('carries the ICE servers it is given', () {
       final cfg = FlutterWebRtcPeerConnectionPort.buildPeerConnectionConfig(
         iceServers: const [
-          {'urls': ['turns:relay.example:443'], 'username': 'u', 'credential': 'c'},
+          {
+            'urls': ['turns:relay.example:443'],
+            'username': 'u',
+            'credential': 'c',
+          },
         ],
       );
       expect(cfg['iceServers'], hasLength(1));
       expect((cfg['iceServers'] as List).first, containsPair('username', 'u'));
     });
 
-    test('defaults to policy all — relaying everything is never the default', () {
-      final cfg = FlutterWebRtcPeerConnectionPort.buildPeerConnectionConfig();
-      expect(cfg['iceTransportPolicy'], 'all');
-      expect(cfg['iceServers'], isEmpty);
-    });
+    test(
+      'defaults to policy all — relaying everything is never the default',
+      () {
+        final cfg = FlutterWebRtcPeerConnectionPort.buildPeerConnectionConfig();
+        expect(cfg['iceTransportPolicy'], 'all');
+        expect(cfg['iceServers'], isEmpty);
+      },
+    );
 
     test('passes relay policy through when asked', () {
       final cfg = FlutterWebRtcPeerConnectionPort.buildPeerConnectionConfig(

@@ -38,7 +38,12 @@ const int _keyBytes = 16;
 const Duration _keepalive = Duration(seconds: 1);
 
 final class DatagramLanePort implements DataChannelPort {
-  DatagramLanePort._(this._socket, this._relayHost, this._relayPort, this._key) {
+  DatagramLanePort._(
+    this._socket,
+    this._relayHost,
+    this._relayPort,
+    this._key,
+  ) {
     _socket.writeEventsEnabled = false;
     _sub = _socket.listen(_onEvent);
     _socket.send(_key, _relayHost, _relayPort);
@@ -60,7 +65,11 @@ final class DatagramLanePort implements DataChannelPort {
     }
     final host = InternetAddress.tryParse(relayHost);
     if (host == null) {
-      throw ArgumentError.value(relayHost, 'relayHost', 'must be an IP literal');
+      throw ArgumentError.value(
+        relayHost,
+        'relayHost',
+        'must be an IP literal',
+      );
     }
     final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
     return DatagramLanePort._(

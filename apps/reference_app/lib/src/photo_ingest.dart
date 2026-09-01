@@ -49,9 +49,7 @@ StagedPhotoArtifacts buildStagedPhotoArtifacts(Uint8List raw) {
       side = (side / 2).round().clamp(32, previewLongPx);
       previewImage = _capLongSide(full, side);
     }
-    preview = Uint8List.fromList(
-      img.encodeJpg(previewImage, quality: quality),
-    );
+    preview = Uint8List.fromList(img.encodeJpg(previewImage, quality: quality));
   }
 
   final tiny = _capLongSide(full, thumbLongPx).convert(numChannels: 4);
@@ -71,5 +69,9 @@ img.Image _capLongSide(img.Image im, int cap) {
   if (long <= cap) return im;
   return im.width >= im.height
       ? img.copyResize(im, width: cap, interpolation: img.Interpolation.linear)
-      : img.copyResize(im, height: cap, interpolation: img.Interpolation.linear);
+      : img.copyResize(
+          im,
+          height: cap,
+          interpolation: img.Interpolation.linear,
+        );
 }

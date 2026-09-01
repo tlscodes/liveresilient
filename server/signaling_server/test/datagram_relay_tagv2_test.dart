@@ -72,13 +72,15 @@ void main() {
     return (r[2] << 8) | r[3];
   }
 
-  test('v2 hello assigns a tag and repeating it returns the same tag',
-      () async {
-    final t1 = await hello(a);
-    final t2 = await hello(a);
-    expect(t1, isNot(0));
-    expect(t2, t1);
-  });
+  test(
+    'v2 hello assigns a tag and repeating it returns the same tag',
+    () async {
+      final t1 = await hello(a);
+      final t2 = await hello(a);
+      expect(t1, isNot(0));
+      expect(t2, t1);
+    },
+  );
 
   test('tagged datagram forwards verbatim to the other seat', () async {
     final tagA = await hello(a);

@@ -23,16 +23,17 @@ class Shimmer extends StatefulWidget {
   State<Shimmer> createState() => _ShimmerState();
 }
 
-class _ShimmerState extends State<Shimmer>
-    with SingleTickerProviderStateMixin {
+class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
   AnimationController? _controller;
 
   @override
   void initState() {
     super.initState();
     if (AppMotion.ambientEnabled) {
-      _controller = AnimationController(vsync: this, duration: AppMotion.ambient)
-        ..repeat();
+      _controller = AnimationController(
+        vsync: this,
+        duration: AppMotion.ambient,
+      )..repeat();
     }
   }
 

@@ -51,7 +51,7 @@ void main() {
     probe.send([0x42], host, relay.port);
     await settle();
     expect(seen, [
-      [0x42]
+      [0x42],
     ]);
     probe.close();
   });
@@ -69,8 +69,12 @@ void main() {
     a.send(frame(key, [1, 2, 3]), host, relay.port);
     b.send(frame(key, [9]), host, relay.port);
     await settle();
-    expect(seenB, [frame(key, [1, 2, 3])]);
-    expect(seenA, [frame(key, [9])]);
+    expect(seenB, [
+      frame(key, [1, 2, 3]),
+    ]);
+    expect(seenA, [
+      frame(key, [9]),
+    ]);
     a.close();
     b.close();
   });
@@ -87,7 +91,9 @@ void main() {
     await settle();
     b.send(frame(key, [6]), host, relay.port); // b re-learns, a is other
     await settle();
-    expect(seenA, [frame(key, [6])]);
+    expect(seenA, [
+      frame(key, [6]),
+    ]);
     a.close();
     b.close();
   });
@@ -107,8 +113,12 @@ void main() {
     a1.send(frame(k1, [11]), host, relay.port);
     a2.send(frame(k2, [22]), host, relay.port);
     await settle();
-    expect(seenB1, [frame(k1, [11])]);
-    expect(seenB2, [frame(k2, [22])]);
+    expect(seenB1, [
+      frame(k1, [11]),
+    ]);
+    expect(seenB2, [
+      frame(k2, [22]),
+    ]);
     for (final s in [a1, b1, a2, b2]) {
       s.close();
     }
@@ -129,12 +139,19 @@ void main() {
     // Fresh claims a seat; the zombie (older lastSeen) must be evicted.
     fresh.send(frame(key, [77]), host, relay.port);
     await settle();
-    expect(seenLive, [frame(key, [77])]);
+    expect(seenLive, [
+      frame(key, [77]),
+    ]);
     fresh.send(frame(key, [78]), host, relay.port);
     live.send(frame(key, [79]), host, relay.port);
     await settle();
-    expect(seenLive, [frame(key, [77]), frame(key, [78])]);
-    expect(seenFresh, [frame(key, [79])]);
+    expect(seenLive, [
+      frame(key, [77]),
+      frame(key, [78]),
+    ]);
+    expect(seenFresh, [
+      frame(key, [79]),
+    ]);
     zombie.close();
     live.close();
     fresh.close();

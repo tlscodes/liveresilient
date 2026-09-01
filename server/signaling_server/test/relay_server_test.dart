@@ -205,20 +205,22 @@ Future<void> main() async {
     },
   );
 
-  test('a join frame without a sender identity is dropped, not paired',
-      () async {
-    final server = await SignalingRelayServer.bind(
-      security: buildServerSecurityContext(),
-    );
-    addTearDown(server.close);
+  test(
+    'a join frame without a sender identity is dropped, not paired',
+    () async {
+      final server = await SignalingRelayServer.bind(
+        security: buildServerSecurityContext(),
+      );
+      addTearDown(server.close);
 
-    final a = await connectClient(server.port);
-    a.add(jsonEncode({'callId': 'call-anon', 'body': 'no-identity'}));
-    // Give the frame time to be processed, then confirm no room formed.
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    expect(server.activeRooms, 0);
-    await a.close();
-  });
+      final a = await connectClient(server.port);
+      a.add(jsonEncode({'callId': 'call-anon', 'body': 'no-identity'}));
+      // Give the frame time to be processed, then confirm no room formed.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(server.activeRooms, 0);
+      await a.close();
+    },
+  );
 
   test(
     'oversized frame is dropped, peer receives nothing, connection stays alive',

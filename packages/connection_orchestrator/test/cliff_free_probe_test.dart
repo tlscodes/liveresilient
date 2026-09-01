@@ -72,26 +72,35 @@ void main() {
       for (var i = 0; i < blocks; i++) {
         if (rng.nextDouble() >= 0.30) arrived++;
       }
-      expect(arrived, lessThan(blocks),
-          reason: 'some blocks are lost, so the in-order object never completes');
+      expect(
+        arrived,
+        lessThan(blocks),
+        reason: 'some blocks are lost, so the in-order object never completes',
+      );
       final completeness = arrived / blocks;
-      expect(completeness, greaterThan(0.5),
-          reason: 'most bytes DID arrive — and yet the object is unusable, '
-              'which is exactly the cliff');
+      expect(
+        completeness,
+        greaterThan(0.5),
+        reason:
+            'most bytes DID arrive — and yet the object is unusable, '
+            'which is exactly the cliff',
+      );
     });
 
     test('layers decode progressively as loss rises — no all-or-nothing', () {
       final results = <double, int>{};
       for (final loss in [0.0, 0.2, 0.5, 0.7, 0.9]) {
-        final r = _run(_layers(),
-            loss: loss, redundancy: 1.6, rng: Random(42));
+        final r = _run(_layers(), loss: loss, redundancy: 1.6, rng: Random(42));
         results[loss] = r.layersDecoded;
       }
       // Monotone: more loss never decodes MORE layers.
       final losses = results.keys.toList()..sort();
       for (var i = 1; i < losses.length; i++) {
-        expect(results[losses[i]]!, lessThanOrEqualTo(results[losses[i - 1]]!),
-            reason: 'quality must fall monotonically with loss, not jump');
+        expect(
+          results[losses[i]]!,
+          lessThanOrEqualTo(results[losses[i - 1]]!),
+          reason: 'quality must fall monotonically with loss, not jump',
+        );
       }
       // At zero loss everything decodes; at 90% loss something still does or
       // the redundancy budget was simply too small — both are informative, so
@@ -107,12 +116,19 @@ void main() {
       var l0Decoded = 0;
       const trials = 20;
       for (var t = 0; t < trials; t++) {
-        final r = _run([layers.first],
-            loss: 0.5, redundancy: 3.0, rng: Random(100 + t));
+        final r = _run(
+          [layers.first],
+          loss: 0.5,
+          redundancy: 3.0,
+          rng: Random(100 + t),
+        );
         if (r.layersDecoded == 1) l0Decoded++;
       }
-      expect(l0Decoded, equals(trials),
-          reason: 'L0 with 3x redundancy must survive 50% loss every time');
+      expect(
+        l0Decoded,
+        equals(trials),
+        reason: 'L0 with 3x redundancy must survive 50% loss every time',
+      );
     });
 
     test('clean-channel overhead is the price of the property', () {
@@ -124,11 +140,16 @@ void main() {
       expect(r.layersDecoded, equals(4));
       final overhead = (r.bytesDelivered - rawBytes) / rawBytes;
       // ignore: avoid_print
-      print('clean-channel overhead at redundancy 1.0: '
-          '${(overhead * 100).toStringAsFixed(2)}% '
-          '(${r.bytesDelivered} vs $rawBytes)');
-      expect(overhead, lessThan(0.30),
-          reason: 'framing overhead alone must stay well under the repair budget');
+      print(
+        'clean-channel overhead at redundancy 1.0: '
+        '${(overhead * 100).toStringAsFixed(2)}% '
+        '(${r.bytesDelivered} vs $rawBytes)',
+      );
+      expect(
+        overhead,
+        lessThan(0.30),
+        reason: 'framing overhead alone must stay well under the repair budget',
+      );
     });
 
     test('the spec 10% clean-channel gate is decided by blockSize alone', () {
@@ -147,8 +168,10 @@ void main() {
         }
         final overhead = (delivered - rawBytes) / rawBytes;
         // ignore: avoid_print
-        print('blockSize $bs -> clean overhead '
-            '${(overhead * 100).toStringAsFixed(2)}%');
+        print(
+          'blockSize $bs -> clean overhead '
+          '${(overhead * 100).toStringAsFixed(2)}%',
+        );
       }
       // The largest permitted block is the only one that can meet a 10% gate.
       var delivered55 = 0;
@@ -156,8 +179,11 @@ void main() {
         final enc = RlncEncoder(layer, blockSize: 55);
         delivered55 += enc.blockCount * 60;
       }
-      expect((delivered55 - rawBytes) / rawBytes, lessThan(0.10),
-          reason: 'blockSize 55 is what makes the 10% gate reachable');
+      expect(
+        (delivered55 - rawBytes) / rawBytes,
+        lessThan(0.10),
+        reason: 'blockSize 55 is what makes the 10% gate reachable',
+      );
     });
 
     test('how much redundancy L0 actually needs, per loss rate', () {
@@ -170,8 +196,12 @@ void main() {
         for (final r in [1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 12.0, 20.0]) {
           var allOk = true;
           for (var t = 0; t < 10; t++) {
-            final res =
-                _run([l0], loss: loss, redundancy: r, rng: Random(900 + t));
+            final res = _run(
+              [l0],
+              loss: loss,
+              redundancy: r,
+              rng: Random(900 + t),
+            );
             if (res.layersDecoded != 1) {
               allOk = false;
               break;
@@ -186,8 +216,11 @@ void main() {
       }
       // ignore: avoid_print
       print('redundancy needed for L0 (10/10 trials): $table');
-      expect(table['loss 50%'], isNot(isNaN),
-          reason: 'L0 must be deliverable at 50% loss within the swept budget');
+      expect(
+        table['loss 50%'],
+        isNot(isNaN),
+        reason: 'L0 must be deliverable at 50% loss within the swept budget',
+      );
     });
   });
 }

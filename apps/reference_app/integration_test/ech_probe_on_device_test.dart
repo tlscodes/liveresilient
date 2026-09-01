@@ -38,16 +38,20 @@ void main() {
   // name starts with a gate id as that gate's proof, and this test is a probe
   // the gate depends on, not the gate itself — naming it "4a…" made the ratchet
   // fail as stale within minutes, which is the ledger working exactly as built.
-  testWidgets('probe: the peer applies the configuration this build offers',
-      (WidgetTester tester) async {
+  testWidgets('probe: the peer applies the configuration this build offers', (
+    WidgetTester tester,
+  ) async {
     expect(_host, isNotEmpty, reason: 'PROBE_HOST was not defined');
     expect(_port, greaterThan(0), reason: 'PROBE_PORT was not defined');
     expect(_configHex, isNotEmpty, reason: 'PROBE_CONFIG_HEX was not defined');
     expect(_innerName, isNotEmpty, reason: 'PROBE_INNER_NAME was not defined');
 
     final probe = ShimProbe.ofThisProcess();
-    expect(probe.state, ShimProbeState.presentBackendLinked,
-        reason: 'this build has no backend to ask');
+    expect(
+      probe.state,
+      ShimProbeState.presentBackendLinked,
+      reason: 'this build has no backend to ask',
+    );
 
     final outcome = probe.echProbe(
       host: _host,
@@ -70,8 +74,12 @@ void main() {
     // that only checked for completion would call it a pass, and the capability
     // would be reported as present on the strength of a peer that did nothing
     // with it.
-    expect(outcome, EchProbeOutcome.applied,
-        reason: 'the peer answered $outcome; only `applied` means the '
-            'configuration this build offered was actually honoured');
+    expect(
+      outcome,
+      EchProbeOutcome.applied,
+      reason:
+          'the peer answered $outcome; only `applied` means the '
+          'configuration this build offered was actually honoured',
+    );
   });
 }

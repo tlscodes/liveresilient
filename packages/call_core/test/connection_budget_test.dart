@@ -5,14 +5,13 @@ AdaptiveConnectionBudget budgetFor({
   required int rttMs,
   required double loss,
   int? bandwidthBps,
-}) =>
-    AdaptiveConnectionBudget.fromConditions(
-      NetworkConditions(
-        rtt: Duration(milliseconds: rttMs),
-        loss: loss,
-        bandwidthBps: bandwidthBps,
-      ),
-    );
+}) => AdaptiveConnectionBudget.fromConditions(
+  NetworkConditions(
+    rtt: Duration(milliseconds: rttMs),
+    loss: loss,
+    bandwidthBps: bandwidthBps,
+  ),
+);
 
 void main() {
   group('AdaptiveConnectionBudget', () {
@@ -87,8 +86,10 @@ void main() {
 
     group('bandwidth term', () {
       test('a null bandwidth contributes nothing', () {
-        expect(budgetFor(rttMs: 1800, loss: 0).attemptCost,
-            const Duration(milliseconds: 19400));
+        expect(
+          budgetFor(rttMs: 1800, loss: 0).attemptCost,
+          const Duration(milliseconds: 19400),
+        );
       });
 
       test('16 kbit/s adds the serialization of one negotiation', () {
@@ -107,9 +108,11 @@ void main() {
       test('a zero or absurd bandwidth does not diverge', () {
         for (final bps in [0, -1, 1]) {
           final b = budgetFor(rttMs: 0, loss: 0, bandwidthBps: bps);
-          expect(b.maxElapsed,
-              lessThanOrEqualTo(AdaptiveConnectionBudget.maxElapsedCap),
-              reason: 'bps=$bps');
+          expect(
+            b.maxElapsed,
+            lessThanOrEqualTo(AdaptiveConnectionBudget.maxElapsedCap),
+            reason: 'bps=$bps',
+          );
         }
       });
     });
@@ -126,12 +129,15 @@ void main() {
       test('every output stays inside its declared bounds', () {
         for (final b in grid) {
           expect(
-              b.maxElapsed,
-              greaterThanOrEqualTo(AdaptiveConnectionBudget.minElapsed),
-              reason: '$b');
-          expect(b.maxElapsed,
-              lessThanOrEqualTo(AdaptiveConnectionBudget.maxElapsedCap),
-              reason: '$b');
+            b.maxElapsed,
+            greaterThanOrEqualTo(AdaptiveConnectionBudget.minElapsed),
+            reason: '$b',
+          );
+          expect(
+            b.maxElapsed,
+            lessThanOrEqualTo(AdaptiveConnectionBudget.maxElapsedCap),
+            reason: '$b',
+          );
           expect(b.maxAttempts, inInclusiveRange(3, 12), reason: '$b');
           expect(b.baseDelay, lessThanOrEqualTo(b.maxDelay), reason: '$b');
         }
@@ -141,19 +147,23 @@ void main() {
         for (final loss in losses) {
           for (var i = 1; i < rtts.length; i++) {
             expect(
-                budgetFor(rttMs: rtts[i], loss: loss).maxElapsed,
-                greaterThanOrEqualTo(
-                    budgetFor(rttMs: rtts[i - 1], loss: loss).maxElapsed),
-                reason: 'rtt ${rtts[i - 1]} -> ${rtts[i]} at loss $loss');
+              budgetFor(rttMs: rtts[i], loss: loss).maxElapsed,
+              greaterThanOrEqualTo(
+                budgetFor(rttMs: rtts[i - 1], loss: loss).maxElapsed,
+              ),
+              reason: 'rtt ${rtts[i - 1]} -> ${rtts[i]} at loss $loss',
+            );
           }
         }
         for (final rtt in rtts) {
           for (var i = 1; i < losses.length; i++) {
             expect(
-                budgetFor(rttMs: rtt, loss: losses[i]).maxElapsed,
-                greaterThanOrEqualTo(
-                    budgetFor(rttMs: rtt, loss: losses[i - 1]).maxElapsed),
-                reason: 'loss ${losses[i - 1]} -> ${losses[i]} at rtt $rtt');
+              budgetFor(rttMs: rtt, loss: losses[i]).maxElapsed,
+              greaterThanOrEqualTo(
+                budgetFor(rttMs: rtt, loss: losses[i - 1]).maxElapsed,
+              ),
+              reason: 'loss ${losses[i - 1]} -> ${losses[i]} at rtt $rtt',
+            );
           }
         }
         // Same property for the bandwidth axis: a narrower pipe never costs
@@ -161,12 +171,12 @@ void main() {
         const pipes = [16000, 32000, 128000, 1000000, 10000000];
         for (var i = 1; i < pipes.length; i++) {
           expect(
-              budgetFor(rttMs: 4, loss: 0, bandwidthBps: pipes[i - 1])
-                  .maxElapsed,
-              greaterThanOrEqualTo(
-                  budgetFor(rttMs: 4, loss: 0, bandwidthBps: pipes[i])
-                      .maxElapsed),
-              reason: 'pipe ${pipes[i - 1]} vs ${pipes[i]}');
+            budgetFor(rttMs: 4, loss: 0, bandwidthBps: pipes[i - 1]).maxElapsed,
+            greaterThanOrEqualTo(
+              budgetFor(rttMs: 4, loss: 0, bandwidthBps: pipes[i]).maxElapsed,
+            ),
+            reason: 'pipe ${pipes[i - 1]} vs ${pipes[i]}',
+          );
         }
       });
 

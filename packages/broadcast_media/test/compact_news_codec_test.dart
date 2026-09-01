@@ -9,20 +9,20 @@ import 'package:test/test.dart';
 Uint8List _id(Uint8List b) => b;
 
 Map<String, Object?> _page() => {
-      'ver': 1,
-      'title': 'شبکه‌ی آزمایشی در سه استان',
-      'dek': 'پوشش کم‌مصرف برای کنتورها',
-      'published': '2026-08-18T14:30:00+03:30',
-      'source': 'خبرگزاری نمونه',
-      'image': {
-        'type': 'blurhash',
-        'hash': 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH',
-        'w': 32,
-        'h': 20,
-        'alt': 'دکل کنار مزرعه',
-      },
-      'body': 'متن خبر با چند جمله‌ی فارسی و یک عدد ۴۲ و emoji 🙂.',
-    };
+  'ver': 1,
+  'title': 'شبکه‌ی آزمایشی در سه استان',
+  'dek': 'پوشش کم‌مصرف برای کنتورها',
+  'published': '2026-08-18T14:30:00+03:30',
+  'source': 'خبرگزاری نمونه',
+  'image': {
+    'type': 'blurhash',
+    'hash': 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH',
+    'w': 32,
+    'h': 20,
+    'alt': 'دکل کنار مزرعه',
+  },
+  'body': 'متن خبر با چند جمله‌ی فارسی و یک عدد ۴۲ و emoji 🙂.',
+};
 
 void main() {
   test('CBOR encoding is deterministic and round-trips', () {

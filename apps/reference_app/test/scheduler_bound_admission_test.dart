@@ -39,37 +39,41 @@ void main() {
       loss: 0,
     );
 
-    test('2b  the bound and the wire budget compose into ONE admission verdict',
-        () {
-      // The production wiring, reproduced: call_core computes the step bound
-      // from the path's delay, media_webrtc prices the wire, and the two meet
-      // in a single decision. Reproducing it here proves the two packages
-      // compose; the source assertion below proves production does the wiring.
-      final budget = AdaptiveConnectionBudget.fromConditions(wide);
-      final admission = OpusWireBudget.forBandwidth(
-        wide.bandwidthBps,
-        concurrentStreams: 2,
-        tickProbe:
-            ({
-              required int wireRateBps,
-              required double perStreamBudgetBps,
-              required int frameBitsOnWire,
-            }) =>
-                budget.maxSchedulerStepFor(
-                  wide,
-                  offeredRateBps: wireRateBps,
-                  usableShareBps: perStreamBudgetBps.round(),
-                  frameBits: frameBitsOnWire,
-                ) is SchedulerStepAdmissible,
-      );
+    test(
+      '2b  the bound and the wire budget compose into ONE admission verdict',
+      () {
+        // The production wiring, reproduced: call_core computes the step bound
+        // from the path's delay, media_webrtc prices the wire, and the two meet
+        // in a single decision. Reproducing it here proves the two packages
+        // compose; the source assertion below proves production does the wiring.
+        final budget = AdaptiveConnectionBudget.fromConditions(wide);
+        final admission = OpusWireBudget.forBandwidth(
+          wide.bandwidthBps,
+          concurrentStreams: 2,
+          tickProbe:
+              ({
+                required int wireRateBps,
+                required double perStreamBudgetBps,
+                required int frameBitsOnWire,
+              }) =>
+                  budget.maxSchedulerStepFor(
+                        wide,
+                        offeredRateBps: wireRateBps,
+                        usableShareBps: perStreamBudgetBps.round(),
+                        frameBits: frameBitsOnWire,
+                      )
+                      is SchedulerStepAdmissible,
+        );
 
-      expect(
-        admission,
-        isA<OpusWireFitted>(),
-        reason: 'a fast, wide link must be admitted once, by both halves '
-            'agreeing — not admitted here and refused downstream',
-      );
-    });
+        expect(
+          admission,
+          isA<OpusWireFitted>(),
+          reason:
+              'a fast, wide link must be admitted once, by both halves '
+              'agreeing — not admitted here and refused downstream',
+        );
+      },
+    );
 
     test('2b  a long path is refused for responsiveness, and the refusal comes '
         'from the bound rather than from capacity', () {
@@ -93,11 +97,12 @@ void main() {
               required int frameBitsOnWire,
             }) =>
                 budget.maxSchedulerStepFor(
-                  slow,
-                  offeredRateBps: wireRateBps,
-                  usableShareBps: perStreamBudgetBps.round(),
-                  frameBits: frameBitsOnWire,
-                ) is SchedulerStepAdmissible,
+                      slow,
+                      offeredRateBps: wireRateBps,
+                      usableShareBps: perStreamBudgetBps.round(),
+                      frameBits: frameBitsOnWire,
+                    )
+                    is SchedulerStepAdmissible,
       );
 
       expect(admission, isA<OpusWireNoCandidateFits>());
@@ -105,38 +110,43 @@ void main() {
       expect(
         refusal.cause,
         OpusWireRefusalCause.responsiveness,
-        reason: 'capacity was never the problem: the path is long, not narrow, '
+        reason:
+            'capacity was never the problem: the path is long, not narrow, '
             'and telling the caller to lower the rate cannot shorten a round '
             'trip',
       );
       expect(
         refusal.minimumBandwidthBps,
         isNull,
-        reason: 'there is no bandwidth that fixes a delay refusal, so the '
+        reason:
+            'there is no bandwidth that fixes a delay refusal, so the '
             'field that would name one must be absent rather than misleading',
       );
     });
 
-    test('2b  production wires the bound into admission, not a local constant',
-        () {
-      // Reproducing the composition in a test proves it is possible. This
-      // proves the app does it — the distinction that ticket 6 was created to
-      // enforce elsewhere in this repo.
-      final session = File(
-        '${Directory.current.path}/lib/src/call_session.dart',
-      ).readAsStringSync();
-      expect(
-        session,
-        contains('tickProbe:'),
-        reason: 'admission must receive the probe, or the bound is not part of '
-            'the decision at all',
-      );
-      expect(
-        session,
-        contains('maxSchedulerStepFor('),
-        reason: 'and the probe must be the real bound, not a local guess',
-      );
-    });
+    test(
+      '2b  production wires the bound into admission, not a local constant',
+      () {
+        // Reproducing the composition in a test proves it is possible. This
+        // proves the app does it — the distinction that ticket 6 was created to
+        // enforce elsewhere in this repo.
+        final session = File(
+          '${Directory.current.path}/lib/src/call_session.dart',
+        ).readAsStringSync();
+        expect(
+          session,
+          contains('tickProbe:'),
+          reason:
+              'admission must receive the probe, or the bound is not part of '
+              'the decision at all',
+        );
+        expect(
+          session,
+          contains('maxSchedulerStepFor('),
+          reason: 'and the probe must be the real bound, not a local guess',
+        );
+      },
+    );
 
     test('2b  any emitter construction must derive its tick from the bound — '
         'vacuous today, armed on the first site', () {
@@ -182,7 +192,8 @@ void main() {
       expect(
         sites,
         isEmpty,
-        reason: 'a production emitter site now exists. That is not a failure '
+        reason:
+            'a production emitter site now exists. That is not a failure '
             'in itself — it means this gate stops being vacuous, and the '
             'expectation here must be updated deliberately along with the '
             'ledger note that calls it vacuous: $sites',
@@ -190,7 +201,8 @@ void main() {
       expect(
         offenders,
         isEmpty,
-        reason: 'these sites construct the emitter without deriving the tick '
+        reason:
+            'these sites construct the emitter without deriving the tick '
             'from the scheduler bound, which is the defect this gate exists '
             'to prevent: $offenders',
       );

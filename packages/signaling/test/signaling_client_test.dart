@@ -232,40 +232,39 @@ void main() {
       });
     });
 
-    test(
-      "heartbeats carry the last send()'s room id — 'session' only before "
-      'the first send (relay pins a socket to its FIRST frame\'s room, '
-      '2026-08-09 split-room lesson)',
-      () {
-        runFake((async) {
-          final socket = FakeSocket();
-          final connector = CountingConnector()..queueSocket(socket);
-          final client = _buildClient(connector: connector);
-          client.connect();
-          async.flushMicrotasks();
+    test("heartbeats carry the last send()'s room id — 'session' only before "
+        'the first send (relay pins a socket to its FIRST frame\'s room, '
+        '2026-08-09 split-room lesson)', () {
+      runFake((async) {
+        final socket = FakeSocket();
+        final connector = CountingConnector()..queueSocket(socket);
+        final client = _buildClient(connector: connector);
+        client.connect();
+        async.flushMicrotasks();
 
-          async.elapse(const Duration(seconds: 15));
-          final before = socket.sentFrames
-              .lastWhere((e) => e.type == SignalType.heartbeat);
-          expect(before.callId, 'session');
+        async.elapse(const Duration(seconds: 15));
+        final before = socket.sentFrames.lastWhere(
+          (e) => e.type == SignalType.heartbeat,
+        );
+        expect(before.callId, 'session');
 
-          client.send(
-            callId: 'call-room-1',
-            type: SignalType.callControl,
-            payload: const {'kind': 'noop'},
-          );
-          async.flushMicrotasks();
+        client.send(
+          callId: 'call-room-1',
+          type: SignalType.callControl,
+          payload: const {'kind': 'noop'},
+        );
+        async.flushMicrotasks();
 
-          async.elapse(const Duration(seconds: 15));
-          final after = socket.sentFrames
-              .lastWhere((e) => e.type == SignalType.heartbeat);
-          expect(after.callId, 'call-room-1');
+        async.elapse(const Duration(seconds: 15));
+        final after = socket.sentFrames.lastWhere(
+          (e) => e.type == SignalType.heartbeat,
+        );
+        expect(after.callId, 'call-room-1');
 
-          client.dispose();
-          async.flushMicrotasks();
-        });
-      },
-    );
+        client.dispose();
+        async.flushMicrotasks();
+      });
+    });
 
     test(
       'a heartbeat send failure is absorbed; the client stays connected',

@@ -129,7 +129,10 @@ void main() {
         relativeTimeLabel(now.subtract(const Duration(hours: 2)), now),
         '2h',
       );
-      expect(relativeTimeLabel(DateTime(2026, 1, 14, 23, 59), now), 'Yesterday');
+      expect(
+        relativeTimeLabel(DateTime(2026, 1, 14, 23, 59), now),
+        'Yesterday',
+      );
       expect(relativeTimeLabel(DateTime(2026, 1, 14), now), 'Yesterday');
       expect(relativeTimeLabel(DateTime(2026, 1, 5, 9, 0), now), 'Jan 5');
       expect(
@@ -137,7 +140,10 @@ void main() {
         'Dec 30, 2025',
       );
       // Clock skew reporting the future must not produce negative labels.
-      expect(relativeTimeLabel(now.add(const Duration(minutes: 3)), now), 'now');
+      expect(
+        relativeTimeLabel(now.add(const Duration(minutes: 3)), now),
+        'now',
+      );
     });
   });
 
@@ -248,7 +254,10 @@ void main() {
       // Our message + status → badge, no pill.
       final mineTile = find.byKey(const ValueKey('conversation-tile-c2'));
       expect(
-        find.descendant(of: mineTile, matching: find.byType(MessageStatusBadge)),
+        find.descendant(
+          of: mineTile,
+          matching: find.byType(MessageStatusBadge),
+        ),
         findsOneWidget,
       );
       expect(unreadPillIn(mineTile), findsNothing);

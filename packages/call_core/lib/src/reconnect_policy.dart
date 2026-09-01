@@ -171,7 +171,7 @@ final class ExponentialBackoffReconnectPolicy implements ReconnectPolicy {
       final bound = context.attempt > maxAttempts
           ? 'attempts ${context.attempt} > max $maxAttempts'
           : 'elapsed ${context.elapsed.inSeconds}s >= '
-              'max ${maxElapsed.inSeconds}s';
+                'max ${maxElapsed.inSeconds}s';
       var reason =
           'Reconnect budget exhausted ($bound; '
           'attempt ${context.attempt}/$maxAttempts, '

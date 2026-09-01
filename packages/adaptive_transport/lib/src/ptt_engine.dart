@@ -34,9 +34,9 @@ final class PttBundler {
     required int tag,
     required Duration bundle,
     required PttSend send,
-  })  : _tag = tag,
-        _send = send,
-        _framesPerBundle = bundle.inMilliseconds ~/ pttFrameMs {
+  }) : _tag = tag,
+       _send = send,
+       _framesPerBundle = bundle.inMilliseconds ~/ pttFrameMs {
     if (tag < 0 || tag > 0xFFFF || tag == 0) {
       throw PttConfigError('tag must be u16 nonzero, got $tag');
     }

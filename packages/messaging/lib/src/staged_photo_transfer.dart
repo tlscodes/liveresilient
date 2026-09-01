@@ -60,8 +60,10 @@ class StagedPhotoArtifacts {
     this.contentType = 'image/jpeg',
   }) {
     if (thumbHash.length > 64) {
-      throw ArgumentError('thumbHash must ride inside the announcement '
-          '(<= 64 bytes, got ${thumbHash.length})');
+      throw ArgumentError(
+        'thumbHash must ride inside the announcement '
+        '(<= 64 bytes, got ${thumbHash.length})',
+      );
     }
     if (original.isEmpty) throw ArgumentError('original must not be empty');
     if (preview.isEmpty) throw ArgumentError('preview must not be empty');
@@ -121,18 +123,18 @@ class PhotoAnnouncement {
   bool get singleBlob => previewId == photoId;
 
   String encode() => jsonEncode({
-        't': _tag,
-        'v': 1,
-        'pid': photoId,
-        'sha': sha256Hex,
-        'pvid': previewId,
-        'sz': sizeBytes,
-        'pvsz': previewBytes,
-        'w': width,
-        'h': height,
-        'ct': contentType,
-        'th': base64Encode(thumbHash),
-      });
+    't': _tag,
+    'v': 1,
+    'pid': photoId,
+    'sha': sha256Hex,
+    'pvid': previewId,
+    'sz': sizeBytes,
+    'pvsz': previewBytes,
+    'w': width,
+    'h': height,
+    'ct': contentType,
+    'th': base64Encode(thumbHash),
+  });
 
   static PhotoAnnouncement? tryDecode(String text) {
     if (!text.contains('"$_tag"')) return null;
@@ -219,15 +221,15 @@ class StagedPhotoSender {
     int chunkBytes = 16 * 1024,
     int? Function()? transportBufferedBytes,
     int Function()? sendBudgetBytesPerSec,
-  })  : lane = StagedPhotoLane.arq,
-        _fountain = null,
-        _arq = BinaryStreamSender(
-          lanePort,
-          retransmitAfter: retransmitAfter,
-          chunkBytes: chunkBytes,
-          transportBufferedBytes: transportBufferedBytes,
-          sendBudgetBytesPerSec: sendBudgetBytesPerSec,
-        );
+  }) : lane = StagedPhotoLane.arq,
+       _fountain = null,
+       _arq = BinaryStreamSender(
+         lanePort,
+         retransmitAfter: retransmitAfter,
+         chunkBytes: chunkBytes,
+         transportBufferedBytes: transportBufferedBytes,
+         sendBudgetBytesPerSec: sendBudgetBytesPerSec,
+       );
 
   StagedPhotoSender.fountain(
     DataChannelPort lanePort, {
@@ -236,15 +238,15 @@ class StagedPhotoSender {
     int floorBytesPerSec = 32 * 1024,
     Duration staleAfter = const Duration(seconds: 45),
     int? Function()? transportBufferedBytes,
-  })  : lane = StagedPhotoLane.fountain,
-        _arq = null,
-        _fountain = FountainStreamSender(
-          lanePort,
-          symbolBytes: symbolBytes,
-          floorBytesPerSec: floorBytesPerSec,
-          staleAfter: staleAfter,
-          transportBufferedBytes: transportBufferedBytes,
-        );
+  }) : lane = StagedPhotoLane.fountain,
+       _arq = null,
+       _fountain = FountainStreamSender(
+         lanePort,
+         symbolBytes: symbolBytes,
+         floorBytesPerSec: floorBytesPerSec,
+         staleAfter: staleAfter,
+         transportBufferedBytes: transportBufferedBytes,
+       );
 
   /// One-line live evidence for a slow or dying delivery.
   String diag() => _arq?.diag() ?? 'fountain lane';
@@ -327,8 +329,12 @@ class StagedPhotoUpdate {
   /// announcement of a completed photo) — rendered instantly.
   final bool deduplicated;
 
-  StagedPhotoUpdate(this.photoId, this.stage, this.state,
-      {this.deduplicated = false});
+  StagedPhotoUpdate(
+    this.photoId,
+    this.stage,
+    this.state, {
+    this.deduplicated = false,
+  });
 }
 
 /// Receives staged photos: feed announcement texts via [offerText]; binary
@@ -348,7 +354,7 @@ class StagedPhotoReceiver {
   final _orphans = <String, Uint8List>{};
 
   StagedPhotoReceiver.arq(DataChannelPort lanePort)
-      : lane = StagedPhotoLane.arq {
+    : lane = StagedPhotoLane.arq {
     _arq = BinaryStreamReceiver(lanePort);
     _arqSub = _arq!.completed.listen((r) {
       if (r.sha256Ok) _onBlob(r.bytes);
@@ -386,8 +392,14 @@ class StagedPhotoReceiver {
     if (existing != null) {
       // Repeat announcement — the dedup dividend: whatever rungs we hold
       // render instantly on the far side of a "re-send".
-      _emit(StagedPhotoUpdate(ann.photoId, existing.stage, existing,
-          deduplicated: existing.stage != PhotoStage.announced));
+      _emit(
+        StagedPhotoUpdate(
+          ann.photoId,
+          existing.stage,
+          existing,
+          deduplicated: existing.stage != PhotoStage.announced,
+        ),
+      );
       return true;
     }
 
@@ -414,8 +426,7 @@ class StagedPhotoReceiver {
         _acceptOriginal(st, bytes);
         return;
       }
-      if (id == st.announcement.previewId &&
-          !st.announcement.singleBlob) {
+      if (id == st.announcement.previewId && !st.announcement.singleBlob) {
         _acceptPreview(st, bytes);
         return;
       }

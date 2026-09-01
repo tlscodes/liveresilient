@@ -1100,25 +1100,29 @@ final class CallController {
             // to open). Grace = connectionTimeout/4, floor 2 s cap 20 s;
             // `connected` cancels it; `failed`/`closed` stay immediate.
             if (_mediaDisconnectGraceTimer == null && !_terminal) {
-              final graceMs = (connectionTimeout.inMilliseconds ~/ 4)
-                  .clamp(2000, 20000);
-              _mediaDisconnectGraceTimer =
-                  Timer(Duration(milliseconds: graceMs), () {
-                _mediaDisconnectGraceTimer = null;
-                _enqueueEvent(() async {
-                  if (_terminal) {
-                    return;
-                  }
-                  await _beginRecovery(
-                    const CallControllerException(
-                      'media_disconnected',
-                      'Media connection stayed disconnected past its '
-                          'squall grace window',
-                    ),
-                    StackTrace.current,
-                  );
-                });
-              });
+              final graceMs = (connectionTimeout.inMilliseconds ~/ 4).clamp(
+                2000,
+                20000,
+              );
+              _mediaDisconnectGraceTimer = Timer(
+                Duration(milliseconds: graceMs),
+                () {
+                  _mediaDisconnectGraceTimer = null;
+                  _enqueueEvent(() async {
+                    if (_terminal) {
+                      return;
+                    }
+                    await _beginRecovery(
+                      const CallControllerException(
+                        'media_disconnected',
+                        'Media connection stayed disconnected past its '
+                            'squall grace window',
+                      ),
+                      StackTrace.current,
+                    );
+                  });
+                },
+              );
             }
           case MediaConnectionState.failed:
             _cancelMediaDisconnectGrace();
@@ -1411,7 +1415,8 @@ final class CallController {
     // watchdog alone declares stagnation — when it fires with no recent
     // remote delivery it begins recovery with its own non-Timeout cause,
     // so true silence still cycles exactly once per modeled attempt.
-    final progressedRecently = !_everConnected &&
+    final progressedRecently =
+        !_everConnected &&
         !_recoveryActive &&
         cause is TimeoutException &&
         // Engine bounds are LOCAL compute deadlines — a wedged engine is
@@ -1555,7 +1560,8 @@ final class CallController {
     // doomed generation.
     final last = _lastRemoteSignalAt;
     final cycleBaseline = _recoveryHardCycleAt ?? _recoveryStartedAt;
-    final patienceFresh = cycleBaseline == null ||
+    final patienceFresh =
+        cycleBaseline == null ||
         clock.now().difference(cycleBaseline) < connectionTimeout * 2;
     // ONE GENERATION FOR THE INITIAL CONNECT (wiretap-proven 2026-08-09):
     // under heavy loss each signaling leg is a TCP retransmit ladder —
@@ -1579,10 +1585,12 @@ final class CallController {
     // still hard-cycles immediately — patience cannot resurrect a dead
     // channel, only a reset can.
     final cause = _lastRecoveryCause;
-    final timeDriven = cause is CallControllerException &&
+    final timeDriven =
+        cause is CallControllerException &&
         (cause.code == 'initial_connection_timeout' ||
             cause.code == 'reconnect_connection_timeout');
-    final progressing = (!_everConnected && timeDriven) ||
+    final progressing =
+        (!_everConnected && timeDriven) ||
         (attempt > 1 &&
             patienceFresh &&
             last != null &&
@@ -1658,7 +1666,8 @@ final class CallController {
         // re-arm looped on chatter forever, bypassing the reconnect
         // policy's attempt/elapsed accounting entirely (2026-08-09).
         final cycleBaseline = _recoveryHardCycleAt ?? _recoveryStartedAt;
-        final patienceFresh = cycleBaseline == null ||
+        final patienceFresh =
+            cycleBaseline == null ||
             clock.now().difference(cycleBaseline) < connectionTimeout * 2;
         if (patienceFresh &&
             last != null &&

@@ -83,7 +83,9 @@ DecodedFrame _pictureToRgba(Pointer<Dav1dPicture> pic) {
       // BT.601 limited range, integer form
       final c298 = 298 * (yy - 16);
       rgba[o++] = _clamp8((c298 + 409 * (vv - 128) + 128) >> 8);
-      rgba[o++] = _clamp8((c298 - 100 * (uu - 128) - 208 * (vv - 128) + 128) >> 8);
+      rgba[o++] = _clamp8(
+        (c298 - 100 * (uu - 128) - 208 * (vv - 128) + 128) >> 8,
+      );
       rgba[o++] = _clamp8((c298 + 516 * (uu - 128) + 128) >> 8);
       rgba[o++] = 255;
     }

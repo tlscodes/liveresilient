@@ -110,11 +110,13 @@ class LaneFrame {
     final type = bytes[1];
     if (type < _typeHello || type > _typeProbeAck) return null;
     final len = view.getUint32(26);
-    final expected =
-        _headerBytes + len + (type == _typeChunk ? 4 : 0);
+    final expected = _headerBytes + len + (type == _typeChunk ? 4 : 0);
     if (bytes.length != expected) return null;
-    final payload =
-        Uint8List.sublistView(bytes, _headerBytes, _headerBytes + len);
+    final payload = Uint8List.sublistView(
+      bytes,
+      _headerBytes,
+      _headerBytes + len,
+    );
     if (type == _typeChunk) {
       final crc = view.getUint32(_headerBytes + len);
       if (crc != Crc32.of(payload)) return null;
@@ -214,11 +216,11 @@ class BinaryStreamSender {
     if (_recentCleanRtts.length > 16) {
       _recentCleanRtts.removeAt(0);
     }
-    minRttMs =
-        _recentCleanRtts.fold(double.infinity, (a, b) => a < b ? a : b);
+    minRttMs = _recentCleanRtts.fold(double.infinity, (a, b) => a < b ? a : b);
   }
 
-  String diag() => 'srtt=${srttMs.round()}ms rttvar=${rttvarMs.round()}ms '
+  String diag() =>
+      'srtt=${srttMs.round()}ms rttvar=${rttvarMs.round()}ms '
       'minRtt=${minRttMs.isFinite ? minRttMs.round() : -1}ms '
       'rate=${(deliveryBytesPerSec * 8 / 1000).round()}kbps '
       'acked=$ackedChunks retx=$retransmitCount helloAcked=$helloAcked';
@@ -239,8 +241,8 @@ class BinaryStreamSender {
     this.chunkBytes = 16 * 1024,
     this.transportBufferedBytes,
     this.sendBudgetBytesPerSec,
-  })  : assert(windowSize >= 1),
-        assert(chunkBytes >= 512);
+  }) : assert(windowSize >= 1),
+       assert(chunkBytes >= 512);
 
   /// Optional LIVE send-rate budget in bytes/second (token bucket, burst
   /// cap two seconds' worth). This is the link arbiter's lever: on a
@@ -369,8 +371,7 @@ class BinaryStreamSender {
                 lastCleanSampleAt = DateTime.now();
               }
             }
-            final elapsed =
-                DateTime.now().difference(startedAt).inMilliseconds;
+            final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
             if (elapsed > 0) {
               deliveryBytesPerSec =
                   timedAckedChunks * chunkBytes * 1000 / elapsed;
@@ -384,17 +385,13 @@ class BinaryStreamSender {
           final probeSent = probeSentAt.remove(frame.index);
           if (probeSent != null) {
             _recordCleanRtt(
-              DateTime.now()
-                  .difference(probeSent)
-                  .inMilliseconds
-                  .toDouble(),
+              DateTime.now().difference(probeSent).inMilliseconds.toDouble(),
             );
             lastCleanSampleAt = DateTime.now();
           }
       }
     });
-    final probeTimer =
-        Timer.periodic(const Duration(seconds: 2), (_) {
+    final probeTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       // Recovery freeze holds for probes too: "nothing new goes out".
       if (done.isCompleted || _paused) return;
       if (DateTime.now().difference(lastCleanSampleAt) <
@@ -409,8 +406,13 @@ class BinaryStreamSender {
       unawaited(
         _port
             .send(
-              LaneFrame(_typeProbe, transferId, nonce, total, Uint8List(0))
-                  .encode(),
+              LaneFrame(
+                _typeProbe,
+                transferId,
+                nonce,
+                total,
+                Uint8List(0),
+              ).encode(),
             )
             .catchError((Object _) {}),
       );
@@ -441,10 +443,13 @@ class BinaryStreamSender {
           // wedges the transfer at zero forever (measured 2026-08-08
           // narrow run 5: budget 500 B/s, chunk 4 KiB, cap 1000 B →
           // helloAcked with 0 chunks ever sent in 1500 s).
-          final burstCap =
-              rate * 2.0 < chunkBytes ? chunkBytes.toDouble() : rate * 2.0;
-          bucketTokens =
-              (bucketTokens + rate * dtMs / 1000).clamp(0.0, burstCap);
+          final burstCap = rate * 2.0 < chunkBytes
+              ? chunkBytes.toDouble()
+              : rate * 2.0;
+          bucketTokens = (bucketTokens + rate * dtMs / 1000).clamp(
+            0.0,
+            burstCap,
+          );
           if (bucketTokens >= chunkBytes) {
             bucketTokens -= chunkBytes;
             break;
@@ -494,8 +499,9 @@ class BinaryStreamSender {
         if (done.isCompleted || _paused) return;
       }
       final start = i * chunkBytes;
-      final end =
-          (start + chunkBytes) > content.length ? content.length : start + chunkBytes;
+      final end = (start + chunkBytes) > content.length
+          ? content.length
+          : start + chunkBytes;
       lastSentAt[i] = DateTime.now();
       await _port.send(
         LaneFrame(
@@ -517,8 +523,13 @@ class BinaryStreamSender {
       // in-memory loss test caught exactly that.
       final sizePayload = Uint8List(8)
         ..buffer.asByteData().setUint64(0, content.length);
-      final hello =
-          LaneFrame(_typeHello, transferId, 0, total, sizePayload).encode();
+      final hello = LaneFrame(
+        _typeHello,
+        transferId,
+        0,
+        total,
+        sizePayload,
+      ).encode();
       await _port.send(hello);
       var helloSentAt = DateTime.now();
       while (!haveBitmap && !done.isCompleted) {
@@ -564,8 +575,10 @@ class BinaryStreamSender {
               growIntervalMs) {
             lastWindowStep = DateTime.now();
             if (retransmitCount > lastRetxSeen) {
-              cwnd = (cwnd / 2)
-                  .clamp(windowSize.toDouble(), maxWindow.toDouble());
+              cwnd = (cwnd / 2).clamp(
+                windowSize.toDouble(),
+                maxWindow.toDouble(),
+              );
             } else if (cwnd < maxWindow) {
               cwnd += 1;
             }
@@ -612,8 +625,10 @@ class BinaryStreamSender {
         for (var i = 0; i < total && inFlight < window; i++) {
           if (acked[i]) continue;
           final sent = lastSentAt[i];
-          final deadlineMs =
-              (rtoMs * (1 << resendCount[i].clamp(0, 3))).clamp(rtoMs, 60000);
+          final deadlineMs = (rtoMs * (1 << resendCount[i].clamp(0, 3))).clamp(
+            rtoMs,
+            60000,
+          );
           if (sent == null ||
               now.difference(sent).inMilliseconds >= deadlineMs) {
             if (sent != null) {
@@ -637,8 +652,8 @@ class BinaryStreamSender {
             // pure self-throttle.
             final queueForming = minRttMs.isFinite && srttMs > 2 * minRttMs;
             if (queueForming && deliveryBytesPerSec > 0) {
-              final drainMs =
-                  (chunkBytes * 1000 / deliveryBytesPerSec / window).round();
+              final drainMs = (chunkBytes * 1000 / deliveryBytesPerSec / window)
+                  .round();
               if (drainMs > 0) {
                 await Future<void>.delayed(
                   Duration(milliseconds: drainMs.clamp(0, 2000)),
@@ -708,10 +723,14 @@ class BinaryStreamReceiver {
   Stream<BinaryReceived> get completed => _completed.stream;
 
   /// Restores a previously exported partial (resume across restarts).
-  void restorePartial(Uint8List transferId, Map<int, Uint8List> chunks,
-      {required int total, required int sizeBytes}) {
-    _partials[_key(transferId)] =
-        _RxPartial(total, sizeBytes)..parts.addAll(chunks);
+  void restorePartial(
+    Uint8List transferId,
+    Map<int, Uint8List> chunks, {
+    required int total,
+    required int sizeBytes,
+  }) {
+    _partials[_key(transferId)] = _RxPartial(total, sizeBytes)
+      ..parts.addAll(chunks);
   }
 
   Future<void> _onFrame(List<int> raw) async {
@@ -720,8 +739,13 @@ class BinaryStreamReceiver {
     final key = _key(frame.transferId);
     if (_completedIds.contains(key)) {
       await _port.send(
-        LaneFrame(_typeDone, frame.transferId, 0, frame.total, Uint8List(0))
-            .encode(),
+        LaneFrame(
+          _typeDone,
+          frame.transferId,
+          0,
+          frame.total,
+          Uint8List(0),
+        ).encode(),
       );
       return;
     }
@@ -731,33 +755,48 @@ class BinaryStreamReceiver {
           frame.payload.buffer,
           frame.payload.offsetInBytes,
         ).getUint64(0);
-        final partial =
-            _partials.putIfAbsent(key, () => _RxPartial(frame.total, size));
+        final partial = _partials.putIfAbsent(
+          key,
+          () => _RxPartial(frame.total, size),
+        );
         // Reply with what we already hold — the resume dividend.
         final bitmap = Uint8List((frame.total + 7) >> 3);
         for (final i in partial.parts.keys) {
           bitmap[i >> 3] |= 1 << (i & 7);
         }
         await _port.send(
-          LaneFrame(_typeHave, frame.transferId, 0, frame.total, bitmap)
-              .encode(),
+          LaneFrame(
+            _typeHave,
+            frame.transferId,
+            0,
+            frame.total,
+            bitmap,
+          ).encode(),
         );
       case _typeProbe:
         // Echo immediately: the sender's RTT estimator depends on this
         // being the fastest possible turnaround (no state, no disk).
         await _port.send(
-          LaneFrame(_typeProbeAck, frame.transferId, frame.index,
-                  frame.total, Uint8List(0))
-              .encode(),
+          LaneFrame(
+            _typeProbeAck,
+            frame.transferId,
+            frame.index,
+            frame.total,
+            Uint8List(0),
+          ).encode(),
         );
       case _typeChunk:
         final partial = _partials[key];
         if (partial == null || frame.index >= partial.total) return;
         partial.parts[frame.index] = Uint8List.fromList(frame.payload);
         await _port.send(
-          LaneFrame(_typeAck, frame.transferId, frame.index, frame.total,
-                  Uint8List(0))
-              .encode(),
+          LaneFrame(
+            _typeAck,
+            frame.transferId,
+            frame.index,
+            frame.total,
+            Uint8List(0),
+          ).encode(),
         );
         if (partial.parts.length == partial.total) {
           final builder = BytesBuilder(copy: false);
@@ -766,7 +805,8 @@ class BinaryStreamReceiver {
           }
           final bytes = builder.toBytes();
           final digest = sha256.convert(bytes).bytes;
-          final ok = _prefixMatches(digest, frame.transferId) &&
+          final ok =
+              _prefixMatches(digest, frame.transferId) &&
               bytes.length == partial.sizeBytes;
           if (ok) {
             _partials.remove(key);
@@ -775,15 +815,17 @@ class BinaryStreamReceiver {
               _completedIds.remove(_completedIds.first);
             }
             await _port.send(
-              LaneFrame(_typeDone, frame.transferId, 0, partial.total,
-                      Uint8List(0))
-                  .encode(),
+              LaneFrame(
+                _typeDone,
+                frame.transferId,
+                0,
+                partial.total,
+                Uint8List(0),
+              ).encode(),
             );
           }
           if (!_completed.isClosed) {
-            _completed.add(
-              BinaryReceived(frame.transferId, bytes, ok),
-            );
+            _completed.add(BinaryReceived(frame.transferId, bytes, ok));
           }
         }
       default:

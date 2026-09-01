@@ -108,10 +108,7 @@ void main() {
       File('${tempDir.path}/generations/candidate.json').existsSync(),
       isFalse,
     );
-    expect(
-      File('${tempDir.path}/generations/prev.json').existsSync(),
-      isTrue,
-    );
+    expect(File('${tempDir.path}/generations/prev.json').existsSync(), isTrue);
     expect(reborn.hub.calibrator.correction(), 2.0);
     await reborn.dispose();
   });
@@ -157,8 +154,7 @@ void main() {
       nowMs: () => 7,
     );
     final raw = jsonDecode(
-      File('${tempDir.path}/generations/promotion_log.json')
-          .readAsStringSync(),
+      File('${tempDir.path}/generations/promotion_log.json').readAsStringSync(),
     );
     expect(raw, isA<List<Object?>>());
     final restored = GenerationDecision.fromJson((raw as List).single)!;

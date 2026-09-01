@@ -113,18 +113,27 @@ class LayeredRedundancyAllocator {
     for (var i = 0; i < blockCounts.length; i++) {
       final blocks = blockCounts[i];
       if (blocks <= 0) {
-        out.add(LayerAllocation(
-            layerIndex: i, blockCount: 0, sendCount: 0, fullyProtected: true));
+        out.add(
+          LayerAllocation(
+            layerIndex: i,
+            blockCount: 0,
+            sendCount: 0,
+            fullyProtected: true,
+          ),
+        );
         continue;
       }
       // Cheap lower bound before paying for a Monte-Carlo plan: below the
       // bare block count nothing can decode.
       if (remaining < blocks) {
-        out.add(LayerAllocation(
+        out.add(
+          LayerAllocation(
             layerIndex: i,
             blockCount: blocks,
             sendCount: 0,
-            fullyProtected: false));
+            fullyProtected: false,
+          ),
+        );
         continue;
       }
       final desired = _desiredSendCount(
@@ -136,12 +145,14 @@ class LayeredRedundancyAllocator {
       );
       final grant = desired <= remaining ? desired : remaining;
       remaining -= grant;
-      out.add(LayerAllocation(
-        layerIndex: i,
-        blockCount: blocks,
-        sendCount: grant,
-        fullyProtected: grant >= desired,
-      ));
+      out.add(
+        LayerAllocation(
+          layerIndex: i,
+          blockCount: blocks,
+          sendCount: grant,
+          fullyProtected: grant >= desired,
+        ),
+      );
     }
     return AllocationResult(out, datagramBytes);
   }
@@ -171,7 +182,11 @@ class LayeredRedundancyAllocator {
       final gens = (blocks + generationSize - 1) ~/ generationSize;
       int planned;
       if (gens == 1) {
-        planned = planner.planSendCount(blocks, targetSuccess: target, trials: plannerTrials);
+        planned = planner.planSendCount(
+          blocks,
+          targetSuccess: target,
+          trials: plannerTrials,
+        );
       } else {
         final perGenTarget = _pow(target, 1 / gens);
         final kGen = planner.planSendCount(

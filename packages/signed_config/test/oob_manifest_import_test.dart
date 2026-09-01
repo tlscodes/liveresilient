@@ -100,7 +100,8 @@ void main() {
         Uint8List.fromList([0x00, 0x11, 0x22]),
       );
       final body = original.substring(CompactManifestCode.prefix.length);
-      final mangled = CompactManifestCode.prefix +
+      final mangled =
+          CompactManifestCode.prefix +
           body.replaceAll('0', 'O').replaceAll('1', 'I');
       expect(
         CompactManifestCode.decode(mangled),
@@ -114,7 +115,11 @@ void main() {
       );
       final chars = code.split('');
       // Flip one alphabet character somewhere in the middle of the body.
-      for (var i = code.length - 8; i > CompactManifestCode.prefix.length; i--) {
+      for (
+        var i = code.length - 8;
+        i > CompactManifestCode.prefix.length;
+        i--
+      ) {
         final c = chars[i];
         if (c == '-') continue;
         final idx = CompactManifestCode.alphabet.indexOf(c);
@@ -133,41 +138,44 @@ void main() {
       );
     });
 
-    test('rejects a missing prefix, a foreign character, and a huge payload',
-        () {
-      expect(
-        () => CompactManifestCode.decode('ABCDE-FGHJK'),
-        throwsA(
-          isA<CompactDecodeException>().having(
-            (e) => e.error,
-            'error',
-            CompactDecodeError.notACode,
+    test(
+      'rejects a missing prefix, a foreign character, and a huge payload',
+      () {
+        expect(
+          () => CompactManifestCode.decode('ABCDE-FGHJK'),
+          throwsA(
+            isA<CompactDecodeException>().having(
+              (e) => e.error,
+              'error',
+              CompactDecodeError.notACode,
+            ),
           ),
-        ),
-      );
-      expect(
-        () => CompactManifestCode.decode('${CompactManifestCode.prefix}AB!DE'),
-        throwsA(
-          isA<CompactDecodeException>().having(
-            (e) => e.error,
-            'error',
-            CompactDecodeError.badCharacter,
+        );
+        expect(
+          () =>
+              CompactManifestCode.decode('${CompactManifestCode.prefix}AB!DE'),
+          throwsA(
+            isA<CompactDecodeException>().having(
+              (e) => e.error,
+              'error',
+              CompactDecodeError.badCharacter,
+            ),
           ),
-        ),
-      );
-      expect(
-        () => CompactManifestCode.encode(
-          Uint8List(CompactManifestCode.maxPayloadBytes + 1),
-        ),
-        throwsA(
-          isA<CompactDecodeException>().having(
-            (e) => e.error,
-            'error',
-            CompactDecodeError.tooLarge,
+        );
+        expect(
+          () => CompactManifestCode.encode(
+            Uint8List(CompactManifestCode.maxPayloadBytes + 1),
           ),
-        ),
-      );
-    });
+          throwsA(
+            isA<CompactDecodeException>().having(
+              (e) => e.error,
+              'error',
+              CompactDecodeError.tooLarge,
+            ),
+          ),
+        );
+      },
+    );
 
     test('a real signed document fits a scannable code', () {
       final bytes = _documentBytes();
@@ -180,45 +188,53 @@ void main() {
   });
 
   group('OobManifestImport', () {
-    test('a scanned code reaches the same verdict as the network path',
-        () async {
-      final code = CompactManifestCode.encode(_documentBytes());
-      final result = await _import().importCode(code, now: _now);
+    test(
+      'a scanned code reaches the same verdict as the network path',
+      () async {
+        final code = CompactManifestCode.encode(_documentBytes());
+        final result = await _import().importCode(code, now: _now);
 
-      expect(result.accepted, isTrue);
-      expect(result.manifest!.revision, 3);
-      expect(result.manifest!.iceServers, hasLength(2));
-      expect(result.source, OobManifestSource.scannedCode);
-      expect(result.describe(), contains('accepted revision 3'));
-    });
+        expect(result.accepted, isTrue);
+        expect(result.manifest!.revision, 3);
+        expect(result.manifest!.iceServers, hasLength(2));
+        expect(result.source, OobManifestSource.scannedCode);
+        expect(result.describe(), contains('accepted revision 3'));
+      },
+    );
 
-    test('carrying it by hand buys NO extra trust: a bad signature is rejected',
-        () async {
-      final code = CompactManifestCode.encode(
-        _documentBytes(goodSignature: false),
-      );
-      final result = await _import().importCode(code, now: _now);
+    test(
+      'carrying it by hand buys NO extra trust: a bad signature is rejected',
+      () async {
+        final code = CompactManifestCode.encode(
+          _documentBytes(goodSignature: false),
+        );
+        final result = await _import().importCode(code, now: _now);
 
-      expect(result.accepted, isFalse);
-      expect(
-        (result.verification! as ManifestRejected).reason,
-        ManifestRejection.badSignature,
-      );
-    });
+        expect(result.accepted, isFalse);
+        expect(
+          (result.verification! as ManifestRejected).reason,
+          ManifestRejection.badSignature,
+        );
+      },
+    );
 
-    test('rollback protection still applies to an out-of-band manifest',
-        () async {
-      // The device has already accepted revision 9; a code offering 3 is a
-      // downgrade, and arriving on paper does not make it acceptable.
-      final code = CompactManifestCode.encode(_documentBytes(revision: 3));
-      final result = await _import(lastAccepted: 9).importCode(code, now: _now);
+    test(
+      'rollback protection still applies to an out-of-band manifest',
+      () async {
+        // The device has already accepted revision 9; a code offering 3 is a
+        // downgrade, and arriving on paper does not make it acceptable.
+        final code = CompactManifestCode.encode(_documentBytes(revision: 3));
+        final result = await _import(
+          lastAccepted: 9,
+        ).importCode(code, now: _now);
 
-      expect(result.accepted, isFalse);
-      expect(
-        (result.verification! as ManifestRejected).reason,
-        ManifestRejection.rollback,
-      );
-    });
+        expect(result.accepted, isFalse);
+        expect(
+          (result.verification! as ManifestRejected).reason,
+          ManifestRejection.rollback,
+        );
+      },
+    );
 
     test('the revision floor is read at import time, not captured', () async {
       var accepted = 0;
@@ -268,66 +284,69 @@ void main() {
       expect(result.source, OobManifestSource.file);
     });
 
-    test('pasted text accepts either form without the user knowing which',
-        () async {
-      final import = _import();
-      final asJson = await import.importText(
-        utf8.decode(_documentBytes()),
-        now: _now,
-      );
-      final asCode = await import.importText(
-        CompactManifestCode.encode(_documentBytes()),
-        now: _now,
-      );
+    test(
+      'pasted text accepts either form without the user knowing which',
+      () async {
+        final import = _import();
+        final asJson = await import.importText(
+          utf8.decode(_documentBytes()),
+          now: _now,
+        );
+        final asCode = await import.importText(
+          CompactManifestCode.encode(_documentBytes()),
+          now: _now,
+        );
 
-      expect(asJson.accepted, isTrue);
-      expect(asCode.accepted, isTrue);
-      expect(asJson.source, OobManifestSource.pastedText);
-      expect(asCode.source, OobManifestSource.pastedText);
-    });
+        expect(asJson.accepted, isTrue);
+        expect(asCode.accepted, isTrue);
+        expect(asJson.source, OobManifestSource.pastedText);
+        expect(asCode.source, OobManifestSource.pastedText);
+      },
+    );
 
-    test('malformed JSON is rejected as malformed, never as a signature fault',
-        () async {
-      final result = await _import().importBytes(
-        utf8.encode('{"manifest": "not-an-object"}'),
-        now: _now,
-      );
-      expect(
-        (result.verification! as ManifestRejected).reason,
-        ManifestRejection.malformed,
-      );
-    });
+    test(
+      'malformed JSON is rejected as malformed, never as a signature fault',
+      () async {
+        final result = await _import().importBytes(
+          utf8.encode('{"manifest": "not-an-object"}'),
+          now: _now,
+        );
+        expect(
+          (result.verification! as ManifestRejected).reason,
+          ManifestRejection.malformed,
+        );
+      },
+    );
   });
 
   // X3 blackout drill, host-side scenarios (D2/D3/D4/D6). These prove the
   // import-path LOGIC against the real verifier; they cannot observe the
   // device UI wording, which stays a device-run responsibility.
   group('X3 blackout drill (host-side)', () {
-    test('D2: a tampered code surfaces as a READ failure, not a trust decision',
-        () async {
-      final code = CompactManifestCode.encode(_documentBytes());
-      // Change ONE character in the middle of the body to a DIFFERENT
-      // alphabet character, exactly as the drill prescribes.
-      final chars = code.split('');
-      final mid = code.length ~/ 2;
-      var i = mid;
-      while (chars[i] == '-') {
-        i++;
-      }
-      final idx = CompactManifestCode.alphabet.indexOf(chars[i]);
-      chars[i] = CompactManifestCode.alphabet[(idx + 1) % 32];
-      final result = await _import().importCode(chars.join(), now: _now);
+    test(
+      'D2: a tampered code surfaces as a READ failure, not a trust decision',
+      () async {
+        final code = CompactManifestCode.encode(_documentBytes());
+        // Change ONE character in the middle of the body to a DIFFERENT
+        // alphabet character, exactly as the drill prescribes.
+        final chars = code.split('');
+        final mid = code.length ~/ 2;
+        var i = mid;
+        while (chars[i] == '-') {
+          i++;
+        }
+        final idx = CompactManifestCode.alphabet.indexOf(chars[i]);
+        chars[i] = CompactManifestCode.alphabet[(idx + 1) % 32];
+        final result = await _import().importCode(chars.join(), now: _now);
 
-      expect(result.decodeError, isNotNull);
-      expect(
-        result.decodeError!.error,
-        CompactDecodeError.checksumMismatch,
-      );
-      // Never reached the verifier: no trust verdict exists, nothing stored.
-      expect(result.verification, isNull);
-      expect(result.accepted, isFalse);
-      expect(result.describe(), contains('could not read'));
-    });
+        expect(result.decodeError, isNotNull);
+        expect(result.decodeError!.error, CompactDecodeError.checksumMismatch);
+        // Never reached the verifier: no trust verdict exists, nothing stored.
+        expect(result.verification, isNull);
+        expect(result.accepted, isFalse);
+        expect(result.describe(), contains('could not read'));
+      },
+    );
 
     test('D3: a manifest signed by a key outside the pinned set is rejected '
         'with unknownSigningKey', () async {
@@ -350,17 +369,21 @@ void main() {
       expect(result.describe(), contains('unknownSigningKey'));
     });
 
-    test('D4: a revision below the stored floor is rejected as rollback',
-        () async {
-      // Floor already at 5; the code carries revision 3.
-      final code = CompactManifestCode.encode(_documentBytes(revision: 3));
-      final result = await _import(lastAccepted: 5).importCode(code, now: _now);
+    test(
+      'D4: a revision below the stored floor is rejected as rollback',
+      () async {
+        // Floor already at 5; the code carries revision 3.
+        final code = CompactManifestCode.encode(_documentBytes(revision: 3));
+        final result = await _import(
+          lastAccepted: 5,
+        ).importCode(code, now: _now);
 
-      expect(result.accepted, isFalse);
-      final rejected = result.verification! as ManifestRejected;
-      expect(rejected.reason, ManifestRejection.rollback);
-      expect(result.describe(), contains('rollback'));
-    });
+        expect(result.accepted, isFalse);
+        final rejected = result.verification! as ManifestRejected;
+        expect(rejected.reason, ManifestRejection.rollback);
+        expect(result.describe(), contains('rollback'));
+      },
+    );
 
     test('D6: rollback protection holds after an earlier accepted import '
         'advances the floor', () async {

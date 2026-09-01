@@ -90,8 +90,7 @@ class BudgetCalibrator {
   }
 
   /// Center of bin k: 2^(k/binsPerOctave).
-  static double _centerOf(int k) =>
-      math.pow(2.0, k / binsPerOctave).toDouble();
+  static double _centerOf(int k) => math.pow(2.0, k / binsPerOctave).toDouble();
 
   /// Feeds one (prediction, outcome) pair into the model. Ignores
   /// non-positive or non-finite timings: garbage in, nothing learned.
@@ -167,11 +166,7 @@ class BudgetCalibrator {
   /// same fallback chain and shrinkage blend as [correction]. Returns
   /// 1.0 while nothing has minWeight samples. This is the budget answer
   /// («بودجه = چندک انتخابی») — NEVER a substitute for [correction].
-  double budgetQuantile({
-    double? lossFraction,
-    double? rttMs,
-    double p = 0.8,
-  }) {
+  double budgetQuantile({double? lossFraction, double? rttMs, double p = 0.8}) {
     final hist = _histFor(lossFraction, rttMs);
     if (hist == null) return 1.0;
     final clampedP = p.isFinite ? p.clamp(0.0, 1.0) : 1.0;

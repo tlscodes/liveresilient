@@ -340,11 +340,7 @@ class LaneAggregationProbe {
     final ids = <String>{};
     for (final c in candidates) {
       if (!ids.add(c.laneId)) {
-        throw ArgumentError.value(
-          c.laneId,
-          'candidates',
-          'duplicate lane id',
-        );
+        throw ArgumentError.value(c.laneId, 'candidates', 'duplicate lane id');
       }
     }
     final byScore = List.of(candidates)
@@ -419,7 +415,8 @@ class LaneAggregationProbe {
           // lane when the baseline read zero; that is the wrong failure
           // direction, and lighting up extra radios on a link nobody can
           // measure is the most expensive way to learn nothing.
-          final justified = m.goodputBps > 0 &&
+          final justified =
+              m.goodputBps > 0 &&
               (current <= 0 || m.goodputBps >= current * (1 + minAdd));
           if (justified) {
             passes++;

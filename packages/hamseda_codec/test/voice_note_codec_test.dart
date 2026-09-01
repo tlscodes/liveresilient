@@ -33,8 +33,7 @@ void main() {
 
   test('wrong frame size fails cleanly', () {
     expect(
-      () => packVoiceNote(
-          frames: [Uint8List(3)], mode: VoiceNoteMode.c700),
+      () => packVoiceNote(frames: [Uint8List(3)], mode: VoiceNoteMode.c700),
       throwsA(isA<MalformedVoiceNote>()),
     );
   });

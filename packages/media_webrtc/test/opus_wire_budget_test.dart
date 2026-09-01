@@ -52,10 +52,10 @@ void main() {
                 reason: 'bw=$bw chose $budget',
               );
             case OpusWireNoCandidateFits(
-                  :final bandwidthBps,
-                  :final cheapestWireRateBps,
-                  :final minimumBandwidthBps,
-                ):
+              :final bandwidthBps,
+              :final cheapestWireRateBps,
+              :final minimumBandwidthBps,
+            ):
               expect(bandwidthBps, bw);
               expect(
                 cheapestWireRateBps,
@@ -148,7 +148,8 @@ void main() {
           WireCarrier.srtpOverIpv6.headerBytes -
               WireCarrier.heavyFramed.headerBytes,
           20,
-          reason: 'the difference is exactly the IPv6 header minus the IPv4 '
+          reason:
+              'the difference is exactly the IPv6 header minus the IPv4 '
               'one, which is the whole content of the third case',
         );
         expect(
@@ -156,7 +157,8 @@ void main() {
               .map((c) => c.headerBytes)
               .reduce((a, b) => a > b ? a : b),
           WireCarrier.srtpOverIpv6.headerBytes,
-          reason: 'if a heavier case is ever added, this assertion fails and '
+          reason:
+              'if a heavier case is ever added, this assertion fails and '
               'the default has to be reconsidered deliberately',
         );
       });
@@ -202,16 +204,14 @@ void main() {
         expect(
           (ipv6At24k as OpusWireFitted).budget.opusRateBps,
           10000,
-          reason: 'the same link buys a lower codec rate once the heavier '
+          reason:
+              'the same link buys a lower codec rate once the heavier '
               'framing is priced — the cost lands on quality first',
         );
 
         // And there is a band where the difference is admission itself.
         expect(
-          OpusWireBudget.forBandwidth(
-            16000,
-            carrier: WireCarrier.heavyFramed,
-          ),
+          OpusWireBudget.forBandwidth(16000, carrier: WireCarrier.heavyFramed),
           isA<OpusWireFitted>(),
         );
         final refused = OpusWireBudget.forBandwidth(
@@ -222,35 +222,38 @@ void main() {
         expect(
           (refused as OpusWireNoCandidateFits).minimumBandwidthBps,
           16762,
-          reason: 'the refusal names the bandwidth that would fix it, from '
+          reason:
+              'the refusal names the bandwidth that would fix it, from '
               'the same formula the search used',
         );
       });
 
-      test('an unannotated call is priced pessimistically, never optimistically',
-          () {
-        for (final ptime in OpusWireBudget.ptimeCandidatesMs) {
-          expect(
-            OpusWireBudget.wireRateBps(6000, ptime),
-            OpusWireBudget.wireRateBps(
-              6000,
-              ptime,
-              carrier: WireCarrier.heavyFramed,
-            ),
-            reason: 'the default must equal the heavier carrier',
-          );
-          expect(
-            OpusWireBudget.wireRateBps(6000, ptime),
-            greaterThan(
+      test(
+        'an unannotated call is priced pessimistically, never optimistically',
+        () {
+          for (final ptime in OpusWireBudget.ptimeCandidatesMs) {
+            expect(
+              OpusWireBudget.wireRateBps(6000, ptime),
               OpusWireBudget.wireRateBps(
                 6000,
                 ptime,
-                carrier: WireCarrier.rtpUdpIp,
+                carrier: WireCarrier.heavyFramed,
               ),
-            ),
-          );
-        }
-      });
+              reason: 'the default must equal the heavier carrier',
+            );
+            expect(
+              OpusWireBudget.wireRateBps(6000, ptime),
+              greaterThan(
+                OpusWireBudget.wireRateBps(
+                  6000,
+                  ptime,
+                  carrier: WireCarrier.rtpUdpIp,
+                ),
+              ),
+            );
+          }
+        },
+      );
 
       test(
         'the derived floor moves with the carrier, and is never a literal',
@@ -301,57 +304,54 @@ void main() {
         },
       );
 
-      test(
-        'admission is ONE decision: a wide but slow link is refused for '
-        'responsiveness, never for capacity',
-        () {
-          // 1 Mbit/s of bandwidth — every candidate clears the ceiling with
-          // room to spare — but the injected bound rejects each one, the way
-          // a 2000 ms round trip does: 150ms - 1000ms - 60ms is negative and
-          // no rate change shortens a round trip.
-          final admission = OpusWireBudget.forBandwidth(
-            1000000,
-            concurrentStreams: 2,
-            tickProbe: ({
-              required int wireRateBps,
-              required double perStreamBudgetBps,
-              required int frameBitsOnWire,
-            }) => false,
-          );
-          expect(admission, isA<OpusWireNoCandidateFits>());
-          final refusal = admission as OpusWireNoCandidateFits;
-          expect(
-            refusal.cause,
-            OpusWireRefusalCause.responsiveness,
-            reason: 'reporting capacity here would send the caller to lower '
-                'the rate, which cannot help — the path is long, not narrow',
-          );
-          expect(
-            refusal.cheapestWireRateBps,
-            lessThan(refusal.perStreamBudgetBps),
-            reason: 'the arithmetic must show capacity was never the problem',
-          );
-        },
-      );
+      test('admission is ONE decision: a wide but slow link is refused for '
+          'responsiveness, never for capacity', () {
+        // 1 Mbit/s of bandwidth — every candidate clears the ceiling with
+        // room to spare — but the injected bound rejects each one, the way
+        // a 2000 ms round trip does: 150ms - 1000ms - 60ms is negative and
+        // no rate change shortens a round trip.
+        final admission = OpusWireBudget.forBandwidth(
+          1000000,
+          concurrentStreams: 2,
+          tickProbe:
+              ({
+                required int wireRateBps,
+                required double perStreamBudgetBps,
+                required int frameBitsOnWire,
+              }) => false,
+        );
+        expect(admission, isA<OpusWireNoCandidateFits>());
+        final refusal = admission as OpusWireNoCandidateFits;
+        expect(
+          refusal.cause,
+          OpusWireRefusalCause.responsiveness,
+          reason:
+              'reporting capacity here would send the caller to lower '
+              'the rate, which cannot help — the path is long, not narrow',
+        );
+        expect(
+          refusal.cheapestWireRateBps,
+          lessThan(refusal.perStreamBudgetBps),
+          reason: 'the arithmetic must show capacity was never the problem',
+        );
+      });
 
-      test(
-        'a narrow link is still refused for capacity even with a probe that '
-        'would have accepted',
-        () {
-          final admission = OpusWireBudget.forBandwidth(
-            16000,
-            concurrentStreams: 2,
-            carrier: WireCarrier.heavyFramed,
-            tickProbe: ({
-              required int wireRateBps,
-              required double perStreamBudgetBps,
-              required int frameBitsOnWire,
-            }) => true,
-          );
-          final refusal = admission as OpusWireNoCandidateFits;
-          expect(refusal.cause, OpusWireRefusalCause.capacity);
-        },
-      );
+      test('a narrow link is still refused for capacity even with a probe that '
+          'would have accepted', () {
+        final admission = OpusWireBudget.forBandwidth(
+          16000,
+          concurrentStreams: 2,
+          carrier: WireCarrier.heavyFramed,
+          tickProbe:
+              ({
+                required int wireRateBps,
+                required double perStreamBudgetBps,
+                required int frameBitsOnWire,
+              }) => true,
+        );
+        final refusal = admission as OpusWireNoCandidateFits;
+        expect(refusal.cause, OpusWireRefusalCause.capacity);
+      });
 
       test('an absent probe leaves behaviour exactly as it was', () {
         for (final bw in [16000, 32000, 64000, 1000000]) {
@@ -362,11 +362,12 @@ void main() {
           final permissiveProbe = OpusWireBudget.forBandwidth(
             bw,
             concurrentStreams: 2,
-            tickProbe: ({
-              required int wireRateBps,
-              required double perStreamBudgetBps,
-              required int frameBitsOnWire,
-            }) => true,
+            tickProbe:
+                ({
+                  required int wireRateBps,
+                  required double perStreamBudgetBps,
+                  required int frameBitsOnWire,
+                }) => true,
           );
           expect(
             permissiveProbe.runtimeType,
@@ -405,7 +406,8 @@ void main() {
           expect(
             admission,
             isA<OpusWireNoCandidateFits>(),
-            reason: 'this is the row that used to return the cheapest '
+            reason:
+                'this is the row that used to return the cheapest '
                 'candidate anyway and queue the link to death',
           );
           final refusal = admission as OpusWireNoCandidateFits;

@@ -45,12 +45,19 @@ void main() {
       for (var i = 0; i < enc2.blockCount; i++) {
         r.addDatagram(2, enc2.datagramAt(i));
       }
-      expect(r.isLayerDecoded(2), isTrue,
-          reason: 'L2 decodes with zero bytes of L0/L1 seen');
+      expect(
+        r.isLayerDecoded(2),
+        isTrue,
+        reason: 'L2 decodes with zero bytes of L0/L1 seen',
+      );
       expect(r.decodedLayerCount, 1);
-      expect(r.usableLayerCount, 0,
-          reason: 'renderable prefix is still empty — decode progress and '
-              'renderable quality are separate numbers');
+      expect(
+        r.usableLayerCount,
+        0,
+        reason:
+            'renderable prefix is still empty — decode progress and '
+            'renderable quality are separate numbers',
+      );
       // L0 arrives last; the prefix unlocks without touching L2 again.
       final enc0 = RlncEncoder(layers[0], blockSize: 55);
       for (var i = 0; i < enc0.blockCount; i++) {

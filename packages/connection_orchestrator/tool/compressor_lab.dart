@@ -270,8 +270,7 @@ void main() {
   const cap = 131072; // 128KB per sample keeps the lab fast
   final samples = <String, String>{
     'PDF (invoice)': Platform.environment['LAB_PDF'] ?? '',
-    'PDF (system card)':
-        Platform.environment['LAB_PDF2'] ?? '',
+    'PDF (system card)': Platform.environment['LAB_PDF2'] ?? '',
     'PNG (screenshot)': Platform.environment['LAB_PNG'] ?? '',
     'JPG (photo)': '/Users/behnam/Downloads/rotonde-fietspad.jpg',
     'WAV PCM (voice)':

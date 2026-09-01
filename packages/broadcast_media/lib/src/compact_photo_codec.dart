@@ -14,7 +14,13 @@ import 'dart:typed_data';
 const int compactPhotoVersion = 1;
 const int compactPhotoHeaderBytes = 2;
 
-enum PhotoWireFormat { avif(1), webp(2); const PhotoWireFormat(this.id); final int id; }
+enum PhotoWireFormat {
+  avif(1),
+  webp(2);
+
+  const PhotoWireFormat(this.id);
+  final int id;
+}
 
 class MalformedPhotoFrame implements Exception {
   final String reason;
@@ -27,12 +33,13 @@ extension type PhotoWire(Uint8List bytes) {
   int get ver => bytes[0] >> 4;
   int get formatId => bytes[0] & 0x0F;
   bool get grayscale => (bytes[1] & 0x01) != 0;
-  Uint8List get payload => Uint8List.sublistView(bytes, compactPhotoHeaderBytes);
+  Uint8List get payload =>
+      Uint8List.sublistView(bytes, compactPhotoHeaderBytes);
 
   PhotoWireFormat get format => PhotoWireFormat.values.firstWhere(
-        (f) => f.id == formatId,
-        orElse: () => throw MalformedPhotoFrame('unknown format id $formatId'),
-      );
+    (f) => f.id == formatId,
+    orElse: () => throw MalformedPhotoFrame('unknown format id $formatId'),
+  );
 
   static PhotoWire checked(Uint8List bytes) {
     if (bytes.length <= compactPhotoHeaderBytes) {

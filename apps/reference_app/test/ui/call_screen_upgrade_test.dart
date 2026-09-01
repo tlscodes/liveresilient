@@ -88,9 +88,7 @@ void main() {
   });
 
   testWidgets('no gauge card without a stream, even in-call', (tester) async {
-    await tester.pumpWidget(
-      app(const CallScreen(phase: CallPhase.connected)),
-    );
+    await tester.pumpWidget(app(const CallScreen(phase: CallPhase.connected)));
     expect(find.byType(QualityGauge), findsNothing);
   });
 
@@ -167,9 +165,9 @@ void main() {
 
       final readings = StreamController<CallQualityReading>();
       // NOT `addTearDown(readings.close)`: close()'s future only completes
-    // once a listener receives the done event, and the idle-phase tests
-    // never build the StreamBuilder — awaiting it would hang the run.
-    addTearDown(() => unawaited(readings.close()));
+      // once a listener receives the done event, and the idle-phase tests
+      // never build the StreamBuilder — awaiting it would hang the run.
+      addTearDown(() => unawaited(readings.close()));
 
       final home = Scaffold(
         body: CallScreen(

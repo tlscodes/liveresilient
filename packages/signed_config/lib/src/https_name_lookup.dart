@@ -123,9 +123,7 @@ class HttpsNameLookup {
     if (InternetAddress.tryParse(host) != null) {
       return Future<String?>.value(host);
     }
-    return _lookupOverHttps(
-      host,
-    ).timeout(timeout, onTimeout: () => null);
+    return _lookupOverHttps(host).timeout(timeout, onTimeout: () => null);
   }
 
   Future<String?> _lookupOverHttps(String host) async {

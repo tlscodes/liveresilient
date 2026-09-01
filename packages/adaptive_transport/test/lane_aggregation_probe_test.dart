@@ -93,10 +93,13 @@ const _lanes = <LaneCandidate>[
 
 void main() {
   group('candidate ordering', () {
-    test('first lane of an unused interface outranks a same-interface lane', () {
-      final ordered = LaneAggregationProbe.orderCandidates(_lanes);
-      expect(ordered.map((c) => c.laneId), ['udp0', 'wss0', 'udp1']);
-    });
+    test(
+      'first lane of an unused interface outranks a same-interface lane',
+      () {
+        final ordered = LaneAggregationProbe.orderCandidates(_lanes);
+        expect(ordered.map((c) => c.laneId), ['udp0', 'wss0', 'udp1']);
+      },
+    );
 
     test('a duplicate lane id is rejected, never silently deduplicated', () {
       expect(
@@ -153,90 +156,107 @@ void main() {
       expect(verdict.aggregationEnabled, isFalse);
     });
 
-    test('mixed: the second interface is admitted, the duplicate is not',
-        () async {
-      final topo = FakeTopology(
-        laneInterfaces: {'udp0': 'cell', 'udp1': 'cell', 'wss0': 'wifi'},
-        interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
-      );
-      final verdict = await LaneAggregationProbe(
-        carryWindow: topo.window,
-      ).run(networkFingerprint: 'net-c', candidates: _lanes);
-
-      expect(verdict.admitted, ['udp0', 'wss0']);
-      expect(verdict.classification, BottleneckClass.mixed);
-    });
-
-    test('noisy sweep stays accurate across all three topologies (gate C18)',
-        () async {
-      // Hysteresis setting: a candidate must win two consecutive decisions.
-      // Measured over 200 seeds, this cuts spurious admissions on the
-      // interface-bound topology from 1.5% to 0.5% at no cost in accuracy.
-      // Zero is not assertable — measurement noise is unbounded — so the gate
-      // is a rate, and the bound below is chosen so that a correct build fails
-      // it with probability well under 1%.
-      const confirmations = 2;
-      var correct = 0;
-      var overEnabledOnPerDevice = 0;
-      const seeds = 40;
-
-      for (var seed = 1; seed <= seeds; seed++) {
-        final perFlow = FakeTopology(
+    test(
+      'mixed: the second interface is admitted, the duplicate is not',
+      () async {
+        final topo = FakeTopology(
           laneInterfaces: {'udp0': 'cell', 'udp1': 'cell', 'wss0': 'wifi'},
           interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
-          perFlow: true,
-          noise: 0.15,
-          seed: seed,
         );
-        final device = FakeTopology(
-          laneInterfaces: {'udp0': 'cell', 'udp1': 'cell', 'udp2': 'cell'},
-          interfaceCapacityBps: {'cell': 4000},
-          noise: 0.15,
-          seed: seed + 1000,
-        );
-        final mixed = FakeTopology(
-          laneInterfaces: {'udp0': 'cell', 'udp1': 'cell', 'wss0': 'wifi'},
-          interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
-          noise: 0.15,
-          seed: seed + 2000,
-        );
+        final verdict = await LaneAggregationProbe(
+          carryWindow: topo.window,
+        ).run(networkFingerprint: 'net-c', candidates: _lanes);
 
-        final vFlow = await LaneAggregationProbe(
-          carryWindow: perFlow.window,
-          confirmations: confirmations,
-        ).run(networkFingerprint: 'f$seed', candidates: _lanes);
-        final vDevice = await LaneAggregationProbe(
-          carryWindow: device.window,
-          confirmations: confirmations,
-        ).run(
-          networkFingerprint: 'd$seed',
-          candidates: const [
-            LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
-            LaneCandidate(laneId: 'udp1', interfaceId: 'cell', score: 0.8),
-            LaneCandidate(laneId: 'udp2', interfaceId: 'cell', score: 0.7),
-          ],
-        );
-        final vMixed = await LaneAggregationProbe(
-          carryWindow: mixed.window,
-          confirmations: confirmations,
-        ).run(networkFingerprint: 'm$seed', candidates: _lanes);
+        expect(verdict.admitted, ['udp0', 'wss0']);
+        expect(verdict.classification, BottleneckClass.mixed);
+      },
+    );
 
-        if (vFlow.admitted.length == 3) correct++;
-        if (vDevice.admitted.length == 1) {
-          correct++;
-        } else {
-          overEnabledOnPerDevice++;
+    test(
+      'noisy sweep stays accurate across all three topologies (gate C18)',
+      () async {
+        // Hysteresis setting: a candidate must win two consecutive decisions.
+        // Measured over 200 seeds, this cuts spurious admissions on the
+        // interface-bound topology from 1.5% to 0.5% at no cost in accuracy.
+        // Zero is not assertable — measurement noise is unbounded — so the gate
+        // is a rate, and the bound below is chosen so that a correct build fails
+        // it with probability well under 1%.
+        const confirmations = 2;
+        var correct = 0;
+        var overEnabledOnPerDevice = 0;
+        const seeds = 40;
+
+        for (var seed = 1; seed <= seeds; seed++) {
+          final perFlow = FakeTopology(
+            laneInterfaces: {'udp0': 'cell', 'udp1': 'cell', 'wss0': 'wifi'},
+            interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
+            perFlow: true,
+            noise: 0.15,
+            seed: seed,
+          );
+          final device = FakeTopology(
+            laneInterfaces: {'udp0': 'cell', 'udp1': 'cell', 'udp2': 'cell'},
+            interfaceCapacityBps: {'cell': 4000},
+            noise: 0.15,
+            seed: seed + 1000,
+          );
+          final mixed = FakeTopology(
+            laneInterfaces: {'udp0': 'cell', 'udp1': 'cell', 'wss0': 'wifi'},
+            interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
+            noise: 0.15,
+            seed: seed + 2000,
+          );
+
+          final vFlow = await LaneAggregationProbe(
+            carryWindow: perFlow.window,
+            confirmations: confirmations,
+          ).run(networkFingerprint: 'f$seed', candidates: _lanes);
+          final vDevice =
+              await LaneAggregationProbe(
+                carryWindow: device.window,
+                confirmations: confirmations,
+              ).run(
+                networkFingerprint: 'd$seed',
+                candidates: const [
+                  LaneCandidate(
+                    laneId: 'udp0',
+                    interfaceId: 'cell',
+                    score: 0.9,
+                  ),
+                  LaneCandidate(
+                    laneId: 'udp1',
+                    interfaceId: 'cell',
+                    score: 0.8,
+                  ),
+                  LaneCandidate(
+                    laneId: 'udp2',
+                    interfaceId: 'cell',
+                    score: 0.7,
+                  ),
+                ],
+              );
+          final vMixed = await LaneAggregationProbe(
+            carryWindow: mixed.window,
+            confirmations: confirmations,
+          ).run(networkFingerprint: 'm$seed', candidates: _lanes);
+
+          if (vFlow.admitted.length == 3) correct++;
+          if (vDevice.admitted.length == 1) {
+            correct++;
+          } else {
+            overEnabledOnPerDevice++;
+          }
+          if (vMixed.admitted.length == 2 &&
+              vMixed.admitted.contains('wss0') &&
+              !vMixed.admitted.contains('udp1')) {
+            correct++;
+          }
         }
-        if (vMixed.admitted.length == 2 &&
-            vMixed.admitted.contains('wss0') &&
-            !vMixed.admitted.contains('udp1')) {
-          correct++;
-        }
-      }
 
-      expect(correct / (seeds * 3), greaterThanOrEqualTo(0.90));
-      expect(overEnabledOnPerDevice, lessThanOrEqualTo(2));
-    });
+        expect(correct / (seeds * 3), greaterThanOrEqualTo(0.90));
+        expect(overEnabledOnPerDevice, lessThanOrEqualTo(2));
+      },
+    );
   });
 
   group('guards and invariants', () {
@@ -254,48 +274,54 @@ void main() {
       expect(verdict.toTelemetry()['syntheticProbeBytes'], 0);
     });
 
-    test('delay guard aborts before admitting a queueing lane (gate C19)',
-        () async {
-      final topo = FakeTopology(
-        laneInterfaces: {'udp0': 'cell', 'udp1': 'cell'},
-        interfaceCapacityBps: {'cell': 4000},
-        queueMsPerExcessLane: 400, // 300 -> 700 ms, above the 1.5x guard
-      );
-      final verdict = await LaneAggregationProbe(carryWindow: topo.window).run(
-        networkFingerprint: 'net-e',
-        candidates: const [
-          LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
-          LaneCandidate(laneId: 'udp1', interfaceId: 'cell', score: 0.8),
-        ],
-      );
+    test(
+      'delay guard aborts before admitting a queueing lane (gate C19)',
+      () async {
+        final topo = FakeTopology(
+          laneInterfaces: {'udp0': 'cell', 'udp1': 'cell'},
+          interfaceCapacityBps: {'cell': 4000},
+          queueMsPerExcessLane: 400, // 300 -> 700 ms, above the 1.5x guard
+        );
+        final verdict = await LaneAggregationProbe(carryWindow: topo.window)
+            .run(
+              networkFingerprint: 'net-e',
+              candidates: const [
+                LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
+                LaneCandidate(laneId: 'udp1', interfaceId: 'cell', score: 0.8),
+              ],
+            );
 
-      expect(verdict.abortedByDelay, isTrue);
-      expect(verdict.admitted, ['udp0']);
-      expect(verdict.classification, BottleneckClass.perDevice);
-    });
+        expect(verdict.abortedByDelay, isTrue);
+        expect(verdict.admitted, ['udp0']);
+        expect(verdict.classification, BottleneckClass.perDevice);
+      },
+    );
 
-    test('confirmations require a candidate to win twice before admission',
-        () async {
-      final topo = FakeTopology(
-        laneInterfaces: {'udp0': 'cell', 'wss0': 'wifi'},
-        interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
-      );
-      final verdict = await LaneAggregationProbe(
-        carryWindow: topo.window,
-        confirmations: 2,
-      ).run(
-        networkFingerprint: 'net-i',
-        candidates: const [
-          LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
-          LaneCandidate(laneId: 'wss0', interfaceId: 'wifi', score: 0.8),
-        ],
-      );
+    test(
+      'confirmations require a candidate to win twice before admission',
+      () async {
+        final topo = FakeTopology(
+          laneInterfaces: {'udp0': 'cell', 'wss0': 'wifi'},
+          interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
+        );
+        final verdict =
+            await LaneAggregationProbe(
+              carryWindow: topo.window,
+              confirmations: 2,
+            ).run(
+              networkFingerprint: 'net-i',
+              candidates: const [
+                LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
+                LaneCandidate(laneId: 'wss0', interfaceId: 'wifi', score: 0.8),
+              ],
+            );
 
-      // A genuinely additive lane still passes, and it costs one extra
-      // median decision: 3 baseline + 3 + 3 confirmation windows.
-      expect(verdict.admitted, ['udp0', 'wss0']);
-      expect(verdict.windowsUsed, 9);
-    });
+        // A genuinely additive lane still passes, and it costs one extra
+        // median decision: 3 baseline + 3 + 3 confirmation windows.
+        expect(verdict.admitted, ['udp0', 'wss0']);
+        expect(verdict.windowsUsed, 9);
+      },
+    );
 
     test('median of three windows is used per decision', () async {
       final topo = FakeTopology(
@@ -330,36 +356,38 @@ void main() {
       expect(verdict.aggregationEnabled, isFalse);
     });
 
-    test('memory short-circuits a repeat run and expires with its TTL',
-        () async {
-      var now = 0;
-      final memory = EphemeralAggregationMemory(
-        nowMs: () => now,
-        ttl: const Duration(minutes: 30),
-      );
-      final topo = FakeTopology(
-        laneInterfaces: {'udp0': 'cell', 'wss0': 'wifi'},
-        interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
-      );
-      final probe = LaneAggregationProbe(
-        carryWindow: topo.window,
-        memory: memory,
-      );
-      const candidates = [
-        LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
-        LaneCandidate(laneId: 'wss0', interfaceId: 'wifi', score: 0.8),
-      ];
+    test(
+      'memory short-circuits a repeat run and expires with its TTL',
+      () async {
+        var now = 0;
+        final memory = EphemeralAggregationMemory(
+          nowMs: () => now,
+          ttl: const Duration(minutes: 30),
+        );
+        final topo = FakeTopology(
+          laneInterfaces: {'udp0': 'cell', 'wss0': 'wifi'},
+          interfaceCapacityBps: {'cell': 4000, 'wifi': 4000},
+        );
+        final probe = LaneAggregationProbe(
+          carryWindow: topo.window,
+          memory: memory,
+        );
+        const candidates = [
+          LaneCandidate(laneId: 'udp0', interfaceId: 'cell', score: 0.9),
+          LaneCandidate(laneId: 'wss0', interfaceId: 'wifi', score: 0.8),
+        ];
 
-      await probe.run(networkFingerprint: 'net-h', candidates: candidates);
-      final callsAfterFirst = topo.windowCalls;
+        await probe.run(networkFingerprint: 'net-h', candidates: candidates);
+        final callsAfterFirst = topo.windowCalls;
 
-      await probe.run(networkFingerprint: 'net-h', candidates: candidates);
-      expect(topo.windowCalls, callsAfterFirst, reason: 'cached');
+        await probe.run(networkFingerprint: 'net-h', candidates: candidates);
+        expect(topo.windowCalls, callsAfterFirst, reason: 'cached');
 
-      now = const Duration(minutes: 31).inMilliseconds;
-      await probe.run(networkFingerprint: 'net-h', candidates: candidates);
-      expect(topo.windowCalls, greaterThan(callsAfterFirst));
-    });
+        now = const Duration(minutes: 31).inMilliseconds;
+        await probe.run(networkFingerprint: 'net-h', candidates: candidates);
+        expect(topo.windowCalls, greaterThan(callsAfterFirst));
+      },
+    );
 
     test('rebind carries every setting to the new port', () async {
       final memory = EphemeralAggregationMemory(nowMs: () => 0);

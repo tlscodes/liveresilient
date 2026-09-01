@@ -62,20 +62,22 @@ void main() {
       expect(last.layerIndex, _segmentsInA60sClip - 1);
     });
 
-    test('even the smallest possible object exceeds the cap once objectId > 0',
-        () {
-      // One object, one layer — the minimum the scheme can express. objectId
-      // occupies the HIGH sixteen bits, so any object past the first is already
-      // over 0xFFFF regardless of how few layers it has. The cap is not a
-      // ceiling the design occasionally brushes; it is crossed on the second
-      // object ever sent.
-      final second = CliffFreeTransferId.of(
-        objectId: 1,
-        layerCount: 1,
-        layerIndex: 0,
-      );
-      expect(second.raw, greaterThan(MediaCarriage.maxTransferId));
-    });
+    test(
+      'even the smallest possible object exceeds the cap once objectId > 0',
+      () {
+        // One object, one layer — the minimum the scheme can express. objectId
+        // occupies the HIGH sixteen bits, so any object past the first is already
+        // over 0xFFFF regardless of how few layers it has. The cap is not a
+        // ceiling the design occasionally brushes; it is crossed on the second
+        // object ever sent.
+        final second = CliffFreeTransferId.of(
+          objectId: 1,
+          layerCount: 1,
+          layerIndex: 0,
+        );
+        expect(second.raw, greaterThan(MediaCarriage.maxTransferId));
+      },
+    );
   });
 
   group('what the carrier does with it', () {
@@ -130,59 +132,63 @@ void main() {
       expect(MediaCarriage.maxTransferId, 0xFFFF);
     });
 
-    test('the HTTP/2 carrier could express it; the SCTP field is the limit',
-        () {
-      // Worth separating, because it changes what a fix costs. HTTP/2 stream
-      // ids are 31 bits, so `streamIdFor` has room to spare for a 32-bit
-      // transfer id; the 0xFFFF cap is imposed by the DataChannel path's
-      // two-byte prefix and then applied to BOTH carriers by `wrap`.
-      final id = CliffFreeTransferId.of(
-        objectId: 300,
-        layerCount: _segmentsInA60sClip,
-        layerIndex: 7,
-      );
-      final streamId = MediaCarriage.streamIdFor(id.raw);
-      expect(streamId.isOdd, isTrue);
-      expect(streamId, lessThan(1 << 31), reason: 'fits an HTTP/2 stream id');
-      expect(MediaCarriage.transferIdForStream(streamId), id.raw);
-    });
+    test(
+      'the HTTP/2 carrier could express it; the SCTP field is the limit',
+      () {
+        // Worth separating, because it changes what a fix costs. HTTP/2 stream
+        // ids are 31 bits, so `streamIdFor` has room to spare for a 32-bit
+        // transfer id; the 0xFFFF cap is imposed by the DataChannel path's
+        // two-byte prefix and then applied to BOTH carriers by `wrap`.
+        final id = CliffFreeTransferId.of(
+          objectId: 300,
+          layerCount: _segmentsInA60sClip,
+          layerIndex: 7,
+        );
+        final streamId = MediaCarriage.streamIdFor(id.raw);
+        expect(streamId.isOdd, isTrue);
+        expect(streamId, lessThan(1 << 31), reason: 'fits an HTTP/2 stream id');
+        expect(MediaCarriage.transferIdForStream(streamId), id.raw);
+      },
+    );
   });
 
   group('the type now travels, and the send path fits its carrier', () {
-    test('the media type ARRIVES instead of being guessed by the receiver',
-        () async {
-      // This test used to pin the gap: `sendCliffFree` accepted a MediaType,
-      // put it nowhere, and `accept` demanded one — so the receiving side
-      // invented the value that decides how an object renders, and sending as
-      // photo while accepting as document raised no objection anywhere.
-      //
-      // With the address in the batch header the type is on the wire, and the
-      // receiver has no parameter left to get wrong.
-      for (final sentAs in [MediaType.photo, MediaType.flipbook]) {
-        final transport = ResilientMediaTransport();
-        final frames = <Uint8List>[];
+    test(
+      'the media type ARRIVES instead of being guessed by the receiver',
+      () async {
+        // This test used to pin the gap: `sendCliffFree` accepted a MediaType,
+        // put it nowhere, and `accept` demanded one — so the receiving side
+        // invented the value that decides how an object renders, and sending as
+        // photo while accepting as document raised no objection anywhere.
+        //
+        // With the address in the batch header the type is on the wire, and the
+        // receiver has no parameter left to get wrong.
+        for (final sentAs in [MediaType.photo, MediaType.flipbook]) {
+          final transport = ResilientMediaTransport();
+          final frames = <Uint8List>[];
 
-        await transport.sendCliffFree(
-          [
-            MediaLayer(
-              Uint8List.fromList(List.filled(200, 3)),
-              kind: LayerKind.base,
-            ),
-          ],
-          sentAs,
-          sink: (objectId, frame) async {
-            frames.add(frame);
-            return true;
-          },
-          budgetBytes: 4096,
-        );
+          await transport.sendCliffFree(
+            [
+              MediaLayer(
+                Uint8List.fromList(List.filled(200, 3)),
+                kind: LayerKind.base,
+              ),
+            ],
+            sentAs,
+            sink: (objectId, frame) async {
+              frames.add(frame);
+              return true;
+            },
+            budgetBytes: 4096,
+          );
 
-        expect(frames, isNotEmpty);
-        for (final f in frames) {
-          expect(CliffFreeBatchCodec.decode(f).type, sentAs);
+          expect(frames, isNotEmpty);
+          for (final f in frames) {
+            expect(CliffFreeBatchCodec.decode(f).type, sentAs);
+          }
         }
-      }
-    });
+      },
+    );
 
     test('every frame the send path emits SURVIVES the carrier', () async {
       // The contract that replaces the defect above. Under the old scheme
@@ -221,31 +227,33 @@ void main() {
       }
     });
 
-    test('a sink that refuses is never called again, including for the tail',
-        () async {
-      // The tail flush after `send` returns is real data, but a sink that
-      // already said stop means a full lane or a closed session, and pushing
-      // one more frame at it is exactly the bug the flush was written to
-      // avoid on the other side.
-      final transport = ResilientMediaTransport();
-      var calls = 0;
+    test(
+      'a sink that refuses is never called again, including for the tail',
+      () async {
+        // The tail flush after `send` returns is real data, but a sink that
+        // already said stop means a full lane or a closed session, and pushing
+        // one more frame at it is exactly the bug the flush was written to
+        // avoid on the other side.
+        final transport = ResilientMediaTransport();
+        var calls = 0;
 
-      await transport.sendCliffFree(
-        [
-          MediaLayer(
-            Uint8List.fromList(List.filled(4000, 7)),
-            kind: LayerKind.base,
-          ),
-        ],
-        MediaType.photo,
-        sink: (objectId, frame) async {
-          calls++;
-          return false; // refuse immediately
-        },
-        budgetBytes: 256 * 1024,
-      );
+        await transport.sendCliffFree(
+          [
+            MediaLayer(
+              Uint8List.fromList(List.filled(4000, 7)),
+              kind: LayerKind.base,
+            ),
+          ],
+          MediaType.photo,
+          sink: (objectId, frame) async {
+            calls++;
+            return false; // refuse immediately
+          },
+          budgetBytes: 256 * 1024,
+        );
 
-      expect(calls, 1, reason: 'refused once, then called again');
-    });
+        expect(calls, 1, reason: 'refused once, then called again');
+      },
+    );
   });
 }

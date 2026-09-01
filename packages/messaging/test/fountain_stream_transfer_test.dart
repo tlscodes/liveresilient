@@ -84,17 +84,11 @@ void main() {
     );
 
     final data = content(64 * 1024); // 64 symbols, 8 generations
-    final result = await sender
-        .send(data)
-        .timeout(const Duration(seconds: 60));
-    final delivered = await received.future
-        .timeout(const Duration(seconds: 5));
+    final result = await sender.send(data).timeout(const Duration(seconds: 60));
+    final delivered = await received.future.timeout(const Duration(seconds: 5));
 
     expect(delivered, equals(data));
-    expect(
-      sha256.convert(delivered).bytes,
-      equals(sha256.convert(data).bytes),
-    );
+    expect(sha256.convert(delivered).bytes, equals(sha256.convert(data).bytes));
     // Overhead bound: at 60% loss the information-theoretic floor is
     // 1/(1-p) = 2.5x; feedback lag costs more. 8x is the honesty rail —
     // an ARQ-style pathology would blow far past it.
@@ -124,8 +118,7 @@ void main() {
 
     final data = content(12345); // 13 symbols: 2 full gens + ragged 3
     await sender.send(data).timeout(const Duration(seconds: 30));
-    final delivered =
-        await received.future.timeout(const Duration(seconds: 5));
+    final delivered = await received.future.timeout(const Duration(seconds: 5));
     expect(delivered, equals(data));
     await receiver.dispose();
     await tx.close();
@@ -162,18 +155,20 @@ void main() {
         final bitmap = raw[30];
         progressGens = bitmap == 0
             ? progressGens
-            : [1, 2, 3, 4]
-                .where((g) => (bitmap >> (g - 1)) & 1 == 1)
-                .length;
+            : [1, 2, 3, 4].where((g) => (bitmap >> (g - 1)) & 1 == 1).length;
       }
     });
     unawaited(
-      sender1.send(data).catchError((Object _) => const FountainSendResult(
-            resumedGenerations: 0,
-            totalGenerations: 0,
-            sentSymbols: 0,
-            totalSourceSymbols: 0,
-          )),
+      sender1
+          .send(data)
+          .catchError(
+            (Object _) => const FountainSendResult(
+              resumedGenerations: 0,
+              totalGenerations: 0,
+              sentSymbols: 0,
+              totalSourceSymbols: 0,
+            ),
+          ),
     );
     while (progressGens < 1) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -194,13 +189,16 @@ void main() {
       staleAfter: const Duration(seconds: 5),
       floorBytesPerSec: 64 * 1024,
     );
-    final result =
-        await sender2.send(data).timeout(const Duration(seconds: 30));
-    final delivered =
-        await received.future.timeout(const Duration(seconds: 5));
+    final result = await sender2
+        .send(data)
+        .timeout(const Duration(seconds: 30));
+    final delivered = await received.future.timeout(const Duration(seconds: 5));
     expect(delivered, equals(data));
-    expect(result.resumedGenerations, greaterThanOrEqualTo(1),
-        reason: 'completed generations must be inherited, not re-sent');
+    expect(
+      result.resumedGenerations,
+      greaterThanOrEqualTo(1),
+      reason: 'completed generations must be inherited, not re-sent',
+    );
     await receiver.dispose();
     await tx2.close();
     await rx.close();
@@ -314,16 +312,14 @@ void main() {
     tx.muted = false;
     rx.muted = false;
     await sendF.timeout(const Duration(seconds: 20));
-    final delivered =
-        await received.future.timeout(const Duration(seconds: 5));
+    final delivered = await received.future.timeout(const Duration(seconds: 5));
     expect(delivered, equals(data));
     await receiver.dispose();
     await tx.close();
     await rx.close();
   });
 
-  test(
-      'terminal-confirmation deadlock is broken by the parked solicit: a '
+  test('terminal-confirmation deadlock is broken by the parked solicit: a '
       'receiver that completes while the reverse path is muted answers the '
       'first re-HELLO after the path returns', () async {
     final (sp, rp) = lossyPair(0); // clean forward AND reverse by default
@@ -361,16 +357,25 @@ void main() {
     unawaited(sendF.then((_) => senderDone = true));
     // Give the deadlock time to form: receiver completes, reverse muted.
     await Future<void>.delayed(const Duration(milliseconds: 800));
-    expect(delivered, hasLength(1),
-        reason: 'the receiver must have completed while muted');
-    expect(senderDone, isFalse,
-        reason: 'precondition: the sender must still be parked deaf');
+    expect(
+      delivered,
+      hasLength(1),
+      reason: 'the receiver must have completed while muted',
+    );
+    expect(
+      senderDone,
+      isFalse,
+      reason: 'precondition: the sender must still be parked deaf',
+    );
 
     // The reverse path returns: the NEXT solicited answer must finish it.
     rp.onBeforeSend = null;
-    final result = await sendF.timeout(const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException(
-            'sender never recovered after the reverse path returned'));
+    final result = await sendF.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw TimeoutException(
+        'sender never recovered after the reverse path returned',
+      ),
+    );
     expect(result.totalSourceSymbols, 12);
     expect(delivered.single, equals(content));
   });

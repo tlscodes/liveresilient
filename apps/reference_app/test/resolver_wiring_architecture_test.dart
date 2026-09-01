@@ -77,7 +77,8 @@ void main() {
       expect(
         offenders,
         isEmpty,
-        reason: 'these sites construct a session without naming the resolver, '
+        reason:
+            'these sites construct a session without naming the resolver, '
             'which is the omission that used to be invisible: $offenders',
       );
     });
@@ -124,7 +125,8 @@ void main() {
         expect(
           offenders,
           isEmpty,
-          reason: 'these wrappers accept a resolver and then ignore it in '
+          reason:
+              'these wrappers accept a resolver and then ignore it in '
               'favour of the platform default: $offenders',
         );
       },
@@ -137,7 +139,8 @@ void main() {
       expect(
         connector,
         contains('platformHostResolution'),
-        reason: 'choosing the platform must be sayable, or silence and '
+        reason:
+            'choosing the platform must be sayable, or silence and '
             'choice stay indistinguishable',
       );
     });

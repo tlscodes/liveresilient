@@ -167,12 +167,13 @@ void main() {
       tester,
     ) async {
       final seeks = <double>[];
-      await pumpHost(tester, child: bar(onToggle: () {}, onSeek: seeks.add));
+      await pumpHost(
+        tester,
+        child: bar(onToggle: () {}, onSeek: seeks.add),
+      );
 
       final rect = tester.getRect(find.byKey(voiceNoteWaveformKey));
-      await tester.tapAt(
-        Offset(rect.left + rect.width * 0.75, rect.center.dy),
-      );
+      await tester.tapAt(Offset(rect.left + rect.width * 0.75, rect.center.dy));
       await tester.pump();
 
       expect(seeks, hasLength(1));
@@ -190,9 +191,7 @@ void main() {
       );
 
       final rect = tester.getRect(find.byKey(voiceNoteWaveformKey));
-      await tester.tapAt(
-        Offset(rect.left + rect.width * 0.75, rect.center.dy),
-      );
+      await tester.tapAt(Offset(rect.left + rect.width * 0.75, rect.center.dy));
       await tester.pump();
 
       expect(seeks, hasLength(1));

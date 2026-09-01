@@ -61,51 +61,49 @@ void main() {
         throwsRangeError,
       );
       expect(
-        () => CliffFreeTransferId.of(
-          objectId: 1,
-          layerCount: 0,
-          layerIndex: 0,
-        ),
+        () => CliffFreeTransferId.of(objectId: 1, layerCount: 0, layerIndex: 0),
         throwsRangeError,
       );
     });
   });
 
   group('send -> receive', () {
-    test('clean channel: base layer renders first, object ends exact',
-        () async {
-      final transport = ResilientMediaTransport();
-      final layers = _photoLayers();
-      final events = <CliffFreeRenderEvent>[];
+    test(
+      'clean channel: base layer renders first, object ends exact',
+      () async {
+        final transport = ResilientMediaTransport();
+        final layers = _photoLayers();
+        final events = <CliffFreeRenderEvent>[];
 
-      final report = await transport.sendCliffFree(
-        layers,
-        MediaType.photo,
-        budgetBytes: 4 * 1024 * 1024,
-        // The sink now receives (objectId, FRAME) — a batch of symbols, not a
-        // bare datagram — and the receiver takes only the frame, because the
-        // media type travels inside it instead of being supplied (and
-        // therefore guessable) by the caller.
-        sink: (objectId, frame) async {
-          final e = transport.receiveCliffFree(frame);
-          if (e != null) events.add(e);
-          return true;
-        },
-      );
+        final report = await transport.sendCliffFree(
+          layers,
+          MediaType.photo,
+          budgetBytes: 4 * 1024 * 1024,
+          // The sink now receives (objectId, FRAME) — a batch of symbols, not a
+          // bare datagram — and the receiver takes only the frame, because the
+          // media type travels inside it instead of being supplied (and
+          // therefore guessable) by the caller.
+          sink: (objectId, frame) async {
+            final e = transport.receiveCliffFree(frame);
+            if (e != null) events.add(e);
+            return true;
+          },
+        );
 
-      expect(report.stoppedEarly, isFalse);
-      expect(events.first.isFirstRender, isTrue);
-      expect(events.first.bytes, layers.first.bytes);
-      expect(events.last.isComplete, isTrue);
-      expect(events.last.usableLayers, 3);
+        expect(report.stoppedEarly, isFalse);
+        expect(events.first.isFirstRender, isTrue);
+        expect(events.first.bytes, layers.first.bytes);
+        expect(events.last.isComplete, isTrue);
+        expect(events.last.usableLayers, 3);
 
-      // Every render is a prefix of the true object — never a partial layer.
-      final whole = BytesBuilder();
-      for (final l in layers) {
-        whole.add(l.bytes);
-      }
-      expect(events.last.bytes, whole.toBytes());
-    });
+        // Every render is a prefix of the true object — never a partial layer.
+        final whole = BytesBuilder();
+        for (final l in layers) {
+          whole.add(l.bytes);
+        }
+        expect(events.last.bytes, whole.toBytes());
+      },
+    );
 
     test('50% loss: the base layer still renders, and it is exact', () async {
       final transport = ResilientMediaTransport();
@@ -152,11 +150,19 @@ void main() {
         return true;
       }
 
-      await transport.sendCliffFree(a, MediaType.photo,
-          budgetBytes: 4 << 20, sink: collect);
+      await transport.sendCliffFree(
+        a,
+        MediaType.photo,
+        budgetBytes: 4 << 20,
+        sink: collect,
+      );
       final firstObjectFrames = pending.length;
-      await transport.sendCliffFree(bFixed, MediaType.photo,
-          budgetBytes: 4 << 20, sink: collect);
+      await transport.sendCliffFree(
+        bFixed,
+        MediaType.photo,
+        budgetBytes: 4 << 20,
+        sink: collect,
+      );
 
       expect(pending.length, greaterThan(firstObjectFrames));
 
@@ -267,7 +273,11 @@ void main() {
     });
 
     test('photos, voice notes and video always take the cliff-free path', () {
-      for (final t in [MediaType.photo, MediaType.audioPcm, MediaType.flipbook]) {
+      for (final t in [
+        MediaType.photo,
+        MediaType.audioPcm,
+        MediaType.flipbook,
+      ]) {
         expect(
           router.route(type: t, byteLength: 100).isCliffFree,
           isTrue,

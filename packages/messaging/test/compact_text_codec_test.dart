@@ -16,7 +16,9 @@ Uint8List _rleCompress(Uint8List raw) {
     while (i + run < raw.length && raw[i + run] == raw[i] && run < 255) {
       run++;
     }
-    out..add(raw[i])..add(run);
+    out
+      ..add(raw[i])
+      ..add(run);
     i += run;
   }
   return Uint8List.fromList(out);
@@ -34,37 +36,57 @@ void main() {
   test('compressed path round-trips with matching dict version', () {
     final raw = Uint8List.fromList(List.filled(64, 0x61)); // shrinks under RLE
     final frame = encodeCompactText(
-        utf8Text: raw, msgId: 4242, dictVer: 7, compress: _rleCompress);
+      utf8Text: raw,
+      msgId: 4242,
+      dictVer: 7,
+      compress: _rleCompress,
+    );
     expect(frame.compressed, isTrue);
     expect(frame.msgId, 4242);
     expect(frame.dictVer, 7);
     final back = decodeCompactText(
-        frame: frame, localDictVer: 7, decompress: _rleDecompress);
+      frame: frame,
+      localDictVer: 7,
+      decompress: _rleDecompress,
+    );
     expect(back, raw);
   });
 
   test('incompressible message is stored raw and round-trips', () {
-    final raw =
-        Uint8List.fromList(utf8.encode('سلام، فردا ساعت ۹ تماس می‌گیرم 🙂'));
+    final raw = Uint8List.fromList(
+      utf8.encode('سلام، فردا ساعت ۹ تماس می‌گیرم 🙂'),
+    );
     final frame = encodeCompactText(
-        utf8Text: raw, msgId: 1, dictVer: 7, compress: _rleCompress);
+      utf8Text: raw,
+      msgId: 1,
+      dictVer: 7,
+      compress: _rleCompress,
+    );
     expect(frame.compressed, isFalse);
     expect(frame.bytes.length, compactTextHeaderBytes + raw.length);
     final back = decodeCompactText(
-        frame: frame,
-        localDictVer: 99, // mismatched, but raw body must still decode cleanly
-        decompress: _rleDecompress);
+      frame: frame,
+      localDictVer: 99, // mismatched, but raw body must still decode cleanly
+      decompress: _rleDecompress,
+    );
     expect(back, raw);
   });
 
   test('dict version mismatch on compressed frame fails cleanly', () {
     final raw = Uint8List.fromList(List.filled(64, 0x62));
     final frame = encodeCompactText(
-        utf8Text: raw, msgId: 2, dictVer: 3, compress: _rleCompress);
+      utf8Text: raw,
+      msgId: 2,
+      dictVer: 3,
+      compress: _rleCompress,
+    );
     expect(frame.compressed, isTrue);
     expect(
       () => decodeCompactText(
-          frame: frame, localDictVer: 4, decompress: _rleDecompress),
+        frame: frame,
+        localDictVer: 4,
+        decompress: _rleDecompress,
+      ),
       throwsA(isA<DictVersionMismatch>()),
     );
   });
@@ -72,9 +94,10 @@ void main() {
   test('truncated frame fails cleanly', () {
     expect(
       () => decodeCompactText(
-          frame: CompactTextFrame(Uint8List(2)),
-          localDictVer: 1,
-          decompress: _rleDecompress),
+        frame: CompactTextFrame(Uint8List(2)),
+        localDictVer: 1,
+        decompress: _rleDecompress,
+      ),
       throwsA(isA<MalformedTextFrame>()),
     );
   });

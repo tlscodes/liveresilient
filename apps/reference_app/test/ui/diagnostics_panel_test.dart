@@ -101,8 +101,7 @@ void main() {
 
     await tester.pumpWidget(wrap(DiagnosticsPanel(seed: seed)));
 
-    final tokens =
-        buildAppThemeData(Brightness.light).extension<AppTokens>()!;
+    final tokens = buildAppThemeData(Brightness.light).extension<AppTokens>()!;
     final lossText = tester.widget<Text>(find.text('20.0'));
     expect(lossText.style?.color, tokens.gaugePoor);
   });

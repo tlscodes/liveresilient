@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:adaptive_transport/adaptive_transport.dart'
-    hide Clock;
+import 'package:adaptive_transport/adaptive_transport.dart' hide Clock;
 import 'package:clock/clock.dart';
 import 'package:test/test.dart';
 
@@ -50,7 +49,8 @@ void main() {
           expect(
             ring.acceptsEpoch(1),
             isTrue,
-            reason: 'the outgoing epoch keeps verifying arrivals, which is '
+            reason:
+                'the outgoing epoch keeps verifying arrivals, which is '
                 'what stops a rotation from cutting a live connection',
           );
           expect(
@@ -62,18 +62,25 @@ void main() {
       },
     );
 
-    test('3e  once the overlap closes the outgoing epoch stops being accepted', () {
-      final ring = ringAt(t0);
-      withClock(Clock.fixed(t0), () => ring.rotate(freshNext: keyPair(3)));
+    test(
+      '3e  once the overlap closes the outgoing epoch stops being accepted',
+      () {
+        final ring = ringAt(t0);
+        withClock(Clock.fixed(t0), () => ring.rotate(freshNext: keyPair(3)));
 
-      withClock(Clock.fixed(t0.add(const Duration(hours: 23))), () {
-        expect(ring.acceptsEpoch(1), isTrue, reason: 'still inside the window');
-      });
-      withClock(Clock.fixed(t0.add(const Duration(days: 1, seconds: 1))), () {
-        expect(ring.acceptsEpoch(1), isFalse);
-        expect(ring.acceptsEpoch(2), isTrue);
-      });
-    });
+        withClock(Clock.fixed(t0.add(const Duration(hours: 23))), () {
+          expect(
+            ring.acceptsEpoch(1),
+            isTrue,
+            reason: 'still inside the window',
+          );
+        });
+        withClock(Clock.fixed(t0.add(const Duration(days: 1, seconds: 1))), () {
+          expect(ring.acceptsEpoch(1), isFalse);
+          expect(ring.acceptsEpoch(2), isTrue);
+        });
+      },
+    );
 
     test(
       '3e  a zero overlap is exactly the failure the parameter exists to prevent',
@@ -84,7 +91,8 @@ void main() {
           expect(
             ring.acceptsEpoch(1),
             isFalse,
-            reason: 'with no overlap the outgoing epoch dies the instant the '
+            reason:
+                'with no overlap the outgoing epoch dies the instant the '
                 'rotation happens — anything in flight under it is stranded',
           );
         });
@@ -112,7 +120,8 @@ void main() {
         expect(
           ring.acceptsEpoch(2),
           isFalse,
-          reason: 'a staged next epoch is not yet acceptable — it is staged '
+          reason:
+              'a staged next epoch is not yet acceptable — it is staged '
               'for pre-fetch, not in force',
         );
       });
@@ -141,7 +150,10 @@ void main() {
       var at = t0;
       for (var i = 0; i < 5; i++) {
         at = at.add(const Duration(days: 7));
-        withClock(Clock.fixed(at), () => ring.rotate(freshNext: keyPair(10 + i)));
+        withClock(
+          Clock.fixed(at),
+          () => ring.rotate(freshNext: keyPair(10 + i)),
+        );
       }
       withClock(Clock.fixed(at), () {
         // Only the immediately preceding epoch can still be accepted; every

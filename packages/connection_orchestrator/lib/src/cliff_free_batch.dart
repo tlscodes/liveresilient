@@ -386,7 +386,8 @@ class CliffFreeBatcher {
   }) {
     // No usable rate is not evidence of a fast link — the same rule the media
     // router applies to a NaN loss estimate. Take the conservative end.
-    if (bytesPerSecond.isNaN || bytesPerSecond.isInfinite ||
+    if (bytesPerSecond.isNaN ||
+        bytesPerSecond.isInfinite ||
         bytesPerSecond <= 0) {
       return 2;
     }
@@ -400,7 +401,8 @@ class CliffFreeBatcher {
     // because a budget that holds on average still misses half the time.
     const worstCasePadBytes = 32 + 64 + 3 * 64; // base + alignment + jitter
     const carrierBytes = 2;
-    final usable = budgetBytes -
+    final usable =
+        budgetBytes -
         CliffFreeBatchCodec.headerBytes -
         worstCasePadBytes -
         carrierBytes;

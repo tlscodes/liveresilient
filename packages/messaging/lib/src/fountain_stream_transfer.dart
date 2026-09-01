@@ -181,8 +181,11 @@ class _FountainFrame {
     final len = view.getUint32(26);
     final expected = _headerBytes + len + (type == _typeSymbol ? 4 : 0);
     if (bytes.length != expected) return null;
-    final payload =
-        Uint8List.sublistView(bytes, _headerBytes, _headerBytes + len);
+    final payload = Uint8List.sublistView(
+      bytes,
+      _headerBytes,
+      _headerBytes + len,
+    );
     if (type == _typeSymbol) {
       if (view.getUint32(_headerBytes + len) != Crc32.of(payload)) {
         return null;
@@ -232,9 +235,9 @@ class FountainStreamSender {
     this.floorBytesPerSec = 16 * 1024,
     this.transportBufferedBytes,
     int? transportGateBytes,
-  })  : transportGateBytes = transportGateBytes ?? 2 * symbolBytes,
-        assert(symbolBytes > 0),
-        assert(generationSize >= 1 && generationSize <= 255);
+  }) : transportGateBytes = transportGateBytes ?? 2 * symbolBytes,
+       assert(symbolBytes > 0),
+       assert(generationSize >= 1 && generationSize <= 255);
 
   final DataChannelPort _port;
   final int symbolBytes;
@@ -299,7 +302,10 @@ class FountainStreamSender {
     final content = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
     final digest = sha256.convert(content).bytes;
     final transferId = Uint8List.fromList(digest.sublist(0, 16));
-    final totalSymbols = (content.length / symbolBytes).ceil().clamp(1, 1 << 31);
+    final totalSymbols = (content.length / symbolBytes).ceil().clamp(
+      1,
+      1 << 31,
+    );
     final generations = (totalSymbols / generationSize).ceil();
 
     // Source symbols, zero-padded to symbolBytes (the ragged tail too —
@@ -477,10 +483,12 @@ class FountainStreamSender {
           targetRate = floorBytesPerSec.toDouble();
         }
         final now = DateTime.now();
-        bucketBytes += targetRate *
-            now.difference(refilledAt).inMilliseconds /
-            1000.0;
-        final maxBucket = targetRate.clamp(symbolBytes.toDouble(), (1 << 24).toDouble());
+        bucketBytes +=
+            targetRate * now.difference(refilledAt).inMilliseconds / 1000.0;
+        final maxBucket = targetRate.clamp(
+          symbolBytes.toDouble(),
+          (1 << 24).toDouble(),
+        );
         if (bucketBytes > maxBucket) bucketBytes = maxBucket;
         refilledAt = now;
 
@@ -578,8 +586,8 @@ class FountainStreamSender {
 
 class _RxGeneration {
   _RxGeneration(this.size, this.symbolBytes)
-      : coeffRows = List<Uint8List?>.filled(size, null),
-        dataRows = List<Uint8List?>.filled(size, null);
+    : coeffRows = List<Uint8List?>.filled(size, null),
+      dataRows = List<Uint8List?>.filled(size, null);
 
   final int size;
   final int symbolBytes;
@@ -637,9 +645,13 @@ class _RxGeneration {
 
 class _RxTransfer {
   _RxTransfer(this.sizeBytes, this.symbolBytes, this.generationSize)
-      : totalSymbols = (sizeBytes / symbolBytes).ceil().clamp(1, 1 << 31) {
+    : totalSymbols = (sizeBytes / symbolBytes).ceil().clamp(1, 1 << 31) {
     generations = [
-      for (var g = 0; g < ((totalSymbols + generationSize - 1) ~/ generationSize); g++)
+      for (
+        var g = 0;
+        g < ((totalSymbols + generationSize - 1) ~/ generationSize);
+        g++
+      )
         _RxGeneration(
           (totalSymbols - g * generationSize) < generationSize
               ? totalSymbols - g * generationSize
@@ -681,9 +693,7 @@ class FountainStreamReceiver {
     void Function(Uint8List content)? onCompleted,
   }) : _onCompleted = onCompleted {
     _sub = _port.inbound.listen(
-      (raw) => unawaited(
-        _onFrame(raw).catchError((Object _) {}),
-      ),
+      (raw) => unawaited(_onFrame(raw).catchError((Object _) {})),
     );
     _stateTimer = Timer.periodic(stateInterval, (_) {
       final now = DateTime.now();
@@ -759,8 +769,13 @@ class FountainStreamReceiver {
     if (_completedIds.contains(key)) {
       try {
         await _port.send(
-          _FountainFrame(_typeDone, frame.transferId, 0, 0, Uint8List(0))
-              .encode(),
+          _FountainFrame(
+            _typeDone,
+            frame.transferId,
+            0,
+            0,
+            Uint8List(0),
+          ).encode(),
         );
       } catch (_) {}
       return;
@@ -797,8 +812,7 @@ class FountainStreamReceiver {
           coeffs = _coefficientsFor(frame.a, frame.b, gen.size);
         }
         // Own aligned copy: the inbound frame buffer is transient.
-        final innovative =
-            gen.offer(coeffs, Uint8List.fromList(frame.payload));
+        final innovative = gen.offer(coeffs, Uint8List.fromList(frame.payload));
         if (innovative && rx.allComplete) {
           final content = rx.assemble();
           final digest = sha256.convert(content).bytes;

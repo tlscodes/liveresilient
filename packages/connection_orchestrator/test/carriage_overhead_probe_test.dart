@@ -53,10 +53,10 @@ void main() {
     //
     // Measured by differencing two carriages rather than by arithmetic: the
     // quantization is the whole question, so it must be observed.
-    final unpadded =
-        MediaCarriage(carrier: MediaCarrier.sctpDataChannel, mtuBlockSize: 1)
-            .wrap(TaggedDatagram(0, datagram))
-            .length;
+    final unpadded = MediaCarriage(
+      carrier: MediaCarrier.sctpDataChannel,
+      mtuBlockSize: 1,
+    ).wrap(TaggedDatagram(0, datagram)).length;
     final padded64 = sizes[MediaCarrier.sctpDataChannel.name]!;
     // ignore: avoid_print
     print(
@@ -100,7 +100,9 @@ void main() {
       var max = 0;
       var total = 0;
       for (var i = 0; i < samples; i++) {
-        final n = carriage.wrap(TaggedDatagram(0, encoder.datagramAt(i))).length;
+        final n = carriage
+            .wrap(TaggedDatagram(0, encoder.datagramAt(i)))
+            .length;
         if (n < min) min = n;
         if (n > max) max = n;
         total += n;

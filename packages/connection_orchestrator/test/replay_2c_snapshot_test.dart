@@ -100,7 +100,8 @@ void main() {
     expect(
       _finalScore(s1),
       lessThan(kGate2cBar),
-      reason: 'if this ever passes, the bar no longer separates the two runs '
+      reason:
+          'if this ever passes, the bar no longer separates the two runs '
           'and gate 2c needs re-deriving rather than re-asserting',
     );
   });
@@ -117,7 +118,8 @@ void main() {
         expect(
           (trend['normalized']! as num).toDouble(),
           1.0,
-          reason: '$tag epoch ${epoch['epoch']}: a moving trend score would '
+          reason:
+              '$tag epoch ${epoch['epoch']}: a moving trend score would '
               'mean the detector gained state — welcome, but it invalidates '
               'this note and the epoch-constant claim in the artifact',
         );

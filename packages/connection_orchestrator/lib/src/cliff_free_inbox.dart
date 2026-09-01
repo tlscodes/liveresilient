@@ -166,7 +166,11 @@ class CliffFreeInbox {
 
   /// Absorbs one datagram. Returns a render event when the usable prefix grew,
   /// null otherwise (including for duplicates, which cost nothing).
-  CliffFreeRenderEvent? accept(int transferId, Uint8List datagram, MediaType type) {
+  CliffFreeRenderEvent? accept(
+    int transferId,
+    Uint8List datagram,
+    MediaType type,
+  ) {
     final id = CliffFreeTransferId(transferId);
     final objectId = id.objectId;
 

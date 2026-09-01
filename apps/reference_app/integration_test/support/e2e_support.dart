@@ -101,11 +101,7 @@ bool get e2eUsesRemoteRelay => e2eRelayUriOverride.isNotEmpty;
 List<Map<String, Object>> e2eIceServers() {
   if (e2eTurnUri.isEmpty) return const [];
   return [
-    {
-      'urls': e2eTurnUri,
-      'username': e2eTurnUser,
-      'credential': e2eTurnPass,
-    },
+    {'urls': e2eTurnUri, 'username': e2eTurnUser, 'credential': e2eTurnPass},
     // Reliable-transport fallback (2026-08-08, loss60 design): the same
     // media relay over TCP. Under heavy random loss the UDP handshake's
     // internal retransmit timers are not tunable from Dart, so candidate
@@ -160,7 +156,8 @@ SignalingSocketConnector e2eWsConnector(Uri endpoint) {
   // compete for the same few kbit/s and starve each other — measured
   // 2026-08-07: narrow (16 kbit/s, zero loss) connected in 4-12 s with one
   // dial and exhausted its whole 57 s budget with three.
-  final dialAttempts = (e2eShapedConditions.loss >= 0.3 &&
+  final dialAttempts =
+      (e2eShapedConditions.loss >= 0.3 &&
           e2eShapedConditions.bandwidthBps == null)
       ? 3
       : 1;
@@ -177,21 +174,22 @@ SignalingSocketConnector e2eWsConnector(Uri endpoint) {
           return WebSocket.connect(uri.toString(), customClient: client)
               .timeout(const Duration(seconds: 9))
               .then((ws) {
-            if (resolved) {
-              unawaited(ws.close());
-              client.close(force: true);
-              return;
-            }
-            resolved = true;
-            winner.complete(_E2eIoSignalingSocket(ws));
-          }).catchError((Object error) {
-            client.close(force: true);
-            failures++;
-            if (!resolved && failures == attempts && !winner.isCompleted) {
-              resolved = true;
-              winner.completeError(error);
-            }
-          });
+                if (resolved) {
+                  unawaited(ws.close());
+                  client.close(force: true);
+                  return;
+                }
+                resolved = true;
+                winner.complete(_E2eIoSignalingSocket(ws));
+              })
+              .catchError((Object error) {
+                client.close(force: true);
+                failures++;
+                if (!resolved && failures == attempts && !winner.isCompleted) {
+                  resolved = true;
+                  winner.completeError(error);
+                }
+              });
         }),
       );
     }
@@ -414,7 +412,10 @@ class LoopbackRelay {
       port: 0,
       abuseControls: e2eAbuseControls(),
     );
-    return LoopbackRelay._(server, Uri.parse('wss://localhost:${server.port}/'));
+    return LoopbackRelay._(
+      server,
+      Uri.parse('wss://localhost:${server.port}/'),
+    );
   }
 
   Future<void> close() async {
@@ -581,60 +582,62 @@ class E2eCallStack {
       OpusWireNoCandidateFits() => throw CallAdmissionRefused(wireAdmission),
     };
     final constrainedLink = e2eShapedConditions.bandwidthBps != null;
-    final media = WebRtcCallMediaSession(() async {
-      final port = await FlutterWebRtcPeerConnectionPort.create(
-        audio: mode == MediaMode.realAudio,
-        iceServers: e2eIceServers(),
-        // Gate 3c: the policy string comes from the same decision function
-        // production uses, not from a shortcut. The environment flag now
-        // feeds `iceProfileFor` through the manifest's own feature flags,
-        // so the row exercises the production path instead of a parallel
-        // one — a rig that proves a code path nobody ships proves nothing.
-        iceTransportPolicy: e2eIceTransportPolicy(),
-        opusPolicy: constrainedLink
-            ? OpusSdpPolicy.forShapingState(
-                fixedTickEmitterRunning: false,
-                maxAverageBitrateBps: wireBudget.opusRateBps,
-                ptimeMs: wireBudget.ptimeMs,
-              )
-            : null,
-      ).timeout(const Duration(seconds: 10));
-      stack.port = port;
-      // Engine-layer wiretap (2026-08-09): envelope-level tracing proved
-      // descriptions and remote candidates DELIVER, yet coturn saw zero
-      // CreatePermission — the missing evidence is what the ICE engine
-      // itself produces. Print every local candidate (its typ token says
-      // relay/srflx/host) and every connection-status transition.
-      port.localCandidates.listen((c) {
-        final cand = c.candidate;
-        final typIdx = cand.indexOf(' typ ');
-        print(
-          'e2e ${role.name} localCand: '
-          '${typIdx < 0 ? cand : cand.substring(typIdx + 1)} '
-          '@${DateTime.now().difference(stack._builtAt).inSeconds}s',
+    final media = WebRtcCallMediaSession(
+      () async {
+        final port = await FlutterWebRtcPeerConnectionPort.create(
+          audio: mode == MediaMode.realAudio,
+          iceServers: e2eIceServers(),
+          // Gate 3c: the policy string comes from the same decision function
+          // production uses, not from a shortcut. The environment flag now
+          // feeds `iceProfileFor` through the manifest's own feature flags,
+          // so the row exercises the production path instead of a parallel
+          // one — a rig that proves a code path nobody ships proves nothing.
+          iceTransportPolicy: e2eIceTransportPolicy(),
+          opusPolicy: constrainedLink
+              ? OpusSdpPolicy.forShapingState(
+                  fixedTickEmitterRunning: false,
+                  maxAverageBitrateBps: wireBudget.opusRateBps,
+                  ptimeMs: wireBudget.ptimeMs,
+                )
+              : null,
+        ).timeout(const Duration(seconds: 10));
+        stack.port = port;
+        // Engine-layer wiretap (2026-08-09): envelope-level tracing proved
+        // descriptions and remote candidates DELIVER, yet coturn saw zero
+        // CreatePermission — the missing evidence is what the ICE engine
+        // itself produces. Print every local candidate (its typ token says
+        // relay/srflx/host) and every connection-status transition.
+        port.localCandidates.listen((c) {
+          final cand = c.candidate;
+          final typIdx = cand.indexOf(' typ ');
+          print(
+            'e2e ${role.name} localCand: '
+            '${typIdx < 0 ? cand : cand.substring(typIdx + 1)} '
+            '@${DateTime.now().difference(stack._builtAt).inSeconds}s',
+          );
+        });
+        port.connectionStatus.listen(
+          (s) => print(
+            'e2e ${role.name} pcStatus: $s '
+            '@${DateTime.now().difference(stack._builtAt).inSeconds}s',
+          ),
         );
-      });
-      port.connectionStatus.listen(
-        (s) => print(
-          'e2e ${role.name} pcStatus: $s '
-          '@${DateTime.now().difference(stack._builtAt).inSeconds}s',
-        ),
-      );
-      return port;
-    },
-    // Same seam as production (call_session.dart): the pure port contract
-    // has no rollback, the Flutter port does. WITHOUT this the Dart layer
-    // "rolls back" (signalingState := stable) while the NATIVE peer
-    // connection stays in have-local-offer, and the next
-    // setRemoteDescription(offer) dies with "Called in wrong state".
-    // Hidden until 2026-08-07 because glare needed a receiver-side offer,
-    // which only the initial-connect watchdog's recovery path produces —
-    // the loss60 phase timeline showed the exact error twice.
-    nativeRollback: (port) async {
-      if (port is FlutterWebRtcPeerConnectionPort) {
-        await port.rollbackLocalDescription();
-      }
-    });
+        return port;
+      },
+      // Same seam as production (call_session.dart): the pure port contract
+      // has no rollback, the Flutter port does. WITHOUT this the Dart layer
+      // "rolls back" (signalingState := stable) while the NATIVE peer
+      // connection stays in have-local-offer, and the next
+      // setRemoteDescription(offer) dies with "Called in wrong state".
+      // Hidden until 2026-08-07 because glare needed a receiver-side offer,
+      // which only the initial-connect watchdog's recovery path produces —
+      // the loss60 phase timeline showed the exact error twice.
+      nativeRollback: (port) async {
+        if (port is FlutterWebRtcPeerConnectionPort) {
+          await port.rollbackLocalDescription();
+        }
+      },
+    );
     final controller = CallController(
       callId: callId,
       role: role,
@@ -771,8 +774,9 @@ class E2eCallStack {
     // backstop ever fires — with no named reason. Terminal-first now
     // surfaces the controller's own endReason/error as a typed failure.
     return Future.any<CallState>([
-      controller.states
-          .firstWhere((state) => state.phase == CallPhase.connected),
+      controller.states.firstWhere(
+        (state) => state.phase == CallPhase.connected,
+      ),
       controller.done.then((state) {
         throw StateError(
           '${role.name} call ended before reaching connected: '
@@ -916,9 +920,9 @@ class SentinelProbe {
       final t = _nowMs();
       int? received;
       try {
-        final counters = await port
-            .readStatsCounters()
-            .timeout(const Duration(milliseconds: 900));
+        final counters = await port.readStatsCounters().timeout(
+          const Duration(milliseconds: 900),
+        );
         received = counters?.packetsReceived;
       } catch (_) {
         received = null; // A slow stats poll is data (a stalling call).

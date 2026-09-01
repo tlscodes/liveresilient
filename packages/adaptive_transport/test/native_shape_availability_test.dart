@@ -41,8 +41,10 @@ String _librarySource() {
     final file = File(candidate);
     if (file.existsSync()) return file.readAsStringSync();
   }
-  throw StateError('native_shape_availability.dart not found from '
-      '${Directory.current.path}');
+  throw StateError(
+    'native_shape_availability.dart not found from '
+    '${Directory.current.path}',
+  );
 }
 
 /// Counts `final class X extends NativeShapeAvailability` declarations.
@@ -82,7 +84,11 @@ void main() {
 
   group('4d the status type has exactly one member', () {
     test('4d one member in the library, and a second one would be seen', () {
-      expect(_memberCount(source), 1, reason: 'one member today, meaning absent');
+      expect(
+        _memberCount(source),
+        1,
+        reason: 'one member today, meaning absent',
+      );
 
       // The predicate proves it can count to two, on a source it has never
       // seen. Without this the assertion above could be a regex that matches
@@ -102,8 +108,14 @@ final class NativeShapePresent extends NativeShapeAvailability {}
       expect(_baseIsSealed(source), isTrue);
       expect(_constructorIsPrivate(source), isTrue);
 
-      expect(_baseIsSealed('abstract class NativeShapeAvailability {}'), isFalse);
-      expect(_constructorIsPrivate('const NativeShapeAvailability();'), isFalse);
+      expect(
+        _baseIsSealed('abstract class NativeShapeAvailability {}'),
+        isFalse,
+      );
+      expect(
+        _constructorIsPrivate('const NativeShapeAvailability();'),
+        isFalse,
+      );
     });
 
     test('4d the exhaustive switch covers the type with no default', () {
@@ -113,9 +125,13 @@ final class NativeShapePresent extends NativeShapeAvailability {}
         _describe(nativeShapeAvailabilityForThisBuild),
         'absent:noModuleLinked',
       );
-      expect(_codeOnly(source).contains('default:'), isFalse,
-          reason: 'a default branch would defeat the exhaustiveness that IS '
-              'the mechanism');
+      expect(
+        _codeOnly(source).contains('default:'),
+        isFalse,
+        reason:
+            'a default branch would defeat the exhaustiveness that IS '
+            'the mechanism',
+      );
     });
   });
 
@@ -162,11 +178,10 @@ final class NativeShapePresent extends NativeShapeAvailability {}
         ),
       );
       expect(
-        resolveNativeShapeAvailability(
-          NativeShapeProbeOutcome.noModuleToProbe,
-        ),
+        resolveNativeShapeAvailability(NativeShapeProbeOutcome.noModuleToProbe),
         nativeShapeAvailabilityForThisBuild,
-        reason: 'the constant and the resolver must agree, or one of them is a '
+        reason:
+            'the constant and the resolver must agree, or one of them is a '
             'second source of truth',
       );
     });
@@ -188,9 +203,17 @@ final class NativeShapePresent extends NativeShapeAvailability {}
       for (final cause in NativeShapeAbsentCause.values) {
         expect(
           cause.name.toLowerCase(),
-          isNot(anyOf(contains('present\$'), equals('available'),
-              equals('ready'), equals('enabled'), equals('active'))),
-          reason: '${cause.name} reads like availability inside an '
+          isNot(
+            anyOf(
+              contains('present\$'),
+              equals('available'),
+              equals('ready'),
+              equals('enabled'),
+              equals('active'),
+            ),
+          ),
+          reason:
+              '${cause.name} reads like availability inside an '
               'absence-cause enum',
         );
       }

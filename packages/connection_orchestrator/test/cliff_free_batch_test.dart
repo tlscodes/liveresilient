@@ -98,8 +98,10 @@ void main() {
       }
 
       // Not ours at all.
-      expect(errorOf(Uint8List.fromList([1, 2, 3])),
-          CliffFreeBatchError.notABatch);
+      expect(
+        errorOf(Uint8List.fromList([1, 2, 3])),
+        CliffFreeBatchError.notABatch,
+      );
       final wrongMagic = Uint8List.fromList(good)..[0] = 0x00;
       expect(errorOf(wrongMagic), CliffFreeBatchError.notABatch);
 
@@ -109,8 +111,10 @@ void main() {
 
       // Ours, and lying about its own size — the remotely-triggerable one.
       final truncated = Uint8List.sublistView(good, 0, good.length - 10);
-      expect(errorOf(Uint8List.fromList(truncated)),
-          CliffFreeBatchError.lengthMismatch);
+      expect(
+        errorOf(Uint8List.fromList(truncated)),
+        CliffFreeBatchError.lengthMismatch,
+      );
 
       // A media type index past the end of the enum used to throw RangeError
       // out of a receive path from a value an attacker chooses.
@@ -128,8 +132,10 @@ void main() {
     });
 
     test('tryDecode separates "not ours" from "ours and broken"', () {
-      expect(CliffFreeBatchCodec.tryDecode(Uint8List.fromList([1, 2, 3])),
-          isNull);
+      expect(
+        CliffFreeBatchCodec.tryDecode(Uint8List.fromList([1, 2, 3])),
+        isNull,
+      );
       final good = CliffFreeBatchCodec.encode(
         objectId: 1,
         type: MediaType.photo,
@@ -200,32 +206,34 @@ void main() {
       expect(layers.last, 1);
     });
 
-    test('an address change AND a full batch in one call loses neither frame',
-        () {
-      // The ordering trap: `add` can trigger a flush for the layer change and
-      // then find the batch full. Overwriting the first frame with the second
-      // drops real symbols on the floor.
-      final batcher = CliffFreeBatcher(
-        objectId: 1,
-        type: MediaType.photo,
-        layerCount: 2,
-        maxSymbolsPerFrame: 1, // every add both changes and fills
-      );
-      final syms = _symbols(4);
-      final frames = <Uint8List>[];
-      for (var i = 0; i < 4; i++) {
-        final f = batcher.add(i.isEven ? 0 : 1, syms[i]);
-        if (f != null) frames.add(f);
-      }
-      final tail = batcher.flush();
-      if (tail != null) frames.add(tail);
+    test(
+      'an address change AND a full batch in one call loses neither frame',
+      () {
+        // The ordering trap: `add` can trigger a flush for the layer change and
+        // then find the batch full. Overwriting the first frame with the second
+        // drops real symbols on the floor.
+        final batcher = CliffFreeBatcher(
+          objectId: 1,
+          type: MediaType.photo,
+          layerCount: 2,
+          maxSymbolsPerFrame: 1, // every add both changes and fills
+        );
+        final syms = _symbols(4);
+        final frames = <Uint8List>[];
+        for (var i = 0; i < 4; i++) {
+          final f = batcher.add(i.isEven ? 0 : 1, syms[i]);
+          if (f != null) frames.add(f);
+        }
+        final tail = batcher.flush();
+        if (tail != null) frames.add(tail);
 
-      var total = 0;
-      for (final f in frames) {
-        total += CliffFreeBatchCodec.decode(f).symbols.length;
-      }
-      expect(total, 4);
-    });
+        var total = 0;
+        for (final f in frames) {
+          total += CliffFreeBatchCodec.decode(f).symbols.length;
+        }
+        expect(total, 4);
+      },
+    );
   });
 
   group('MEASURED: what batching buys', () {
@@ -279,10 +287,16 @@ void main() {
 
       final one = factor(1);
       final ten = factor(10);
-      expect(ten, lessThan(one / 2),
-          reason: 'N=10 must at least halve the expansion of N=1');
-      expect(one, greaterThan(2.0),
-          reason: 'the unbatched cost measured in Run I was x3.6');
+      expect(
+        ten,
+        lessThan(one / 2),
+        reason: 'N=10 must at least halve the expansion of N=1',
+      );
+      expect(
+        one,
+        greaterThan(2.0),
+        reason: 'the unbatched cost measured in Run I was x3.6',
+      );
     });
 
     test('MEASURED COST: burst loss from batching, at equal byte loss', () {
@@ -319,8 +333,9 @@ void main() {
             final take = batchSize > sent - i ? sent - i : batchSize;
             final dropWholeFrame = batchSize > 1 && rng.nextDouble() < loss;
             for (var k = 0; k < take; k++) {
-              final drop =
-                  batchSize > 1 ? dropWholeFrame : rng.nextDouble() < loss;
+              final drop = batchSize > 1
+                  ? dropWholeFrame
+                  : rng.nextDouble() < loss;
               if (!drop) decoder.addDatagram(encoder.datagramAt(i + k));
             }
             i += take;
@@ -366,7 +381,11 @@ void main() {
       const trials = 150;
       const candidates = [1, 2, 4, 10, 20, 40, 80];
 
-      ({double wire, double success}) run(int batchSize, double loss, int seed) {
+      ({double wire, double success}) run(
+        int batchSize,
+        double loss,
+        int seed,
+      ) {
         final rng = Random(seed);
         var ok = 0;
         var wireTotal = 0;
@@ -415,9 +434,11 @@ void main() {
       // ignore: avoid_print
       print('wire bytes per SUCCESSFUL 3000 B object (lower is better):');
       // ignore: avoid_print
-      print('  loss |' +
-          candidates.map((n) => 'N=$n'.padLeft(9)).join() +
-          '   best');
+      print(
+        '  loss |' +
+            candidates.map((n) => 'N=$n'.padLeft(9)).join() +
+            '   best',
+      );
 
       final best = <double, int>{};
       for (final loss in [0.05, 0.1, 0.2, 0.3, 0.4]) {
@@ -433,14 +454,17 @@ void main() {
         }
         best[loss] = bestN;
         // ignore: avoid_print
-        print('  ${(loss * 100).round().toString().padLeft(4)}% |' +
-            candidates
-                .map((n) => (row[n]!.isFinite
-                        ? row[n]!.round().toString()
-                        : 'fail')
-                    .padLeft(9))
-                .join() +
-            '   N=$bestN');
+        print(
+          '  ${(loss * 100).round().toString().padLeft(4)}% |' +
+              candidates
+                  .map(
+                    (n) =>
+                        (row[n]!.isFinite ? row[n]!.round().toString() : 'fail')
+                            .padLeft(9),
+                  )
+                  .join() +
+              '   N=$bestN',
+        );
       }
 
       // WHAT THIS TABLE OVERTURNED. The first policy written against it was a
@@ -456,7 +480,8 @@ void main() {
         expect(
           entry.value,
           greaterThanOrEqualTo(10),
-          reason: 'at ${entry.key} loss the cheapest batch was ${entry.value}; '
+          reason:
+              'at ${entry.key} loss the cheapest batch was ${entry.value}; '
               'if this ever drops below 10 the padding constant has changed '
               'and the policy must be re-derived',
         );
@@ -487,10 +512,9 @@ void main() {
           layerIndex: 0,
           symbols: _symbols(n),
         );
-        final wire =
-            MediaCarriage(carrier: MediaCarrier.sctpDataChannel)
-                .wrap(TaggedDatagram(1, frame))
-                .length;
+        final wire = MediaCarriage(
+          carrier: MediaCarrier.sctpDataChannel,
+        ).wrap(TaggedDatagram(1, frame)).length;
         // ignore: avoid_print
         print(
           '  N=${n.toString().padLeft(2)}: $wire B  ->  '
@@ -513,9 +537,9 @@ void main() {
         layerIndex: 0,
         symbols: _symbols(chosen),
       );
-      final wire = MediaCarriage(carrier: MediaCarrier.sctpDataChannel)
-          .wrap(TaggedDatagram(1, frame))
-          .length;
+      final wire = MediaCarriage(
+        carrier: MediaCarrier.sctpDataChannel,
+      ).wrap(TaggedDatagram(1, frame)).length;
       expect(
         wire / bytesPerSecondNarrow,
         lessThanOrEqualTo(0.5),

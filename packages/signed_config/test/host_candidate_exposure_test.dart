@@ -30,11 +30,7 @@ void main() {
   EndpointManifest manifestWith(
     List<IceServerEntry> servers, {
     Map<String, bool> flags = const {},
-  }) => buildManifest(
-    revision: 1,
-    iceServers: servers,
-    featureFlags: flags,
-  );
+  }) => buildManifest(revision: 1, iceServers: servers, featureFlags: flags);
 
   group('gate 3f — which inputs actually reach a relay-only policy', () {
     test('3f  the default profile offers host candidates, by design', () {
@@ -44,7 +40,8 @@ void main() {
       expect(
         config.iceTransportPolicy,
         'all',
-        reason: 'a normal call wants every path that might work; the local '
+        reason:
+            'a normal call wants every path that might work; the local '
             'address going out is the cost of that and is not a defect',
       );
     });
@@ -57,12 +54,11 @@ void main() {
       expect(config.iceTransportPolicy, 'relay');
       expect(
         config.iceServers.every(
-          (s) => (s['urls']! as List).every(
-            (u) => '$u'.startsWith('turn'),
-          ),
+          (s) => (s['urls']! as List).every((u) => '$u'.startsWith('turn')),
         ),
         isTrue,
-        reason: 'a relay-only policy with a STUN entry in the list is a '
+        reason:
+            'a relay-only policy with a STUN entry in the list is a '
             'contradiction the mapper must not emit',
       );
     });

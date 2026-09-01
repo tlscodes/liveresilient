@@ -78,8 +78,11 @@ void main() {
 
     test('at exactly the threshold the cheap path still wins', () {
       expect(
-        routeAttachment(byteLength: 100, isImage: false, lossEstimate: 0.10)
-            .path,
+        routeAttachment(
+          byteLength: 100,
+          isImage: false,
+          lossEstimate: 0.10,
+        ).path,
         MediaPath.acknowledged,
       );
     });

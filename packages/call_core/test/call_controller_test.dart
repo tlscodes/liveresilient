@@ -1433,8 +1433,7 @@ void main() {
       },
     );
 
-    test(
-        'operation timeout during initial connect is SOFT: the watchdog '
+    test('operation timeout during initial connect is SOFT: the watchdog '
         'alone declares stagnation (raised 2026-08-08, loss60)', () {
       fakeAsync((async) {
         final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
@@ -1622,34 +1621,32 @@ void main() {
       },
     );
 
-    test(
-      'receiver-role INITIAL-connect recovery only requests a restart — '
-      'the initiator owns every generation until first connected '
-      '(raised 2026-08-09)',
-      () {
-        fakeAsync((async) {
-          final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
-            ReconnectDecision.retry(const Duration(milliseconds: 100)),
-          ]);
-          final h = Harness(role: CallRole.receiver, reconnectPolicy: policy);
-          h.run(async, h.controller.start);
-          async.flushMicrotasks();
+    test('receiver-role INITIAL-connect recovery only requests a restart — '
+        'the initiator owns every generation until first connected '
+        '(raised 2026-08-09)', () {
+      fakeAsync((async) {
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(milliseconds: 100)),
+        ]);
+        final h = Harness(role: CallRole.receiver, reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
 
-          h.log.entries.clear();
-          h.transport.emit(const TransportEvent(TransportStatus.disconnected));
-          async.flushMicrotasks();
-          async.elapse(const Duration(milliseconds: 100));
+        h.log.entries.clear();
+        h.transport.emit(const TransportEvent(TransportStatus.disconnected));
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 100));
 
-          expect(h.log.entries, contains('signaling.send(restart)'));
-          expect(
-            h.log.entries,
-            isNot(contains('media.createOffer(iceRestart:true)')),
-            reason: 'a never-connected receiver must answer, never race '
-                'its own generation against the initiator',
-          );
-        });
-      },
-    );
+        expect(h.log.entries, contains('signaling.send(restart)'));
+        expect(
+          h.log.entries,
+          isNot(contains('media.createOffer(iceRestart:true)')),
+          reason:
+              'a never-connected receiver must answer, never race '
+              'its own generation against the initiator',
+        );
+      });
+    });
 
     test('a failing reconnect attempt reschedules another attempt', () {
       fakeAsync((async) {
@@ -2081,62 +2078,56 @@ void main() {
   });
 
   group('12. Media start bound vs engine bound', () {
-    test(
-      'start hung 20 s still succeeds: getUserMedia latency is human '
-      '(permission prompt), bounded by mediaStartTimeout, not the 15 s '
-      'engine bound',
-      () {
-        fakeAsync((async) {
-          final h = Harness();
-          h.media.startImpl = () =>
-              Future<void>.delayed(const Duration(seconds: 20));
-          h.run(async, h.controller.start);
-          async.elapse(const Duration(seconds: 21));
-          async.flushMicrotasks();
-          expect(
-            h.states.any((s) => s.phase == CallPhase.negotiating),
-            true,
-            reason: 'a 20 s start must not be classified as a hung engine',
-          );
-          h.run(async, h.controller.dispose);
-          async.flushMicrotasks();
-          expectNoPendingTimers(async);
-        });
-      },
-    );
+    test('start hung 20 s still succeeds: getUserMedia latency is human '
+        '(permission prompt), bounded by mediaStartTimeout, not the 15 s '
+        'engine bound', () {
+      fakeAsync((async) {
+        final h = Harness();
+        h.media.startImpl = () =>
+            Future<void>.delayed(const Duration(seconds: 20));
+        h.run(async, h.controller.start);
+        async.elapse(const Duration(seconds: 21));
+        async.flushMicrotasks();
+        expect(
+          h.states.any((s) => s.phase == CallPhase.negotiating),
+          true,
+          reason: 'a 20 s start must not be classified as a hung engine',
+        );
+        h.run(async, h.controller.dispose);
+        async.flushMicrotasks();
+        expectNoPendingTimers(async);
+      });
+    });
 
-    test(
-      'setLocalDescription hung 15 s fails fast: compute calls keep the '
-      'fixed engine bound',
-      () {
-        fakeAsync((async) {
-          final h = Harness();
-          h.media.setLocalDescriptionImpl = (description) =>
-              Completer<void>().future;
-          h.run(async, h.controller.start);
-          async.flushMicrotasks();
-          async.elapse(const Duration(seconds: 14));
-          async.flushMicrotasks();
-          expect(
-            h.states.last.phase,
-            isNot(CallPhase.failed),
-            reason: 'must not fail before the 15 s engine bound',
-          );
-          async.elapse(const Duration(seconds: 2));
-          async.flushMicrotasks();
-          expect(
-            h.states.last.phase,
-            CallPhase.failed,
-            reason:
-                'the hung compute call must fail at the fixed 15 s engine '
-                'bound (the Harness policy retries nothing), not wait out '
-                'the 30 s media-start bound',
-          );
-          h.run(async, h.controller.dispose);
-          async.flushMicrotasks();
-          expectNoPendingTimers(async);
-        });
-      },
-    );
+    test('setLocalDescription hung 15 s fails fast: compute calls keep the '
+        'fixed engine bound', () {
+      fakeAsync((async) {
+        final h = Harness();
+        h.media.setLocalDescriptionImpl = (description) =>
+            Completer<void>().future;
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 14));
+        async.flushMicrotasks();
+        expect(
+          h.states.last.phase,
+          isNot(CallPhase.failed),
+          reason: 'must not fail before the 15 s engine bound',
+        );
+        async.elapse(const Duration(seconds: 2));
+        async.flushMicrotasks();
+        expect(
+          h.states.last.phase,
+          CallPhase.failed,
+          reason:
+              'the hung compute call must fail at the fixed 15 s engine '
+              'bound (the Harness policy retries nothing), not wait out '
+              'the 30 s media-start bound',
+        );
+        h.run(async, h.controller.dispose);
+        async.flushMicrotasks();
+        expectNoPendingTimers(async);
+      });
+    });
   });
 }

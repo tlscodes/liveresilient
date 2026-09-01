@@ -131,19 +131,22 @@ void main() {
     addTearDown(ticker.cancel);
     double dilation() {
       if (tickCount == 0) return 1.0;
-      final d = tickWatch.elapsedMicroseconds /
+      final d =
+          tickWatch.elapsedMicroseconds /
           (tickCount * tickNominal.inMicroseconds);
       return d < 1.0 ? 1.0 : d;
     }
 
     final started = DateTime.now();
     final resultF = sender.send(clip);
-    unawaited(resultF.then<void>(
-      (_) {},
-      onError: (Object e, StackTrace st) {
-        if (!delivered.isCompleted) delivered.completeError(e, st);
-      },
-    ));
+    unawaited(
+      resultF.then<void>(
+        (_) {},
+        onError: (Object e, StackTrace st) {
+          if (!delivered.isCompleted) delivered.completeError(e, st);
+        },
+      ),
+    );
 
     // Liveness, not a deadline. The old comment here claimed that needing
     // more than 8 minutes "signals the T2 rate-law stall, not slowness";
@@ -171,16 +174,20 @@ void main() {
       }
       final d = dilation();
       if (sinceProgress.elapsed > stallWindowBase * d) {
-        fail('no datagram progress for ${sinceProgress.elapsed.inSeconds}s '
-            '(window ${(stallWindowBase * d).inSeconds}s at dilation '
-            '${d.toStringAsFixed(2)}, rxReceived=${rxRaw.receivedDatagrams})'
-            ' — the pipeline stopped producing, and that is independent of '
-            'host speed');
+        fail(
+          'no datagram progress for ${sinceProgress.elapsed.inSeconds}s '
+          '(window ${(stallWindowBase * d).inSeconds}s at dilation '
+          '${d.toStringAsFixed(2)}, rxReceived=${rxRaw.receivedDatagrams})'
+          ' — the pipeline stopped producing, and that is independent of '
+          'host speed',
+        );
       }
       if (sinceStart.elapsed > hardCeiling) {
-        fail('probe still running after ${hardCeiling.inMinutes} min with '
-            'progress only trickling (rxReceived=${rxRaw.receivedDatagrams},'
-            ' dilation ${d.toStringAsFixed(2)})');
+        fail(
+          'probe still running after ${hardCeiling.inMinutes} min with '
+          'progress only trickling (rxReceived=${rxRaw.receivedDatagrams},'
+          ' dilation ${d.toStringAsFixed(2)})',
+        );
       }
     }
     final received = await delivered.future;
@@ -202,16 +209,18 @@ void main() {
     final overhead = result.sentSymbols / result.totalSourceSymbols;
     final achievedBps = result.sentSymbols * symbolBytes * 1000 / ms;
     final correctedBps = achievedBps * hostDilation;
-    print('PROBE_SUMMARY sentSymbols=${result.sentSymbols} '
-        'totalSourceSymbols=${result.totalSourceSymbols} '
-        'overhead=${overhead.toStringAsFixed(2)}x ms=$ms '
-        'deliveredKbps=${(clip.length * 8 / ms).round()} '
-        'achievedBps=${achievedBps.round()} '
-        'correctedBps=${correctedBps.round()} floorBps=$floorBytesPerSec '
-        'dilation=${hostDilation.toStringAsFixed(2)} '
-        'condition=${hostDilation > 1.3 ? 'loaded-host' : 'quiet-host'} '
-        'txSent=${txRaw.sentDatagrams} txLocalDrops=${txRaw.localSendDrops} '
-        'rxReceived=${rxRaw.receivedDatagrams}');
+    print(
+      'PROBE_SUMMARY sentSymbols=${result.sentSymbols} '
+      'totalSourceSymbols=${result.totalSourceSymbols} '
+      'overhead=${overhead.toStringAsFixed(2)}x ms=$ms '
+      'deliveredKbps=${(clip.length * 8 / ms).round()} '
+      'achievedBps=${achievedBps.round()} '
+      'correctedBps=${correctedBps.round()} floorBps=$floorBytesPerSec '
+      'dilation=${hostDilation.toStringAsFixed(2)} '
+      'condition=${hostDilation > 1.3 ? 'loaded-host' : 'quiet-host'} '
+      'txSent=${txRaw.sentDatagrams} txLocalDrops=${txRaw.localSendDrops} '
+      'rxReceived=${rxRaw.receivedDatagrams}',
+    );
 
     // Symbol economics are a property of the loss profile and the rate
     // law, not of host speed: a deterministic 60% drop means delivery
@@ -220,21 +229,33 @@ void main() {
     // recorded passing run. The band survives load because the feedback
     // lag costs symbols at the pacing rate, and load lowers that rate by
     // the same factor it lengthens the lag.
-    expect(overhead, greaterThan(2.4),
-        reason: 'sent/source below the 1/0.4 loss floor means the '
-            'deterministic 60% drop is not being applied');
-    expect(overhead, lessThan(3.4),
-        reason: 'sent/source far above the loss floor means the repair '
-            'series or the rate law is overshooting');
+    expect(
+      overhead,
+      greaterThan(2.4),
+      reason:
+          'sent/source below the 1/0.4 loss floor means the '
+          'deterministic 60% drop is not being applied',
+    );
+    expect(
+      overhead,
+      lessThan(3.4),
+      reason:
+          'sent/source far above the loss floor means the repair '
+          'series or the rate law is overshooting',
+    );
 
     // The floor rate is a promise made by the CODE's pacing, so hold it
     // against the event loop the code actually got: the sent rate,
     // corrected by measured dilation, must clear 75% of floorBytesPerSec.
-    expect(correctedBps, greaterThan(0.75 * floorBytesPerSec),
-        reason: 'sender paced below its configured floor after correcting '
-            'for host scheduling: ${correctedBps.round()} B/s corrected '
-            '(${achievedBps.round()} B/s raw at dilation '
-            '${hostDilation.toStringAsFixed(2)}) vs floor '
-            '$floorBytesPerSec B/s');
+    expect(
+      correctedBps,
+      greaterThan(0.75 * floorBytesPerSec),
+      reason:
+          'sender paced below its configured floor after correcting '
+          'for host scheduling: ${correctedBps.round()} B/s corrected '
+          '(${achievedBps.round()} B/s raw at dilation '
+          '${hostDilation.toStringAsFixed(2)}) vs floor '
+          '$floorBytesPerSec B/s',
+    );
   });
 }

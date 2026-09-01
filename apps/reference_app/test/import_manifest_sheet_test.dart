@@ -55,13 +55,21 @@ String _validCode() {
       'schemaVersion': manifestSchemaVersion,
       'revision': 4,
       'signingKeyId': 'key-a',
-      'issuedAt': DateTime.now().toUtc().subtract(const Duration(hours: 1))
+      'issuedAt': DateTime.now()
+          .toUtc()
+          .subtract(const Duration(hours: 1))
           .toIso8601String(),
-      'expiresAt': DateTime.now().toUtc().add(const Duration(days: 7))
+      'expiresAt': DateTime.now()
+          .toUtc()
+          .add(const Duration(days: 7))
           .toIso8601String(),
       'signalingEndpoints': ['wss://relay.example/signal'],
       'iceServers': [
-        {'urls': ['turns:relay.example:443'], 'username': 'u', 'credential': 'c'},
+        {
+          'urls': ['turns:relay.example:443'],
+          'username': 'u',
+          'credential': 'c',
+        },
       ],
       'configServiceUris': ['https://config.example/manifest'],
     },
@@ -73,13 +81,16 @@ String _validCode() {
 
 Future<void> _pump(WidgetTester tester, OobManifestImport import) async {
   await tester.pumpWidget(
-    MaterialApp(home: Scaffold(body: ImportManifestSheet(import: import))),
+    MaterialApp(
+      home: Scaffold(body: ImportManifestSheet(import: import)),
+    ),
   );
 }
 
 void main() {
-  testWidgets('an import that THROWS still leaves the sheet usable',
-      (tester) async {
+  testWidgets('an import that THROWS still leaves the sheet usable', (
+    tester,
+  ) async {
     await _pump(tester, _import(_AlwaysThrows()));
 
     await tester.enterText(find.byType(TextField), _validCode());
@@ -100,8 +111,9 @@ void main() {
     expect(find.textContaining('fault in the app'), findsOneWidget);
   });
 
-  testWidgets('a crash is named as an app fault, not as a trust failure',
-      (tester) async {
+  testWidgets('a crash is named as an app fault, not as a trust failure', (
+    tester,
+  ) async {
     await _pump(tester, _import(_AlwaysThrows()));
     await tester.enterText(find.byType(TextField), _validCode());
     await tester.tap(find.text('Check this code'));
@@ -114,8 +126,9 @@ void main() {
     expect(find.textContaining('Do not use it'), findsNothing);
   });
 
-  testWidgets('an unreadable code is a READ failure, and offers no manifest',
-      (tester) async {
+  testWidgets('an unreadable code is a READ failure, and offers no manifest', (
+    tester,
+  ) async {
     await _pump(tester, _import(_Accepts()));
 
     await tester.enterText(find.byType(TextField), 'CFM1-ZZZZZ-ZZZZZ');

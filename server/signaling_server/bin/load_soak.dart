@@ -261,13 +261,12 @@ class _RoomHarness {
   // Identity-keyed rooms: join frames must carry a senderKeyId, and each
   // role uses its own so the pair SEATS as two members (a duplicate
   // identity would be treated as a session resumption, not a peer).
-  String _envelope(String body, {required String from}) => jsonEncode(
-        <String, Object?>{
-          'callId': callId,
-          'senderKeyId': '$from-key',
-          'body': body,
-        },
-      );
+  String _envelope(String body, {required String from}) =>
+      jsonEncode(<String, Object?>{
+        'callId': callId,
+        'senderKeyId': '$from-key',
+        'body': body,
+      });
 
   Future<WebSocket> _connect() async {
     // Dedicated HttpClient per socket: the dev certificate is self-signed,

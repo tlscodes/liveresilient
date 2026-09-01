@@ -101,12 +101,8 @@ void main() {
       expect(chatEntryContinuesGroup(entries, 3), isFalse);
     });
 
-    test('gap shrinks inside a group (s2 vs s8), none above the first row',
-        () {
-      expect(
-        chatBubbleGapAbove(continuesGroup: false, isFirst: true),
-        0,
-      );
+    test('gap shrinks inside a group (s2 vs s8), none above the first row', () {
+      expect(chatBubbleGapAbove(continuesGroup: false, isFirst: true), 0);
       expect(
         chatBubbleGapAbove(continuesGroup: true, isFirst: false),
         AppSpacing.s2,
@@ -133,7 +129,11 @@ void main() {
       expect(mineGrouped.bottomEnd, tail);
 
       final theirs = chatBubbleRadius(isMe: false, continuesGroup: false);
-      expect(theirs.bottomStart, tail, reason: 'their tail sits at bottomStart');
+      expect(
+        theirs.bottomStart,
+        tail,
+        reason: 'their tail sits at bottomStart',
+      );
       expect(theirs.topStart, big);
 
       final theirsGrouped = chatBubbleRadius(isMe: false, continuesGroup: true);
@@ -142,9 +142,7 @@ void main() {
   });
 
   group('delivery tick mapping (icons pinned by the pre-existing tests)', () {
-    Widget screen({
-      Map<String, DeliveryState> deliveryStates = const {},
-    }) {
+    Widget screen({Map<String, DeliveryState> deliveryStates = const {}}) {
       return Scaffold(
         body: ChatScreen(
           entries: [ChatEntry(message: _msg('me', 0, 'hello'))],
@@ -226,11 +224,7 @@ void main() {
   testWidgets('entrance animation is skipped for first-build entries and '
       'runs once for later arrivals', (tester) async {
     Widget screen(List<ChatEntry> entries) => Scaffold(
-      body: ChatScreen(
-        entries: entries,
-        localSenderId: 'me',
-        onSend: (_) {},
-      ),
+      body: ChatScreen(entries: entries, localSenderId: 'me', onSend: (_) {}),
     );
     final first = ChatEntry(message: _msg('me', 0, 'first'));
 
@@ -245,10 +239,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAppThemeData(Brightness.light),
-        home: screen([
-          first,
-          ChatEntry(message: _msg('me', 1, 'second')),
-        ]),
+        home: screen([first, ChatEntry(message: _msg('me', 1, 'second'))]),
       ),
     );
 
@@ -279,7 +270,10 @@ void main() {
       home: Scaffold(
         body: ChatScreen(
           entries: [
-            ChatEntry(message: _msg('peer', 0, '[voice]'), attachment: voiceNote),
+            ChatEntry(
+              message: _msg('peer', 0, '[voice]'),
+              attachment: voiceNote,
+            ),
           ],
           localSenderId: 'me',
           onSend: (_) {},

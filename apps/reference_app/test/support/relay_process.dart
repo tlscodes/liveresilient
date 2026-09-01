@@ -56,29 +56,38 @@ class RelayProcess {
   static Future<String> _ensureCompiled() async {
     final serverDir = _serverDir;
     final exe = File(
-        '$serverDir/.dart_tool/probe_relay_cache/relay-${_sourceKey(serverDir)}.exe');
+      '$serverDir/.dart_tool/probe_relay_cache/relay-${_sourceKey(serverDir)}.exe',
+    );
     if (exe.existsSync()) return exe.path;
     exe.parent.createSync(recursive: true);
     // Compile to a temp path, then atomic rename: parallel test isolates may
     // race here; both compiles succeed and the last rename wins.
     final tmp = '${exe.path}.tmp-$pid';
-    final proc = await Process.start(
-      'dart',
-      ['compile', 'exe', 'bin/datagram_relay.dart', '-o', tmp],
-      workingDirectory: serverDir,
-    );
+    final proc = await Process.start('dart', [
+      'compile',
+      'exe',
+      'bin/datagram_relay.dart',
+      '-o',
+      tmp,
+    ], workingDirectory: serverDir);
     final out = StringBuffer(), err = StringBuffer();
     proc.stdout.transform(const SystemEncoding().decoder).listen(out.write);
     proc.stderr.transform(const SystemEncoding().decoder).listen(err.write);
-    final code = await proc.exitCode.timeout(_compileBudget, onTimeout: () {
-      proc.kill();
-      throw StateError(
+    final code = await proc.exitCode.timeout(
+      _compileBudget,
+      onTimeout: () {
+        proc.kill();
+        throw StateError(
           'relay AOT compile exceeded ${_compileBudget.inSeconds}s\n'
-          'stdout: $out\nstderr: $err');
-    });
+          'stdout: $out\nstderr: $err',
+        );
+      },
+    );
     if (code != 0) {
-      throw StateError('relay AOT compile failed (exit $code)\n'
-          'stdout: $out\nstderr: $err');
+      throw StateError(
+        'relay AOT compile failed (exit $code)\n'
+        'stdout: $out\nstderr: $err',
+      );
     }
     File(tmp).renameSync(exe.path);
     return exe.path;
@@ -96,24 +105,33 @@ class RelayProcess {
         .transform(const SystemEncoding().decoder)
         .transform(const LineSplitter())
         .listen((l) {
-      out.writeln(l);
-      if (!ready.isCompleted && l.contains('datagram relay listening on')) {
-        ready.complete(int.parse(l.split(':').last.trim()));
-      }
-    });
-    unawaited(proc.exitCode.then((c) {
-      if (!ready.isCompleted) {
-        ready.completeError(StateError(
-            'relay exited before readiness (exit $c)\n'
-            'stdout: $out\nstderr: $err'));
-      }
-    }));
-    final port = await ready.future.timeout(_readyBudget, onTimeout: () {
-      proc.kill();
-      throw StateError(
+          out.writeln(l);
+          if (!ready.isCompleted && l.contains('datagram relay listening on')) {
+            ready.complete(int.parse(l.split(':').last.trim()));
+          }
+        });
+    unawaited(
+      proc.exitCode.then((c) {
+        if (!ready.isCompleted) {
+          ready.completeError(
+            StateError(
+              'relay exited before readiness (exit $c)\n'
+              'stdout: $out\nstderr: $err',
+            ),
+          );
+        }
+      }),
+    );
+    final port = await ready.future.timeout(
+      _readyBudget,
+      onTimeout: () {
+        proc.kill();
+        throw StateError(
           'relay (AOT exe) not ready in ${_readyBudget.inSeconds}s\n'
-          'stdout: $out\nstderr: $err');
-    });
+          'stdout: $out\nstderr: $err',
+        );
+      },
+    );
     return RelayProcess._(proc, port);
   }
 

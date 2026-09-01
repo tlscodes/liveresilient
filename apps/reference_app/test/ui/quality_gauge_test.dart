@@ -33,10 +33,7 @@ void main() {
       );
       final score = qualityScore(reading);
       expect(score, isNotNull);
-      expect(
-        score,
-        closeTo(1 - (100 / 1000) * 0.5 - (0.01 / 0.3) * 0.5, 1e-9),
-      );
+      expect(score, closeTo(1 - (100 / 1000) * 0.5 - (0.01 / 0.3) * 0.5, 1e-9));
       expect(bandOf(reading), QualityBand.good);
     });
 
@@ -189,10 +186,7 @@ void main() {
       addTearDown(tester.view.reset);
 
       await tester.pumpWidget(
-        wrap(
-          const QualityGauge(reading: reading),
-          brightness: Brightness.dark,
-        ),
+        wrap(const QualityGauge(reading: reading), brightness: Brightness.dark),
       );
       await tester.pumpAndSettle();
       await expectLater(

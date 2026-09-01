@@ -65,8 +65,10 @@ void main(List<String> args) {
   if (only != null) {
     final value = fields[only];
     if (value == null) {
-      stderr.writeln('unknown field "$only"; '
-          'known: ${fields.keys.join(', ')}');
+      stderr.writeln(
+        'unknown field "$only"; '
+        'known: ${fields.keys.join(', ')}',
+      );
       exit(2);
     }
     stdout.writeln(value);

@@ -61,29 +61,34 @@ void main() {
       key1,
     );
 
-    test('5f  a lower revision signed one day later is refused as a rollback',
-        () async {
-      final resigned = doc(
-        revision: accepted - 2, // the old configuration
-        issuedAt: acceptedIssuedAt.add(const Duration(days: 1)), // newer stamp
-      );
+    test(
+      '5f  a lower revision signed one day later is refused as a rollback',
+      () async {
+        final resigned = doc(
+          revision: accepted - 2, // the old configuration
+          issuedAt: acceptedIssuedAt.add(
+            const Duration(days: 1),
+          ), // newer stamp
+        );
 
-      final result = await verifier.verify(
-        resigned,
-        lastAcceptedRevision: accepted,
-        // Inside the re-signed document's own window, so the time checks pass
-        // and the decision is made on the revision alone.
-        now: acceptedIssuedAt.add(const Duration(days: 2)),
-      );
+        final result = await verifier.verify(
+          resigned,
+          lastAcceptedRevision: accepted,
+          // Inside the re-signed document's own window, so the time checks pass
+          // and the decision is made on the revision alone.
+          now: acceptedIssuedAt.add(const Duration(days: 2)),
+        );
 
-      expect(result, isA<ManifestRejected>());
-      expect(
-        (result as ManifestRejected).reason,
-        ManifestRejection.rollback,
-        reason: 'the document is authentic and in-window; the ONLY thing wrong '
-            'with it is that it moves the device backwards',
-      );
-    });
+        expect(result, isA<ManifestRejected>());
+        expect(
+          (result as ManifestRejected).reason,
+          ManifestRejection.rollback,
+          reason:
+              'the document is authentic and in-window; the ONLY thing wrong '
+              'with it is that it moves the device backwards',
+        );
+      },
+    );
 
     test('5f  a much newer signature does not buy a rollback either', () async {
       // The recency advantage is unbounded — a year of it changes nothing,
@@ -121,26 +126,28 @@ void main() {
       expect(result, isA<ManifestAccepted>());
     });
 
-    test('5f  a higher revision with an older signature is still accepted',
-        () async {
-      // The mirror of the gate: recency does not outrank revision in EITHER
-      // direction. A document that is authentic, in-window and ahead of the
-      // device is accepted even though it was stamped before the one the
-      // device holds — otherwise an attacker could block updates by
-      // replaying a recent stamp.
-      final ahead = doc(
-        revision: accepted + 1,
-        issuedAt: acceptedIssuedAt.subtract(const Duration(days: 1)),
-      );
+    test(
+      '5f  a higher revision with an older signature is still accepted',
+      () async {
+        // The mirror of the gate: recency does not outrank revision in EITHER
+        // direction. A document that is authentic, in-window and ahead of the
+        // device is accepted even though it was stamped before the one the
+        // device holds — otherwise an attacker could block updates by
+        // replaying a recent stamp.
+        final ahead = doc(
+          revision: accepted + 1,
+          issuedAt: acceptedIssuedAt.subtract(const Duration(days: 1)),
+        );
 
-      final result = await verifier.verify(
-        ahead,
-        lastAcceptedRevision: accepted,
-        now: acceptedIssuedAt,
-      );
+        final result = await verifier.verify(
+          ahead,
+          lastAcceptedRevision: accepted,
+          now: acceptedIssuedAt,
+        );
 
-      expect(result, isA<ManifestAccepted>());
-    });
+        expect(result, isA<ManifestAccepted>());
+      },
+    );
 
     test('5f  out of window, the refusal is reported as a time failure — the '
         'documented consequence of check order', () async {
@@ -163,7 +170,8 @@ void main() {
       expect(
         (result as ManifestRejected).reason,
         ManifestRejection.expired,
-        reason: 'time checks precede the rollback check; both refuse, and this '
+        reason:
+            'time checks precede the rollback check; both refuse, and this '
             'test exists so the difference is a decision rather than a '
             'surprise',
       );

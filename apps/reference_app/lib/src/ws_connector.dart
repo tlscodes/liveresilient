@@ -24,6 +24,7 @@ Future<String?> platformHostResolution(String host) async => null;
 /// returned [WebSocket] owns the detached socket.
 Future<WebSocket> connectWebSocketWithCustomRules(
   Uri endpoint, {
+
   /// Maps a host name to an address, asynchronously, once per connection
   /// attempt. Null leaves the platform's own resolution in place.
   Future<String?> Function(String host)? hostResolver,

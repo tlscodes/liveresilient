@@ -314,10 +314,7 @@ class NetworkAtlas {
   /// landed on [toLabel]). Same-label hops are ignored. Only hashes are
   /// stored. The from-side is bounded by [maxIdentities]; successors per
   /// from-identity are bounded by [maxSuccessors] (lowest count evicted).
-  void recordTransition({
-    required String fromLabel,
-    required String toLabel,
-  }) {
+  void recordTransition({required String fromLabel, required String toLabel}) {
     if (fromLabel == toLabel) return;
     final from = identityHash(fromLabel);
     final to = identityHash(toLabel);
@@ -358,9 +355,7 @@ class NetworkAtlas {
   /// hop away from it was ever recorded. Ties resolve to the
   /// lexicographically smallest hash, so the answer is a pure function
   /// of the counts (deterministic, like everything else here).
-  NetworkTransitionForecast? likelyNextNetwork({
-    required String networkLabel,
-  }) {
+  NetworkTransitionForecast? likelyNextNetwork({required String networkLabel}) {
     final successors = _transitions[identityHash(networkLabel)];
     if (successors == null || successors.isEmpty) return null;
     var total = 0;
@@ -485,9 +480,7 @@ class NetworkAtlas {
     if (_transitions.isNotEmpty)
       'transitions': {
         for (final from in _transitions.entries)
-          from.key: {
-            for (final to in from.value.entries) to.key: to.value,
-          },
+          from.key: {for (final to in from.value.entries) to.key: to.value},
       },
   };
 

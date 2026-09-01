@@ -513,18 +513,23 @@ class ManifestVerifier {
         }
         // Parse cannot fail here: a time rejection means the strict pass
         // already parsed this exact JSON successfully.
-        final issuedAt =
-            EndpointManifest.fromJson(document.manifestJson).issuedAt;
+        final issuedAt = EndpointManifest.fromJson(
+          document.manifestJson,
+        ).issuedAt;
         final relaxed = await verify(
           document,
           lastAcceptedRevision: lastAcceptedRevision,
           now: issuedAt,
         );
         return switch (relaxed) {
-          ManifestAccepted(:final manifest) =>
-            LenientAcceptedStale(manifest, fault),
-          ManifestRejected(:final reason, :final detail) =>
-            LenientRejected(reason, detail),
+          ManifestAccepted(:final manifest) => LenientAcceptedStale(
+            manifest,
+            fault,
+          ),
+          ManifestRejected(:final reason, :final detail) => LenientRejected(
+            reason,
+            detail,
+          ),
         };
     }
   }

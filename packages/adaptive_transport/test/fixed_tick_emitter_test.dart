@@ -58,24 +58,21 @@ void main() {
       }
     });
 
-    test(
-      '1d  an empty queue still emits: the output rate is the tick, not the '
-      'application rate',
-      () {
-        final emitter = FixedTickEmitter(
-          mode: TickEmissionMode.fixedTick,
-          tick: const Duration(milliseconds: 20),
-          shaper: shaperWithSeed(7),
-          nextFrame: () => null, // the caller never has anything
-          delay: (_) async {},
-        );
-        for (var i = 0; i < 50; i++) {
-          expect(emitter.emitOnce(), isNotEmpty);
-        }
-        expect(emitter.fillerFramesEmitted, 50);
-        expect(emitter.realFramesEmitted, 0);
-      },
-    );
+    test('1d  an empty queue still emits: the output rate is the tick, not the '
+        'application rate', () {
+      final emitter = FixedTickEmitter(
+        mode: TickEmissionMode.fixedTick,
+        tick: const Duration(milliseconds: 20),
+        shaper: shaperWithSeed(7),
+        nextFrame: () => null, // the caller never has anything
+        delay: (_) async {},
+      );
+      for (var i = 0; i < 50; i++) {
+        expect(emitter.emitOnce(), isNotEmpty);
+      }
+      expect(emitter.fillerFramesEmitted, 50);
+      expect(emitter.realFramesEmitted, 0);
+    });
 
     test('1d  a filler frame is identified and refuses to yield a payload', () {
       final shaper = shaperWithSeed(3);
@@ -91,7 +88,8 @@ void main() {
       expect(
         () => FixedTickEmitter.unwrap(unshaped),
         throwsFormatException,
-        reason: 'returning empty bytes would let a filler reach the '
+        reason:
+            'returning empty bytes would let a filler reach the '
             'application instead of being dropped',
       );
     });
@@ -134,23 +132,25 @@ void main() {
       },
     );
 
-    test('1d  counters separate the two kinds, which is what a shadow run reads',
-        () {
-      var queued = 3;
-      final emitter = FixedTickEmitter(
-        mode: TickEmissionMode.fixedTick,
-        tick: const Duration(milliseconds: 20),
-        shaper: shaperWithSeed(5),
-        nextFrame: () => queued-- > 0 ? <int>[1] : null,
-        delay: (_) async {},
-      );
-      for (var i = 0; i < 10; i++) {
-        emitter.emitOnce();
-      }
-      expect(emitter.realFramesEmitted, 3);
-      expect(emitter.fillerFramesEmitted, 7);
-      expect(emitter.framesEmitted, 10);
-    });
+    test(
+      '1d  counters separate the two kinds, which is what a shadow run reads',
+      () {
+        var queued = 3;
+        final emitter = FixedTickEmitter(
+          mode: TickEmissionMode.fixedTick,
+          tick: const Duration(milliseconds: 20),
+          shaper: shaperWithSeed(5),
+          nextFrame: () => queued-- > 0 ? <int>[1] : null,
+          delay: (_) async {},
+        );
+        for (var i = 0; i < 10; i++) {
+          emitter.emitOnce();
+        }
+        expect(emitter.realFramesEmitted, 3);
+        expect(emitter.fillerFramesEmitted, 7);
+        expect(emitter.framesEmitted, 10);
+      },
+    );
 
     test('1d  run emits one frame per tick and stops on request', () async {
       var ticks = 0;

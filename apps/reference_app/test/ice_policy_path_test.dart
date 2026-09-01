@@ -28,17 +28,15 @@ import 'package:signed_config/signed_config.dart'
 /// the shortcut is ever reintroduced, which is the regression that matters.
 void main() {
   final root = Directory.current.path;
-  final support = File(
-    '$root/integration_test/support/e2e_support.dart',
-  );
+  final support = File('$root/integration_test/support/e2e_support.dart');
 
   group('gate 3c — the rig goes through the production decision', () {
-    test('3c  the rig derives its policy from iceProfileFor, not from the flag',
-        () {
+    test('3c  the rig derives its policy from iceProfileFor, not from the flag', () {
       expect(
         support.existsSync(),
         isTrue,
-        reason: 'the rig support file is the subject of this gate: '
+        reason:
+            'the rig support file is the subject of this gate: '
             '${support.path}',
       );
       final source = support.readAsStringSync();
@@ -46,21 +44,26 @@ void main() {
       // The body of e2eIceTransportPolicy, isolated so the assertions below
       // cannot be satisfied by some unrelated part of the file.
       final start = source.indexOf('String e2eIceTransportPolicy()');
-      expect(start, greaterThan(-1),
-          reason: 'the rig must still expose the derivation it is tested for');
+      expect(
+        start,
+        greaterThan(-1),
+        reason: 'the rig must still expose the derivation it is tested for',
+      );
       final end = source.indexOf('\n}', start);
       final body = source.substring(start, end < 0 ? source.length : end);
 
       expect(
         body,
         contains('iceProfileFor('),
-        reason: 'the policy must come from the production rule; calling it is '
+        reason:
+            'the policy must come from the production rule; calling it is '
             'the only way the rig can inherit a fix or a defect in it',
       );
       expect(
         body,
         contains('IceProfile.strictRelay'),
-        reason: 'the string must be derived from the returned profile, not '
+        reason:
+            'the string must be derived from the returned profile, not '
             'chosen alongside it',
       );
       // THE SHORTCUT, RULED OUT BY POSITION RATHER THAN BY SHAPE.
@@ -84,7 +87,8 @@ void main() {
       expect(
         flagOutsideFlags,
         isEmpty,
-        reason: 'the flag must only enter as a manifest feature flag; here it '
+        reason:
+            'the flag must only enter as a manifest feature flag; here it '
             'reaches the result directly: $flagOutsideFlags',
       );
       final literalAwayFromProfile = lines
@@ -94,13 +98,15 @@ void main() {
       expect(
         literalAwayFromProfile,
         isEmpty,
-        reason: 'a policy string must be produced from the returned profile '
+        reason:
+            'a policy string must be produced from the returned profile '
             'and nowhere else: $literalAwayFromProfile',
       );
       expect(
         body,
         contains("'strict_relay'"),
-        reason: 'the flag must enter as a manifest feature flag, which is '
+        reason:
+            'the flag must enter as a manifest feature flag, which is '
             'where a real deployment supplies it',
       );
     });
@@ -133,20 +139,15 @@ void main() {
       // production and not in the harness — the two would disagree exactly
       // where a shaped-network row is most likely to hit it.
       expect(
-        iceProfileFor(
-          iceFailureCount: 1,
-          featureFlags: const <String, bool>{},
-        ),
+        iceProfileFor(iceFailureCount: 1, featureFlags: const <String, bool>{}),
         IceProfile.normal,
         reason: 'one failure is a transient',
       );
       expect(
-        iceProfileFor(
-          iceFailureCount: 2,
-          featureFlags: const <String, bool>{},
-        ),
+        iceProfileFor(iceFailureCount: 2, featureFlags: const <String, bool>{}),
         IceProfile.strictRelay,
-        reason: 'two failures on the same call is the evidence the rule waits '
+        reason:
+            'two failures on the same call is the evidence the rule waits '
             'for',
       );
     });
@@ -161,12 +162,14 @@ void main() {
         contains('iceProfileFor('),
         reason: 'the composition root uses the production rule',
       );
-      final handRolled =
-          RegExp("iceTransportPolicy:\\s*'(relay|all)'").hasMatch(main);
+      final handRolled = RegExp(
+        "iceTransportPolicy:\\s*'(relay|all)'",
+      ).hasMatch(main);
       expect(
         handRolled,
         isFalse,
-        reason: 'a literal policy string in the app would fork the decision '
+        reason:
+            'a literal policy string in the app would fork the decision '
             'the rig is asserting it shares',
       );
     });

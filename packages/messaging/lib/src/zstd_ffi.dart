@@ -47,34 +47,67 @@ typedef _CreateCDictC = Pointer<Void> Function(Pointer<Void>, UintPtr, Int32);
 typedef _CreateCDictD = Pointer<Void> Function(Pointer<Void>, int, int);
 typedef _CreateDDictC = Pointer<Void> Function(Pointer<Void>, UintPtr);
 typedef _CreateDDictD = Pointer<Void> Function(Pointer<Void>, int);
-typedef _CompressCDictC = UintPtr Function(Pointer<Void>, Pointer<Void>,
-    UintPtr, Pointer<Void>, UintPtr, Pointer<Void>);
-typedef _CompressCDictD = int Function(
-    Pointer<Void>, Pointer<Void>, int, Pointer<Void>, int, Pointer<Void>);
-typedef _DecompressDDictC = UintPtr Function(Pointer<Void>, Pointer<Void>,
-    UintPtr, Pointer<Void>, UintPtr, Pointer<Void>);
-typedef _DecompressDDictD = int Function(
-    Pointer<Void>, Pointer<Void>, int, Pointer<Void>, int, Pointer<Void>);
+typedef _CompressCDictC =
+    UintPtr Function(
+      Pointer<Void>,
+      Pointer<Void>,
+      UintPtr,
+      Pointer<Void>,
+      UintPtr,
+      Pointer<Void>,
+    );
+typedef _CompressCDictD =
+    int Function(
+      Pointer<Void>,
+      Pointer<Void>,
+      int,
+      Pointer<Void>,
+      int,
+      Pointer<Void>,
+    );
+typedef _DecompressDDictC =
+    UintPtr Function(
+      Pointer<Void>,
+      Pointer<Void>,
+      UintPtr,
+      Pointer<Void>,
+      UintPtr,
+      Pointer<Void>,
+    );
+typedef _DecompressDDictD =
+    int Function(
+      Pointer<Void>,
+      Pointer<Void>,
+      int,
+      Pointer<Void>,
+      int,
+      Pointer<Void>,
+    );
 
-final _compressBound =
-    _lib.lookupFunction<_CBound, _CBoundD>('ZSTD_compressBound');
+final _compressBound = _lib.lookupFunction<_CBound, _CBoundD>(
+  'ZSTD_compressBound',
+);
 final _isError = _lib.lookupFunction<_IsErrC, _IsErrD>('ZSTD_isError');
 final _createCCtx = _lib.lookupFunction<_CreateC, _CreateD>('ZSTD_createCCtx');
 final _freeCCtx = _lib.lookupFunction<_FreeC, _FreeD>('ZSTD_freeCCtx');
 final _createDCtx = _lib.lookupFunction<_CreateC, _CreateD>('ZSTD_createDCtx');
 final _freeDCtx = _lib.lookupFunction<_FreeC, _FreeD>('ZSTD_freeDCtx');
-final _createCDict =
-    _lib.lookupFunction<_CreateCDictC, _CreateCDictD>('ZSTD_createCDict');
+final _createCDict = _lib.lookupFunction<_CreateCDictC, _CreateCDictD>(
+  'ZSTD_createCDict',
+);
 final _freeCDict = _lib.lookupFunction<_FreeC, _FreeD>('ZSTD_freeCDict');
-final _createDDict =
-    _lib.lookupFunction<_CreateDDictC, _CreateDDictD>('ZSTD_createDDict');
+final _createDDict = _lib.lookupFunction<_CreateDDictC, _CreateDDictD>(
+  'ZSTD_createDDict',
+);
 final _freeDDict = _lib.lookupFunction<_FreeC, _FreeD>('ZSTD_freeDDict');
 final _compressUsingCDict = _lib
     .lookupFunction<_CompressCDictC, _CompressCDictD>(
-        'ZSTD_compress_usingCDict');
-final _decompressUsingDDict =
-    _lib.lookupFunction<_DecompressDDictC, _DecompressDDictD>(
-        'ZSTD_decompress_usingDDict');
+      'ZSTD_compress_usingCDict',
+    );
+final _decompressUsingDDict = _lib
+    .lookupFunction<_DecompressDDictC, _DecompressDDictD>(
+      'ZSTD_decompress_usingDDict',
+    );
 
 /// Dictionary-aware zstd codec, level pinned to the phase-5 measurement
 /// (zstd -19 trained on chat_train_2000). The raw dictionary bytes are
@@ -116,7 +149,13 @@ class ZstdChat {
     final dstP = malloc<Uint8>(cap);
     try {
       final n = _compressUsingCDict(
-          _cctx, dstP.cast(), cap, srcP.cast(), raw.length, _cdict);
+        _cctx,
+        dstP.cast(),
+        cap,
+        srcP.cast(),
+        raw.length,
+        _cdict,
+      );
       if (_isError(n) != 0) {
         throw StateError('ZSTD_compress_usingCDict failed (code $n)');
       }
@@ -136,7 +175,13 @@ class ZstdChat {
     final dstP = malloc<Uint8>(maxOut);
     try {
       final n = _decompressUsingDDict(
-          _dctx, dstP.cast(), maxOut, srcP.cast(), body.length, _ddict);
+        _dctx,
+        dstP.cast(),
+        maxOut,
+        srcP.cast(),
+        body.length,
+        _ddict,
+      );
       if (_isError(n) != 0) {
         throw StateError('ZSTD_decompress_usingDDict failed (code $n)');
       }

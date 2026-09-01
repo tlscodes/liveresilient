@@ -16,7 +16,10 @@ void main() {
   test('4s bundle of 700C is exactly 2B tag + 350B payload', () {
     final sent = <Uint8List>[];
     final b = PttBundler(
-        tag: 0x1234, bundle: const Duration(seconds: 4), send: sent.add);
+      tag: 0x1234,
+      bundle: const Duration(seconds: 4),
+      send: sent.add,
+    );
     expect(b.framesPerBundle, 100);
     expect(b.bundleWireBytes, 352);
     for (var i = 0; i < 100; i++) {
@@ -31,7 +34,10 @@ void main() {
   test('bundle -> unbundle round-trips every frame exactly', () {
     final sent = <Uint8List>[];
     final b = PttBundler(
-        tag: 0xBEEF, bundle: const Duration(seconds: 2), send: sent.add);
+      tag: 0xBEEF,
+      bundle: const Duration(seconds: 2),
+      send: sent.add,
+    );
     final frames = List.generate(50, _frame);
     frames.forEach(b.addFrame);
     final back = PttUnbundler().accept(sent.single);
@@ -44,7 +50,10 @@ void main() {
   test('PTT release flushes a partial bundle immediately', () {
     final sent = <Uint8List>[];
     final b = PttBundler(
-        tag: 1, bundle: const Duration(seconds: 4), send: sent.add);
+      tag: 1,
+      bundle: const Duration(seconds: 4),
+      send: sent.add,
+    );
     b.addFrame(_frame(9));
     expect(sent, isEmpty);
     b.flush();
@@ -54,21 +63,27 @@ void main() {
 
   test('sub-second and oversized bundles are rejected by construction', () {
     expect(
-        () => PttBundler(
-            tag: 1,
-            bundle: const Duration(milliseconds: 160),
-            send: (_) {}),
-        throwsA(isA<PttConfigError>()));
+      () => PttBundler(
+        tag: 1,
+        bundle: const Duration(milliseconds: 160),
+        send: (_) {},
+      ),
+      throwsA(isA<PttConfigError>()),
+    );
     expect(
-        () => PttBundler(
-            tag: 1, bundle: const Duration(seconds: 5), send: (_) {}),
-        throwsA(isA<PttConfigError>()));
+      () =>
+          PttBundler(tag: 1, bundle: const Duration(seconds: 5), send: (_) {}),
+      throwsA(isA<PttConfigError>()),
+    );
   });
 
   test('receive queue is bounded: oldest bundles drop, depth never grows', () {
     final sent = <Uint8List>[];
     final b = PttBundler(
-        tag: 2, bundle: const Duration(seconds: 1), send: sent.add);
+      tag: 2,
+      bundle: const Duration(seconds: 1),
+      send: sent.add,
+    );
     final u = PttUnbundler(maxQueued: 3);
     for (var k = 0; k < 10; k++) {
       for (var i = 0; i < 25; i++) {

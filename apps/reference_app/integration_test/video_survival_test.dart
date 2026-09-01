@@ -164,7 +164,8 @@ void main() {
       // impossible there, and the rig's open mic defeats DTX. A quiet
       // listener (what DTX yields with a real headset) is the honest
       // model: the sender talks, the receiver listens, x2 crossings fit.
-      final receiverMode = e2eShapedConditions.bandwidthBps != null &&
+      final receiverMode =
+          e2eShapedConditions.bandwidthBps != null &&
               mode == MediaMode.realAudio
           ? MediaMode.noLocalAudio
           : mode;
@@ -196,12 +197,12 @@ void main() {
             : appConnectBudget;
         final connectStarted = DateTime.now();
         await Future.wait([
-          initiator.controller
-              .start()
-              .then((_) => initiator.waitForConnected(timeout: connectBudget)),
-          receiver.controller
-              .start()
-              .then((_) => receiver.waitForConnected(timeout: connectBudget)),
+          initiator.controller.start().then(
+            (_) => initiator.waitForConnected(timeout: connectBudget),
+          ),
+          receiver.controller.start().then(
+            (_) => receiver.waitForConnected(timeout: connectBudget),
+          ),
         ]).timeout(
           connectBudget + const Duration(seconds: 5),
           onTimeout: () => throw TimeoutException(
@@ -210,8 +211,9 @@ void main() {
             'receiver: ${receiver.recentPhases()}',
           ),
         );
-        summary['connectMs'] =
-            DateTime.now().difference(connectStarted).inMilliseconds;
+        summary['connectMs'] = DateTime.now()
+            .difference(connectStarted)
+            .inMilliseconds;
 
         // 2. THE VIDEO LANE — second negotiated channel, own SCTP stream,
         //    then one renegotiation so the SDP carries m=application.
@@ -238,25 +240,31 @@ void main() {
           // Row-specific safety argument: on an uncapped link the lane's
           // spray cannot queue behind signaling. A future capped+lossy row
           // must not silently inherit an unbudgeted sender — fail loud.
-          expect(bwBps, isNull,
-              reason: 'fountain lane is only argued safe on uncapped rows; '
-                  'a bandwidth-capped lossy row needs a budgeted sender '
-                  'before it may ride this lane');
+          expect(
+            bwBps,
+            isNull,
+            reason:
+                'fountain lane is only argued safe on uncapped rows; '
+                'a bandwidth-capped lossy row needs a budgeted sender '
+                'before it may ride this lane',
+          );
           summary['transport'] = 'datagram';
           // ONE SYMBOL = ONE DATAGRAM: 1024 B + 30 B lane header + 16 B
           // room key = 1070 B UDP payload — single packet, zero
           // fragmentation (§0.3 sizing decision).
           const symbolBytes = 1024;
           summary['symbolBytes'] = symbolBytes;
-          const dgramPort =
-              int.fromEnvironment('E2E_DGRAM_PORT', defaultValue: 3737);
+          const dgramPort = int.fromEnvironment(
+            'E2E_DGRAM_PORT',
+            defaultValue: 3737,
+          );
           // The rig passes an IP-literal relay host (E2E_RELAY_URI); the
           // in-process fallback endpoint says "localhost", which the port
           // refuses (no DNS per send) — map it to the loopback literal.
           final relayHost =
               InternetAddress.tryParse(relay.endpoint.host) != null
-                  ? relay.endpoint.host
-                  : '127.0.0.1';
+              ? relay.endpoint.host
+              : '127.0.0.1';
           final roomKey = DatagramLanePort.roomKeyFromCallId(callId);
           final senderPort = await DatagramLanePort.bind(
             relayHost: relayHost,
@@ -287,8 +295,8 @@ void main() {
           addTearDown(rx.dispose);
           var recoveryFreezes = 0;
           final freezeSub = initiator.controller.states.listen((s) {
-            final live = s.phase == CallPhase.connected ||
-                s.phase == CallPhase.degraded;
+            final live =
+                s.phase == CallPhase.connected || s.phase == CallPhase.degraded;
             // Evidence only — no pause: the datagram path is stateless
             // (no channel to die with the call), and during an outage the
             // sender's per-generation debt caps park it within ~one
@@ -321,12 +329,14 @@ void main() {
           final resultF = sender.send(clip);
           // A sender-side abort (STATE silence) must surface at the
           // awaited completer, not as an unhandled zone error mid-wait.
-          unawaited(resultF.then<void>(
-            (_) {},
-            onError: (Object e, StackTrace st) {
-              if (!done.isCompleted) done.completeError(e, st);
-            },
-          ));
+          unawaited(
+            resultF.then<void>(
+              (_) {},
+              onError: (Object e, StackTrace st) {
+                if (!done.isCompleted) done.completeError(e, st);
+              },
+            ),
+          );
           final received = await done.future.timeout(
             window,
             onTimeout: () {
@@ -335,8 +345,7 @@ void main() {
               summary['senderDatagrams'] = senderPort.sentDatagrams;
               summary['senderLocalDrops'] = senderPort.localSendDrops;
               summary['receiverDatagrams'] = receiverPort.receivedDatagrams;
-              summary['initiatorPhase'] =
-                  initiator.controller.state.phase.name;
+              summary['initiatorPhase'] = initiator.controller.state.phase.name;
               summary['receiverPhase'] = receiver.controller.state.phase.name;
               throw TimeoutException(
                 'video (fountain/datagram) not delivered within '
@@ -370,11 +379,11 @@ void main() {
           summary['senderDatagrams'] = senderPort.sentDatagrams;
           summary['senderLocalDrops'] = senderPort.localSendDrops;
           summary['receiverDatagrams'] = receiverPort.receivedDatagrams;
-          summary['deliveryKbps'] =
-              (sender.deliveryBytesPerSec * 8 / 1000).round();
+          summary['deliveryKbps'] = (sender.deliveryBytesPerSec * 8 / 1000)
+              .round();
           // The sender's decode-miss estimate, NOT shaped ground truth.
-          summary['senderLossEstimatePct'] =
-              (sender.lossEstimate * 100).round();
+          summary['senderLossEstimatePct'] = (sender.lossEstimate * 100)
+              .round();
 
           // The receiver sha-verified content against the transfer id
           // (sha-256 prefix + exact size) before onCompleted; the gate
@@ -389,8 +398,7 @@ void main() {
             }
           }
           summary['sha256Ok'] = intact;
-          expect(intact, true,
-              reason: 'the clip must arrive verified intact');
+          expect(intact, true, reason: 'the clip must arrive verified intact');
           expect(received.length, sizeBytes);
           return;
         }
@@ -400,10 +408,12 @@ void main() {
           negotiatedId: 1,
           ordered: false,
         );
-        final senderChannel =
-            await initiator.media.openDataChannel(videoChannel);
-        final receiverChannel =
-            await receiver.media.openDataChannel(videoChannel);
+        final senderChannel = await initiator.media.openDataChannel(
+          videoChannel,
+        );
+        final receiverChannel = await receiver.media.openDataChannel(
+          videoChannel,
+        );
         // Channel lifecycle evidence: the port drops sends into a dead
         // channel silently BY DESIGN, so a mid-transfer channel death is
         // invisible to the lane — the flatlined counters of 2026-08-08
@@ -450,8 +460,9 @@ void main() {
           chunkBytes: chunkBytes,
           // The definitive backpressure signal, straight from the channel.
           transportBufferedBytes: () => senderChannel.bufferedAmount,
-          sendBudgetBytesPerSec:
-              laneBudgetBytesPerSec > 0 ? () => laneBudgetBytesPerSec : null,
+          sendBudgetBytesPerSec: laneBudgetBytesPerSec > 0
+              ? () => laneBudgetBytesPerSec
+              : null,
         );
         // ADAPTIVE STREAM PAUSE (accepted design, 2026-08-08): the moment
         // the call leaves its live phases the video stream freezes, handing
@@ -460,8 +471,8 @@ void main() {
         // the freeze free). Without this, recovery heartbeats queue behind
         // video chunks on precisely the links where recovery matters.
         final freezeSub = initiator.controller.states.listen((s) {
-          final live = s.phase == CallPhase.connected ||
-              s.phase == CallPhase.degraded;
+          final live =
+              s.phase == CallPhase.connected || s.phase == CallPhase.degraded;
           if (live) {
             sender.resume();
           } else {
@@ -508,10 +519,14 @@ void main() {
         summary['totalChunks'] = result.totalChunks;
         summary['recoveryFreezes'] = recoveryFreezes;
         summary['srttMs'] = sender.srttMs.round();
-        summary['deliveryKbps'] = (sender.deliveryBytesPerSec * 8 / 1000).round();
+        summary['deliveryKbps'] = (sender.deliveryBytesPerSec * 8 / 1000)
+            .round();
 
-        expect(received.sha256Ok, true,
-            reason: 'the clip must arrive hash-verified intact');
+        expect(
+          received.sha256Ok,
+          true,
+          reason: 'the clip must arrive hash-verified intact',
+        );
         expect(received.bytes.length, sizeBytes);
       } finally {
         print('VID_SUMMARY ${jsonEncode(summary)}');
