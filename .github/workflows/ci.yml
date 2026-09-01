@@ -47,7 +47,7 @@ jobs:
         run: flutter pub get
 
       - name: Native codec libraries (the FFI tests link against these)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libbrotli-dev libdav1d-dev
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libbrotli-dev libdav1d-dev libzstd-dev
 
       - name: Build codec2 at the pinned commit (mode 450 was removed upstream)
         run: |

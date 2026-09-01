@@ -27,6 +27,11 @@ DynamicLibrary _open() {
   for (final p in [
     '/usr/local/opt/zstd/lib/libzstd.dylib',
     '/opt/homebrew/opt/zstd/lib/libzstd.dylib',
+    // Linux: versioned soname first, since the bare .so needs the -dev package.
+    '/usr/lib/x86_64-linux-gnu/libzstd.so.1',
+    '/usr/lib/x86_64-linux-gnu/libzstd.so',
+    '/usr/lib/aarch64-linux-gnu/libzstd.so.1',
+    '/usr/lib/aarch64-linux-gnu/libzstd.so',
   ]) {
     if (File(p).existsSync()) return DynamicLibrary.open(p);
   }
