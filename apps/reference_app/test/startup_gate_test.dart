@@ -135,8 +135,9 @@ void main() {
       var attempt = 0;
       final held = await gate.retrieve(() async {
         attempt++;
-        if (attempt < 3)
+        if (attempt < 3) {
           return const StartupManifest(null, ManifestSource.none);
+        }
         return StartupManifest(manifest(), ManifestSource.outOfBand);
       });
       expect(attempt, 3);
