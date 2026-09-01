@@ -25,7 +25,10 @@ jobs:
   gate:
     name: Gate — format · analyze · test · guard
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Raised from 20: run 33501986639 was cut off at exactly 20:21 once the
+    # native codec build and LCOV generation joined the job. Measured need is
+    # ~21 min; 35 leaves headroom without hiding a hang.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
