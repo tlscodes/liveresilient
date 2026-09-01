@@ -55,7 +55,7 @@ jobs:
           # A package without `resolution: workspace` is invisible to the root
           # resolve, and analysis then fails on imports that work locally only
           # because a stale .dart_tool exists there. Find them and resolve each.
-          for p in apps/*/pubspec.yaml server/*/pubspec.yaml; do
+          for p in packages/*/pubspec.yaml apps/*/pubspec.yaml server/*/pubspec.yaml; do
             [ -f "$p" ] || continue
             grep -q '^resolution: *workspace' "$p" && continue
             d="$(dirname "$p")"

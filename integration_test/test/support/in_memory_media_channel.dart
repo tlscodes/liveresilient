@@ -34,8 +34,19 @@ class InMemoryMediaChannel implements MediaDataChannel {
     return (a, b);
   }
 
+  // Mirrors the real channel: the stream is broadcast, so an event sent while
+  // nobody listens is gone; a consumer seeds from this getter and then follows
+  // the stream. Kept in step with `state` by every mutation below.
+  MediaDataChannelState _current = MediaDataChannelState.connecting;
+
+  @override
+  MediaDataChannelState get currentState => _current;
+
   /// Reports the channel open, as the platform would once DTLS/SCTP is up.
-  void open() => _state.add(MediaDataChannelState.open);
+  void open() {
+    _current = MediaDataChannelState.open;
+    _state.add(MediaDataChannelState.open);
+  }
 
   @override
   Stream<List<int>> get inbound => _inbound.stream;
@@ -58,6 +69,7 @@ class InMemoryMediaChannel implements MediaDataChannel {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    _current = MediaDataChannelState.closed;
     _state.add(MediaDataChannelState.closed);
     await _inbound.close();
     await _state.close();
