@@ -48,3 +48,10 @@ docs/evidence/step7_trace_raw.pcap
 Archive.zip
 tools/phase5/native/
 apps/reference_app/ios/NativeCodecs/
+
+# Autorun state (process residue, never public)
+.autorun/
+
+# One-shot migration scripts from earlier phases (kept locally, not published)
+tools/apply_*.py
+tools/make_slices.py

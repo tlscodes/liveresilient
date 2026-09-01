@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-PHOTO_SRC="/Users/behnam/Downloads/IMG_4565.jpg"
+PHOTO_SRC="${PHOTO_SRC:-$HOME/Downloads/IMG_4565.jpg}"   # override for another machine
 SPEECH_SRC="../../demo_audio/level1_original.wav"
-CLIP_SRC="/Users/behnam/Movies/CapCut/0606 (2)(1).mp4"
+CLIP_SRC="${CLIP_SRC:-$HOME/Movies/reference_clip.mp4}"   # override for another machine
 
 mkdir -p corpus native .markers logs artifacts
 

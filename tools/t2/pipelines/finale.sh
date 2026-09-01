@@ -4,7 +4,7 @@
 # hangup). This pipeline runs the OFFICIAL rows for the five open cells, in
 # order. UNROUTED / tooling rows are waived (not counted); each cell gets a
 # bounded number of counted draws.
-cd /Users/behnam/Downloads/voice_call_kit_v3 || exit 1
+cd $REPO || exit 1
 S=$(cd "$(dirname "$0")" && pwd)/logs
 mkdir -p "$S"
 PEER="${T2_PEER:?T2_PEER not set - eval tools/t2/usb_peer.sh first}"

@@ -2,7 +2,7 @@
 # SNIPER PIPELINE (hotspot topology 2026-08-09): cheap connect-only draws
 # first, full video row only after a connect lands. Peer defaults to the
 # phone-as-hotspot gateway; override with T2_PEER.
-cd /Users/behnam/Downloads/voice_call_kit_v3 || exit 1
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)" || exit 1
 S=$(cd "$(dirname "$0")" && pwd)/logs
 mkdir -p "$S"
 PEER="${T2_PEER:-172.20.10.1}"

@@ -2,7 +2,7 @@
 # DAY MISSION (hotspot topology): after the video sniper pipeline, hammer
 # voice loss60 (item 8) and messaging loss60/extreme. Peer defaults to
 # the phone-as-hotspot gateway; override with T2_PEER.
-cd /Users/behnam/Downloads/voice_call_kit_v3 || exit 1
+cd $REPO || exit 1
 S=$(cd "$(dirname "$0")" && pwd)/logs
 mkdir -p "$S"
 PEER="${T2_PEER:-172.20.10.1}"
