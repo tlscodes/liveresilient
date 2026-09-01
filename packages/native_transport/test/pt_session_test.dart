@@ -17,10 +17,9 @@ import 'package:test/test.dart';
 String? _resolveLibrary() {
   final fromEnv = Platform.environment['PT_LIBRARY_PATH'];
   if (fromEnv != null && File(fromEnv).existsSync()) return fromEnv;
-  const fallbacks = [
-    '/Users/behnam/Downloads/questions/engine/pt/build/macos-universal/libpt_transport.dylib',
-    '/Users/behnam/Downloads/questions/engine/pt/libpt_transport.dylib',
-  ];
+  // No absolute paths: the library comes from an external build, and where it
+  // sits differs per machine. PT_LIBRARY_PATH is the supported way in.
+  const fallbacks = <String>[];
   for (final path in fallbacks) {
     if (File(path).existsSync()) return path;
   }
@@ -30,12 +29,22 @@ String? _resolveLibrary() {
 void main() {
   final libraryPath = _resolveLibrary();
   if (libraryPath == null) {
-    test('native library is available', () {
-      fail(
-        'no transport library found: set PT_LIBRARY_PATH, or build it with '
-        '`make` in engine/pt',
-      );
-    });
+    final configured = Platform.environment['PT_LIBRARY_PATH'];
+    if (configured != null && configured.isNotEmpty) {
+      // Explicitly pointed somewhere that does not exist: a real error.
+      test('native library is available', () {
+        fail('PT_LIBRARY_PATH is set to "$configured" but no file is there');
+      });
+      return;
+    }
+    // Nothing configured: this repository does not build the transport
+    // library, so the surface is untested here — say so instead of failing.
+    test(
+      'native transport session',
+      () {},
+      skip: 'no transport library configured; set PT_LIBRARY_PATH to run '
+          'these tests against an external build',
+    );
     return;
   }
 
