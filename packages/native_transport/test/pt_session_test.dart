@@ -42,7 +42,8 @@ void main() {
     test(
       'native transport session',
       () {},
-      skip: 'no transport library configured; set PT_LIBRARY_PATH to run '
+      skip:
+          'no transport library configured; set PT_LIBRARY_PATH to run '
           'these tests against an external build',
     );
     return;
