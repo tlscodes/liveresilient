@@ -247,6 +247,92 @@ binary, so it is closed to us until the transport core is published — that is
 milestone M5 of the application. For the pilot: a signed APK from a release
 page, with the hash published on a second channel.
 
+## The funding calendar, running beside all of this
+
+Three applications, three different weeks, three genuinely disjoint sets of
+deliverables. That last word is the whole rule: nothing here forbids applying
+in more than one place, but the same piece of work may never appear in two
+budgets.
+
+```
+3 Sep      NLnet, Open Internet Stack      38,700 EUR   the engineering
+week of    Digital Defenders Partnership   <10,000 EUR  device security work
+  8 Sep
+mid-Oct    OTF, Internet Freedom Fund      see below    after the pilot
+```
+
+**3 September — NLnet.** Text is ready in
+`tools/dossier/NLNET_SUBMISSION_READY.md`. Read the call's own guide first: the
+fund this was drafted against closed on 1 June and the successor's form may
+differ field for field. Submitting on day one buys no place in a queue —
+proposals are reviewed after the deadline, not on arrival — so submit early for
+the real reason instead: it leaves time to fix whatever the guide turns out to
+require. Deadlines recur on the third of every odd month, so a decline costs
+two months rather than a year.
+
+**Week of 8 September — Digital Defenders Partnership.** Up to 10,000 EUR over
+four to six months, Dutch, and their pages invite providers of secure software
+directly. This is the natural home for the device-hardening work in weeks 2 and
+3 of this plan: keystore-backed keys, the delete-everything action, at-rest
+protection, and the loaner handsets that let a pilot measure on hardware the
+developer does not own.
+
+**Not SIDN, and this is a correction rather than an omission.** Their page
+requires a rechtspersoon above 10,000 EUR and lists which forms qualify —
+stichting, vereniging, coöperatie, onderlinge waarborgmaatschappij, NV, BV. An
+eenmanszaak is on none of them, so only the Pioniers track is open, and that
+track funds work relevant to *Dutch* internet infrastructure. Handsets for an
+Iran-facing pilot are not that. Applying anyway spends credibility with a
+funder who may matter later, for a form that will be declined on eligibility
+before anyone reads the engineering.
+
+**Mid-October — OTF, after the pilot has produced evidence.** Not before: their
+gate is demonstrated demand, which is precisely why the previous application
+there was dismissed. Five weeks of pilot measurements turn that from the
+weakest part of the file into the strongest.
+
+On the amount, a correction worth making before it is typed into a form. A
+request of 150 to 250 thousand dollars does not match either the instrument or
+the applicant. OTF funds projects rather than overhead, and disburses on
+completed deliverables with nothing paid up front — so that figure is not money
+to receive, it is work to carry unpaid until each deliverable lands. For a solo
+developer with no employees, a first contract of 50 to 100 thousand over six to
+nine months is what can actually be delivered under those terms, and it sits
+inside their own stated range for typical awards.
+
+The shape matters as much as the number. "Global relay servers" is recurring
+operational cost, the category they decline. What they do fund, and what this
+project can honestly offer: user research with named at-risk communities, and
+the relay design published as reproducible infrastructure that others can
+deploy — a design and a reference deployment rather than a bill for running a
+network.
+
+**What each application says, and what none of them may vary.** The subset of
+deliverables, the order, the emphasis and the funder's own vocabulary can
+differ. No fact may: how many users exist today, the project's stage, the
+licences, the price of any deliverable, where the impact lands, and every
+measured number. Two checks while writing — take a sentence from one form and
+drop it into another, and if a reviewer holding both would find a factual
+disagreement, that is two stories rather than two emphases; and every claim
+must resolve to one line in this repository.
+
+**The sentence for the "other funding" field**, wherever it is asked:
+
+```
+No past or present funding. A concept note to OTF's Internet Freedom Fund is
+planned for [date], for deliverables disjoint from those in this proposal;
+nothing is under consideration elsewhere at submission.
+```
+
+**No fiscal host.** A Dutch registration and a Dutch account mean NLnet pays
+the person directly and OTF contracts with the person directly. An
+intermediary would take eight to ten percent for a door that is already open.
+
+**And no probability, anywhere.** NLnet publishes how many projects it selected
+and not how many applied, so no acceptance rate can be computed from it. Any
+number offered as a chance of success has no source, and a file whose whole
+value is that every claim is checkable cannot carry one.
+
 ## What this plan does not do
 
 It does not encrypt the bulk lane, publish the transport core from source, or
