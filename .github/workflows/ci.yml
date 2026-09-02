@@ -263,6 +263,30 @@ jobs:
           fi
           echo "no obvious secrets found"
 
+      # A manifest nothing reads is a promise, not a gate. These 24 artifacts
+      # are what the funding documents send a reviewer to; if one is edited the
+      # documents cite a file that no longer says what was measured.
+      - name: Evidence integrity (manifest hashes)
+        run: |
+          rows=$(tail -n +2 tools/dossier/manifest.tsv | wc -l | tr -d ' ')
+          tail -n +2 tools/dossier/manifest.tsv \
+            | awk -F'\t' '{print $3"  "$1}' \
+            | sha256sum -c --strict
+          echo "evidence verified: ${rows} recorded artifacts unchanged"
+
+      # No developer's home directory in tracked source, scripts or config.
+      # Evidence and logs are excluded deliberately: the path inside a run log
+      # is part of the record, and rewriting it would break the hashes above.
+      - name: No build-machine paths in source
+        run: |
+          if git grep -nE '/(Users|home)/[A-Za-z0-9_.-]+/' -- \
+               '*.dart' '*.sh' '*.yaml' '*.yml' '*.json' '*.podspec' \
+               ':!docs/evidence' ':!tools/*/logs' ':!tools/t2' \
+               ':!tools/*/corpus' ':!tools/suite-logs'; then
+            echo "::error::a build-machine path reached tracked source"; exit 1
+          fi
+          echo "no build-machine paths in tracked source"
+
   # A green test suite says nothing about what got packaged: on 2026-08-01 the
   # macOS core shipped linked against /usr/local/opt/openssl@3, a path that
   # exists on no user's device, and every test passed. So the Apple bundles are
