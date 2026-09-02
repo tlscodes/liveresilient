@@ -58,7 +58,7 @@ so before a reviewer has to find it.
 ## Requested amount
 
 ```
-27,500 EUR — 540 hours at 50 EUR/hour, plus 500 EUR of out-of-pocket cost
+38,700 EUR — 740 hours at 50 EUR/hour, plus 1,700 EUR of out-of-pocket cost
 ```
 
 The rate is taken from NLnet's own published convention rather than a market
@@ -68,24 +68,27 @@ score. Fifty euro sits below that ceiling, below the European Commission's own
 daily unit cost for an SME owner without a salary — the applicant's exact legal
 category — and at roughly half the Dutch freelance software rate.
 
-The total is 55% of the 50,000 euro band. Asking near the top would stack two
-maximum signals for a first-time applicant with no prior grant history, and
-there is nothing here to spend it on: the software already exists, so this
-budget buys four specific pieces of work, not a build. There is no contingency
-line, because NLnet pays no overhead and risk belongs in the hours.
+The total is 77% of the 50,000 euro ceiling that applies to a first proposal.
+It is not the ceiling, because there is nothing else here to spend it on: the
+software exists, so this budget buys six named pieces of work rather than a
+build. There is no contingency line — NLnet pays no overhead, and risk belongs
+in the hours rather than in a margin.
 
 ## Explain what the requested budget will be used for
 
 ```
-M1  datagram-lane encryption      160 h            8,000 EUR
-M2  audit response                100 h            5,000 EUR
-M3  push-to-talk continuity       150 h            7,500 EUR
-M4  supervised pilot              130 h + 500 EUR  7,000 EUR
-                                  540 h           27,500 EUR
+M1  datagram-lane encryption      160 h              8,000 EUR
+M2  audit response                100 h              5,000 EUR
+M3  push-to-talk continuity       150 h              7,500 EUR
+M4  supervised pilot              130 h + 1,700 EUR  8,200 EUR
+M5  transport core, from source   120 h              6,000 EUR
+M6  Android arm of the pilot       80 h              4,000 EUR
+                                  740 h             38,700 EUR
 ```
 
-Nine months at roughly twenty hours a week. Seven would cover the hours; the
-extra two absorb the audit queue, which is not under the applicant's control.
+Twelve months at roughly fifteen hours a week. The hours alone would fit in
+nine; the extra three absorb the audit queue, which is not under the
+applicant's control.
 
 **M1 — end-to-end encryption on the datagram lane, 160 h.** The lane that
 carries bulk content on lossy links has no encryption layer of its own today
@@ -151,6 +154,41 @@ signalling service during the pilot — each with a receipt.
 Acceptance: the six end-to-end rows reproduced on testers' own devices rather
 than on the developer's, so that "it works for people" becomes a measurement.
 
+The out-of-pocket line is the developer programme fee, prepaid data for
+impaired-link sessions, a small server for the signalling service during the
+pilot, and four loaner handsets. On the handsets: the policy excludes basic
+operational equipment — laptops, workstations, phones — and this application
+requests none. It permits hardware directly necessary for the project's tasks,
+and this milestone's acceptance test requires measurements on devices that are
+not the developer's, from volunteers who cannot be asked to own a particular
+model. Four mid-range devices at about 300 euro each, each with a receipt,
+returned to the pool at the end of the pilot.
+
+**M5 — the transport core, buildable from source, 120 h.** The Darwin transport
+framework and the two Android `libpt_transport.so` files ship as prebuilt
+binaries. `SECURITY.md` records that a reader cannot reproduce them from this
+repository, and it is the weakest point in a repository that otherwise invites
+verification: everything else here can be checked, and the layer nearest the
+network cannot. Twenty-four hours to prepare and publish the engine under the
+same licence, forty to give it its own build in CI across the three target
+platforms, thirty-two to make those builds reproducible and record the toolchain
+provenance, sixteen to wire the kit to build against source rather than a
+vendored binary, eight for documentation.
+
+Acceptance: a CI job that builds the transport core from published source on
+each target platform, and a provenance record mapping every shipped binary to
+the commit and toolchain that produced it.
+
+**M6 — the Android arm of the pilot, 80 h.** Every device measurement to date
+was made on one iPhone. A pilot reachable only by iOS owners is a pilot with a
+hardware prerequisite that most people in the condition this project targets do
+not have. Thirty-two hours for the Android build and distribution path,
+twenty-four to bring the six end-to-end rows up on Android, sixteen for device
+runs across the loaner handsets, eight to merge the results into the same table.
+
+Acceptance: the six end-to-end rows recorded on Android devices in the same
+results file, under the same profile, beside the iOS rows.
+
 Every milestone follows the pattern the repository already uses: a `verify_cmd`
 that exits zero, and no milestone reported complete without it. The four
 amounts sum exactly to the requested total.
@@ -163,7 +201,10 @@ programme or any other, past or present.
 ## Cost effectiveness
 
 Every measurement in this application was made on the applicant's own iMac and
-iPhone. No hardware is requested, and none of the budget is operational cost.
+iPhone. No operational hardware is requested — no workstation, no laptop, no
+phone for the developer. The only equipment in the budget is four loaner
+handsets for pilot participants, which exist because an acceptance test requires
+devices that are not the developer's.
 
 ## Compare your own project with existing or historical efforts
 
@@ -250,7 +291,10 @@ CI green, tag v0.1.0-ci-green        GitHub Actions run 33610621039
 audit via ROS, in kind to grantees    nlnet.nl/officehour FAQ; nlnet.nl/NGI0/services
 SME-owner daily unit cost             European Commission, Horizon unit costs
 Dutch freelance developer average     Knab, ZZP software developer 2025
-540 h at 50 EUR = 27,500 EUR          this document, budget section — check the sum
+740 h at 50 EUR + 1,700 = 38,700      this document, budget section — check the sum
+hardware: operational excluded,       nlnet.nl/foundation/policies/externalspending
+  project-necessary allowed
+prebuilt binaries, no source build     SECURITY.md
 10 of 60 bundles, 40.7 s (the bar      tools/dossier/e2e_ios_results.tsv, ptt row
   M3 must beat)
 above 50,000 needs a completed one   nlnet.nl, NGI Zero applicant guide
