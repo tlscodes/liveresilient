@@ -51,6 +51,14 @@ class MediaAdaptationDriver {
   /// Every applied profile change, in order.
   Stream<MediaPolicyDecision> get decisions => _decisions.stream;
 
+  /// The live stats behind those decisions: loss, round-trip time and
+  /// throughput read from the peer connection, EWMA-smoothed by the sampler.
+  ///
+  /// Exposed so the UI can show what the ladder is reacting to. Until this
+  /// existed the call screen's gauge was fed by a scripted demo profile while
+  /// these real numbers were computed a stream away and discarded.
+  Stream<RtcStatsSample> get samples => _sampler.samples;
+
   /// The ladder position the policy currently recommends.
   MediaProfile get profile => _policy.profile;
 

@@ -19,6 +19,7 @@ import 'src/attachment_picker.dart';
 import 'src/call_demo_controller.dart';
 import 'src/call_screen.dart';
 import 'src/call_session.dart';
+import 'src/live_quality_feed.dart';
 import 'src/ws_connector.dart' show platformHostResolution;
 import 'package:live_captions/live_captions.dart' show ChannelInvite;
 
@@ -156,6 +157,21 @@ class _HomePageState extends State<HomePage> {
   /// measured RTCStats (see path_health_monitor.dart).
   final DemoQualityFeed _quality = DemoQualityFeed();
 
+  /// Measured readings from a live session, when one exists. The reference
+  /// app's default screen is a demo controller with no network, so this stays
+  /// null there and the demo feed stands in — labelled as such. A session
+  /// opened through the dev entry point supplies real ones.
+  Stream<CallQualityReading>? _liveQuality;
+
+  /// The readings actually charted: measured when available, demo otherwise.
+  Stream<CallQualityReading>? get _chartedQuality =>
+      _liveQuality ?? (_liveFeedsAllowed ? _quality.stream : null);
+
+  /// What the source chip says about them.
+  String? get _chartedQualityLabel => _liveQuality != null
+      ? liveQualitySourceLabel
+      : (_liveFeedsAllowed ? demoQualitySourceLabel : null);
+
   /// Real ladder logic ([OperatingLadder]) driven by the demo feed's
   /// bitrate — the mapping is genuine even where the input is labeled
   /// synthetic.
@@ -181,7 +197,7 @@ class _HomePageState extends State<HomePage> {
     // cancels, so nothing periodic outlives the call.
     final inCall = _call.canHangUp;
     if (_liveFeedsAllowed && inCall && _rungSub == null) {
-      _rungSub = _quality.stream.listen((reading) {
+      _rungSub = (_chartedQuality ?? _quality.stream).listen((reading) {
         final rung = _ladder.report(reading.bitrateBps ?? 0);
         if (rung != _rung && mounted) setState(() => _rung = rung);
       });
@@ -343,10 +359,8 @@ class _HomePageState extends State<HomePage> {
         callId: _call.callId,
         onCall: _call.canCall ? _call.placeCall : null,
         onHangUp: _call.canHangUp ? _call.hangUp : null,
-        quality: _liveFeedsAllowed ? _quality.stream : null,
-        // The feed is DemoQualityFeed, a scripted profile. Say so on the
-        // screen, not only here.
-        qualitySourceLabel: _liveFeedsAllowed ? demoQualitySourceLabel : null,
+        quality: _chartedQuality,
+        qualitySourceLabel: _chartedQualityLabel,
         rung: _rung,
       ),
       RefreshIndicator(
@@ -360,9 +374,9 @@ class _HomePageState extends State<HomePage> {
       SettingsScreen(
         themeMode: widget.themeMode,
         onThemeMode: (mode) => widget.onThemeMode?.call(mode),
-        readings: _liveFeedsAllowed ? _quality.stream : null,
+        readings: _chartedQuality,
         diagnosticsSeed: seededDemoHistory(),
-        diagnosticsSource: demoQualitySourceLabel,
+        diagnosticsSource: _chartedQualityLabel ?? demoQualitySourceLabel,
         appVersion: 'reference v3',
       ),
     ];

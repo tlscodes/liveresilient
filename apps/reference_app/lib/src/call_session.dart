@@ -32,6 +32,8 @@ import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
 import 'call_memory.dart';
 import 'intelligence/intelligence_hub.dart';
+import 'live_quality_feed.dart';
+import 'ui/network_truth.dart';
 import 'media_adaptation_driver.dart';
 import 'path_health_monitor.dart';
 import 'degraded_mode_driver.dart';
@@ -46,9 +48,18 @@ class CallSessionHandle {
     this.dtnFallbackQueue,
     this.connectionFabric,
     this.connectionBudget,
+    this.qualityReadings,
   });
 
   final CallController controller;
+
+  /// Measured readings from the live path — loss, round-trip time and
+  /// throughput, straight from the stats sampler that drives the adaptation
+  /// ladder. Null on session builds that skip production wiring.
+  ///
+  /// The call screen prefers this over the demo profile. Both are labelled on
+  /// screen, so a viewer can tell which they are seeing rather than assuming.
+  final Stream<CallQualityReading>? qualityReadings;
 
   /// The deadlines this session was built with, and the model behind them.
   ///
@@ -535,7 +546,14 @@ CallSessionHandle buildWebRtcCallSession({
     }
     lastPhase = state.phase;
   });
+  // Project the sampler's output into the reading the UI charts. Elapsed time
+  // is measured from the session's own start so the series is monotonic
+  // regardless of when the first sample lands.
+  final sessionStart = Stopwatch()..start();
   return CallSessionHandle(
+    qualityReadings: adaptationDriver.samples.map(
+      (sample) => readingFromSample(sample, at: sessionStart.elapsed),
+    ),
     connectionBudget: connectionBudget,
     controller: controller,
     dtnFallbackQueue: resolvedFallbackQueue,
