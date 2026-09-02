@@ -37,12 +37,24 @@ not_run() {
 REFERENCE="$SCRIPT_DIR/$BASELINE_REFERENCE"
 [ -f "$REFERENCE" ] || not_run "reference csv missing: $REFERENCE"
 
-[ -n "${LEAK_GATE_ENGINE_DIR:-}" ] || not_run "LEAK_GATE_ENGINE_DIR is not set"
-[ -d "$LEAK_GATE_ENGINE_DIR" ] || not_run "LEAK_GATE_ENGINE_DIR does not exist: $LEAK_GATE_ENGINE_DIR"
-
-if ! (cd "$LEAK_GATE_ENGINE_DIR" && cargo build -q -p trace-gate); then
-  not_run "cargo build -p trace-gate failed in $LEAK_GATE_ENGINE_DIR"
+# Two evaluators implement the same frozen contract. The Rust one in the engine
+# repository is the reference; the Dart one in this repository exists so the
+# gate can run where that repository is not available, which is everywhere
+# outside the author's machine. They agree to six decimals on the committed
+# fixtures — tools/trace_gate/test/cross_check_test.dart pins that, and the
+# baseline in leak_gate_baseline.env, measured with the Rust one a month
+# earlier, corroborates it.
+EVALUATOR=""
+if [ -n "${LEAK_GATE_ENGINE_DIR:-}" ] && [ -d "$LEAK_GATE_ENGINE_DIR" ] \
+   && (cd "$LEAK_GATE_ENGINE_DIR" && cargo build -q -p trace-gate 2>/dev/null); then
+  EVALUATOR="rust"
+elif command -v dart >/dev/null 2>&1 \
+     && [ -f "$REPO_ROOT/tools/trace_gate/bin/trace_gate.dart" ]; then
+  EVALUATOR="dart"
+else
+  not_run "no evaluator available: set LEAK_GATE_ENGINE_DIR, or install the Dart SDK"
 fi
+echo "leak_gate: evaluator = $EVALUATOR"
 
 TMPDIR_GATE="$(mktemp -d "${TMPDIR:-/tmp}/leak_gate.XXXXXX")"
 trap 'rm -rf "$TMPDIR_GATE"' EXIT
@@ -74,8 +86,14 @@ echo "  check on emitter periodicity); the KL estimate is provisional at"
 echo "  this sample size."
 echo "==================================================================="
 
-(cd "$LEAK_GATE_ENGINE_DIR" && cargo run -q -p trace-gate -- \
-  "$OBSERVED" "$REFERENCE" --kl-threshold "$KL_THRESHOLD")
+if [ "$EVALUATOR" = "rust" ]; then
+  (cd "$LEAK_GATE_ENGINE_DIR" && cargo run -q -p trace-gate -- \
+    "$OBSERVED" "$REFERENCE" --kl-threshold "$KL_THRESHOLD")
+else
+  (cd "$REPO_ROOT/tools/trace_gate" && dart pub get -q >/dev/null 2>&1 || true)
+  dart run "$REPO_ROOT/tools/trace_gate/bin/trace_gate.dart" \
+    "$OBSERVED" "$REFERENCE" --kl-threshold "$KL_THRESHOLD"
+fi
 RC=$?
 
 if [ "$RC" -eq 0 ]; then

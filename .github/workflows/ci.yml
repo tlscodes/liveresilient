@@ -402,14 +402,32 @@ jobs:
         continue-on-error: false
 
   leak-gate:
-    # Option (a): the engine repo is NOT checked out by this CI, so the gate's
-    # honest state here is NOT RUN (exit 3) — surfaced as a warning annotation
-    # and a loud step summary, never silently green, never blocking merges.
+    # This gate reported NOT RUN (exit 3) on every run until 2026-09-02: its
+    # evaluator lived in an unpublished repository. It was surfaced as a warning
+    # annotation rather than a pass, which is the only reason anyone found it.
+    # A second evaluator now lives in tools/trace_gate, cross-checked against
+    # the Rust one to six decimals, so the gate executes here. The exit-3 branch
+    # stays for the case where neither evaluator is available.
     name: Leak gate — on-wire trace regression
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+
+      - name: Set up Flutter (pinned, cached)
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Resolve the emitter and the evaluator
+        run: |
+          dart pub get --directory packages/connection_orchestrator
+          dart pub get --directory tools/trace_gate
+
+      - name: Cross-check the evaluator against its recorded reference outputs
+        working-directory: tools/trace_gate
+        run: dart test
 
       - name: Run leak gate
         run: |

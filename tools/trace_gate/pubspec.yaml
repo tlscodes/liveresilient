@@ -1,0 +1,15 @@
+name: trace_gate
+description: >-
+  On-wire leakage gate: KL divergence of the packet-size histogram against a
+  reference, plus a spectral scan of inter-arrival times for a periodic tell.
+  A second implementation of an evaluator that lives in an unpublished
+  repository, so the gate can actually run in this project's CI.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0
