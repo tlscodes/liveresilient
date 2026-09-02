@@ -235,13 +235,19 @@ budgets per feature, and the whole thing demonstrated on a real handset.
 
 Encrypting the datagram lane without giving back the loss tolerance that
 justifies it, since a handshake that needs a reliable round trip reintroduces
-the failure the lane exists to avoid. Alongside it, closing a gap this project
-had not written down until now: the call and text lanes both ride DTLS, but
-nothing verifies the fingerprint out of band, so a signalling server that is
-malicious or coerced can substitute fingerprints and sit in the middle of both.
-A short authentication string the two parties can read to each other is the
-standard answer and it is cheap; leaving it out while claiming an encrypted
-path would not be. Establishing a continuity bar for live
+the failure the lane exists to avoid.
+
+One gap is named here and deliberately not billed, because it is being closed
+before this application could be decided. The call and text lanes both ride
+DTLS, but nothing verifies the fingerprint out of band, so a signalling server
+that is malicious or coerced can substitute fingerprints and sit in the middle
+of both. The fix — a safety number over both parties' long-term identity keys,
+shown as digits and a QR code, compared over a channel the signalling server
+does not control — is being built now, unpaid, because nobody should be pointed
+at this tool while that gap is open. It appears here as evidence of what gets
+done without funding rather than as a cost.
+
+Establishing a continuity bar for live
 voice that is honest at 60% loss — high enough to mean something, low enough
 to be reachable. Building the lane's parameters from measured link conditions
 rather than constants calibrated on one network, a mistake this project has

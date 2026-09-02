@@ -116,11 +116,15 @@ on the 29-byte text gate very nearly doubles the wire cost. Either that budget
 is renegotiated with the overhead recorded, or the design earns its bytes back
 with an implicit nonce derived from the counter and a tag length justified
 against the threat rather than chosen by habit. Twenty-four of the hours exist
-for that reconciliation. This milestone also closes a second
-gap: nothing currently verifies the DTLS fingerprint out of band, so a
-signalling server that is malicious or coerced can substitute fingerprints on
-the call and text lanes. The fix is a safety number over both parties' identity
-keys, shown as digits and a QR code.
+for that reconciliation. A second gap is named here and
+deliberately not billed, because it is being closed before this application
+could be decided. Nothing currently verifies the DTLS fingerprint out of band,
+so a signalling server that is malicious or coerced can substitute fingerprints
+on the call and text lanes. The fix - a safety number over both parties'
+long-term identity keys, shown as digits and a QR code, compared over a channel
+the signalling server does not control - is being built now, unpaid, because
+nobody should be pointed at this tool while that gap is open. It appears here
+as evidence of what gets done without funding, not as a line to pay for.
 Acceptance: the six transport matrix rows re-run with the layer in place and
 the measured overhead recorded in the results file.
 
