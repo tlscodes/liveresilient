@@ -193,28 +193,77 @@ class IdentityStore {
     await _store.write('$_remoteKeyPrefix$peerId', hexEncode(newPublicKey));
   }
 
-  /// Safety number for out-of-band comparison: a stable digest over both
-  /// parties' public keys, identical on both devices regardless of role.
+  /// Domain tag and version for [safetyNumber]. Both are inside the hash, so a
+  /// future version produces entirely different digits rather than colliding
+  /// with this one.
+  ///
+  /// This value is frozen. Two people comparing safety numbers on different
+  /// app versions must either see the same number or be told the version
+  /// differs — they must never see a mismatch caused by us and read it as an
+  /// attack. Changing the derivation means shipping v2 alongside v1 and
+  /// displaying which is in use, never editing this.
+  static const List<int> _safetyNumberDomainV1 = [
+    // "vck-safety-number-v1"
+    118, 99, 107, 45, 115, 97, 102, 101, 116, 121,
+    45, 110, 117, 109, 98, 101, 114, 45, 118, 49,
+  ];
+
+  /// Safety number for out-of-band comparison: sixty decimal digits derived
+  /// from both parties' public keys, identical on both devices regardless of
+  /// which side asks.
+  ///
+  /// Derivation, version 1 — frozen, and pinned by a golden vector in
+  /// `safety_number_test.dart`:
+  ///
+  ///   sha256( domain tag || min(keyA, keyB) || max(keyA, keyB) )
+  ///   the digest read as a big-endian integer, reduced modulo 10^60,
+  ///   left-padded to sixty digits, shown in groups of five.
+  ///
+  /// The keys are compared and concatenated as raw bytes, so both sides reach
+  /// the same input without agreeing who is "local". Reducing the whole digest
+  /// modulo 10^60 spends all 256 bits on the sixty digits and is unbiased to
+  /// about one part in 10^17; taking digits byte by byte, as an earlier
+  /// version did, both threw away most of the digest and made the digits 0-5
+  /// roughly twice as likely as 6-9. A safety number's only job is to be hard
+  /// to collide on purpose, so that mattered.
   Future<String> safetyNumber({
     required Uint8List localPublicKey,
     required Uint8List remotePublicKey,
   }) async {
-    final a = hexEncode(localPublicKey);
-    final b = hexEncode(remotePublicKey);
-    // Order-independent: sort so both sides derive the same number.
-    final combined = a.compareTo(b) <= 0 ? '$a$b' : '$b$a';
-    final digest = await _engine.sha256(Uint8List.fromList(combined.codeUnits));
-    // 60 decimal digits in groups of 5, matching familiar safety-number UX.
-    final digits = StringBuffer();
-    for (var i = 0; i < digest.length && digits.length < 60; i++) {
-      digits.write((digest[i] % 10).toString());
-      digits.write((digest[i] ~/ 10 % 10).toString());
+    final first = _lexicographicallyFirst(localPublicKey, remotePublicKey);
+    final second = identical(first, localPublicKey)
+        ? remotePublicKey
+        : localPublicKey;
+
+    final input = Uint8List.fromList([
+      ..._safetyNumberDomainV1,
+      ...first,
+      ...second,
+    ]);
+    final digest = await _engine.sha256(input);
+
+    var value = BigInt.zero;
+    for (final byte in digest) {
+      value = (value << 8) | BigInt.from(byte);
     }
-    final raw = digits.toString().substring(0, 60);
+    final modulus = BigInt.from(10).pow(60);
+    final raw = (value % modulus).toString().padLeft(60, '0');
+
     final groups = <String>[
       for (var i = 0; i < 60; i += 5) raw.substring(i, i + 5),
     ];
     return groups.join(' ');
+  }
+
+  /// Byte-wise order, so both devices concatenate the two keys the same way.
+  /// Returns whichever argument sorts first; ties (the same key on both sides)
+  /// return [a], which makes the concatenation well defined either way.
+  static Uint8List _lexicographicallyFirst(Uint8List a, Uint8List b) {
+    final shared = a.length < b.length ? a.length : b.length;
+    for (var i = 0; i < shared; i++) {
+      if (a[i] != b[i]) return a[i] < b[i] ? a : b;
+    }
+    return a.length <= b.length ? a : b;
   }
 
   Future<String> _fingerprint(Uint8List publicKey) async {

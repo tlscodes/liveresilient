@@ -41,5 +41,28 @@ void main() {
       final cfg = FlutterWebRtcPeerConnectionPort.buildPeerConnectionConfig();
       expect(cfg['sdpSemantics'], 'unified-plan');
     });
+
+    // The session-binding design (docs/DESIGN_session_binding.md) argues that
+    // a replayed attestation is at worst denial of service, because the DTLS
+    // certificate's private key lives only inside the peer's live connection.
+    // That holds only while certificates stay ephemeral. Adding a persistent
+    // `certificates` entry — to save a handshake, say — would make replayed
+    // attestations usable and quietly cost the design a property nobody would
+    // re-derive. So the invariant is measured here rather than trusted.
+    test('never pins a persistent DTLS certificate', () {
+      for (final cfg in [
+        FlutterWebRtcPeerConnectionPort.buildPeerConnectionConfig(),
+        FlutterWebRtcPeerConnectionPort.buildPeerConnectionConfig(
+          iceTransportPolicy: 'relay',
+        ),
+      ]) {
+        expect(
+          cfg.containsKey('certificates'),
+          isFalse,
+          reason: 'a reused certificate makes a replayed session attestation '
+              'usable; see docs/DESIGN_session_binding.md',
+        );
+      }
+    });
   });
 }
