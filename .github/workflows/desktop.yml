@@ -63,6 +63,11 @@ jobs:
   windows:
     name: Windows — release bundle
     runs-on: windows-latest
+    # Billed at 2x, and it builds a release artifact — tags and explicit
+    # requests only, same reasoning as the macOS packaging job in ci.yml.
+    if: >-
+      startsWith(github.ref, 'refs/tags/') ||
+      github.event_name == 'workflow_dispatch'
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4

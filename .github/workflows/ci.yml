@@ -9,6 +9,14 @@ on:
     branches: [main, master, 'phase-*/**']
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_packaging:
+        description: >-
+          Run the macOS packaging gate. Off by default: that runner bills at ten
+          times the Linux rate and consumed 88% of the account's monthly minutes
+          on 2026-09-01. It runs automatically on every tag.
+        type: boolean
+        default: false
 
 # Never run two CI rounds on the same ref; newest wins.
 concurrency:
@@ -259,6 +267,12 @@ jobs:
   packaging:
     name: Packaging — embedded native framework
     runs-on: macos-latest
+    # Billed at 10x. Runs on tags (where a release bundle is what ships) or on
+    # explicit request; every other push gets the five Linux jobs, which cost
+    # a tenth as much and catch everything except bundle layout.
+    if: >-
+      startsWith(github.ref, 'refs/tags/') ||
+      inputs.run_packaging == true
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
