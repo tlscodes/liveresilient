@@ -101,11 +101,14 @@ for the record layer, twenty-four for tamper, replay and nonce-reuse tests,
 twenty-four to reconcile the byte budgets, sixteen to re-run the matrix rows,
 eight for the specification.
 
-One line of that deserves stating rather than hiding: an authentication tag
-plus a nonce on a 29-byte text gate is more than half its size again. Either a
-gate is renegotiated with the overhead stated, or the design uses implicit
-nonces and a justified tag length. That reconciliation is what the twenty-four
-hours are for, and a reviewer who knows the arithmetic will look for it.
+One line of that deserves stating rather than hiding, and the design has
+already costed it: one byte of frame type, eight of replay counter and sixteen
+of authentication tag is 25 bytes per frame, which on the 29-byte text gate
+very nearly doubles the wire cost. Either that gate is renegotiated with the
+overhead stated, or the design earns its bytes back — an implicit nonce derived
+from the counter, and a tag length justified against the threat rather than
+chosen by habit. That reconciliation is what the twenty-four hours are for, and
+a reviewer who knows the arithmetic will reach it in a minute.
 
 Acceptance: the six transport matrix rows re-run with the layer in place, and
 the measured overhead recorded in the results file.

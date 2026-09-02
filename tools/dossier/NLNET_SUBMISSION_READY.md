@@ -106,10 +106,13 @@ M1 - end-to-end encryption on the bulk lane, 160 h. The lane carrying bulk
 content on lossy links has no encryption of its own, which SECURITY.md states
 plainly. A standard construction, a Noise-pattern handshake with a standard
 AEAD, not a bespoke cipher. One awkward consequence is stated rather than
-hidden: an authentication tag plus a nonce on a 29-byte text gate is more than
-half its size again, so either a budget is renegotiated with the overhead
-recorded or the design justifies implicit nonces and a shorter tag. Twenty-four
-of the hours exist for that reconciliation. This milestone also closes a second
+hidden, and the design has already costed it: one byte of frame type, eight of
+replay counter and sixteen of authentication tag is 25 bytes per frame, which
+on the 29-byte text gate very nearly doubles the wire cost. Either that budget
+is renegotiated with the overhead recorded, or the design earns its bytes back
+with an implicit nonce derived from the counter and a tag length justified
+against the threat rather than chosen by habit. Twenty-four of the hours exist
+for that reconciliation. This milestone also closes a second
 gap: nothing currently verifies the DTLS fingerprint out of band, so a
 signalling server that is malicious or coerced can substitute fingerprints on
 the call and text lanes. The fix is a safety number over both parties' identity
