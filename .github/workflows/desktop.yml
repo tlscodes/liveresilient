@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
 
       - name: Set up Flutter (pinned, cached)
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
@@ -58,7 +58,7 @@ jobs:
         run: flutter build linux --release
 
       - name: Upload the bundle
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5
         with:
           name: linux-release-bundle
           path: apps/reference_app/build/linux/*/release/bundle
@@ -71,7 +71,7 @@ jobs:
     # free, so the one-day cost gate of 2026-09-01 no longer applies.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
 
       - name: Set up Flutter (pinned, cached)
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
@@ -91,7 +91,7 @@ jobs:
         run: flutter build windows --release
 
       - name: Upload the bundle
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5
         with:
           name: windows-release-bundle
           path: apps/reference_app/build/windows/*/runner/Release
