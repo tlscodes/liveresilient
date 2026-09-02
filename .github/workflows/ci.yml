@@ -7,6 +7,9 @@ name: CI
 on:
   push:
     branches: [main, master, 'phase-*/**']
+    # The packaging job gates on refs/tags/*; without this the workflow never
+    # runs on a tag, so that job could never fire automatically.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
     inputs:
