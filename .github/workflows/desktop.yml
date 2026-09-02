@@ -17,6 +17,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # Same value ci.yml pins; keep the two in lockstep.
+  FLUTTER_VERSION: '3.44.6'
+
 jobs:
   linux:
     name: Linux — release bundle
@@ -28,7 +32,7 @@ jobs:
       - name: Set up Flutter (pinned, cached)
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
         with:
-          flutter-version-file: apps/reference_app/pubspec.yaml
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       # The Linux desktop embedder links against GTK and its build uses ninja;
@@ -63,11 +67,8 @@ jobs:
   windows:
     name: Windows — release bundle
     runs-on: windows-latest
-    # Billed at 2x, and it builds a release artifact — tags and explicit
-    # requests only, same reasoning as the macOS packaging job in ci.yml.
-    if: >-
-      startsWith(github.ref, 'refs/tags/') ||
-      github.event_name == 'workflow_dispatch'
+    # Runs on every push again — public repositories get standard runners for
+    # free, so the one-day cost gate of 2026-09-01 no longer applies.
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
@@ -75,7 +76,7 @@ jobs:
       - name: Set up Flutter (pinned, cached)
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
         with:
-          flutter-version-file: apps/reference_app/pubspec.yaml
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Enable the Windows desktop target

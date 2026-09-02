@@ -270,12 +270,9 @@ jobs:
   packaging:
     name: Packaging — embedded native framework
     runs-on: macos-latest
-    # Billed at 10x. Runs on tags (where a release bundle is what ships) or on
-    # explicit request; every other push gets the five Linux jobs, which cost
-    # a tenth as much and catch everything except bundle layout.
-    if: >-
-      startsWith(github.ref, 'refs/tags/') ||
-      inputs.run_packaging == true
+    # Runs on every push again: the repository is public, so standard runners
+    # are free. It was tag-only for one day while the account's minutes were
+    # exhausted (2026-09-01) — see the usage analysis in the commit history.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
