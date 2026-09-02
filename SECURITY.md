@@ -39,8 +39,16 @@ every security property below as *designed and tested by the authors*, not
   network. It does not protect them from the party that relays the session
   description: a signalling server that is malicious or coerced can substitute
   fingerprints and sit in the middle of a call or a conversation. Until the two
-  parties can compare a short authentication string themselves, do not read the
-  encryption on those lanes as end-to-end against the server.
+  parties can verify the binding themselves, do not read the encryption on
+  those lanes as end-to-end against the server.
+
+  The planned fix is the established one rather than a novel design: a safety
+  number derived from both parties' long-term identity keys, displayed as
+  digits and as a QR code, compared once in person or over a channel the
+  signalling server does not control, and re-verified when it changes. Reading
+  a short string aloud mid-call is the weaker fallback for parties who cannot
+  meet, not the primary mechanism — a caller under duress can be talked past
+  it, and it verifies one session rather than the identity behind it.
 - **The Android transport library ships prebuilt.** `libpt_transport.so`
   (arm64-v8a and x86_64) is committed under `apps/reference_app/android/`
   because the Android build consumes it directly and no source build exists in
