@@ -18,9 +18,15 @@ Status column reflects this review (2026-07-16, `phase-4/security-identity`);
 see `security/THREAT_MODEL.md` §4 for the per-threat evidence this table
 summarizes.
 
+> **Where this document stands, 2026-09-02.** The table below was written on
+> 2026-07-15 and rows may lag what shipped since. The root `SECURITY.md` is the
+> current statement of trust boundaries and known gaps; where the two disagree,
+> that one is right and this one needs a correction like the media-encryption
+> row just received.
+
 | Purpose | Primitive | Implementation rule | Status |
 |---|---|---|---|
-| Media encryption | DTLS-SRTP | WebRTC platform stack only; never re-implemented | Blocked, dated 2026-07-15 (native `flutter_webrtc` build needs full Xcode) |
+| Media encryption | DTLS-SRTP | WebRTC platform stack only; never re-implemented | Shipping since 2026-08; the native build was completed and the six device rows were recorded on a physical iPhone. Superseded the 2026-07-15 blocker. Caveat, from the root `SECURITY.md`: nothing verifies the DTLS fingerprint out of band, so this protects against a network observer and not against the signalling server. |
 | Endpoint manifest signatures | Ed25519 | Audited library (`package:cryptography`) via `Ed25519Verifier` adapter; keys pinned in the app build | Verification logic implemented and tested against fakes (`manifest_verifier_test.dart`). Real-crypto adapter `CryptographyEd25519Verifier` implemented and green: `crypto_ed25519_verifier_test.dart` 10/10 pass on re-run 2026-07-16 (phase-7; the 2 accept-path failures recorded earlier that day are fixed), and `key_rotation_test.dart` (8/8) proves zero-outage key rotation with real in-test Ed25519 signing. Build-pinned keys: not yet built (no shipped app build exists). |
 | Device identity / envelope auth | Ed25519 | Audited library (`package:cryptography`) via `IdentityKeyEngine` / `EnvelopeSigner` adapters; private keys in platform secure storage, hardware-backed where available | Identity engine (`CryptographyIdentityKeyEngine`) implemented and tested (`crypto_identity_engine_test.dart`, `identity_store_e2e_test.dart`, all passing). Envelope crypto adapter (`CryptoEnvelopeSigner`/`Verifier` in `device_link`) implemented, exported, and tested with real keys (15 tests, 100% coverage). Private-key storage: dev-only stores only (`InMemoryKeyStore`, `DevFileKeyStore`); platform Keystore/Keychain blocked, dated 2026-07-15 (needs the Flutter app shell). |
 | Fingerprints / safety numbers | SHA-256 | Audited library via adapter | Sign/verify + fingerprint computation implemented and tested (`identity_store_e2e_test.dart`). User-facing comparison UI not yet built (no call UI exists). |

@@ -43,8 +43,12 @@ extra symbols instead of a stalled round trip, and every feature has a wire
 budget proven by a gate rather than asserted.
 
 Six features - text, a news page, a photograph, a voice note, a short video
-note and live push-to-talk - fit between 29 and 5,926 bytes, and all six have
-been measured end to end on a physical iPhone over a shaped link. A 4 MiB
+note and live push-to-talk - fit between 29 and 5,926 bytes, and the transport
+and codecs carrying all six were measured on a physical iPhone over a shaped
+link. Wiring every lane into the application is in progress;
+tools/dossier/LANE_TABLE.md records which are wired today and which are not,
+because the measurement characterises the transport rather than the finished
+app and a reviewer opening the test would see that in two minutes. A 4 MiB
 transfer that never completed at all on a reliability-managed channel at 60%
 loss completed and hash-verified in 303 seconds on the coded lane. Everything
 is public: Apache-2.0 for the client and packages, AGPL-3.0 for the server,

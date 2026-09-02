@@ -74,8 +74,11 @@ row 269  2026-08-10T08:37:11Z  loss60  PASS   4,194,304 B sha-verified
 ```
 
 **The application layer is sized for the floor.** Every feature has a wire
-budget proven by its own gate, and the same six features were then measured end
-to end on a physical iPhone over a shaped link.
+budget proven by its own gate, and the transport and codecs carrying those six
+features were then measured on a physical iPhone over a shaped link. Which of
+those lanes is wired into the application today, and which is not yet, is in
+`tools/dossier/LANE_TABLE.md` — the measurement characterises the transport,
+not a finished product.
 
 ```
 src:tools/phase5/h3_results.tsv and tools/dossier/e2e_ios_results.tsv

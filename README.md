@@ -31,8 +31,13 @@ bash tools/phase5/goal_verify.sh     # re-runs every gate; exit 0 means the tabl
 
 ### End-to-end on a physical iPhone (`tools/dossier/e2e_ios_results.tsv`)
 
-Same six features, running on an iPhone over a shaped link, each inside a
-budget derived from the link physics rather than chosen by hand:
+The same six payloads over a shaped link on a physical iPhone, each inside a
+budget derived from the link physics rather than chosen by hand. Read these as
+what they are: a measurement of the transport and the codecs, taken over the
+test harness's datagram lane. The application's own chat path is the WebRTC
+data channel, and three of the six have no production wiring yet —
+`tools/dossier/LANE_TABLE.md` says which is which, and closing that gap is
+funded work rather than a finished claim.
 
 | Feature    | Budget | Measured | Status |
 |------------|--------|----------|--------|

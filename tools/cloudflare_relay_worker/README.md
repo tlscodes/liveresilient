@@ -106,9 +106,12 @@ profile, which is ordinary web traffic on the wire.
 It is a relay, not a media server: it does not transcode, does not
 authenticate peers, and does not persist anything. Anyone who guesses a
 session id can attach as the missing role. Session ids must therefore be
-unguessable — treat them as secrets, not as call numbers. The payloads
-themselves are already sealed by the client's own session keys before they
-reach this code, so the relay sees ciphertext either way.
+unguessable — treat them as secrets, not as call numbers. Do not read "relay" as
+"cannot see content". The datagram lane has no end-to-end encryption of its own
+yet — what `secure_media_lane.dart` calls sealing is an anti-replay sequence
+header, not a cipher — so whoever runs this relay can read what crosses it.
+Closing that is tracked work, stated in `SECURITY.md`, and until it lands an
+operator should be told plainly what they can see.
 
 ## Carrying a 31.8 bps link
 

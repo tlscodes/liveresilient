@@ -35,8 +35,10 @@ extra symbols instead of a stalled round trip, and every feature has a wire
 budget proven by a gate rather than a claim.
 
 Six features — text, a news page, a photograph, a voice note, a short video
-note and live push-to-talk — fit in 29 to 5,926 bytes and have been measured
-end to end on a physical iPhone over a shaped link. A 4 MiB transfer that never
+note and live push-to-talk — fit in 29 to 5,926 bytes, and the transport and
+codecs carrying them were measured on a physical iPhone over a shaped link.
+Wiring every one of those lanes into the application is in progress, and
+`tools/dossier/LANE_TABLE.md` says which are wired today and which are not. A 4 MiB transfer that never
 completed at all on a reliability-managed channel at 60% loss completed and
 hash-verified in 303 seconds on the new lane. All of it is public, Apache-2.0
 for the client and AGPL-3.0 for the server, with continuous integration green
