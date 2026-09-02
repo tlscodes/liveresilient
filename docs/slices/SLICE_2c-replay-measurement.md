@@ -22,7 +22,7 @@ being reviewable.
 ## VERIFY — the only thing that closes this
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3 && test -f docs/GATE_2C_REPLAY.md && grep -qE "score[^0-9]*1\.[0-9]{3,4}" docs/GATE_2C_REPLAY.md
+cd $REPO && test -f docs/GATE_2C_REPLAY.md && grep -qE "score[^0-9]*1\.[0-9]{3,4}" docs/GATE_2C_REPLAY.md
 ```
 
 No claim of done without this command's exit 0 in the same turn as the claim.

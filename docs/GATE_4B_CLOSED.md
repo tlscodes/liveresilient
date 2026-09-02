@@ -13,7 +13,7 @@ typed one line:
 
 ```
 sudo visudo -f /etc/sudoers.d/t2rig-extra
-behnam ALL=(root) NOPASSWD: /Users/behnam/Downloads/voice_call_kit_v3/tools/t2/step7_trace.sh
+behnam ALL=(root) NOPASSWD: $REPO/tools/t2/step7_trace.sh
 ```
 
 The exact absolute path, never `ALL`, and no `SETENV:` because this script needs

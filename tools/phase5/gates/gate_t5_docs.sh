@@ -45,7 +45,11 @@ check() {
   grep -q 'رمزنگاری' "$TECH" || die "tech dossier lacks the honest crypto chapter"
   grep -q 'تعهد طراحی' "$PROP" || die "proposal lacks the «تعهد طراحی» label"
 
+  # The two documents a funder actually opens were outside this lint until
+  # 2026-09-02. The application draft stays out on purpose: it is prose bound
+  # for a web form, and it carries its own verification table instead.
   python3 "$DOSSIER/number_source_lint.py" "$TECH" "$PROP" "$EXEC" \
+    "$DOSSIER/PROBLEM_STATEMENT.md" "$DOSSIER/FUNDING_FACTS.md" \
     || die "number-source lint found violations"
 }
 

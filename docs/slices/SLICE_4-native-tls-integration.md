@@ -22,7 +22,7 @@ being reviewable.
 ## VERIFY — the only thing that closes this
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3 && test -f docs/TICKET4_INTEGRATION.md && grep -qE "BLOCKER|blocker" docs/TICKET4_INTEGRATION.md
+cd $REPO && test -f docs/TICKET4_INTEGRATION.md && grep -qE "BLOCKER|blocker" docs/TICKET4_INTEGRATION.md
 ```
 
 No claim of done without this command's exit 0 in the same turn as the claim.

@@ -41,20 +41,39 @@ budget derived from the link physics rather than chosen by hand:
 | voice note | 42.3 s | **13.9 s** | PASS |
 | photo      | 49.6 s | **23.2 s** | PASS |
 | video note | 82.0 s | **45.4 s** | PASS |
-| push-to-talk | live | 60 s continuous | PASS |
+| push-to-talk | live | 60 s session, 10 of 60 bundles | PASS (liveness only) |
 
 These rows are **measured on a device, not on CI**. A CI runner cannot shape a
 radio link, so the workflow does not pretend to reproduce them; the reproduction
 script for a reviewer with their own hardware is
 `tools/dossier/reproduce_conditions.sh`.
 
+The push-to-talk row is judged differently from the five above it and we would
+rather say so than have it found. Its rule is liveness — the lane stayed up, the
+decoder raised no fault, at least one bundle arrived — and on the recorded run
+10 of 60 bundles arrived with a 40.7-second gap. It shows a live voice lane
+survives the profile; it does not yet show usable continuity. The rule is in
+`apps/reference_app/integration_test/e2e_matrix_test.dart`, and the row is
+labelled `PASS/LIVENESS` in `tools/dossier/e2e_ios_results.tsv` so the
+distinction survives being copied out of this table.
+
 ### Transport survival (`tools/t2/h2_results.tsv`)
 
 The transport layer is separately gated across a 24-row matrix of impairment
 profiles — voice, messaging and video, each from a clean link down to 60% loss
-and to a 2 kbit/s bandwidth ceiling. All 24 rows pass. The video row at 60%
-loss delivers a 4 MiB object with 2.54× symbol overhead against a theoretical
-floor of 2.5× — the rateless lane doing exactly what the arithmetic says it can.
+and to a 2 kbit/s bandwidth ceiling. The file is append-only and keeps every
+run this project has made, failures included; `tools/t2/report_matrix.py`
+reduces it to the latest verdict per cell, and all 24 cells pass.
+
+The clearest pair of rows in it is the 4 MiB video at 60% loss, before and
+after the lane changed:
+
+```
+row 266-267   reliability-managed channel   abandoned at 790 s, 0 kbps,
+                                            172 of 1,158 and 587 of 2,814 symbols
+row 268-269   rateless lane over plain UDP  4,194,304 B hash-verified,
+                                            303.6 s at 111 kbps · 314.7 s at 107 kbps
+```
 
 ## How it works, briefly
 
@@ -64,8 +83,10 @@ floor of 2.5× — the rateless lane doing exactly what the arithmetic says it c
   network coding over GF(256)). Loss costs proportional extra symbols instead
   of a round trip, which is why a 60%-loss link still completes a transfer.
   It runs over plain UDP because a loss-reactive congestion controller
-  underneath collapses to about 2 packets per second at that loss rate — that
-  collapse is measured, not assumed.
+  underneath does not recover at that loss rate: the same transfer was
+  abandoned twice at the time limit with the recorded rate at zero
+  (`tools/t2/h2_results.tsv`, rows 266-267). That collapse is measured, not
+  assumed.
 - **Codecs**: purpose-built ultralight paths per medium — a dictionary-trained
   text codec, CBOR + Brotli for pages, AVIF for images, Codec2 for speech, and
   raw AV1 with a 12-byte header for video notes (no container: an MP4 header
@@ -114,3 +135,10 @@ Apache-2.0 for the client and all reusable packages; AGPL-3.0 for `server/`.
 Running a modified server as a network service means publishing those changes;
 clients that merely talk to a server are unaffected. See `CONTRIBUTING.md`
 for the DCO sign-off used on contributions.
+
+One exception is worth stating rather than burying. `packages/pt_transport_darwin`
+is Apache-2.0 for its own source, but it ships a prebuilt binary framework whose
+engine is not yet published as source, as do the two committed Android
+`libpt_transport.so` files. A reader cannot reproduce those binaries from this
+repository today. Publishing that engine under the same licence is tracked work,
+and until it lands the binaries carry the caveat set out in `SECURITY.md`.

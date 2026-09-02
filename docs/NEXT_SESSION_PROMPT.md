@@ -1,4 +1,4 @@
-Continue in /Users/behnam/Downloads/voice_call_kit_v3, branch plan-v4-waves-1-to-6.
+Continue in $REPO, branch plan-v4-waves-1-to-6.
 
 Six pieces, in this order, each verified before the next. Do not ask me
 anything; where a choice is reversible, make it and record it in one line.

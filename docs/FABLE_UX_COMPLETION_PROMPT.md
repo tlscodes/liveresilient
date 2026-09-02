@@ -1,7 +1,7 @@
 # Fable 5 — finish the chat/UX layer (updated, gated)
 
 Supersedes the audit prompt for this phase. Paste the block below into Fable 5 at
-`/Users/behnam/Downloads/voice_call_kit_v3`. Plain UI/app work — stays in the clean core,
+`$REPO`. Plain UI/app work — stays in the clean core,
 never names the plugins workspace, so it will not flag. If the session was long, run
 `/compact` first.
 

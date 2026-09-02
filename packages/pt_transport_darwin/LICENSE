@@ -1,1 +1,32 @@
-Copyright (c) 2026 Voice Call Kit. All rights reserved.
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+Copyright 2026 Living Stone Apps
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+The full licence text is in the LICENSE file at the root of this repository.
+
+--------------------------------------------------------------------------------
+NOTICE — vendored binary
+
+This package ships a prebuilt binary framework under ios/Frameworks/ and
+macos/Frameworks/ (PtTransport.xcframework). The Apache-2.0 grant above covers
+this package's own source: ios/Sources/pt_shim.c, ios/Sources/pt_shim.h, the
+two podspecs, tools/sync-xcframework.sh and pubspec.yaml.
+
+The framework binary is built from a transport engine that is not yet published
+as source. Until it is, a reader cannot reproduce those files from this
+repository, and they carry the same caveat as any vendored binary. This is
+recorded as an open item in SECURITY.md rather than left for a reader to
+discover. Publishing that engine under the same licence is tracked work.

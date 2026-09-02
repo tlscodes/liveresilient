@@ -177,7 +177,7 @@ bool _eq(Uint8List a, Uint8List b) {
 void main() {
   // ---- image: Paeth baseline vs GAP vs YCoCg-R+each ----
   final png = File(
-    '/Users/behnam/Downloads/voorrang_tram_afslaan_topdown.png',
+    '$HOME/Downloads/voorrang_tram_afslaan_topdown.png',
   ).readAsBytesSync();
   final img = pngDecode(Uint8List.fromList(png))!;
   final rows = img.height < 500 ? img.height : 500;
@@ -209,7 +209,7 @@ void main() {
 
   // ---- audio: lpc2 baseline vs per-frame adaptive ----
   final wav = File(
-    '/Users/behnam/Downloads/voice_call_kit_v3/demo_audio/gift_24k.wav',
+    '$REPO/demo_audio/gift_24k.wav',
   ).readAsBytesSync();
   final pcm = Uint8List.sublistView(
     Uint8List.fromList(wav),

@@ -1,6 +1,6 @@
 # Fable 5 — core-only architectural audit prompt (safe)
 
-Paste the block below into Fable 5 at `/Users/behnam/Downloads/voice_call_kit_v3`. It
+Paste the block below into Fable 5 at `$REPO`. It
 targets ONLY the standards-based core workspace — it never names or points at the external
 plugins workspace, so Fable never reads the sensitive transport code and never flags. No
 "avoid vocabulary" meta-instruction is used (that itself is a flag risk); the prompt is

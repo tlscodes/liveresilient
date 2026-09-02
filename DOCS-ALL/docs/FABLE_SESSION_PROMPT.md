@@ -1,7 +1,7 @@
 # Fable 5 session prompt — test · modernize · wire · UI pass
 
 Copy the block below into Fable 5 (Claude Code) at the repo root
-`/Users/behnam/Downloads/voice_call_kit_v3`. It is phased and gated: each phase must end
+`$REPO`. It is phased and gated: each phase must end
 green (`dart format .` clean, `dart analyze --fatal-infos --fatal-warnings` = 0,
 `dart test` per touched package passing) before the next phase starts. No new features —
 this is hardening, wiring, and a visual pass only.

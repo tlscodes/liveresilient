@@ -21,7 +21,7 @@ being reviewable.
 ## VERIFY — the only thing that closes this
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3 && python3 tools/compare_first_record.py docs/TICKET4_FIRST_RECORD/FIRST_RECORD_CONFIGURED_1.hex docs/TICKET4_FIRST_RECORD/FIRST_RECORD_CONFIGURED_2.hex 2>&1 | grep -q "reproduces the profile shape"
+cd $REPO && python3 tools/compare_first_record.py docs/TICKET4_FIRST_RECORD/FIRST_RECORD_CONFIGURED_1.hex docs/TICKET4_FIRST_RECORD/FIRST_RECORD_CONFIGURED_2.hex 2>&1 | grep -q "reproduces the profile shape"
 ```
 
 No claim of done without this command's exit 0 in the same turn as the claim.

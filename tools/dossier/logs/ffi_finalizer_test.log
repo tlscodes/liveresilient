@@ -1,0 +1,6 @@
+00:00 +0: loading test/codec2_ffi_finalizer_test.dart
+00:00 +0: bit widths match the phase-5 wire math (700C=28, 450=18)
+00:00 +1: finalizer-managed churn: abandoned instances never crash the VM
+00:00 +2: eager dispose detaches the finalizer; reuse-after-dispose throws
+00:00 +3: 250-frame round trip stays byte-exact in width and sane in energy
+00:00 +4: All tests passed!

@@ -21,7 +21,7 @@ being reviewable.
 ## VERIFY — the only thing that closes this
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3 && grep -rq "test('6d" packages/signed_config/test && bash tools/run_suites.sh --only signed_config
+cd $REPO && grep -rq "test('6d" packages/signed_config/test && bash tools/run_suites.sh --only signed_config
 ```
 
 No claim of done without this command's exit 0 in the same turn as the claim.

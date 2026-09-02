@@ -16,7 +16,7 @@ packet loss، jitter، قطعی‌های کوتاه، و جابه‌جاییِ �
 - گزارشِ شفافِ وضعیتِ اتصال (connection-state) به‌لایه‌ی اپ.
 
 کد پایه از قبل ساخته شده در این مسیر (مونوریپوی melos، ۳۲ فایل Dart، ۸ پکیج):
-/Users/behnam/Downloads/VoiceCallKit_Enterprise_v1.0/voice_call_kit_v2
+$HOME/Downloads/VoiceCallKit_Enterprise_v1.0/voice_call_kit_v2
 
 کارهای این نشست، به‌ترتیب:
 ۱. ساختار پروژه را بخوان و یک نقشهٔ معماری کوتاه بده (پکیج‌ها، جریان داده، پروتکل‌ها).

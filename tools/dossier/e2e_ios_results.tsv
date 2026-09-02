@@ -4,4 +4,4 @@ news	1160	52.3	17.0	PASS	attempts=4,page=verified
 voice_note	879	42.3	13.9	PASS	attempts=4,frames=250,decode=complete
 photo	2682	49.6	23.2	PASS	decoded=120x160,render=pumped
 video_note	5926	82.0	45.4	PASS	frames=15/15,128x96
-ptt	5220/60s	live	60.0	PASS	sent=60,got=10,ratio=0.167,frames=250,maxGap=40.7s,err=none
+ptt	5220/60s	live	60.0	PASS/LIVENESS	sent=60,got=10,ratio=0.167,frames=250,maxGap=40.7s,err=none,rule=alive(rxError==null&&got>0)

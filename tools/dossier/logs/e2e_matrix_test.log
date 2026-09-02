@@ -1,0 +1,37 @@
+00:00 +0: loading /Users/behnam/Downloads/voice_call_kit_v3/apps/reference_app/integration_test/e2e_matrix_test.dart
+The following plugins do not support Swift Package Manager for ios:
+  - flutter_webrtc
+  - pt_transport_darwin
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+Automatically signing iOS for device deployment using specified development team in Xcode project: TRHWV7KMLT
+The following target(s) do not support arm64 architecture, which is a requirement for Apple Silicon iOS 26+ simulators:
+  - Flutter (transitive dependency of Flutter plugin flutter_webrtc)
+  - flutter_webrtc (Flutter plugin)
+  - NativeCodecs
+  - pt_transport_darwin (Flutter plugin)
+  - WebRTC-SDK (transitive dependency of Flutter plugin flutter_webrtc)
+  - Flutter (transitive dependency of Flutter plugin flutter_webrtc)
+
+Please contact plugin maintainers to request arm64 support to continue to be able to use the plugin on a simulator.
+Running Xcode build...                                          
+Xcode build done.                                           70.2s
+Installing and launching...                                     
+The Dart VM Service was not discovered after 60 seconds. This is taking much longer than expected...
+Installing and launching...                                        95.6s
+00:00 +0: shape barrier: attach unshaped, begin only under the profile
+E2E_MATRIX_WAITING_FOR_SHAPE
+SHAPE_OBSERVED rtt_ms=2263 consecutive=2 probes=12
+00:27 +1: chat: 29B compact frame — delivery + text integrity
+E2E_ROW	chat	29	4.8	2.5	PASS	attempts=10,msgId=3,decoded=verified
+00:30 +2: news: 1160B page — full decode on device
+E2E_ROW	news	1160	52.3	17.0	PASS	attempts=4,page=verified
+00:47 +3: voice_note: 879B — decode-complete (ready to play)
+E2E_ROW	voice_note	879	42.3	13.9	PASS	attempts=4,frames=250,decode=complete
+01:01 +4: photo: 2682B AVIF — decode and render
+E2E_ROW	photo	2682	49.6	23.2	PASS	decoded=120x160,render=pumped
+01:24 +5: video_note: 5926B — all frames decode
+E2E_ROW	video_note	5926	82.0	45.4	PASS	frames=15/15,128x96
+02:09 +6: ptt: 60s live stream — survival and continuity
+E2E_ROW	ptt	5220/60s	live	60.0	PASS	sent=60,got=10,ratio=0.167,frames=250,maxGap=40.7s,err=none
+03:15 +7: (tearDownAll)
+03:16 +7: All tests passed!

@@ -18,13 +18,13 @@ packet loss، jitter، قطعی‌های کوتاه، و جابه‌جاییِ �
 کد پایه در همین مخزن است (مونوریپوی melos):
 
 ```
-/Users/behnam/Downloads/voice_call_kit_v3
+$REPO
 ```
 
 اصلاح ۲۰۲۶-۰۷-۳۱ — نسخه‌ی پیشینِ این خط به پوشه‌ی نسخه‌ی دو اشاره می‌کرد:
 
 ```
-/Users/behnam/Downloads/VoiceCallKit_Enterprise_v1.0/voice_call_kit_v2
+$HOME/Downloads/VoiceCallKit_Enterprise_v1.0/voice_call_kit_v2
 ```
 
 آن مسیر مخزنِ این دستور کار نیست؛ ارقام «۳۲ فایل Dart و ۸ پکیج» هم برای همان

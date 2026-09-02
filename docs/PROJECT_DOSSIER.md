@@ -85,7 +85,7 @@ python3 tools/t2/report_matrix.py && open tools/t2/h2_report.html
 توپولوژی: مک = کل ریگ (رله‌ها + TURN + شکل‌دهی)؛ گوشی فقط با کابل USB.
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3
+cd $REPO
 eval "$(tools/t2/usb_peer.sh)"          # کشف خودکار iface/peer/device
 echo "$T2_IFACE $T2_PEER $DEVICE"
 ```

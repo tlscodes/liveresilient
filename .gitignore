@@ -58,3 +58,7 @@ tools/make_slices.py
 
 # Generated coverage output and prebuilt native binaries (rebuildable)
 **/coverage/
+
+# Applicant identity and bank details for funding forms. Never committed:
+# a public repository is not the place for an IBAN.
+tools/dossier/private/

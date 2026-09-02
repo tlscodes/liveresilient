@@ -1,0 +1,4 @@
+== gate_t1b_probe 2026-08-19T13:47:30Z check_only=1 ==
+suite run: tools/suite-logs/20260819T133223Z  rows=74 expected=74 fails=0
+ratchet: blocked=0 unproven_unlisted=0
+gate_t1b_probe check-only OK

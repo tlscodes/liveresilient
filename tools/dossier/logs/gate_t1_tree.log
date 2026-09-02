@@ -1,0 +1,4 @@
+== gate_t1_tree 2026-08-19T13:47:29Z check_only=1 ==
+suite run: tools/suite-logs/20260819T133223Z  rows=74 expected=74 fails=0
+analyze sections in audit log: 25
+gate_t1_tree check-only OK

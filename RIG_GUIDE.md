@@ -481,7 +481,7 @@ RIG_GUIDE بخش ۰.۳ را اجرا کن: لاین فواره‌ای را رو�
 - قدم ۳ — ران رسمی (توپولوژی فعلی: ۱۴ پرومکس روی کابل):
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3
+cd $REPO
 eval "$(tools/t2/usb_peer.sh)"
 sudo -n T2_IFACE=$T2_IFACE T2_PEER=$T2_PEER tools/t2/h2_run.sh loss60 integration_test/video_survival_test.dart $DEVICE
 ```
@@ -503,7 +503,7 @@ sudo -n T2_IFACE=$T2_IFACE T2_PEER=$T2_PEER tools/t2/h2_run.sh loss60 integratio
 
 ```
 pgrep -fl "night_orchestrator|sniper.sh|h2_run"
-tail -5 /Users/behnam/Downloads/voice_call_kit_v3/tools/t2/pipelines/logs/sniper_run.out
+tail -5 $REPO/tools/t2/pipelines/logs/sniper_run.out
 ```
 
 - قدم ۲ — اگر مرده یا دستگاه/آدرس کهنه را هدف می‌گیرد، پاک‌سازی:
@@ -515,7 +515,7 @@ pkill -f h2_run.sh; pkill -f "flutter test"; pkill -f signaling_server.dart
 - قدم ۳ — کشف خودکار لینک و دستگاه (هر دو گوشی، هر دو توپولوژی):
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3
+cd $REPO
 eval "$(tools/t2/usb_peer.sh)"
 echo "$T2_IFACE $T2_PEER $DEVICE"
 ```
@@ -852,7 +852,7 @@ iPhone 11 Pro Max   00008030-001215003AF2802E   (iPhone12,5، بدون سیم)
 - کشف خودکار همه‌چیز با یک فرمان (اسکریپت در repo، تست‌شده‌ی زنده):
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3
+cd $REPO
 eval "$(tools/t2/usb_peer.sh)"
 echo "$T2_IFACE $T2_PEER $DEVICE"
 ```
@@ -926,7 +926,7 @@ xcrun devicectl device process launch --device FFEE11A1-786F-54EB-ADB7-38CAC724C
 ### اجرای یک ردیف منفرد (الگوی طلایی USB — T2_IFACE مهم!)
 
 ```
-cd /Users/behnam/Downloads/voice_call_kit_v3
+cd $REPO
 sudo -n T2_IFACE=en6 T2_PEER=169.254.209.150 tools/t2/h2_run.sh loss60 integration_test/loopback_call_test.dart 00008120-0010795A3613C01E
 ```
 
@@ -979,7 +979,7 @@ sudo tools/t2/net_shape.sh restore            # اگر خالی نبود
       مسیر واقعی فایل:
 
 ```
-/Users/behnam/Downloads/voice_call_kit_v3/docs/TRAFFIC_NORMALIZATION_RESEARCH.md
+$REPO/docs/TRAFFIC_NORMALIZATION_RESEARCH.md
 ```
 
       (مسیر `~/src/ruby-3.3.0/docs/...` که گاهی گفته می‌شود وجود ندارد —

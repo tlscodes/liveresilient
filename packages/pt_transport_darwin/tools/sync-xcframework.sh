@@ -5,7 +5,10 @@
 # it does not survive `pod install`.
 set -euo pipefail
 
-SRC=${1:-/Users/behnam/Downloads/questions/engine/pt/build/PtTransport.xcframework}
+# No default: the engine tree lives outside this repository, and a path under
+# one developer's home directory is not a default anyone else can use.
+SRC=${1:-${PT_XCFRAMEWORK:-}}
+[ -n "$SRC" ] || { echo "usage: $0 <path/to/PtTransport.xcframework>  (or set PT_XCFRAMEWORK)" >&2; exit 2; }
 PKG=$(cd "$(dirname "$0")/.." && pwd)
 
 [ -d "$SRC" ] || { echo "missing $SRC — run engine/pt/tools/make_xcframework.sh first" >&2; exit 1; }

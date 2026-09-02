@@ -1,0 +1,83 @@
+== gate_t4_uplift 2026-08-19T22:43:37Z check_only=0 ==
+adaptive_transport  pub get                          PASS  (2s)  see log
+adaptive_transport  analyze                          PASS  (3s)  No issues found!
+adaptive_transport  test                             PASS  (45s)  All tests passed!
+broadcast_media  pub get                             PASS  (3s)  see log
+broadcast_media  analyze                             PASS  (3s)  No issues found!
+broadcast_media  test                                PASS  (8s)  All tests passed!
+broadcast  pub get                                   PASS  (3s)  see log
+broadcast  analyze                                   PASS  (4s)  No issues found!
+broadcast  test                                      PASS  (13s)  All tests passed!
+call_core  pub get                                   PASS  (2s)  see log
+call_core  analyze                                   PASS  (3s)  No issues found!
+call_core  test                                      PASS  (5s)  All tests passed!
+call_media_adapter  pub get                          PASS  (2s)  see log
+call_media_adapter  analyze                          PASS  (2s)  No issues found!
+call_media_adapter  test                             PASS  (4s)  All tests passed!
+call_signaling_adapter  pub get                      PASS  (2s)  see log
+call_signaling_adapter  analyze                      PASS  (3s)  No issues found!
+call_signaling_adapter  test                         PASS  (5s)  All tests passed!
+connection_orchestrator  pub get                     PASS  (2s)  see log
+connection_orchestrator  analyze                     PASS  (3s)  No issues found!
+connection_orchestrator  test                        PASS  (137s)  All tests passed!
+device_link  pub get                                 PASS  (3s)  see log
+device_link  analyze                                 PASS  (3s)  No issues found!
+device_link  test                                    PASS  (17s)  All tests passed!
+hamseda_codec  pub get                               PASS  (2s)  see log
+hamseda_codec  analyze                               PASS  (3s)  No issues found!
+hamseda_codec  test                                  PASS  (6s)  All tests passed!
+live_captions  pub get                               PASS  (2s)  see log
+live_captions  analyze                               PASS  (3s)  No issues found!
+live_captions  test                                  PASS  (5s)  All tests passed!
+media_webrtc_flutter  pub get                        PASS  (3s)  see log
+media_webrtc_flutter  analyze                        PASS  (7s)  No issues found!
+media_webrtc_flutter  test                           PASS  (15s)  All tests passed!
+media_webrtc  pub get                                PASS  (2s)  see log
+media_webrtc  analyze                                PASS  (3s)  No issues found!
+media_webrtc  test                                   PASS  (5s)  All tests passed!
+messaging_webrtc_adapter  pub get                    PASS  (2s)  see log
+messaging_webrtc_adapter  analyze                    PASS  (2s)  No issues found!
+messaging_webrtc_adapter  test                       PASS  (5s)  All tests passed!
+messaging  pub get                                   PASS  (2s)  see log
+messaging  analyze                                   PASS  (2s)  No issues found!
+messaging  test                                      PASS  (41s)  All tests passed!
+native_transport  pub get                            PASS  (2s)  see log
+native_transport  analyze                            PASS  (3s)  No issues found!
+native_transport  test                               PASS  (4s)  All tests passed!
+on_device_assistant  pub get                         PASS  (2s)  see log
+on_device_assistant  analyze                         PASS  (3s)  No issues found!
+on_device_assistant  test                            PASS  (4s)  All tests passed!
+privacy_telemetry  pub get                           PASS  (2s)  see log
+privacy_telemetry  analyze                           PASS  (3s)  No issues found!
+privacy_telemetry  test                              PASS  (4s)  All tests passed!
+pt_transport_darwin  pub get                         PASS  (3s)  see log
+pt_transport_darwin  analyze                         PASS  (4s)  No issues found!
+quality_governor  pub get                            PASS  (2s)  see log
+quality_governor  analyze                            PASS  (2s)  No issues found!
+quality_governor  test                               PASS  (4s)  All tests passed!
+security_keychain  pub get                           PASS  (5s)  see log
+security_keychain  analyze                           PASS  (7s)  No issues found!
+security_keychain  test                              PASS  (8s)  All tests passed!
+security  pub get                                    PASS  (2s)  see log
+security  analyze                                    PASS  (3s)  No issues found!
+security  test                                       PASS  (6s)  All tests passed!
+seed_lineage  pub get                                PASS  (3s)  see log
+seed_lineage  analyze                                PASS  (4s)  No issues found!
+seed_lineage  test                                   PASS  (4s)  All tests passed!
+signaling  pub get                                   PASS  (2s)  see log
+signaling  analyze                                   PASS  (2s)  No issues found!
+signaling  test                                      PASS  (5s)  All tests passed!
+signed_config  pub get                               PASS  (2s)  see log
+signed_config  analyze                               PASS  (3s)  No issues found!
+signed_config  test                                  PASS  (36s)  All tests passed!
+reference_app  pub get                               PASS  (22s)  see log
+reference_app  analyze                               PASS  (14s)  No issues found!
+reference_app  test                                  PASS  (341s)  All tests passed!
+
+logs (kept): tools/suite-logs/20260819T224338Z
+summary:     tools/suite-logs/20260819T224338Z/SUMMARY.tsv
+SUITES GREEN — 74 steps passed
+post-uplift suite run: tools/suite-logs/20260819T224338Z  rows=74 expected=74 fails=0
+ledger rows: 7
+GOAL VERIFY GREEN: 6/6 rows PASS and all gates re-verify
+gate_t4_uplift -> PASS

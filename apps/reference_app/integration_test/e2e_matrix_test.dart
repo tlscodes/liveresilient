@@ -523,8 +523,12 @@ void main() {
         // drain the pipe's tail (last bundles are still in 2s of rtt)
         await Future<void>.delayed(const Duration(seconds: 5));
         final ratio = sentBundles == 0 ? 0.0 : gotBundles / sentBundles;
+        // Liveness, not continuity: the lane stayed up, the decoder raised no
+        // fault, and at least one bundle arrived. The label says so, because a
+        // bare PASS next to the wire-budget rows reads as a comparable bar and
+        // it is not one. Continuity is tracked work, not a passing gate.
         final alive = rxError == null && gotBundles > 0;
-        if (alive) status = 'PASS';
+        if (alive) status = 'PASS/LIVENESS';
         note =
             'sent=$sentBundles,got=$gotBundles,'
             'ratio=${ratio.toStringAsFixed(3)},frames=$decodedFrames,'
@@ -538,7 +542,7 @@ void main() {
         await rx.close();
         _row('ptt', '5220/60s', 'live', 60.0, status, note);
       }
-      expect(status, 'PASS');
+      expect(status, 'PASS/LIVENESS');
     });
   });
 }

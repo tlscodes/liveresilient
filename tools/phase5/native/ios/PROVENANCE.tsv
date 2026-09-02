@@ -1,0 +1,12 @@
+lib	source	commit	sha256_binary
+codec2	worktree codec2_450 (450-capable)	9f5e2deebcdf702ae9fd71785879891bc38d2f4e	fe2a8e35e1833ffd19bfec6c6a06464de2075d72094d23701d94aa7f5c9ec728
+dav1d	code.videolan.org/videolan/dav1d	[t2-build 12:52:53Z] clone https://code.videolan.org/videolan/dav1d.git
+52b9d3d3ec525f5a20849145fa0e879d585f4911	12c3d2452ebc961a48397c1f6b396a84025fbb194397f440c6a69a3ead1ff7e2
+SvtAv1Enc	gitlab.com/AOMediaCodec/SVT-AV1	[t2-build 12:53:40Z] clone https://gitlab.com/AOMediaCodec/SVT-AV1.git
+fd116158a00986d923db8a1fdddd0dbd5fd0e240	a6c150b9c502d444a31f26f71fce88bc45963ebc99545c3fa17d9c5e5e22cd6c
+avif	github.com/AOMediaCodec/libavif	[t2-build 12:56:58Z] clone https://github.com/AOMediaCodec/libavif.git
+93717e957e75ace6d5db3c61c52c4c1d7e151e09	3f4ca44c36b969ea30a6454725cf3113b286351f6c84acf4af7c3245c3f30c20
+zstd	github.com/facebook/zstd	[t2-build 12:57:23Z] clone https://github.com/facebook/zstd.git
+82d322c4973d9e2968d94047a40892bc6d9a9bdf	cba901978ce47b11fa1ec668a4af4ba321faaa0a459b542971dfdb37fd8fccb9
+brotlidec	github.com/google/brotli	[t2-build 12:57:51Z] clone https://github.com/google/brotli.git
+8e10eeb3378f6c459dbaf033ca6727e9816afccb	aee0cb371d01b75040da5c886cb653b8863fbb5f6d2c32e953dfd7687434bd72

@@ -1,0 +1,34 @@
+== t3 matrix v2 2026-08-19T22:03:33Z device=00008030-001215003AF2802E self=192.168.2.1 ==
+profile t3x: bw 2Kbit/s per crossing (4Kbit/s applied, shared pipe),
+one-way delay 1000ms => rtt 2000ms, plr 0.3675/crossing = 60% end-to-end
+relay up (pid 68560)
+attached; applying the profile NOW
+pfctl: Use of -f option, could result in flushing of rules
+present in the main ruleset added by the system at startup.
+See /etc/pf.conf for further details.
+
+No ALTQ support in kernel
+ALTQ related functions disabled
+shaped: bw 4Kbit/s delay 1000 plr 0.3675 on bridge100
+--- pipes ---
+00001:   4.000 Kbit/s 1000 ms   50 sl.plr 0.367500 1 queues (1 buckets) droptail
+    mask: 0x00 0x00000000/0x0000 -> 0x00000000/0x0000
+BKT Prot ___Source IP/port____ ____Dest. IP/port____ Tot_pkt/bytes Pkt/Byte Drp
+    mask: 0x00 0x00000000/0x0000 -> 0x00000000/0x0000
+BKT Prot ___Source IP/port____ ____Dest. IP/port____ Tot_pkt/bytes Pkt/Byte Drp
+  0 udp      192.168.2.2/56231     192.168.2.1/3737     2       88  1   44   1
+--- anchor t2harness ---
+--- interface ---
+bridge100: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500
+	options=3<RXCSUM,TXCSUM>
+	ether 3a:c9:86:b2:40:64
+flutter exit=0 (shape torn down)
+SHAPE_OBSERVED rtt_ms=2263 consecutive=2 probes=12
+e2e_ios_results.tsv rows: 6
+Feature	WireBytes	Budget_s	Measured_s	Status	Note
+chat	29	4.8	2.5	PASS	attempts=10,msgId=3,decoded=verified
+news	1160	52.3	17.0	PASS	attempts=4,page=verified
+voice_note	879	42.3	13.9	PASS	attempts=4,frames=250,decode=complete
+photo	2682	49.6	23.2	PASS	decoded=120x160,render=pumped
+video_note	5926	82.0	45.4	PASS	frames=15/15,128x96
+ptt	5220/60s	live	60.0	PASS	sent=60,got=10,ratio=0.167,frames=250,maxGap=40.7s,err=none

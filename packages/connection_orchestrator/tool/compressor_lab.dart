@@ -272,9 +272,9 @@ void main() {
     'PDF (invoice)': Platform.environment['LAB_PDF'] ?? '',
     'PDF (system card)': Platform.environment['LAB_PDF2'] ?? '',
     'PNG (screenshot)': Platform.environment['LAB_PNG'] ?? '',
-    'JPG (photo)': '/Users/behnam/Downloads/rotonde-fietspad.jpg',
+    'JPG (photo)': '$HOME/Downloads/rotonde-fietspad.jpg',
     'WAV PCM (voice)':
-        '/Users/behnam/Downloads/voice_call_kit_v3/demo_audio/gift_24k.wav',
+        '$REPO/demo_audio/gift_24k.wav',
     'Dart source': 'lib/src/media_codecs/live_context_compressor.dart',
   };
   samples.forEach((label, path) {
@@ -294,7 +294,7 @@ void main() {
   // against a fair PNG-equivalent (gzip9 over the same residual, which
   // is exactly PNG's own filter+deflate pipeline on this crop).
   final pngFile = File(
-    '/Users/behnam/Downloads/voorrang_tram_afslaan_topdown.png',
+    '$HOME/Downloads/voorrang_tram_afslaan_topdown.png',
   ).readAsBytesSync();
   final img = pngDecode(Uint8List.fromList(pngFile));
   if (img == null) {
