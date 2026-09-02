@@ -196,9 +196,7 @@ bool _eq(Uint8List a, Uint8List b) {
 
 void main() {
   // ---- audio ----
-  final wav = File(
-    '$REPO/demo_audio/gift_24k.wav',
-  ).readAsBytesSync();
+  final wav = File('$REPO/demo_audio/gift_24k.wav').readAsBytesSync();
   final pcm = Uint8List.sublistView(Uint8List.fromList(wav), 44, 44 + 131072);
   final q = lpcQuantized(pcm);
   assert(

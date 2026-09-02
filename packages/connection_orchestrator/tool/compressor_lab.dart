@@ -273,8 +273,7 @@ void main() {
     'PDF (system card)': Platform.environment['LAB_PDF2'] ?? '',
     'PNG (screenshot)': Platform.environment['LAB_PNG'] ?? '',
     'JPG (photo)': '$HOME/Downloads/rotonde-fietspad.jpg',
-    'WAV PCM (voice)':
-        '$REPO/demo_audio/gift_24k.wav',
+    'WAV PCM (voice)': '$REPO/demo_audio/gift_24k.wav',
     'Dart source': 'lib/src/media_codecs/live_context_compressor.dart',
   };
   samples.forEach((label, path) {
