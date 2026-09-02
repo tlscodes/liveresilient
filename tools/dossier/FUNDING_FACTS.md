@@ -100,6 +100,109 @@ does not exist in order to fit the form would fail on its own terms. A BV could
 file the larger calls, but a newly incorporated one has no annual accounts to
 attach, which those calls ask for.
 
+## Applying to more than one at a time
+
+No programme here forbids it. Two ask about it, and the honest answer is the
+one that costs nothing:
+
+```
+NLnet    the form asks: does the project have other funding sources, past and
+         present? A pending application elsewhere is neither, but name it anyway
+OTF      the concept note never asks; the full proposal and the reviewer's
+         worksheet both do, under sustainability and other public funding
+SIDN     co-financing is not required; a good funding mix counts in favour
+```
+
+So the two real constraints are: disclose every application including pending
+ones wherever the question is asked, and never put the same deliverable in two
+budgets.
+
+The reason to go in sequence anyway is not the rulebook. OTF's gate is
+demonstrated user demand, and this project has none until the pilot milestone
+runs. Applying there first means arriving with the same gap that got the
+previous application dismissed.
+
+## What is actually reachable at SIDN, and what is not
+
+Advice reaching this project said a Dutch chamber-of-commerce registration
+makes the applicant an ideal candidate here. The amounts quoted were real; the
+eligibility was not.
+
+```
+src:sidnfonds.nl/aanvragen and /faq
+
+Pioniers, up to 10.000 EUR      a natural OR legal person may apply
+above 10.000 EUR                a legal person only — stichting, vereniging,
+                                coöperatie, onderlinge waarborgmaatschappij,
+                                NV or BV
+up to 75.000 EUR                thematic calls, once or twice a year, amount
+                                set per call, legal persons only
+```
+
+An eenmanszaak appears on none of those lists, and a KvK registration does not
+put it there. So Pioniers is the only open route, and its current scope is
+narrow: solutions relevant to Dutch internet infrastructure, aimed at
+organisations that are not primarily commercially driven. Without a Dutch
+infrastructure operator or public body named as the pilot host, this project
+does not fit — and inventing that host to fit the form would fail on its own
+terms.
+
+## What OTF actually funds, and what "we hold an EU grant" is worth
+
+```
+supports projects, not overhead; overhead capped at 10% where allowed at all
+funds disbursed on completed deliverables — no money up front
+reviewers are asked whether the applicant can work under payment-on-delivery
+ineligible: basic connectivity, except limited cases around political shutdowns
+```
+
+That rules out the shape suggested in the advice. Running a distributed relay
+network is recurring operational cost, not a deliverable, and "user
+distribution" is not something OTF funds — demand is an input their reviewers
+score, not an output they pay for. The fundable shape is user research with
+named at-risk communities, plus the relay design as reproducible
+infrastructure-as-code with one bounded reference deployment.
+
+On the claim that an EU grant multiplies the chance: it is disclosed, not
+leveraged. Reviewers are asked whether the project receives other public
+funding and whether it has a diversified funding strategy, so it counts under
+sustainability. The only stated preference runs the other way — toward
+applicants without a history of prior OTF support. No multiplier is published,
+so none is written here.
+
+## Telling three funders three stories
+
+What may differ per funder: which subset of deliverables is requested, their
+order, their emphasis, and the vocabulary of that funder's own criteria.
+
+What may not differ: any fact. Who the users are today, the project's stage,
+the licences, the price of a given deliverable, where the impact lands, and
+every measured number.
+
+Two checks while writing. Take a sentence from one application and drop it into
+another: if a reviewer holding both would find a factual disagreement, it is a
+different story rather than a different emphasis. And every claim must resolve
+to one line in this dossier — the number lint already enforces that for figures.
+
+## The instrument that does not depend on a reviewer
+
+WBSO is a Dutch R&D tax deduction, not a grant, and it is the only item here
+whose outcome no committee decides.
+
+```
+who        a self-employed entrepreneur with at least 500 R&D hours in the year
+what       a fixed deduction, with a substantial extra allowance for starters
+scope      software development qualifies
+deadline   applications for the October-December period close 30 September
+```
+
+The hours in the proposal clear that threshold on their own, grant or no grant.
+‹src:tools/dossier/APPLICATION_NLNET.md, budget section›
+Two things to settle with an accountant rather than guess: whether the
+deduction combines with a grant received as a donation, and how a donation
+received for one's own work is taxed in an eenmanszaak. NLnet states plainly
+that it gives no tax advice and that the grantee owes any taxes due.
+
 ## Sequence
 
 NLnet first: its published criteria do not require users or letters, it pays
@@ -113,3 +216,6 @@ because rolling intake costs nothing to wait for and a concept note showing
 funded work under way answers the exact ground of the earlier dismissal.
 
 SIDN only if a true Dutch use case exists, as a Pioniers application.
+
+And before any of them: file WBSO, because its deadline is the nearest one and
+its answer does not depend on anyone's opinion of the project.
