@@ -34,6 +34,13 @@ every security property below as *designed and tested by the authors*, not
 - **The signalling server** sees connection metadata by construction: which
   identifiers are talking, and when. It is not designed to see message
   content.
+- **Nothing verifies the DTLS fingerprint out of band.** The media path and the
+  text data channel both ride DTLS, which protects them from an observer on the
+  network. It does not protect them from the party that relays the session
+  description: a signalling server that is malicious or coerced can substitute
+  fingerprints and sit in the middle of a call or a conversation. Until the two
+  parties can compare a short authentication string themselves, do not read the
+  encryption on those lanes as end-to-end against the server.
 - **The Android transport library ships prebuilt.** `libpt_transport.so`
   (arm64-v8a and x86_64) is committed under `apps/reference_app/android/`
   because the Android build consumes it directly and no source build exists in

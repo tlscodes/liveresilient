@@ -5,9 +5,11 @@ open because only the applicant can fill them: the amount and the milestone
 breakdown. Everything else is written and each factual claim points at a file
 in the public repository.
 
-Check the open call on `nlnet.nl/funding.html` before submitting. Calls reopened
-3 September 2026 with a deadline of 3 November 2026, 12:00 CEST, and the
-programme names changed after NGI Zero closed — see `FUNDING_FACTS.md`.
+Read the open call's own guide before polishing any of this. The fund these
+answers were first written against — NGI Zero Commons Fund — closed its final
+call on 1 June 2026. The successor call opens 3 September 2026 with a deadline
+of 3 November 2026 at 12:00, and its rules are not assumed to match the old
+ones. See `FUNDING_FACTS.md`.
 
 ---
 
@@ -108,12 +110,12 @@ hours are for, and a reviewer who knows the arithmetic will look for it.
 Acceptance: the six transport matrix rows re-run with the layer in place, and
 the measured overhead recorded in the results file.
 
-**M2 — security audit and the work to answer it, 100 h, no external cost.**
-NLnet's office-hour FAQ states that grantees generally have the opportunity of
-a security audit through Radically Open Security as part of the grant, on a
-first-come-first-served basis. This milestone therefore asks for the
-applicant's hours, not an invoice: the audit is requested through the programme
-in month one. Sixteen hours to hand over scope, threat model and reproducible
+**M2 — security audit and the work to answer it, 100 h plus the audit itself.**
+The in-kind audit the programme offers is described for projects above the
+50 kEUR line and phrased as a possibility, not a guarantee, so a proposal at
+this size cannot assume it. The audit is budgeted as a scoped external review
+of the two named gaps rather than a full-codebase audit, and if a programme
+slot turns out to be available the line is not spent. Sixteen hours to hand over scope, threat model and reproducible
 builds, eight to be available during the audit, fifty-six to triage and fix,
 twelve to coordinate re-testing and publish, eight of slack. If no audit slot
 is available, a scoped external review of the two named gaps is proposed as a
@@ -228,7 +230,13 @@ budgets per feature, and the whole thing demonstrated on a real handset.
 
 Encrypting the datagram lane without giving back the loss tolerance that
 justifies it, since a handshake that needs a reliable round trip reintroduces
-the failure the lane exists to avoid. Establishing a continuity bar for live
+the failure the lane exists to avoid. Alongside it, closing a gap this project
+had not written down until now: the call and text lanes both ride DTLS, but
+nothing verifies the fingerprint out of band, so a signalling server that is
+malicious or coerced can substitute fingerprints and sit in the middle of both.
+A short authentication string the two parties can read to each other is the
+standard answer and it is cheap; leaving it out while claiming an encrypted
+path would not be. Establishing a continuity bar for live
 voice that is honest at 60% loss — high enough to mean something, low enough
 to be reachable. Building the lane's parameters from measured link conditions
 rather than constants calibrated on one network, a mistake this project has
