@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Check the files this commit actually stages, not the ones you were thinking
+# about.
+#
+# Three times in one day the same mistake reached CI: format or analyze was run
+# on the unit under discussion while a script had quietly changed others. Each
+# fix was correct and each verification was of the wrong scope. Care did not
+# solve it and a fourth attempt at care would not either, so the scope now comes
+# from `git diff --cached` — a record — instead of from memory.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Bypass deliberately:     git commit --no-verify   (CI still decides)
+set -euo pipefail
+
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.dart')
+[ -n "$files" ] || exit 0
+
+echo "pre-commit: $(echo "$files" | wc -l | tr -d ' ') staged Dart file(s)"
+
+# Format: exactly the staged files, so a script's edits cannot be missed.
+# shellcheck disable=SC2086
+dart format --output=none --set-exit-if-changed $files
+
+# Analyze: every package that owns a staged file. `dart analyze` takes one
+# target, and analysing a file alone misses errors its package would catch.
+pkgs=$(for f in $files; do
+  d=$(dirname "$f")
+  while [ "$d" != "." ] && [ ! -f "$d/pubspec.yaml" ]; do d=$(dirname "$d"); done
+  [ "$d" != "." ] && echo "$d"
+done | sort -u)
+
+for p in $pkgs; do
+  echo "pre-commit: analyzing $p"
+  (cd "$p" && dart analyze --fatal-infos --fatal-warnings .)
+done
+
+echo "pre-commit: ok"

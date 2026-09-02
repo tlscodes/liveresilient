@@ -59,7 +59,8 @@ void main() {
         expect(
           cfg.containsKey('certificates'),
           isFalse,
-          reason: 'a reused certificate makes a replayed session attestation '
+          reason:
+              'a reused certificate makes a replayed session attestation '
               'usable; see docs/DESIGN_session_binding.md',
         );
       }

@@ -24,6 +24,19 @@ cd packages/<name> && dart test  # one package
 bash tools/run_suites.sh         # the full gate suite, logs under tools/suite-logs/
 ```
 
+Enable the pre-commit hook once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It formats and analyses exactly the Dart files your commit stages, deriving
+that list from `git diff --cached` rather than from what you remember touching.
+That distinction is the whole reason it exists: on 2 September 2026 the same
+mistake reached CI three times in one day, each time because a script had
+edited files the author then did not check. Care did not fix it; a list did.
+Bypass it with `--no-verify` when you mean to — CI still decides.
+
 ## The gate system, and why your PR may fail
 
 A "gate" is a claim about behaviour that a specific test proves. The project
