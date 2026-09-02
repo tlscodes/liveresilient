@@ -33,15 +33,21 @@ Not features. The three things that decide whether a person can be identified
 by the tool they are carrying.
 
 ```
-private keys in the platform keystore   they are in a plain file today
+private keys in the platform keystore   a plain file in the shipped build
 delete-everything                        no such action exists today
 a pilot on devices we do not own         every measurement is from one iPhone
 ```
 
-The first two are quoted from the project's own code, not inferred:
-`packages/security/lib/src/key_store.dart` says of its shipped implementation
-"There is no encryption, no OS keychain integration", and a search for a wipe
-action across the application returns nothing.
+Both of the first two are quoted from the project's own code rather than
+inferred. `packages/security/lib/src/key_store.dart` says of its shipped
+implementation "There is no encryption, no OS keychain integration", and a
+search for a wipe action across the application returns nothing.
+
+One qualification we would rather state than have found: an Apple Keychain
+adapter already exists in this repository, with a documented protection class
+and backup exclusion, and it is simply not wired into the app. So on Apple this
+is connection work, not construction; the Android Keystore half has no adapter
+and is the real build. The request is sized for that, not for both.
 
 For most people in the situation this tool targets, the danger is not someone
 reading the wire. It is a phone in someone else's hands at a checkpoint. A tool

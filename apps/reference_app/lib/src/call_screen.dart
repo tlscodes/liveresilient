@@ -10,6 +10,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'theme.dart';
 import 'ui/network_truth.dart';
 import 'ui/quality_gauge.dart';
+import 'ui/source_chip.dart';
 
 /// Human label for [phase], distinct per phase so tests can assert each
 /// state renders its own text.
@@ -86,6 +87,7 @@ class CallScreen extends StatelessWidget {
     this.onCall,
     this.onHangUp,
     this.quality,
+    this.qualitySourceLabel,
     this.rung,
   });
 
@@ -126,6 +128,12 @@ class CallScreen extends StatelessWidget {
   /// real path stats. Null (or a non-active [phase]) hides the gauge card;
   /// the screen never invents readings.
   final Stream<CallQualityReading>? quality;
+
+  /// Where [quality] comes from, shown beside the gauge. Null means the
+  /// readings are live and need no qualifier; anything else is displayed
+  /// verbatim, so a synthetic feed says so on the screen the user is looking
+  /// at rather than only in the source.
+  final String? qualitySourceLabel;
 
   /// The adaptive ladder's current [OperatingRung]; null renders the ladder
   /// display in its no-signal state.
@@ -196,7 +204,11 @@ class CallScreen extends StatelessWidget {
             // call to measure.
             if (liveQuality != null && _isActive) ...[
               const SizedBox(height: AppSpacing.s16),
-              _QualityCard(quality: liveQuality, rung: rung),
+              _QualityCard(
+                quality: liveQuality,
+                rung: rung,
+                sourceLabel: qualitySourceLabel,
+              ),
             ],
             if (_isActive && callId != null) ...[
               const SizedBox(height: Spacing.s12),
@@ -303,10 +315,19 @@ Color heroColorFor(String callId, Brightness brightness) {
 /// this leaf — one reading repaints the gauge/ladder pair and nothing else
 /// on the screen; no `setState` exists anywhere in this flow.
 class _QualityCard extends StatelessWidget {
-  const _QualityCard({required this.quality, required this.rung});
+  const _QualityCard({
+    required this.quality,
+    required this.rung,
+    required this.sourceLabel,
+  });
 
   final Stream<CallQualityReading> quality;
   final OperatingRung? rung;
+
+  /// Where these readings come from. Shown on the card, because a gauge that
+  /// does not say it is synthetic is a confident lie about the one thing the
+  /// person on the call cannot check for themselves.
+  final String? sourceLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -323,7 +344,17 @@ class _QualityCard extends StatelessWidget {
         child: StreamBuilder<CallQualityReading>(
           stream: quality,
           builder: (context, snapshot) {
-            final gauge = QualityGauge(reading: snapshot.data);
+            final label = sourceLabel;
+            final gauge = label == null
+                ? QualityGauge(reading: snapshot.data)
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      QualityGauge(reading: snapshot.data),
+                      const SizedBox(height: AppSpacing.s8),
+                      SourceChip(label: label),
+                    ],
+                  );
             final ladder = LadderRungIndicator(rung: rung);
             return LayoutBuilder(
               builder: (context, constraints) {

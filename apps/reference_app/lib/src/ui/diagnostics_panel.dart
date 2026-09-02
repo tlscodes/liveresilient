@@ -29,6 +29,7 @@ import 'package:adaptive_transport/adaptive_transport.dart'
 import 'package:flutter/material.dart';
 
 import 'network_truth.dart';
+import 'source_chip.dart';
 import 'tokens.dart';
 
 /// Card showing RTT / loss / bitrate tiles with sparklines over the last
@@ -154,7 +155,7 @@ class _DiagnosticsPanelState extends State<DiagnosticsPanel> {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.s8),
-                _SourceChip(label: widget.sourceLabel),
+                SourceChip(label: widget.sourceLabel),
               ],
             ),
             const SizedBox(height: AppSpacing.s16),
@@ -231,36 +232,6 @@ class _NativeShapeAvailabilityRow extends StatelessWidget {
 }
 
 /// Small neutral chip naming the real origin of the readings.
-class _SourceChip extends StatelessWidget {
-  const _SourceChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      label: 'Readings source: $label',
-      child: Container(
-        padding: const EdgeInsetsDirectional.symmetric(
-          horizontal: AppSpacing.s8,
-          vertical: AppSpacing.s2,
-        ),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(AppRadius.r8),
-        ),
-        child: Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// One metric: big number, caption, sparkline.
 class _MetricTile extends StatelessWidget {
   const _MetricTile({

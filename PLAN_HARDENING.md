@@ -33,10 +33,13 @@ known    bulk lane carries no encryption of its own
 known    signalling server sees who talks to whom, and when
 known    nothing verifies the DTLS fingerprint out of band
 
-NEW      private identity keys are not in the platform keystore
-         packages/security/lib/src/key_store.dart:60 — "There is no encryption,
-         no OS keychain integration, and no..."  Both implementations shipped
-         today are InMemoryKeyStore and DevFileKeyStore.
+NEW      the shipped build stores private identity keys in a plain file
+         key_store.dart:60 — "There is no encryption, no OS keychain
+         integration" — because the two stores it offers are InMemoryKeyStore
+         and DevFileKeyStore. An Apple Keychain adapter DOES exist and is
+         careful work (packages/security_keychain, with a documented
+         protection class and iCloud backup deliberately excluded); nothing
+         outside that package imports it. Android has no adapter at all.
 NEW      local application data is plain JSON on disk
          apps/reference_app/lib/src/intelligence/disk_json_storage.dart
 NEW      there is no delete-everything action anywhere in the app
@@ -122,9 +125,15 @@ identity, and someone under duress can be talked past it.
 In the same week, because it is the same file:
 
 ```
-private keys move to the iOS Keychain and the Android Keystore
+wire the existing Apple Keychain adapter into the app — it is written, tested
+  and unused (packages/security_keychain)
+build the Android Keystore half, which has no adapter
 DevFileKeyStore stops being reachable from a release build
 ```
+
+The Apple half is wiring rather than construction, and the honest claim once it
+lands is "encrypted at rest by the OS" — the adapter's own comment says the seed
+stays extractable, so this is not hardware-backed signing.
 
 verify: `cd packages/security && dart test` green, plus a test asserting a
 release configuration cannot select the development key store.

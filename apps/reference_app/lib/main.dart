@@ -344,6 +344,9 @@ class _HomePageState extends State<HomePage> {
         onCall: _call.canCall ? _call.placeCall : null,
         onHangUp: _call.canHangUp ? _call.hangUp : null,
         quality: _liveFeedsAllowed ? _quality.stream : null,
+        // The feed is DemoQualityFeed, a scripted profile. Say so on the
+        // screen, not only here.
+        qualitySourceLabel: _liveFeedsAllowed ? demoQualitySourceLabel : null,
         rung: _rung,
       ),
       RefreshIndicator(
