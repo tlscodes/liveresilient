@@ -13,6 +13,14 @@ import 'dart:typed_data';
 
 import 'package:connection_orchestrator/src/media_codecs/live_context_compressor.dart';
 
+/// Sample inputs for these lab runs are not committed: they were local files.
+/// Resolve them at runtime so the tool is runnable on any machine that has
+/// them, instead of encoding one developer's directory layout.
+String _home() => Platform.environment['HOME'] ?? '.';
+
+/// Repository-relative, from wherever `dart run` was invoked.
+String _repo() => Platform.environment['REPO_ROOT'] ?? Directory.current.path;
+
 const c = LiveContextCompressor();
 final gz = GZipCodec(level: 9);
 
@@ -272,8 +280,8 @@ void main() {
     'PDF (invoice)': Platform.environment['LAB_PDF'] ?? '',
     'PDF (system card)': Platform.environment['LAB_PDF2'] ?? '',
     'PNG (screenshot)': Platform.environment['LAB_PNG'] ?? '',
-    'JPG (photo)': '$HOME/Downloads/rotonde-fietspad.jpg',
-    'WAV PCM (voice)': '$REPO/demo_audio/gift_24k.wav',
+    'JPG (photo)': '${_home()}/Downloads/rotonde-fietspad.jpg',
+    'WAV PCM (voice)': '${_repo()}/demo_audio/gift_24k.wav',
     'Dart source': 'lib/src/media_codecs/live_context_compressor.dart',
   };
   samples.forEach((label, path) {
@@ -293,7 +301,7 @@ void main() {
   // against a fair PNG-equivalent (gzip9 over the same residual, which
   // is exactly PNG's own filter+deflate pipeline on this crop).
   final pngFile = File(
-    '$HOME/Downloads/voorrang_tram_afslaan_topdown.png',
+    '${_home()}/Downloads/voorrang_tram_afslaan_topdown.png',
   ).readAsBytesSync();
   final img = pngDecode(Uint8List.fromList(pngFile));
   if (img == null) {

@@ -14,6 +14,14 @@ import 'package:connection_orchestrator/src/media_codecs/live_context_compressor
 
 import 'compressor_lab.dart' show pngDecode, residual2d, lpc2, unlpc2;
 
+/// Sample inputs for these lab runs are not committed: they were local files.
+/// Resolve them at runtime so the tool is runnable on any machine that has
+/// them, instead of encoding one developer's directory layout.
+String _home() => Platform.environment['HOME'] ?? '.';
+
+/// Repository-relative, from wherever `dart run` was invoked.
+String _repo() => Platform.environment['REPO_ROOT'] ?? Directory.current.path;
+
 const c = LiveContextCompressor();
 final gz = GZipCodec(level: 9);
 
@@ -177,7 +185,7 @@ bool _eq(Uint8List a, Uint8List b) {
 void main() {
   // ---- image: Paeth baseline vs GAP vs YCoCg-R+each ----
   final png = File(
-    '$HOME/Downloads/voorrang_tram_afslaan_topdown.png',
+    '${_home()}/Downloads/voorrang_tram_afslaan_topdown.png',
   ).readAsBytesSync();
   final img = pngDecode(Uint8List.fromList(png))!;
   final rows = img.height < 500 ? img.height : 500;
@@ -208,7 +216,7 @@ void main() {
   );
 
   // ---- audio: lpc2 baseline vs per-frame adaptive ----
-  final wav = File('$REPO/demo_audio/gift_24k.wav').readAsBytesSync();
+  final wav = File('${_repo()}/demo_audio/gift_24k.wav').readAsBytesSync();
   final pcm = Uint8List.sublistView(
     Uint8List.fromList(wav),
     44,
