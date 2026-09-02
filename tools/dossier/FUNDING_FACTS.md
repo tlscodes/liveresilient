@@ -38,7 +38,21 @@ amount, historic NGI0  above 50k required one or more completed smaller NGI0
 calls                  reopened 3 September 2026; deadline 3 November 2026,
                        12:00 CEST, then the 3rd of every odd month
 notable field          a generative-AI disclosure question — answer it plainly
+hourly rate            65 EUR/h is the stated ceiling, and the FAQ warns that
+                       using the ceiling reduces cost effectiveness
+security audit         generally offered in kind to grantees through Radically
+                       Open Security, first come first served — request it in
+                       month one; do not budget an invoice for it
+hardware               not fundable: laptops, workstations and phones are
+                       excluded as basic operational cost
+out-of-pocket          reimbursed against proof from 250 EUR per item, and the
+                       most economic option must be chosen
 ```
+
+The audit line is the one that changes an application's shape rather than its
+wording. Budgeting a paid audit asks the programme to pay twice for something
+it already provides, and it puts the largest number in the proposal on the one
+line the reviewer knows is free.
 
 Confirm which successor call is open on `nlnet.nl/funding.html` before writing
 to a template built for a closed one.

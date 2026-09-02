@@ -58,43 +58,112 @@ so before a reviewer has to find it.
 ## Requested amount
 
 ```
-[owner] amount in euro
+27,500 EUR — 540 hours at 50 EUR/hour, plus 500 EUR of out-of-pocket cost
 ```
 
-The successor programme announces 5,000 to 50,000 euro per proposal. Under
-NGI Zero, anything above 50,000 required one or more successfully completed
-smaller projects first; the equivalent rule for the current programme was not
-published as of 2 September 2026. Ask for the amount the milestones below
-actually cost and no more — cost effectiveness is 30% of the score, and an
-inflated number is the easiest thing in an application to disbelieve.
+The rate is taken from NLnet's own published convention rather than a market
+average. The office-hour FAQ names 65 EUR/hour as the absolute ceiling and
+warns that using the ceiling reduces cost effectiveness, which is 30% of the
+score. Fifty euro sits below that ceiling, below the European Commission's own
+daily unit cost for an SME owner without a salary — the applicant's exact legal
+category — and at roughly half the Dutch freelance software rate.
+
+The total is 55% of the 50,000 euro band. Asking near the top would stack two
+maximum signals for a first-time applicant with no prior grant history, and
+there is nothing here to spend it on: the software already exists, so this
+budget buys four specific pieces of work, not a build. There is no contingency
+line, because NLnet pays no overhead and risk belongs in the hours.
 
 ## Explain what the requested budget will be used for
 
 ```
-[owner] hours per milestone and the rate behind them
+M1  datagram-lane encryption      160 h            8,000 EUR
+M2  audit response                100 h            5,000 EUR
+M3  push-to-talk continuity       150 h            7,500 EUR
+M4  supervised pilot              130 h + 500 EUR  7,000 EUR
+                                  540 h           27,500 EUR
 ```
 
-Four milestones, each with a mechanical acceptance test, in the order they
-should be funded:
+Nine months at roughly twenty hours a week. Seven would cover the hours; the
+extra two absorb the audit queue, which is not under the applicant's control.
 
-1. **End-to-end encryption on the datagram lane.** The lane that carries bulk
-   content on lossy links has no encryption layer of its own today. `SECURITY.md`
-   states this plainly. Nobody should be pointed at this tool until it closes.
-   Acceptance: the six transport matrix rows re-run with the layer in place and
-   the measured overhead recorded in the results file.
-2. **An independent security audit, and the work to answer it.** The project
-   has never been audited. Acceptance: the report published in the repository
-   alongside the commits that answer each finding.
-3. **Push-to-talk continuity.** The live voice lane survives the hardest
-   profile but delivered 10 of 60 bundles with a 40.7-second gap on the
-   recorded run. Acceptance: a stated continuity bar, met on a physical device,
-   replacing today's liveness-only rule in the test.
-4. **A supervised pilot.** Acceptance: the six end-to-end rows reproduced on
-   testers' own devices rather than on the developer's, so that "it works for
-   people" becomes a measurement.
+**M1 — end-to-end encryption on the datagram lane, 160 h.** The lane that
+carries bulk content on lossy links has no encryption layer of its own today
+and `SECURITY.md` says so plainly. A standard construction — a Noise-pattern
+handshake with a standard AEAD — not a bespoke cipher. Sixteen hours for the
+threat model and wire format, twenty-four for key establishment, forty-eight
+for the record layer, twenty-four for tamper, replay and nonce-reuse tests,
+twenty-four to reconcile the byte budgets, sixteen to re-run the matrix rows,
+eight for the specification.
 
-Every milestone here follows the pattern the repository already uses: a
-`verify_cmd` that exits zero, and no milestone reported complete without it.
+One line of that deserves stating rather than hiding: an authentication tag
+plus a nonce on a 29-byte text gate is more than half its size again. Either a
+gate is renegotiated with the overhead stated, or the design uses implicit
+nonces and a justified tag length. That reconciliation is what the twenty-four
+hours are for, and a reviewer who knows the arithmetic will look for it.
+
+Acceptance: the six transport matrix rows re-run with the layer in place, and
+the measured overhead recorded in the results file.
+
+**M2 — security audit and the work to answer it, 100 h, no external cost.**
+NLnet's office-hour FAQ states that grantees generally have the opportunity of
+a security audit through Radically Open Security as part of the grant, on a
+first-come-first-served basis. This milestone therefore asks for the
+applicant's hours, not an invoice: the audit is requested through the programme
+in month one. Sixteen hours to hand over scope, threat model and reproducible
+builds, eight to be available during the audit, fifty-six to triage and fix,
+twelve to coordinate re-testing and publish, eight of slack. If no audit slot
+is available, a scoped external review of the two named gaps is proposed as a
+separate follow-up rather than assumed here.
+
+Acceptance: the report published in the repository alongside the commits that
+answer each finding.
+
+**M3 — push-to-talk continuity, 150 h.** The live voice lane survives the
+hardest profile but delivered 10 of 60 bundles with a 40.7-second gap on the
+recorded run, and today's rule only checks that the lane stayed alive. The bar
+this milestone must meet, written down now rather than after the fact:
+
+```
+at the 60%-loss profile, on a physical device:
+  bundles delivered   >= 48 of 60
+  longest gap         <= 3.0 s
+```
+
+Twenty-four hours of per-layer instrumentation to localise where the gap comes
+from, eight to write the bar into the test rule, sixteen of design, forty-eight
+of implementation, thirty-two of device runs, fourteen to re-run the matrix,
+eight of documentation. This is the least predictable of the four and is named
+as such.
+
+Acceptance: the bar above, met on a physical device, replacing the
+liveness-only rule in the test.
+
+**M4 — supervised pilot, 130 h and about 500 EUR.** Sixteen hours to recruit
+and onboard six to eight testers, sixteen for distribution and signing, forty
+to build an in-app runner so the testers produce the six rows themselves rather
+than the developer producing them, twenty-six for supervised sessions,
+twenty-four for what breaks on other people's hardware, eight to merge results
+and write the report. The out-of-pocket line is the developer programme fee,
+prepaid data for impaired-link sessions, and a small server for the AGPL
+signalling service during the pilot — each with a receipt.
+
+Acceptance: the six end-to-end rows reproduced on testers' own devices rather
+than on the developer's, so that "it works for people" becomes a measurement.
+
+Every milestone follows the pattern the repository already uses: a `verify_cmd`
+that exits zero, and no milestone reported complete without it. The four
+amounts sum exactly to the requested total.
+
+## Other funding
+
+None. The project is self-funded and no hours to date have been paid, by this
+programme or any other, past or present.
+
+## Cost effectiveness
+
+Every measurement in this application was made on the applicant's own iMac and
+iPhone. No hardware is requested, and none of the budget is operational cost.
 
 ## Compare your own project with existing or historical efforts
 
@@ -177,6 +246,13 @@ same object, 303 s, hash-verified    tools/t2/h2_results.tsv rows 268-269
 10 of 60 bundles, 40.7 s gap         tools/dossier/e2e_ios_results.tsv, ptt
 CI green, tag v0.1.0-ci-green        GitHub Actions run 33610621039
 5,000-50,000 EUR per proposal        nlnet.nl, successor programme page
+65 EUR/h ceiling, using it costs      nlnet.nl/officehour FAQ
+audit via ROS, in kind to grantees    nlnet.nl/officehour FAQ; nlnet.nl/NGI0/services
+SME-owner daily unit cost             European Commission, Horizon unit costs
+Dutch freelance developer average     Knab, ZZP software developer 2025
+540 h at 50 EUR = 27,500 EUR          this document, budget section — check the sum
+10 of 60 bundles, 40.7 s (the bar      tools/dossier/e2e_ios_results.tsv, ptt row
+  M3 must beat)
 above 50,000 needs a completed one   nlnet.nl, NGI Zero applicant guide
 150k per proposal, 500k lifetime     nlnet.nl, NGI Zero applicant guide
 scoring 30 / 40 / 30, floor 5.0/7    nlnet.nl, applicant guide
