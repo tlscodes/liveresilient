@@ -65,12 +65,34 @@ class Hub(BaseHTTPRequestHandler):
             return
         self._send(404, b"no such path\n")
 
+    def _read_body(self) -> bytes:
+        # dart:io's HttpClient streams a written body as Transfer-Encoding:
+        # chunked (no Content-Length) unless the caller sets contentLength;
+        # BaseHTTPRequestHandler does not decode chunks — the first rig run
+        # logged two reports as 400 "bad json" from an empty read.
+        encoding = (self.headers.get("Transfer-Encoding") or "").lower()
+        if "chunked" in encoding:
+            chunks = []
+            while True:
+                size_line = self.rfile.readline().strip()
+                if not size_line:
+                    break
+                size = int(size_line.split(b";", 1)[0], 16)
+                if size == 0:
+                    while self.rfile.readline().strip():
+                        pass  # trailers
+                    break
+                chunks.append(self.rfile.read(size))
+                self.rfile.readline()  # the CRLF after each chunk
+            return b"".join(chunks)
+        length = int(self.headers.get("Content-Length") or 0)
+        return self.rfile.read(length) if length > 0 else b""
+
     def do_POST(self):  # noqa: N802
         if self.path != "/report":
             self._send(404, b"no such path\n")
             return
-        length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(length) if length > 0 else b""
+        raw = self._read_body()
         try:
             event = json.loads(raw.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
