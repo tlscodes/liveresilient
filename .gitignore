@@ -62,3 +62,6 @@ tools/make_slices.py
 # Applicant identity and bank details for funding forms. Never committed:
 # a public repository is not the place for an IBAN.
 tools/dossier/private/
+
+# App-journey screen recordings (0.5-1.2 GB each): attributed via evidence/journey/RECORDINGS.tsv, never committed
+tools/dossier/evidence/journey/*.mov

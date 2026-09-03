@@ -1,0 +1,121 @@
+feature	profile	wire_B	budget_s	measured_s	status	note
+call_connect	normal	-	300	61.0	FAIL	outcome=Call app_end=Call peer_end=? media=noLocalAudio bw=- delay=40 plr=0.0 icmp_rtt=81.116 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	normal	-	40	-	FAIL	chip_live=0 chip_demo=0 rtt=-..-ms loss_max=0.0% reconnects=0 (bar not live) (no connected call to measure) bw=- delay=40 plr=0.0 icmp_rtt=81.116 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	normal	-	300	61.0	FAIL	outcome=Call_failedconnect_ms app_end=Call_failed peer_end=? media=noLocalAudio run=2026-09-03T10:22:14Z bw=- delay=40 plr=0.0 icmp_rtt=80.999 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	normal	-	40	-	FAIL	chip_live=0 chip_demo=0 rtt=-..-ms loss_max=0.0% reconnects=0 (bar not live) (no connected call to measure) run=2026-09-03T10:22:14Z bw=- delay=40 plr=0.0 icmp_rtt=80.999 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	normal	-	300	6.3	FAIL	outcome=Connectedconnect_ms app_end=Reconnecting… peer_end=localHangup media=noLocalAudio run=2026-09-03T10:35:46Z bw=- delay=40 plr=0.0 icmp_rtt=81.521 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	normal	-	40	83	FAIL	chip_live=16 chip_demo=0 rtt=82..83ms loss_max=0.0% reconnects=1 (no connected call to measure) run=2026-09-03T10:35:46Z bw=- delay=40 plr=0.0 icmp_rtt=81.521 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	normal	-	300	7.6	PASS	outcome=Connected app_end=Reconnecting… peer_end=localHangup media=noLocalAudio run=2026-09-03T10:47:18Z bw=- delay=40 plr=0.0 icmp_rtt=81.070 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	normal	-	40	82	PASS	chip_live=64 chip_demo=0 rtt=81..82ms loss_max=0.0% reconnects=3 run=2026-09-03T10:47:18Z bw=- delay=40 plr=0.0 icmp_rtt=81.070 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	latency	-	300	6.3	PASS	outcome=Connected app_end=Reconnecting… peer_end=localHangup media=noLocalAudio run=2026-09-03T11:49:43Z bw=- delay=900 plr=0.0 icmp_rtt=1801.293 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	latency	-	900	1803	PASS	chip_live=60 chip_demo=0 rtt=1801..1803ms loss_max=0.0% reconnects=1 run=2026-09-03T11:49:43Z bw=- delay=900 plr=0.0 icmp_rtt=1801.293 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	latency	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	latency	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	latency	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	latency	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	loss10	-	300	6.1	PASS	outcome=Connected app_end=Call_ended peer_end=? media=noLocalAudio run=2026-09-03T11:57:09Z bw=- delay=- plr=0.10 icmp_rtt=0.931 icmp_loss=50.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	loss10	-	-	3	INFO	chip_live=61 chip_demo=0 rtt=1..3ms loss_max=0.0% reconnects=3 run=2026-09-03T11:57:09Z bw=- delay=- plr=0.10 icmp_rtt=0.931 icmp_loss=50.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	bandwidth	-	300	5.2	PASS	outcome=Connected app_end=Call_ended peer_end=localHangup media=noLocalAudio run=2026-09-03T12:06:29Z bw=32Kbit/s delay=- plr=0.0 icmp_rtt=43.204 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	bandwidth	-	-	956	INFO	chip_live=65 chip_demo=0 rtt=57..956ms loss_max=0.0% reconnects=4 run=2026-09-03T12:06:29Z bw=32Kbit/s delay=- plr=0.0 icmp_rtt=43.204 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	bandwidth	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	bandwidth	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	bandwidth	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	bandwidth	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	narrow	-	300	7.3	PASS	outcome=Connected app_end=Reconnecting… peer_end=localHangup media=noLocalAudio run=2026-09-03T18:12:05Z bw=16Kbit/s delay=- plr=0.0 icmp_rtt=85.139 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	narrow	-	-	5209	INFO	chip_live=59 chip_demo=0 rtt=2..5209ms loss_max=0.0% reconnects=3 run=2026-09-03T18:12:05Z bw=16Kbit/s delay=- plr=0.0 icmp_rtt=85.139 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	narrow	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	narrow	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	narrow	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	narrow	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	loss60	-	300	6.0	PASS	outcome=Connected app_end=Call_ended peer_end=? media=noLocalAudio run=2026-09-03T18:18:59Z bw=- delay=- plr=0.60 icmp_rtt=1.013 icmp_loss=90.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	loss60	-	-	3	INFO	chip_live=65 chip_demo=0 rtt=1..3ms loss_max=0.0% reconnects=0 run=2026-09-03T18:18:59Z bw=- delay=- plr=0.60 icmp_rtt=1.013 icmp_loss=90.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	loss60	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	loss60	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	loss60	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	loss60	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	extreme	-	300	5.6	PASS	outcome=Connected app_end=Call_ended peer_end=localHangup media=noLocalAudio run=2026-09-03T18:24:52Z bw=16Kbit/s delay=1000 plr=0.15 icmp_rtt=2085.044 icmp_loss=20.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	extreme	-	1000	4729	PASS	chip_live=50 chip_demo=0 rtt=2112..4729ms loss_max=0.0% reconnects=1 run=2026-09-03T18:24:52Z bw=16Kbit/s delay=1000 plr=0.15 icmp_rtt=2085.044 icmp_loss=20.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	latency	-	300	7.0	PASS	outcome=Connected app_end=Call_ended peer_end=? media=realAudio run=2026-09-03T18:49:30Z bw=- delay=900 plr=0.0 icmp_rtt=1800.498 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	latency	-	900	1802	PASS	chip_live=87 chip_demo=0 rtt=1801..1802ms loss_max=0.0% reconnects=0 run=2026-09-03T18:49:30Z bw=- delay=900 plr=0.0 icmp_rtt=1800.498 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	latency	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	latency	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	latency	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	latency	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	loss10	-	300	5.8	PASS	outcome=Connected app_end=Call_ended peer_end=localHangup media=noLocalAudio run=2026-09-03T18:58:03Z bw=- delay=- plr=0.10 icmp_rtt=0.932 icmp_loss=20.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	loss10	-	-	2	INFO	chip_live=18 chip_demo=0 rtt=2..2ms loss_max=0.0% reconnects=2 run=2026-09-03T18:58:03Z bw=- delay=- plr=0.10 icmp_rtt=0.932 icmp_loss=20.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	bandwidth	-	300	8.9	PASS	outcome=Connected app_end=Call_ended peer_end=localHangup media=realAudio run=2026-09-03T19:05:35Z bw=32Kbit/s delay=- plr=0.0 icmp_rtt=43.211 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	bandwidth	-	-	2240	INFO	chip_live=87 chip_demo=0 rtt=56..2240ms loss_max=38.0% reconnects=0 run=2026-09-03T19:05:35Z bw=32Kbit/s delay=- plr=0.0 icmp_rtt=43.211 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	bandwidth	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	bandwidth	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	bandwidth	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	bandwidth	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	narrow	-	300	9.0	PASS	outcome=Connected app_end=Call_ended peer_end=localHangup media=realAudio run=2026-09-03T19:13:01Z bw=16Kbit/s delay=- plr=0.0 icmp_rtt=85.151 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	narrow	-	-	2550	INFO	chip_live=53 chip_demo=0 rtt=306..2550ms loss_max=72.3% reconnects=3 run=2026-09-03T19:13:01Z bw=16Kbit/s delay=- plr=0.0 icmp_rtt=85.151 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	narrow	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	narrow	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	narrow	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	narrow	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	loss60	-	300	9.7	PASS	outcome=Connected app_end=Call_ended peer_end=? media=realAudio run=2026-09-03T19:19:29Z bw=- delay=- plr=0.60 icmp_rtt=? icmp_loss=100.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	loss60	-	-	351	INFO	chip_live=79 chip_demo=0 rtt=1..351ms loss_max=71.7% reconnects=1 run=2026-09-03T19:19:29Z bw=- delay=- plr=0.60 icmp_rtt=? icmp_loss=100.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	loss60	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	loss60	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	loss60	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	loss60	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	normal	-	300	6.4	PASS	outcome=Connected app_end=Call_ended peer_end=? media=noLocalAudio run=2026-09-03T19:59:28Z bw=- delay=40 plr=0.0 icmp_rtt=81.164 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	normal	-	40	83	PASS	chip_live=64 chip_demo=0 rtt=81..83ms loss_max=0.0% reconnects=1 run=2026-09-03T19:59:28Z bw=- delay=40 plr=0.0 icmp_rtt=81.164 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	loss10	-	300	10.9	PASS	outcome=Connected app_end=Call_ended peer_end=? media=realAudio run=2026-09-03T20:19:49Z bw=- delay=- plr=0.10 icmp_rtt=1.085 icmp_loss=12.5% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	loss10	-	-	1	INFO	chip_live=87 chip_demo=0 rtt=1..1ms loss_max=17.0% reconnects=0 run=2026-09-03T20:19:49Z bw=- delay=- plr=0.10 icmp_rtt=1.085 icmp_loss=12.5% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	loss10	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	extreme	-	300	6.3	PASS	outcome=Connected app_end=Call_ended peer_end=? media=noLocalAudio run=2026-09-03T20:26:05Z bw=16Kbit/s delay=1000 plr=0.15 icmp_rtt=2085.579 icmp_loss=22.5% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	extreme	-	1000	5355	PASS	chip_live=67 chip_demo=0 rtt=2..5355ms loss_max=0.0% reconnects=3 run=2026-09-03T20:26:05Z bw=16Kbit/s delay=1000 plr=0.15 icmp_rtt=2085.579 icmp_loss=22.5% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	normal	-	300	6.5	PASS	outcome=Connected app_end=Call_ended peer_end=localHangup media=noLocalAudio run=2026-09-03T20:37:24Z bw=- delay=40 plr=0.0 icmp_rtt=81.313 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	normal	-	40	82	PASS	chip_live=64 chip_demo=0 rtt=81..82ms loss_max=0.0% reconnects=1 run=2026-09-03T20:37:24Z bw=- delay=40 plr=0.0 icmp_rtt=81.313 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	normal	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+call_connect	extreme	-	300	6.9	PASS	outcome=Connected app_end=Call_ended peer_end=? media=noLocalAudio run=2026-09-03T20:45:10Z bw=16Kbit/s delay=1000 plr=0.15 icmp_rtt=2085.512 icmp_loss=35.0% scope=udp+icmp on bridge100, relay TCP unshaped app_relay=localhost(unshaped)
+monitor_bar	extreme	-	1000	5288	PASS	chip_live=65 chip_demo=0 rtt=2..5288ms loss_max=0.0% reconnects=3 run=2026-09-03T20:45:10Z bw=16Kbit/s delay=1000 plr=0.15 icmp_rtt=2085.512 icmp_loss=35.0% scope=udp+icmp on bridge100, relay TCP unshaped
+chat_text	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+photo	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+video_note	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md
+voice_note	extreme	-	-	-	NOT_WIRED	chat tab is the loopback demo thread (ChatDemoController), not bound to the live call; see tools/dossier/LANE_TABLE.md

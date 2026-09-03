@@ -22,6 +22,7 @@ items=(
   tools/phase5/corpus/manifest.tsv
   tools/t2/h2_results.tsv
   tools/dossier/e2e_ios_results.tsv
+  tools/dossier/app_journey_results.tsv
   tools/dossier/e2e_payloads/payloads.tsv
   tools/phase5/native/ios/PROVENANCE.tsv
   tools/dossier/logs/full_tree_summary.tsv
@@ -36,8 +37,16 @@ while IFS= read -r f; do items+=("${f#"$REPO"/}"); done \
 while IFS= read -r f; do items+=("${f#"$REPO"/}"); done \
   < <(find "$REPO/tools/phase5/logs" -name 'gate_*.log' ! -name '*.check.log' -type f | sort)
 # captures copied above
+# Screen recordings (tools/dossier/evidence/journey/*.mov, ~0.5-1.2 GB each)
+# stay OUT of git and out of the manifest; their sizes and sha256 go into a
+# small TSV that IS in the manifest, so the recordings remain attributable
+# without a multi-gigabyte repository.
+if ls "$DOS"/evidence/journey/*.mov >/dev/null 2>&1; then
+  { printf "path\tbytes\tsha256\n"; for m in "$DOS"/evidence/journey/*.mov; do
+      printf "%s\t%s\t%s\n" "${m#"$REPO"/}" "$(stat -f %z "$m")" "$(shasum -a 256 "$m" | awk '{print $1}')"; done; } >"$DOS/evidence/journey/RECORDINGS.tsv"
+fi
 while IFS= read -r f; do items+=("${f#"$REPO"/}"); done \
-  < <(find "$DOS/evidence" -type f 2>/dev/null | sort)
+  < <(find "$DOS/evidence" -type f ! -name "*.mov" 2>/dev/null | sort)
 
 TMPF="$MAN.tmp.$$"
 printf 'path\tbytes\tsha256\n' > "$TMPF"

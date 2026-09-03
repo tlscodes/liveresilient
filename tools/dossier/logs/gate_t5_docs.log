@@ -1,2 +1,2 @@
-== gate_t5_docs 2026-08-19T13:47:37Z check_only=1 ==
-GATE FAIL: sha256 mismatch for tools/dossier/logs/gate_t1_tree.log
+== gate_t5_docs 2026-09-03T18:26:26Z check_only=0 ==
+GATE FAIL: sha256 mismatch for tools/dossier/logs/gate_t5_docs.log
