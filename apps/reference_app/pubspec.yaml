@@ -35,6 +35,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   meta: ^1.15.0
+  clock: ^1.1.1
 
   # VoiceCallKit v2 stack (standalone path deps; the app and the
   # media_webrtc_flutter plugin package stay OUT of the root pure-Dart pub
@@ -97,7 +98,6 @@ dev_dependencies:
   # The broadcast publisher and reader take their time from package:clock's
   # zone clock, so the wiring test pins an instant with Clock.fixed instead
   # of depending on when the suite happens to run.
-  clock: ^1.1.1
 
   # Direct dev-dep (same constraint as media_webrtc_flutter): the E2E
   # support code probes `getUserMedia` directly to report the media mode.

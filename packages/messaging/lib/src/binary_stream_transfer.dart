@@ -202,6 +202,21 @@ class BinaryStreamSender {
   /// for never-retransmitted chunks (Karn); RTT probes provide them
   /// unconditionally — every probe nonce is unique, so its echo can
   /// never be mistaken for another transmission's answer.
+  /// The wait before a chunk (or the hello) is re-sent: the configured
+  /// [retransmitAfter] until a clean round trip was measured, then
+  /// srtt + 4·rttvar (RFC 6298) with [retransmitAfter] as the floor and
+  /// 30 s as the cap. A fixed 700 ms wait under a 1.9 s queueing round trip
+  /// re-sent every chunk ~3× before its ack could land, tripling the load
+  /// on the link that was already saturated (rig, bandwidth profile,
+  /// 2026-09-04).
+  Duration _retransmitWait() {
+    if (srttMs == 0) return retransmitAfter;
+    final rto = (srttMs + 4 * rttvarMs).round();
+    return Duration(
+      milliseconds: rto.clamp(retransmitAfter.inMilliseconds, 30000),
+    );
+  }
+
   void _recordCleanRtt(double sampleMs) {
     if (srttMs == 0) {
       // RFC 6298 seeding: srtt = sample, rttvar = sample/2.
@@ -489,7 +504,7 @@ class BinaryStreamSender {
           return windowBytes;
         }
 
-        final waitDeadline = DateTime.now().add(retransmitAfter);
+        final waitDeadline = DateTime.now().add(_retransmitWait());
         while ((buffered() ?? 0) > gateBytes() &&
             DateTime.now().isBefore(waitDeadline) &&
             !done.isCompleted &&
@@ -535,7 +550,7 @@ class BinaryStreamSender {
       while (!haveBitmap && !done.isCompleted) {
         await Future<void>.delayed(const Duration(milliseconds: 25));
         if (!haveBitmap &&
-            DateTime.now().difference(helloSentAt) >= retransmitAfter) {
+            DateTime.now().difference(helloSentAt) >= _retransmitWait()) {
           await _port.send(hello);
           helloSentAt = DateTime.now();
         }

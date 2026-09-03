@@ -19,7 +19,12 @@ import 'dart:async';
 import 'package:media_webrtc/media_webrtc.dart';
 import 'package:messaging/messaging.dart';
 
-class MediaChannelDataPort implements DataChannelPort {
+class MediaChannelDataPort implements BufferedDataChannelPort {
+  /// The channel's un-drained send buffer, straight from the transport, so
+  /// lane senders can gate on it (see [BufferedDataChannelPort]).
+  @override
+  int? get bufferedAmount => _channel.bufferedAmount;
+
   /// Wraps [channel]. Subscribes to its streams immediately, so construct
   /// this port before signaling readiness to peers (broadcast-stream rule).
   /// The seed below relaxes that rule for STATE only: an open reported before

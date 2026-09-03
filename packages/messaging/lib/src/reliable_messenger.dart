@@ -17,7 +17,13 @@ class _Pending {
   final List<int> frame;
   int attempts;
   int lastSentMs;
-  _Pending(this.message, this.frame, this.attempts, this.lastSentMs);
+
+  /// When the FIRST copy left: the round-trip sample base. Only a message
+  /// acked after a single transmission is sampled (Karn's rule) — an ack
+  /// after a retransmit cannot say which copy it answers.
+  final int firstSentMs;
+  _Pending(this.message, this.frame, this.attempts, this.lastSentMs)
+    : firstSentMs = lastSentMs;
 }
 
 /// Reliable text messaging over a [DataChannelPort]: at-least-once delivery
@@ -30,9 +36,23 @@ class _Pending {
 class ReliableMessenger {
   final DataChannelPort _port;
   final String peerId;
+
+  /// The retransmission window BEFORE any round trip was measured, and the
+  /// floor under the measured one. See [currentRetryAfter].
   final Duration retryAfter;
   final int maxAttempts;
   final Clock _clock;
+
+  /// Cap on the measured window and on its backoff.
+  static const Duration maxRetryAfter = Duration(seconds: 30);
+
+  /// Smoothed round trip and its variance from single-transmission acks
+  /// (RFC 6298 seeding and gains). Null until the first ack: a 12 KB
+  /// attachment chunk on a 32 kbit/s link drains in seconds, and a fixed
+  /// 2 s window re-sent every chunk before its ack could arrive — doubling
+  /// the load on the link that was already the problem (rig, 2026-09-04).
+  double? _srttMs;
+  double _rttvarMs = 0;
 
   /// Maximum number of received-message ids retained for de-duplication.
   final int maxSeenEntries;
@@ -95,6 +115,50 @@ class ReliableMessenger {
   /// Count of locally-sent messages still awaiting acknowledgement.
   int get pendingCount => _pending.length;
 
+  /// The retransmission window in force: [retryAfter] until a round trip
+  /// has been measured, then srtt + 4·rttvar clamped to
+  /// [retryAfter, maxRetryAfter]. Once measured, each retransmission of a
+  /// message doubles its own window (Karn backoff), capped the same way.
+  Duration get currentRetryAfter {
+    final srtt = _srttMs;
+    if (srtt == null) return retryAfter;
+    final rto = (srtt + 4 * _rttvarMs).round();
+    return Duration(
+      milliseconds: rto.clamp(
+        retryAfter.inMilliseconds,
+        maxRetryAfter.inMilliseconds,
+      ),
+    );
+  }
+
+  /// Last measured smoothed round trip in milliseconds, null before an ack.
+  double? get smoothedRttMs => _srttMs;
+
+  Duration _windowFor(_Pending p) {
+    final base = currentRetryAfter;
+    if (_srttMs == null || p.attempts <= 1) return base;
+    final shift = (p.attempts - 1).clamp(0, 6);
+    final backedOff = base.inMilliseconds << shift;
+    return Duration(
+      milliseconds: backedOff.clamp(
+        base.inMilliseconds,
+        maxRetryAfter.inMilliseconds,
+      ),
+    );
+  }
+
+  void _sampleRtt(int sampleMs) {
+    final sample = sampleMs.toDouble();
+    final srtt = _srttMs;
+    if (srtt == null) {
+      _srttMs = sample;
+      _rttvarMs = sample / 2;
+    } else {
+      _rttvarMs = _rttvarMs * 0.75 + (srtt - sample).abs() * 0.25;
+      _srttMs = srtt * 0.875 + sample * 0.125;
+    }
+  }
+
   /// Sends [text]; returns the created [ChatMessage]. Retransmits happen on
   /// [tick] until an ack arrives or [maxAttempts] transmissions are exhausted.
   Future<ChatMessage> send(String text) async {
@@ -114,13 +178,14 @@ class ReliableMessenger {
     return msg;
   }
 
-  /// Retransmits pending messages whose [retryAfter] window elapsed, and fails
-  /// those that reach [maxAttempts]. Call periodically from the app layer.
+  /// Retransmits pending messages whose window ([currentRetryAfter], backed
+  /// off per retransmission) elapsed, and fails those that reach
+  /// [maxAttempts]. Call periodically from the app layer.
   Future<void> tick() async {
     if (_closed) throw StateError('ReliableMessenger is closed');
     final nowMs = _clock.now().millisecondsSinceEpoch;
     for (final p in _pending.values.toList()) {
-      if (nowMs - p.lastSentMs < retryAfter.inMilliseconds) continue;
+      if (nowMs - p.lastSentMs < _windowFor(p).inMilliseconds) continue;
       if (p.attempts >= maxAttempts) {
         _pending.remove(p.message.id);
         _deliveries.add((p.message.id, DeliveryState.failed));
@@ -138,7 +203,11 @@ class ReliableMessenger {
       case null:
         return; // ignore malformed / hostile input
       case AckFrame(:final id):
-        if (_pending.remove(id) != null) {
+        final acked = _pending.remove(id);
+        if (acked != null) {
+          if (acked.attempts == 1) {
+            _sampleRtt(_clock.now().millisecondsSinceEpoch - acked.firstSentMs);
+          }
           _deliveries.add((id, DeliveryState.delivered));
         }
       case MessageFrame(:final message):

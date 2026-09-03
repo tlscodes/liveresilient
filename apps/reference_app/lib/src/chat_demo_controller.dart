@@ -27,6 +27,7 @@ import 'package:messaging/messaging.dart';
 import 'attachment_route_wiring.dart';
 import 'chat_screen.dart';
 import 'intelligence/intelligence_hub.dart';
+import 'lane_governor.dart';
 import 'loopback_port.dart';
 import 'photo_source.dart';
 
@@ -35,13 +36,15 @@ class ChatDemoController extends ChangeNotifier {
     DataChannelPort? callChannelPort,
     DataChannelPort? photoLanePort,
     DataChannelPort? videoLanePort,
+    LaneGovernor? laneGovernor,
     ConnectionFabric? intelligenceFabric,
     this._hub,
     this._photoPicker,
     this._photoIngest,
     this._attachmentPicker,
     this._audioPlayer,
-  }) : _fabric = intelligenceFabric {
+  }) : _fabric = intelligenceFabric,
+       _governor = laneGovernor {
     final DataChannelPort localPort;
     if (callChannelPort != null) {
       localPort = callChannelPort;
@@ -51,7 +54,11 @@ class ChatDemoController extends ChangeNotifier {
         _photoSender = StagedPhotoSender.arq(
           photoLanePort,
           announce: _announcePhoto,
-          retransmitAfter: const Duration(milliseconds: 700),
+          retransmitAfter:
+              laneGovernor?.retransmitAfter() ??
+              const Duration(milliseconds: 700),
+          transportBufferedBytes: _bufferedBytesOf(photoLanePort),
+          sendBudgetBytesPerSec: laneGovernor?.budgetBytesPerSec,
         );
         _photoReceiver = StagedPhotoReceiver.arq(photoLanePort);
       }
@@ -59,7 +66,11 @@ class ChatDemoController extends ChangeNotifier {
         _videoSender = VideoNoteSender(
           videoLanePort,
           announce: _announceVideo,
-          retransmitAfter: const Duration(milliseconds: 700),
+          retransmitAfter:
+              laneGovernor?.retransmitAfter() ??
+              const Duration(milliseconds: 700),
+          transportBufferedBytes: _bufferedBytesOf(videoLanePort),
+          sendBudgetBytesPerSec: laneGovernor?.budgetBytesPerSec,
         );
         _videoReceiver = VideoNoteReceiver(videoLanePort);
       }
@@ -100,7 +111,15 @@ class ChatDemoController extends ChangeNotifier {
       );
       _videoReceiver = VideoNoteReceiver(videoLanePeerEnd);
     }
-    _local = ReliableMessenger(localPort, peerId: localSenderId);
+    // The window adapts from acks (RFC 6298 in ReliableMessenger); 2 s is
+    // the floor before the first one. Twelve backed-off attempts outlast
+    // a recovery episode instead of failing a chunk in ten seconds.
+    _local = ReliableMessenger(
+      localPort,
+      peerId: localSenderId,
+      retryAfter: const Duration(seconds: 2),
+      maxAttempts: 12,
+    );
 
     _photoUpdatesSub = _photoReceiver?.updates.listen(_onIncomingPhotoUpdate);
     _videoUpdatesSub = _videoReceiver?.updates.listen(_onIncomingVideoUpdate);
@@ -275,6 +294,21 @@ class ChatDemoController extends ChangeNotifier {
   /// path carries it, slower but never refused).
   bool get canSendVideo => _videoSender != null;
 
+  /// Sizes the lanes' send rate from the live path (see [LaneGovernor]);
+  /// null in the loopback demo and in tests without a path.
+  final LaneGovernor? _governor;
+
+  /// What the lane budget was last derived from, for the diagnostics
+  /// panel and the rig's row note.
+  String? get laneBudgetReason => _governor?.lastReason;
+
+  /// The most recent send that failed after every retry, with why — the
+  /// bubble shows the failed tick; this is the sentence behind it.
+  String? lastSendFailure;
+
+  static int? Function()? _bufferedBytesOf(DataChannelPort port) =>
+      port is BufferedDataChannelPort ? () => port.bufferedAmount : null;
+
   /// Full sha256 (hex) of every attachment, photo and video note this side
   /// sent — by attachment id for chunked sends and video notes, by photoId
   /// for staged photos. The sender's half of the integrity evidence a rig
@@ -316,7 +350,7 @@ class ChatDemoController extends ChangeNotifier {
     entries.add(ChatEntry(message: bubble, attachment: attachment));
     notifyListeners();
     if (sender == null) {
-      await sendAttachmentWithProgress(attachment);
+      await sendAttachmentWithProgress(attachment, bubbleId: bubble.id);
       return;
     }
     final videoId = contentAddressHex(attachment.bytes);
@@ -337,12 +371,13 @@ class ChatDemoController extends ChangeNotifier {
       status.done = true;
       deliveryStates[bubble.id] = DeliveryState.delivered;
       _hub?.recordDelivery(success: true, choice: 'arq');
-    } catch (_) {
+    } catch (error) {
       status.failed = true;
       deliveryStates[bubble.id] = DeliveryState.failed;
+      lastSendFailure = 'video ${attachment.id}: $error';
       _hub?.recordDelivery(success: false, choice: 'arq');
     }
-    notifyListeners();
+    _notify();
   }
 
   Future<void> _announcePhoto(String text) async {
@@ -421,7 +456,7 @@ class ChatDemoController extends ChangeNotifier {
       status.failed = true;
       _hub?.recordDelivery(success: false, choice: sender.lane.name);
     }
-    notifyListeners();
+    _notify();
   }
 
   /// The app's live connectivity brain. When present, every real user send
@@ -509,14 +544,10 @@ class ChatDemoController extends ChangeNotifier {
       await sendVideoNote(attachment);
       return;
     }
-    entries.add(
-      ChatEntry(
-        message: _localPlaceholder('[${attachment.kind.name}]'),
-        attachment: attachment,
-      ),
-    );
+    final bubble = _localPlaceholder('[${attachment.kind.name}]');
+    entries.add(ChatEntry(message: bubble, attachment: attachment));
     notifyListeners();
-    await sendAttachmentWithProgress(attachment);
+    await sendAttachmentWithProgress(attachment, bubbleId: bubble.id);
   }
 
   /// The routing question, asked on every real attachment send.
@@ -538,7 +569,16 @@ class ChatDemoController extends ChangeNotifier {
 
   /// Sends [attachment] over the live messenger, mirroring per-chunk
   /// progress into [attachmentProgress] for the bubble's progress bar.
-  Future<void> sendAttachmentWithProgress(Attachment attachment) async {
+  ///
+  /// Never throws: a chunk that fails after every retry marks [bubbleId]
+  /// failed (the tick the bubble shows) and records [lastSendFailure]. The
+  /// send used to propagate the messenger's StateError into whatever
+  /// awaited it — a screen callback or the rig driver — and take the
+  /// caller down with a transfer that had merely lost the link.
+  Future<void> sendAttachmentWithProgress(
+    Attachment attachment, {
+    String? bubbleId,
+  }) async {
     sentSha256[attachment.id] = contentSha256Hex(attachment.bytes);
     final handle = startAttachmentSend(
       _local,
@@ -568,9 +608,25 @@ class ChatDemoController extends ChangeNotifier {
     }
     try {
       await handle.done;
+      if (bubbleId != null) {
+        deliveryStates[bubbleId] = DeliveryState.delivered;
+      }
+    } catch (error) {
+      if (bubbleId != null) deliveryStates[bubbleId] = DeliveryState.failed;
+      lastSendFailure = 'attachment ${attachment.id}: $error';
     } finally {
       await sub.cancel();
+      _notify();
     }
+  }
+
+  bool _disposed = false;
+
+  /// [notifyListeners] for code that resumes after an await: a transfer
+  /// finishing after the thread was torn down (call ended, screen gone) must
+  /// not touch a disposed notifier.
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
   /// Seeds one image + one file attachment through the real chunker/
@@ -591,11 +647,10 @@ class ChatDemoController extends ChangeNotifier {
       contentType: 'audio/demo-placeholder',
       bytes: List<int>.filled((4000 * seconds).round().clamp(800, 240000), 0),
     );
-    entries.add(
-      ChatEntry(message: _localPlaceholder('[voice]'), attachment: voice),
-    );
+    final bubble = _localPlaceholder('[voice]');
+    entries.add(ChatEntry(message: bubble, attachment: voice));
     notifyListeners();
-    await sendAttachmentWithProgress(voice);
+    await sendAttachmentWithProgress(voice, bubbleId: bubble.id);
   }
 
   Future<void> _seedDemoAttachments() async {
@@ -640,6 +695,7 @@ class ChatDemoController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _ticker?.cancel();
     unawaited(_captionSub.cancel());
     unawaited(_demoCaptionSub?.cancel());

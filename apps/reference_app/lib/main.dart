@@ -38,6 +38,7 @@ import 'src/intelligence/intelligence_boot.dart';
 import 'src/intelligence/intelligence_hub.dart';
 import 'src/import_manifest_sheet.dart';
 import 'src/join_channel_sheet.dart';
+import 'src/lane_governor.dart';
 import 'src/startup_manifest.dart';
 import 'src/theme.dart';
 import 'src/ui/conversations_screen.dart';
@@ -203,6 +204,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   CallSessionHandle? _liveChatHandle;
   int _liveChatGeneration = 0;
 
+  /// The newest measured reading of the live path, null between calls —
+  /// what the live thread's lane governor sizes its send budget from.
+  CallQualityReading? _lastReading;
+
   /// Demo-labeled network-quality feed for the gauge and diagnostics panel.
   /// GATED ON [AppMotion.ambientEnabled]: under `flutter test` no stream is
   /// handed out at all, so no periodic timer ever exists to leak into a
@@ -303,6 +308,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           callChannelPort: chatPort,
           photoLanePort: photoPort,
           videoLanePort: videoPort,
+          laneGovernor: LaneGovernor(
+            readRttMs: () => _lastReading?.rttMs,
+            readAvailableOutgoingBps: () => _lastReading?.availableOutgoingBps,
+          ),
           attachmentPicker: widget.attachmentPicker ?? pickAttachmentFile,
           photoPicker: widget.photoPicker ?? pickPhotoBytes,
           photoIngest: (raw) => compute(buildStagedPhotoArtifacts, raw),
@@ -337,8 +346,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _rungLiveSource = live;
       _rungOnDemoFeed = wantDemo;
       final source = live ?? (wantDemo ? _quality.stream : null);
+      _lastReading = null;
       if (source != null) {
         _rungSub = source.listen((reading) {
+          if (live != null) _lastReading = reading;
           final rung = _ladder.report(reading.bitrateBps ?? 0);
           if (rung != _rung && mounted) setState(() => _rung = rung);
         });

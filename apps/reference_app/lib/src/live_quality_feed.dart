@@ -24,4 +24,5 @@ CallQualityReading readingFromSample(
   rttMs: s.rttMs,
   lossFraction: s.packetLossFraction,
   bitrateBps: s.incomingBitrateBps,
+  availableOutgoingBps: s.availableOutgoingBitrateBps,
 );

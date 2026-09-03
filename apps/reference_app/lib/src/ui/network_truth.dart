@@ -47,7 +47,14 @@ class CallQualityReading {
     this.rttMs,
     this.lossFraction,
     this.bitrateBps,
+    this.availableOutgoingBps,
   });
+
+  /// The transport's own estimate of the bandwidth available to send, in
+  /// bits per second (the selected candidate pair's congestion-control
+  /// estimate); null when the stats carry none. The data lanes size their
+  /// share from it (see LaneGovernor).
+  final int? availableOutgoingBps;
 
   /// When the reading was taken (monotonic enough for charting).
   final Duration at;

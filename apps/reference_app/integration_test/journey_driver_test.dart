@@ -331,8 +331,11 @@ Future<List<FeatureOutcome>> _runFeatures(
     '${chat.canPickPhoto ? '+photo' : ''}${chat.canSendVideo ? '+video' : ''}',
   );
 
+  // Each feature is fenced: an exception inside one (a send that threw,
+  // a finder that found nothing) is that feature's FAIL row, and the next
+  // feature still runs — the bandwidth run lost three rows to one throw.
   // 1. Text.
-  {
+  try {
     final text = 'journey ${DateTime.now().millisecondsSinceEpoch} hello';
     final sha = contentSha256Hex(utf8.encode(text));
     await tester.enterText(find.byType(TextField), text);
@@ -357,47 +360,53 @@ Future<List<FeatureOutcome>> _runFeatures(
         note: 'typed in the composer, sent with the send button',
       ),
     );
+  } catch (error) {
+    outcomes.add(_skipped('chat_text', 'threw: $error'));
   }
 
   // 2. Photo: the staged ladder (thumbhash → preview → sha-verified original).
-  if (!chat.canPickPhoto) {
-    outcomes.add(_skipped('photo', 'no photo lane on this thread'));
-  } else {
-    final before = Set<String>.of(chat.outgoingPhotos.keys);
-    await tester.tap(find.byIcon(Icons.photo_camera_outlined));
-    await tester.pump(const Duration(milliseconds: 400));
-    final startedAt = DateTime.now();
-    await tester.tap(find.text('Photo library'));
-    await tester.pump(const Duration(milliseconds: 200));
-    final photoId = await _pumpUntil<String>(tester, () {
-      for (final id in chat.outgoingPhotos.keys) {
-        if (!before.contains(id)) return id;
-      }
-      return null;
-    }, budget: const Duration(seconds: 30));
-    if (photoId == null) {
-      outcomes.add(_skipped('photo', 'the picker produced no photo'));
+  try {
+    if (!chat.canPickPhoto) {
+      outcomes.add(_skipped('photo', 'no photo lane on this thread'));
     } else {
-      final sha = chat.sentSha256[photoId] ?? '';
-      outcomes.add(
-        await _await(
-          tester,
-          feature: 'photo',
-          bytes: _photoBytes,
-          sha256: sha,
-          kind: 'photo',
-          senderDone: () => chat.outgoingPhotos[photoId]?.done ?? false,
-          startedAt: startedAt,
-          note:
-              'JPEG fixture via the photo button, staged ladder, '
-              'phone verified the original sha256',
-        ),
-      );
+      final before = Set<String>.of(chat.outgoingPhotos.keys);
+      await tester.tap(find.byIcon(Icons.photo_camera_outlined));
+      await tester.pump(const Duration(milliseconds: 400));
+      final startedAt = DateTime.now();
+      await tester.tap(find.text('Photo library'));
+      await tester.pump(const Duration(milliseconds: 200));
+      final photoId = await _pumpUntil<String>(tester, () {
+        for (final id in chat.outgoingPhotos.keys) {
+          if (!before.contains(id)) return id;
+        }
+        return null;
+      }, budget: const Duration(seconds: 30));
+      if (photoId == null) {
+        outcomes.add(_skipped('photo', 'the picker produced no photo'));
+      } else {
+        final sha = chat.sentSha256[photoId] ?? '';
+        outcomes.add(
+          await _await(
+            tester,
+            feature: 'photo',
+            bytes: _photoBytes,
+            sha256: sha,
+            kind: 'photo',
+            senderDone: () => chat.outgoingPhotos[photoId]?.done ?? false,
+            startedAt: startedAt,
+            note:
+                'JPEG fixture via the photo button, staged ladder, '
+                'phone verified the original sha256',
+          ),
+        );
+      }
     }
+  } catch (error) {
+    outcomes.add(_skipped('photo', 'threw: $error'));
   }
 
   // 3. Voice note: the composer's mic, held for the note length, then send.
-  {
+  try {
     final micKey = find.byKey(const ValueKey('composer-mic'));
     final beforeIds = chat.sentSha256.keys.toSet();
     final startedAt = DateTime.now();
@@ -452,10 +461,12 @@ Future<List<FeatureOutcome>> _runFeatures(
         ),
       );
     }
+  } catch (error) {
+    outcomes.add(_skipped('voice_note', 'threw: $error'));
   }
 
   // 4. Video note: attach a clip; it rides the video lane, sha-verified.
-  {
+  try {
     final beforeIds = chat.sentSha256.keys.toSet();
     final startedAt = DateTime.now();
     await tester.tap(find.byIcon(Icons.attach_file));
@@ -491,6 +502,8 @@ Future<List<FeatureOutcome>> _runFeatures(
         ),
       );
     }
+  } catch (error) {
+    outcomes.add(_skipped('video_note', 'threw: $error'));
   }
 
   // Back to the call screen for the hang-up.
