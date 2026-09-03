@@ -45,6 +45,8 @@ class CallSessionHandle {
     required this.controller,
     required this.dispose,
     this.openChatPort,
+    this.openPhotoLanePort,
+    this.openVideoLanePort,
     this.dtnFallbackQueue,
     this.connectionFabric,
     this.connectionBudget,
@@ -87,6 +89,13 @@ class CallSessionHandle {
   /// open it with the same default config; null on session builds that have
   /// no media data channel (e.g. pure test fakes).
   final Future<DataChannelPort> Function()? openChatPort;
+
+  /// The staged-photo binary lane ([CallLanes.photo]) and the video lane
+  /// ([CallLanes.video]) over the same call. All lanes are pre-opened at
+  /// media start so the first offer carries them; these only hand out the
+  /// port objects. Null on session builds without a media data channel.
+  final Future<DataChannelPort> Function()? openPhotoLanePort;
+  final Future<DataChannelPort> Function()? openVideoLanePort;
 
   /// Tears down the controller and everything the session owns (e.g. the
   /// real signaling client's socket).
@@ -365,6 +374,10 @@ CallSessionHandle buildWebRtcCallSession({
         await port.rollbackLocalDescription();
       }
     },
+    // Every lane exists before the first offer, so chat, photos and video
+    // notes ride the call from its first second without a renegotiation;
+    // the peer opens the identical table (negotiated mode has no DCEP).
+    preOpenChannels: CallLanes.all,
   );
   // Per-operation deadlines, same three classes the e2e harness proved on
   // the T2 matrix (one 15 s constant used to bound all three):
@@ -566,7 +579,15 @@ CallSessionHandle buildWebRtcCallSession({
     dtnFallbackQueue: resolvedFallbackQueue,
     connectionFabric: fabric,
     openChatPort: () async =>
-        MediaChannelDataPort(await media.openDataChannel()),
+        MediaChannelDataPort(await media.openDataChannel(CallLanes.chat)),
+    openPhotoLanePort: () async => MediaChannelDataPort(
+      await media.openDataChannel(CallLanes.photo),
+      maxPendingFrames: 128,
+    ),
+    openVideoLanePort: () async => MediaChannelDataPort(
+      await media.openDataChannel(CallLanes.video),
+      maxPendingFrames: 128,
+    ),
     dispose: () async {
       // Record once, before the hub's savers could be disposed by the
       // caller (a markDirty after saver disposal is a silent no-op and

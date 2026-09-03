@@ -241,4 +241,76 @@ void main() {
       },
     );
   });
+
+  group('RtcStatsSampler null loss (no packets expected)', () {
+    test('an interval with no expected packets emits a sample with null loss, '
+        'not zero', () async {
+      final responses = [
+        _counters(
+          packetsReceived: 0,
+          packetsLost: 0,
+          packetsSent: 5,
+          bytesReceived: 0,
+          bytesSent: 750,
+          jitterSeconds: 0.0,
+        ),
+        _counters(
+          // Neither received nor lost anything this interval -- e.g. the
+          // peer sent no audio (DTX/silence). deltaExpected == 0.
+          packetsReceived: 0,
+          packetsLost: 0,
+          packetsSent: 10,
+          bytesReceived: 0,
+          bytesSent: 1500,
+          jitterSeconds: 0.0,
+        ),
+      ];
+      var callCount = 0;
+      Completer<RawRtcCounters?>? pending;
+      var nowMs = 1000;
+
+      Future<RawRtcCounters?> reader() {
+        final completer = Completer<RawRtcCounters?>();
+        pending = completer;
+        callCount++;
+        return completer.future;
+      }
+
+      final sampler = RtcStatsSampler(
+        reader: reader,
+        interval: const Duration(milliseconds: 5),
+        nowMs: () => nowMs,
+      );
+      addTearDown(sampler.dispose);
+
+      final sampleFuture = sampler.samples.first;
+      sampler.start();
+
+      while (callCount < 1) {
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+      nowMs = 1000;
+      pending!.complete(responses[0]);
+
+      while (callCount < 2) {
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+      nowMs = 2000;
+      pending!.complete(responses[1]);
+
+      final sample = await sampleFuture.timeout(const Duration(seconds: 2));
+
+      expect(
+        sample.packetLossFraction,
+        isNull,
+        reason:
+            'zero expected packets is absence of evidence, not a '
+            'measured 0.0 loss',
+      );
+      // The rest of the sample must still be a valid measurement --
+      // losing evidence for one field must not suppress the others.
+      expect(sample.outgoingBitrateBps, greaterThan(0));
+      expect(sample.timestampMs, 2000);
+    });
+  });
 }

@@ -2075,6 +2075,120 @@ void main() {
       expect(h.states.last.phase, CallPhase.ended);
       expect(h.states.last.endReason, CallEndReason.remoteHangup);
     });
+
+    // The two tests above end the call while the queue is IDLE (the retry
+    // timer has not fired). The field defect (app-journey rig, 2026-09-03:
+    // >30 s of "Reconnecting…" after a Hang-up tap; the peer's hangup lost
+    // behind a recovery cycle) lives in the window where a recovery attempt
+    // is mid-flight and holding the serial queue on a slow channel
+    // operation. These two pin the end latch that preempts it.
+    test('hangUp while a recovery attempt awaits a stalled transport connect '
+        'ends the call at once, not behind the operation timeout', () async {
+      late Harness h;
+      late Outcome<void> hangup;
+      late FakeAsync fa;
+      fakeAsync((async) {
+        fa = async;
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(seconds: 1)),
+          ReconnectDecision.retry(const Duration(seconds: 1)),
+        ]);
+        h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        // The recovery attempt's reconnect never completes: the hard cycle
+        // parks on `connect transport` for the whole operationTimeout.
+        h.transport.connectImpl = () => Completer<void>().future;
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.failed),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.reconnecting);
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+        // The attempt is now in flight, awaiting the stalled connect.
+        expect(h.transport.connectCalls, 2);
+
+        hangup = Outcome<void>()..attach(h.run(async, h.controller.hangUp));
+        async.flushMicrotasks();
+      });
+      await pumpEventQueue();
+      fa.flushMicrotasks();
+
+      // No fake time elapsed since the tap: the end did not wait for the
+      // 15 s bound on the stalled connect.
+      expect(
+        hangup.completed,
+        isTrue,
+        reason: 'hangUp must not be queued behind the in-flight attempt',
+      );
+      expect(hangup.error, isNull);
+      expect(
+        h.states.map((s) => s.phase).toList().sublist(h.states.length - 2),
+        [CallPhase.ending, CallPhase.ended],
+      );
+      expect(h.states.last.endReason, CallEndReason.localHangup);
+
+      // The abandoned operation's own timeout firing later is inert.
+      final emitted = h.states.length;
+      fa.elapse(const Duration(seconds: 30));
+      fa.flushMicrotasks();
+      expect(h.states.length, emitted);
+      expectNoPendingTimers(fa);
+    });
+
+    test('a remote hangup arriving while a recovery attempt awaits a stalled '
+        'signaling start ends the call with remoteHangup at once', () async {
+      late Harness h;
+      late FakeAsync fa;
+      fakeAsync((async) {
+        fa = async;
+        final policy = ScriptedReconnectPolicy(<ReconnectDecision>[
+          ReconnectDecision.retry(const Duration(seconds: 1)),
+          ReconnectDecision.retry(const Duration(seconds: 1)),
+        ]);
+        h = Harness(reconnectPolicy: policy);
+        h.run(async, h.controller.start);
+        async.flushMicrotasks();
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.connected),
+        );
+        async.flushMicrotasks();
+        h.signaling.startImpl = ({required callId, required role}) =>
+            Completer<void>().future;
+        h.media.emit(
+          const MediaConnectionChangedEvent(MediaConnectionState.failed),
+        );
+        async.flushMicrotasks();
+        expect(h.states.last.phase, CallPhase.reconnecting);
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+        expect(h.signaling.startCalls, 2);
+
+        // The peer's goodbye lands on the wire mid-attempt.
+        h.signaling.emit(RemoteHangupEvent('peer left'));
+        async.flushMicrotasks();
+      });
+      await pumpEventQueue();
+      fa.flushMicrotasks();
+
+      expect(h.states.last.phase, CallPhase.ended);
+      expect(h.states.last.endReason, CallEndReason.remoteHangup);
+      expect(
+        h.states.map((s) => s.phase),
+        isNot(contains(CallPhase.failed)),
+        reason: 'the abandoned attempt must not schedule another one',
+      );
+      final emitted = h.states.length;
+      fa.elapse(const Duration(seconds: 30));
+      fa.flushMicrotasks();
+      expect(h.states.length, emitted);
+      expectNoPendingTimers(fa);
+    });
   });
 
   group('12. Media start bound vs engine bound', () {

@@ -36,11 +36,48 @@ typedef PortFactory = Future<mw.PeerConnectionPort> Function();
 typedef NativeRollback = Future<void> Function(mw.PeerConnectionPort port);
 
 class WebRtcCallMediaSession implements CallMediaSession {
-  WebRtcCallMediaSession(this._portFactory, {NativeRollback? nativeRollback})
-    : _nativeRollback = nativeRollback;
+  WebRtcCallMediaSession(
+    this._portFactory, {
+    NativeRollback? nativeRollback,
+    List<mw.DataChannelConfig> preOpenChannels = const [],
+  }) : _nativeRollback = nativeRollback,
+       _preOpenChannels = List<mw.DataChannelConfig>.unmodifiable(
+         preOpenChannels,
+       ) {
+    final ids = <int>{};
+    for (final config in _preOpenChannels) {
+      config.validate();
+      if (!ids.add(config.negotiatedId)) {
+        throw ArgumentError.value(
+          preOpenChannels,
+          'preOpenChannels',
+          'negotiated id ${config.negotiatedId} listed twice',
+        );
+      }
+    }
+  }
 
   final PortFactory _portFactory;
   final NativeRollback? _nativeRollback;
+
+  /// Negotiated channels created the moment the port exists — BEFORE the
+  /// first offer or answer — so the very first SDP carries the application
+  /// section and SCTP comes up with the call. A channel created after an
+  /// audio-only offer has no transport until a full renegotiation round
+  /// trip (measured: messaging_survival_test had to request recovery to
+  /// bring the lane up mid-call). Both peers list the same configs.
+  final List<mw.DataChannelConfig> _preOpenChannels;
+
+  /// One channel object per negotiated id for the port's lifetime. A
+  /// negotiated id is one SCTP stream; creating it twice would hand two
+  /// consumers two objects over the same stream, so [openDataChannel]
+  /// returns the existing object for an id already open.
+  final Map<int, mw.MediaDataChannel> _channels = <int, mw.MediaDataChannel>{};
+
+  /// Completes once [start] has a port (or once [stop] gives up on one),
+  /// so a lane can be requested the moment a session handle exists —
+  /// before the controller's own start reached the media engine.
+  final Completer<void> _started = Completer<void>();
 
   final _events = StreamController<MediaEvent>.broadcast();
   final _subscriptions = <StreamSubscription<Object?>>[];
@@ -66,6 +103,13 @@ class WebRtcCallMediaSession implements CallMediaSession {
     }
     if (_port != null) return;
     final port = await _portFactory();
+    if (_stopped) {
+      // stop() ran while the factory was in flight (an end preempted the
+      // start): close the late port instead of leaking it — the capture
+      // it opened must not outlive a call that already ended.
+      await port.close();
+      throw StateError('WebRtcCallMediaSession was stopped during start.');
+    }
     _port = port;
     _connectionState = MediaConnectionState.connecting;
 
@@ -88,6 +132,10 @@ class WebRtcCallMediaSession implements CallMediaSession {
         );
       }),
     );
+    for (final config in _preOpenChannels) {
+      _channels[config.negotiatedId] = await port.createDataChannel(config);
+    }
+    if (!_started.isCompleted) _started.complete();
   }
 
   @override
@@ -139,10 +187,24 @@ class WebRtcCallMediaSession implements CallMediaSession {
   /// ride the call's own DTLS transport). Both peers must call this with an
   /// identical [config] — that is the negotiated-mode contract. Requires
   /// [start]; the returned channel reports open once the transport is up.
+  ///
+  /// Memoized per negotiated id: a lane pre-opened at [start] (or opened
+  /// once here) is returned as the same object on every later call, so
+  /// several consumers of one lane share one stream instead of racing
+  /// duplicate channel objects over it.
+  ///
+  /// Called before [start] finished, it WAITS for the port (the app asks
+  /// for its chat lanes as soon as a session exists); after [stop] it
+  /// throws [StateError].
   Future<mw.MediaDataChannel> openDataChannel([
     mw.DataChannelConfig config = const mw.DataChannelConfig(),
-  ]) {
-    return _requirePort().createDataChannel(config);
+  ]) async {
+    if (_port == null && !_stopped) await _started.future;
+    final port = _requirePort();
+    final existing = _channels[config.negotiatedId];
+    if (existing != null) return existing;
+    final channel = await port.createDataChannel(config);
+    return _channels.putIfAbsent(config.negotiatedId, () => channel);
   }
 
   @override
@@ -162,8 +224,12 @@ class WebRtcCallMediaSession implements CallMediaSession {
       await subscription.cancel();
     }
     _subscriptions.clear();
+    _channels.clear();
     await _port?.close();
     _port = null;
+    // Release anyone waiting for a port that will never come; they fall
+    // through to _requirePort and get the StateError.
+    if (!_started.isCompleted) _started.complete();
     await _events.close();
   }
 

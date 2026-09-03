@@ -13,8 +13,11 @@ import 'dart:async';
 import 'package:call_core/call_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:messaging/messaging.dart' show ReliableMessenger;
 import 'package:reference_app/main.dart';
 import 'package:reference_app/src/call_session.dart';
+import 'package:reference_app/src/live_chat_registry.dart';
+import 'package:reference_app/src/loopback_port.dart';
 import 'package:reference_app/src/demo_feeds.dart' show demoQualitySourceLabel;
 import 'package:reference_app/src/live_quality_feed.dart'
     show liveQualitySourceLabel;
@@ -156,6 +159,11 @@ class _FakeSession {
     handle = CallSessionHandle(
       controller: controller,
       qualityReadings: readings?.stream,
+      // The session's data lanes, as loopback pairs: the app gets one
+      // end, a test's "remote human" the other.
+      openChatPort: () async => chatLanes.$1,
+      openPhotoLanePort: () async => photoLanes.$1,
+      openVideoLanePort: () async => videoLanes.$1,
       dispose: () async {
         disposeCalls++;
         await controller.dispose();
@@ -163,6 +171,9 @@ class _FakeSession {
     );
   }
 
+  final chatLanes = pairLoopbackPorts();
+  final photoLanes = pairLoopbackPorts();
+  final videoLanes = pairLoopbackPorts();
   final transport = _Transport();
   late final _Signaling signaling;
   final media = _Media();
@@ -222,6 +233,14 @@ class _OpenerProbe {
 Future<void> _settle(WidgetTester tester, [int frames = 6]) async {
   for (var i = 0; i < frames; i++) {
     await tester.pump(const Duration(milliseconds: 20));
+  }
+}
+
+/// Pumps a page transition to completion frame by frame (the animation only
+/// begins on the frame after the push, so one long pump does not finish it).
+Future<void> _settleRoute(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
   }
 }
 
@@ -425,5 +444,74 @@ void main() {
       expect(controller.phase, CallPhase.idle);
       expect(controller.callId, isNull);
     });
+  });
+
+  group('the chat thread rides the live call', () {
+    testWidgets(
+      'a "Call peer" thread appears while a session exists, sends over the '
+      'session\'s chat lane, and goes away with the call',
+      (tester) async {
+        final probe = _OpenerProbe();
+        await tester.pumpWidget(MyApp(openSession: probe.open));
+        await tester.pump();
+        expect(liveChatController.value, isNull);
+
+        await tester.tap(find.widgetWithText(FilledButton, 'Call'));
+        await _settle(tester);
+        expect(find.text('Connected'), findsOneWidget);
+        final chat = liveChatController.value;
+        expect(chat, isNotNull, reason: 'the thread binds to the session');
+        expect(chat!.canPickPhoto, isTrue);
+        expect(chat.canSendVideo, isTrue);
+
+        // The far end of the chat lane: a messenger on the peer port.
+        final session = probe.sessions.single;
+        final remote = ReliableMessenger(
+          session.chatLanes.$2,
+          peerId: 'remote',
+        );
+        final got = <String>[];
+        remote.incoming.listen((m) => got.add(m.text));
+
+        await tester.tap(find.widgetWithText(NavigationDestination, 'Chat'));
+        await _settle(tester);
+        expect(find.text('Call peer'), findsOneWidget);
+        await tester.tap(find.text('Call peer'));
+        // Let the route's slide-in finish completely: mid-transition the
+        // composer sits past the right edge and a tap there misses.
+        // A route transition starts on the frame after the push and
+        // advances one frame at a time: pump several frames past its
+        // length, or the composer is still sliding in when it is tapped.
+        await _settleRoute(tester);
+        await tester.enterText(find.byType(TextField), 'over the call');
+        await tester.tap(find.byKey(const ValueKey('composer-send')));
+        await _settle(tester);
+        expect(got, ['over the call']);
+        final mine = chat.entries.last;
+        expect(mine.message.text, 'over the call');
+
+        // Back to the call; hanging up disposes the thread with the session.
+        await tester.tap(find.byType(BackButton));
+        await _settleRoute(tester);
+        await tester.tap(find.widgetWithText(NavigationDestination, 'Call'));
+        await _settle(tester);
+        await tester.ensureVisible(
+          find.widgetWithText(FilledButton, 'Hang up'),
+        );
+        await tester.tap(find.widgetWithText(FilledButton, 'Hang up'));
+        await _settle(tester);
+        expect(find.text('Call ended'), findsOneWidget);
+        expect(liveChatController.value, isNull);
+        await tester.tap(find.widgetWithText(NavigationDestination, 'Chat'));
+        await _settle(tester);
+        expect(find.text('Call peer'), findsNothing);
+        expect(find.text('Loopback peer'), findsOneWidget);
+
+        // Not awaited: a subscription cancel under flutter_test parks on the
+        // root-zone _nullFuture (this repo's fake_async trap, 2026-08-07).
+        unawaited(remote.close());
+        await _teardownApp(tester);
+      },
+    );
   });
 }

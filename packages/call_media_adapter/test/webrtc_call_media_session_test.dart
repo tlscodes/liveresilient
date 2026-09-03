@@ -43,12 +43,14 @@ class FakePeerConnectionPort implements mw.PeerConnectionPort {
   int setRemoteDescriptionCalls = 0;
   int addRemoteCandidateCalls = 0;
   int closeCalls = 0;
+  int createDataChannelCalls = 0;
   mw.DataChannelConfig? lastDataChannelConfig;
 
   @override
   Future<mw.MediaDataChannel> createDataChannel(
     mw.DataChannelConfig config,
   ) async {
+    createDataChannelCalls++;
     lastDataChannelConfig = config;
     return _FakeMediaDataChannel(config.label);
   }
@@ -296,8 +298,87 @@ void main() {
       expect(config.ordered, isTrue);
     });
 
-    test('openDataChannel before start() throws StateError', () async {
-      expect(() => session.openDataChannel(), throwsStateError);
+    test(
+      'openDataChannel before start() waits for the port, then opens',
+      () async {
+        final early = session.openDataChannel();
+        var opened = false;
+        unawaited(early.then((_) => opened = true));
+        await Future<void>.delayed(Duration.zero);
+        expect(opened, isFalse, reason: 'no port yet');
+        await session.start();
+        final channel = await early;
+        expect(channel.label, 'vck-messaging');
+        expect(port.createDataChannelCalls, 1);
+      },
+    );
+
+    test('openDataChannel after stop() throws StateError', () async {
+      await session.start();
+      await session.stop();
+      await expectLater(session.openDataChannel(), throwsStateError);
+    });
+
+    test('openDataChannel is memoized per negotiated id: one channel object '
+        'per stream for the port\'s lifetime', () async {
+      await session.start();
+      final first = await session.openDataChannel();
+      final again = await session.openDataChannel();
+      expect(again, same(first));
+      expect(port.createDataChannelCalls, 1);
+
+      const other = mw.DataChannelConfig(label: 'vck-photo', negotiatedId: 9);
+      final photo = await session.openDataChannel(other);
+      expect(photo, isNot(same(first)));
+      expect(port.createDataChannelCalls, 2);
+    });
+
+    test('preOpenChannels are created at start(), before any offer, and '
+        'openDataChannel returns those same objects', () async {
+      const lanes = <mw.DataChannelConfig>[
+        mw.DataChannelConfig(),
+        mw.DataChannelConfig(label: 'vck-chat', negotiatedId: 2),
+      ];
+      final preOpened = WebRtcCallMediaSession(
+        () async => port,
+        preOpenChannels: lanes,
+      );
+      await preOpened.start();
+      expect(port.createDataChannelCalls, 2);
+      expect(port.createOfferCalls, 0);
+
+      final chat = await preOpened.openDataChannel(lanes[1]);
+      expect(chat.label, 'vck-chat');
+      expect(port.createDataChannelCalls, 2, reason: 'no second creation');
+      await preOpened.stop();
+    });
+
+    test('preOpenChannels rejects a negotiated id listed twice', () {
+      expect(
+        () => WebRtcCallMediaSession(
+          () async => port,
+          preOpenChannels: const <mw.DataChannelConfig>[
+            mw.DataChannelConfig(),
+            mw.DataChannelConfig(label: 'dup'),
+          ],
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('stop() while the port factory is in flight closes the late port '
+        'and start() reports the stop', () async {
+      final gate = Completer<void>();
+      final late = WebRtcCallMediaSession(() async {
+        await gate.future;
+        return port;
+      });
+      final starting = late.start();
+      await late.stop();
+      gate.complete();
+      await expectLater(starting, throwsStateError);
+      expect(port.closeCalls, 1, reason: 'the late port must not leak');
+      expect(late.connectionState, MediaConnectionState.closed);
     });
   });
 }

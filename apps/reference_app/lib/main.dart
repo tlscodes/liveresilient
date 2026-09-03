@@ -6,12 +6,13 @@
 library;
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:call_core/call_core.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:media_webrtc/media_webrtc.dart' show OpusSdpPolicy;
-import 'package:messaging/messaging.dart' show DeliveryState;
+import 'package:messaging/messaging.dart' show Attachment, DeliveryState;
 import 'package:signed_config/signed_config.dart'
     show EndpointManifest, OobManifestImport, buildRtcIceConfig, iceProfileFor;
 
@@ -19,6 +20,7 @@ import 'src/attachment_picker.dart';
 import 'src/call_screen.dart';
 import 'src/call_session.dart';
 import 'src/live_call_controller.dart';
+import 'src/live_chat_registry.dart';
 import 'src/live_quality_feed.dart';
 import 'src/ws_connector.dart' show isLoopbackHost, platformHostResolution;
 import 'package:live_captions/live_captions.dart' show ChannelInvite;
@@ -28,6 +30,7 @@ import 'src/chat_screen.dart';
 import 'src/demo_feeds.dart';
 import 'src/photo_ingest.dart';
 import 'src/photo_picker.dart';
+import 'src/photo_source.dart';
 import 'src/intelligence/assistant_view.dart';
 import 'src/intelligence/device_bindings.dart';
 import 'src/intelligence/foresight_card.dart';
@@ -60,7 +63,14 @@ Future<void> main() async {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.intelligence, this.oobImport, this.openSession});
+  const MyApp({
+    super.key,
+    this.intelligence,
+    this.oobImport,
+    this.openSession,
+    this.attachmentPicker,
+    this.photoPicker,
+  });
 
   /// Null only in widget tests that exercise screens in isolation.
   final IntelligenceStack? intelligence;
@@ -70,6 +80,12 @@ class MyApp extends StatefulWidget {
   /// on Call exercises the real wiring — phase from the session's controller,
   /// readings from the session — with no network and no WebRTC engine.
   final SessionOpener? openSession;
+
+  /// Pickers behind the chat threads' attach and photo buttons. Null uses
+  /// the platform dialogs; the app-journey rig injects fixtures so a real
+  /// send goes through the real screens with no dialog to click.
+  final Future<Attachment?> Function()? attachmentPicker;
+  final Future<Uint8List?> Function(PhotoSource source)? photoPicker;
 
   /// Out-of-band manifest import, when this build has pinned signing keys.
   ///
@@ -102,6 +118,8 @@ class _MyAppState extends State<MyApp> {
         intelligence: widget.intelligence,
         oobImport: widget.oobImport,
         openSession: widget.openSession,
+        attachmentPicker: widget.attachmentPicker,
+        photoPicker: widget.photoPicker,
         themeMode: _themeMode,
         onThemeMode: (mode) => setState(() => _themeMode = mode),
       ),
@@ -118,6 +136,8 @@ class HomePage extends StatefulWidget {
     this.intelligence,
     this.oobImport,
     this.openSession,
+    this.attachmentPicker,
+    this.photoPicker,
     this.themeMode = ThemeMode.system,
     this.onThemeMode,
   });
@@ -130,6 +150,10 @@ class HomePage extends StatefulWidget {
 
   /// See [MyApp.openSession]. Null means the dev relay entry point.
   final SessionOpener? openSession;
+
+  /// See [MyApp.attachmentPicker] / [MyApp.photoPicker].
+  final Future<Attachment?> Function()? attachmentPicker;
+  final Future<Uint8List?> Function(PhotoSource source)? photoPicker;
 
   /// Appearance selection, owned by [MyApp] (it must sit above the
   /// [MaterialApp] to take effect); Settings edits it through [onThemeMode].
@@ -162,12 +186,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     open: widget.openSession ?? _openDevSession,
   );
   late final ChatDemoController _chat = ChatDemoController(
-    attachmentPicker: pickAttachmentFile,
-    photoPicker: pickPhotoBytes,
+    attachmentPicker: widget.attachmentPicker ?? pickAttachmentFile,
+    photoPicker: widget.photoPicker ?? pickPhotoBytes,
     photoIngest: (raw) => compute(buildStagedPhotoArtifacts, raw),
     intelligenceFabric: widget.intelligence?.fabric,
     hub: widget.intelligence?.hub,
   );
+
+  /// The chat thread bound to the LIVE call's data lanes — built when a
+  /// session handle appears, disposed when it goes. Null between calls,
+  /// so the conversations list shows the thread only while it can send.
+  ChatDemoController? _liveChat;
+
+  /// The handle [_liveChat] was built for, so a new session gets a new
+  /// thread and a stale build never binds a fresh call's lanes.
+  CallSessionHandle? _liveChatHandle;
+  int _liveChatGeneration = 0;
 
   /// Demo-labeled network-quality feed for the gauge and diagnostics panel.
   /// GATED ON [AppMotion.ambientEnabled]: under `flutter test` no stream is
@@ -235,7 +269,59 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.detached) unawaited(_call.hangUp());
   }
 
+  /// Binds a chat thread to the live call's lanes the moment its session
+  /// handle exists, and tears it down when the session goes. Opening the
+  /// lanes is asynchronous (they wait for the media engine to start), so
+  /// a generation token drops a late build if the call ended or a new one
+  /// began meanwhile.
+  void _syncLiveChat() {
+    final handle = _call.handle;
+    if (identical(handle, _liveChatHandle)) return;
+    _liveChatHandle = handle;
+    final generation = ++_liveChatGeneration;
+    final old = _liveChat;
+    if (old != null) {
+      _liveChat = null;
+      liveChatController.value = null;
+      old.removeListener(_onChanged);
+      old.dispose();
+    }
+    final openChat = handle?.openChatPort;
+    if (handle == null || openChat == null) return;
+    unawaited(() async {
+      try {
+        final chatPort = await openChat();
+        final photoPort = await handle.openPhotoLanePort?.call();
+        final videoPort = await handle.openVideoLanePort?.call();
+        if (generation != _liveChatGeneration || !mounted) {
+          await chatPort.close();
+          await photoPort?.close();
+          await videoPort?.close();
+          return;
+        }
+        final chat = ChatDemoController(
+          callChannelPort: chatPort,
+          photoLanePort: photoPort,
+          videoLanePort: videoPort,
+          attachmentPicker: widget.attachmentPicker ?? pickAttachmentFile,
+          photoPicker: widget.photoPicker ?? pickPhotoBytes,
+          photoIngest: (raw) => compute(buildStagedPhotoArtifacts, raw),
+          intelligenceFabric: widget.intelligence?.fabric,
+          hub: widget.intelligence?.hub,
+        );
+        chat.addListener(_onChanged);
+        _liveChat = chat;
+        liveChatController.value = chat;
+        setState(() {});
+      } catch (_) {
+        // A lane that failed to open leaves the thread absent; the call
+        // itself is unaffected and the conversations list says so.
+      }
+    }());
+  }
+
   void _onChanged() {
+    _syncLiveChat();
     // The ladder follows exactly what the gauge charts: measured readings
     // while a session exists, the demo feed otherwise — and nothing under
     // tests, where no demo stream is handed out, so no periodic timer can
@@ -270,6 +356,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _quality.dispose();
     _call.dispose();
     _chat.dispose();
+    final live = _liveChat;
+    _liveChat = null;
+    if (identical(liveChatController.value, live)) {
+      liveChatController.value = null;
+    }
+    live?.removeListener(_onChanged);
+    live?.dispose();
     super.dispose();
   }
 
@@ -295,9 +388,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// Maps the live loopback thread's last entry to a truth-ladder status for
   /// the conversations list — real delivery signals only (delivered/failed
   /// from the messenger's ack stream; anything else visible is "sent").
-  MessageTruthStatus? _lastStatus(ChatEntry entry) {
-    if (entry.message.senderId != _chat.localSenderId) return null;
-    return switch (_chat.deliveryStates[entry.message.id]) {
+  MessageTruthStatus? _lastStatus(
+    ChatEntry entry, [
+    ChatDemoController? thread,
+  ]) {
+    final chat = thread ?? _chat;
+    if (entry.message.senderId != chat.localSenderId) return null;
+    return switch (chat.deliveryStates[entry.message.id]) {
       DeliveryState.delivered => MessageTruthStatus.delivered,
       DeliveryState.failed => MessageTruthStatus.failed,
       null => MessageTruthStatus.sent,
@@ -321,7 +418,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final now = DateTime.now();
     final entries = _chat.entries;
     final last = entries.isEmpty ? null : entries.last;
+    final live = _liveChat;
+    final liveLast = live == null || live.entries.isEmpty
+        ? null
+        : live.entries.last;
     return [
+      if (live != null)
+        ConversationSummary(
+          id: 'live',
+          title: 'Call peer',
+          lastMessage: liveLast == null
+              ? 'In-call chat: text, photos and notes ride the live call'
+              : _lastLabel(liveLast),
+          lastAt: liveLast == null
+              ? now
+              : DateTime.fromMillisecondsSinceEpoch(liveLast.message.sentAtMs),
+          avatarSeed: 0x11FE,
+          unreadCount: 0,
+          lastIsMine:
+              liveLast != null &&
+              liveLast.message.senderId == live.localSenderId,
+          lastStatus: liveLast == null ? null : _lastStatus(liveLast, live),
+        ),
       ConversationSummary(
         id: 'loopback',
         title: 'Loopback peer',
@@ -365,6 +483,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   void _openThread(ConversationSummary summary) {
+    final live = _liveChat;
+    if (summary.id == 'live' && live != null) {
+      _pushThread(live, title: 'Call peer');
+      return;
+    }
     if (summary.id != 'loopback') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -373,29 +496,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       );
       return;
     }
+    _pushThread(_chat, title: 'Loopback peer');
+  }
+
+  /// One screen for both threads: the loopback demo and the live call's.
+  void _pushThread(ChatDemoController chat, {required String title}) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Loopback peer')),
+          appBar: AppBar(title: Text(title)),
           body: ListenableBuilder(
-            listenable: _chat,
+            listenable: chat,
             builder: (context, _) => ChatScreen(
-              entries: _chat.entries,
-              localSenderId: _chat.localSenderId,
-              onSend: _chat.sendText,
-              deliveryStates: _chat.deliveryStates,
-              attachmentProgress: _chat.attachmentProgress,
-              onPickAttachment: () => unawaited(_chat.pickAndSendAttachment()),
-              onSendPhoto: _chat.canPickPhoto ? _chat.pickAndSendPhoto : null,
-              outgoingPhotos: _chat.outgoingPhotos,
-              incomingPhotos: _chat.incomingPhotos,
-              onPlayAudio: _chat.playAudio,
-              captions: _chat.captions,
+              entries: chat.entries,
+              localSenderId: chat.localSenderId,
+              onSend: chat.sendText,
+              deliveryStates: chat.deliveryStates,
+              attachmentProgress: chat.attachmentProgress,
+              onPickAttachment: () => unawaited(chat.pickAndSendAttachment()),
+              onSendPhoto: chat.canPickPhoto ? chat.pickAndSendPhoto : null,
+              outgoingPhotos: chat.outgoingPhotos,
+              incomingPhotos: chat.incomingPhotos,
+              onPlayAudio: chat.playAudio,
+              captions: chat.captions,
               captionLanguage: 'fa',
               amplitudeSource: _liveFeedsAllowed
                   ? syntheticAmplitudeSource()
                   : null,
-              onSendVoiceNote: _chat.sendVoiceNote,
+              onSendVoiceNote: chat.sendVoiceNote,
             ),
           ),
         ),

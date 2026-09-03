@@ -11,7 +11,9 @@
 ///   the messenger rides the live call's own data channel; the remote human
 ///   is the peer. Staged photos additionally need a `photoLanePort` (a
 ///   second data channel); without one the photo button stays hidden — no
-///   half-wired sends.
+///   half-wired sends. Video notes ride a `videoLanePort` the same way
+///   (content-addressed blob, sha256-verified at the far side); without
+///   one a picked video falls back to the chunked text path.
 library;
 
 import 'dart:async';
@@ -32,6 +34,7 @@ class ChatDemoController extends ChangeNotifier {
   ChatDemoController({
     DataChannelPort? callChannelPort,
     DataChannelPort? photoLanePort,
+    DataChannelPort? videoLanePort,
     ConnectionFabric? intelligenceFabric,
     this._hub,
     this._photoPicker,
@@ -52,6 +55,14 @@ class ChatDemoController extends ChangeNotifier {
         );
         _photoReceiver = StagedPhotoReceiver.arq(photoLanePort);
       }
+      if (videoLanePort != null) {
+        _videoSender = VideoNoteSender(
+          videoLanePort,
+          announce: _announceVideo,
+          retransmitAfter: const Duration(milliseconds: 700),
+        );
+        _videoReceiver = VideoNoteReceiver(videoLanePort);
+      }
     } else {
       final (loopLocal, loopPeer) = pairLoopbackPorts();
       localPort = loopLocal;
@@ -59,6 +70,9 @@ class ChatDemoController extends ChangeNotifier {
       _peerSub = peer.incoming.listen((message) {
         if (_photoReceiver?.offerText(message.text) ?? false) {
           return; // a photo announcement — the staged ladder consumes it
+        }
+        if (_videoReceiver?.offerText(message.text) ?? false) {
+          return; // a video-note announcement — the video lane consumes it
         }
         if (_peerAttachments.offer(message.text)) {
           return; // an attachment chunk, not chat text — already consumed
@@ -78,10 +92,18 @@ class ChatDemoController extends ChangeNotifier {
         retransmitAfter: const Duration(milliseconds: 300),
       );
       _photoReceiver = StagedPhotoReceiver.arq(photoLanePeerEnd);
+      final (videoLaneLocal, videoLanePeerEnd) = pairLoopbackPorts();
+      _videoSender = VideoNoteSender(
+        videoLaneLocal,
+        announce: _announceVideo,
+        retransmitAfter: const Duration(milliseconds: 300),
+      );
+      _videoReceiver = VideoNoteReceiver(videoLanePeerEnd);
     }
     _local = ReliableMessenger(localPort, peerId: localSenderId);
 
     _photoUpdatesSub = _photoReceiver?.updates.listen(_onIncomingPhotoUpdate);
+    _videoUpdatesSub = _videoReceiver?.updates.listen(_onIncomingVideoUpdate);
 
     _deliverySub = _local.deliveries.listen((event) {
       final (id, state) = event;
@@ -99,6 +121,11 @@ class ChatDemoController extends ChangeNotifier {
           _peer == null &&
           _photoReceiver!.offerText(message.text)) {
         return; // call mode: the announcement arrived from the remote human
+      }
+      if (_videoReceiver != null &&
+          _peer == null &&
+          _videoReceiver!.offerText(message.text)) {
+        return; // call mode: a video-note announcement from the remote human
       }
       if (_localAttachments.offer(message.text)) {
         return; // reassembling; the completed stream emits the bubble
@@ -230,6 +257,94 @@ class ChatDemoController extends ChangeNotifier {
   bool get canPickPhoto =>
       _photoPicker != null && _photoIngest != null && _photoSender != null;
 
+  // ── Video notes (binary lane, content-addressed, sha256-verified) ─────
+
+  VideoNoteSender? _videoSender;
+  VideoNoteReceiver? _videoReceiver;
+  StreamSubscription<VideoNoteUpdate>? _videoUpdatesSub;
+  final Set<String> _incomingVideoBubbles = {};
+
+  /// Sender-side video note status by videoId (my bubbles' data source).
+  final Map<String, OutgoingVideoStatus> outgoingVideos = {};
+
+  /// Receiver-side video notes by videoId (peer bubbles).
+  Map<String, VideoNoteState> get incomingVideos =>
+      _videoReceiver?.notes ?? const {};
+
+  /// Whether a picked video rides the binary lane (else the chunked text
+  /// path carries it, slower but never refused).
+  bool get canSendVideo => _videoSender != null;
+
+  /// Full sha256 (hex) of every attachment, photo and video note this side
+  /// sent — by attachment id for chunked sends and video notes, by photoId
+  /// for staged photos. The sender's half of the integrity evidence a rig
+  /// compares against the receiver's verified report.
+  final Map<String, String> sentSha256 = {};
+
+  Future<void> _announceVideo(String text) async {
+    await _local.send(text);
+  }
+
+  void _onIncomingVideoUpdate(VideoNoteUpdate update) {
+    final bytes = update.state.bytes;
+    if (update.stage == VideoNoteStage.verified &&
+        bytes != null &&
+        _incomingVideoBubbles.add(update.videoId)) {
+      entries.add(
+        ChatEntry(
+          message: _peerPlaceholder('[video]'),
+          attachment: Attachment(
+            id: update.videoId,
+            kind: MediaKind.video,
+            contentType: update.state.announcement.contentType,
+            bytes: bytes,
+          ),
+        ),
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Sends a video clip: with a video lane, announcement (size, sha256) on
+  /// the reliable text path and the content-addressed blob on the lane —
+  /// the bubble's delivery tick flips only when the far side verified the
+  /// whole clip against the announced sha256 (the lane's DONE receipt).
+  /// Without a lane the clip rides the chunked attachment path.
+  Future<void> sendVideoNote(Attachment attachment) async {
+    final sender = _videoSender;
+    final bubble = _localPlaceholder('[video]');
+    entries.add(ChatEntry(message: bubble, attachment: attachment));
+    notifyListeners();
+    if (sender == null) {
+      await sendAttachmentWithProgress(attachment);
+      return;
+    }
+    final videoId = contentAddressHex(attachment.bytes);
+    final status = outgoingVideos.putIfAbsent(
+      videoId,
+      () => OutgoingVideoStatus(videoId),
+    );
+    status
+      ..done = false
+      ..failed = false;
+    sentSha256[attachment.id] = contentSha256Hex(attachment.bytes);
+    try {
+      await sender.deliver(
+        attachment.bytes,
+        contentType: attachment.contentType,
+        durationMs: 0,
+      );
+      status.done = true;
+      deliveryStates[bubble.id] = DeliveryState.delivered;
+      _hub?.recordDelivery(success: true, choice: 'arq');
+    } catch (_) {
+      status.failed = true;
+      deliveryStates[bubble.id] = DeliveryState.failed;
+      _hub?.recordDelivery(success: false, choice: 'arq');
+    }
+    notifyListeners();
+  }
+
   Future<void> _announcePhoto(String text) async {
     await _local.send(text);
   }
@@ -267,6 +382,7 @@ class ChatDemoController extends ChangeNotifier {
     if (ingest == null || sender == null) return;
     final artifacts = await ingest(raw);
     final announcement = PhotoAnnouncement.fromArtifacts(artifacts);
+    sentSha256[announcement.photoId] = announcement.sha256Hex;
     final status = outgoingPhotos.putIfAbsent(
       announcement.photoId,
       () => OutgoingPhotoStatus(announcement.photoId, artifacts.original),
@@ -389,6 +505,10 @@ class ChatDemoController extends ChangeNotifier {
       await _sendStagedFromRaw(Uint8List.fromList(attachment.bytes));
       return;
     }
+    if (attachment.kind == MediaKind.video) {
+      await sendVideoNote(attachment);
+      return;
+    }
     entries.add(
       ChatEntry(
         message: _localPlaceholder('[${attachment.kind.name}]'),
@@ -419,6 +539,7 @@ class ChatDemoController extends ChangeNotifier {
   /// Sends [attachment] over the live messenger, mirroring per-chunk
   /// progress into [attachmentProgress] for the bubble's progress bar.
   Future<void> sendAttachmentWithProgress(Attachment attachment) async {
+    sentSha256[attachment.id] = contentSha256Hex(attachment.bytes);
     final handle = startAttachmentSend(
       _local,
       attachment,
@@ -530,8 +651,19 @@ class ChatDemoController extends ChangeNotifier {
     unawaited(_localAttachmentsSub.cancel());
     unawaited(_photoUpdatesSub?.cancel());
     unawaited(_photoReceiver?.close());
+    unawaited(_videoUpdatesSub?.cancel());
+    unawaited(_videoReceiver?.close());
     unawaited(_local.close());
     unawaited(_peer?.close());
     super.dispose();
   }
+}
+
+/// Sender-side video note status, by videoId (content address).
+class OutgoingVideoStatus {
+  OutgoingVideoStatus(this.videoId);
+
+  final String videoId;
+  bool done = false;
+  bool failed = false;
 }

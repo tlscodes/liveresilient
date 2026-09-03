@@ -78,6 +78,14 @@ class _Room {
   /// ring-buffered and re-delivered on every fresh join.
   final List<(String?, Object)> _pending = <(String?, Object)>[];
 
+  /// Set when [members] last became empty; `null` while at least one
+  /// identity is seated. The room is kept (not removed) while this is set,
+  /// so its ring survives for [AbuseControlConfig.emptyRoomGrace] in case a
+  /// peer rejoins to receive it. Cleared by [SignalingRelayServer._joinRoom]
+  /// the moment any member (re)joins. Reaped by the idle sweep once the
+  /// grace elapses.
+  DateTime? emptiedAt;
+
   static const int maxSocketsPerSeat = 3;
 
   Iterable<WebSocket> get sockets => members.values.expand((seat) => seat);
@@ -309,10 +317,20 @@ class SignalingRelayServer {
         // 2026-08-07 on loss60, that turned every single-sided reconnect
         // into a two-sided from-zero rebuild and no cycle ever finished.
         // The peer keeps its socket and its seat, the buffer survives,
-        // and the vacated identity resumes into the SAME room. Empty
-        // rooms are removed at once; abandoned one-seat rooms age out via
-        // the idle-TTL sweep. Deliberate call ends still propagate at the
-        // signaling layer (hangup envelopes), not by socket teardown.
+        // and the vacated identity resumes into the SAME room. An emptied
+        // room is kept — not removed at once — for
+        // AbuseControlConfig.emptyRoomGrace: field evidence 2026-09-03
+        // showed a peer hanging up (sending its hangup envelope, then
+        // closing) right as the other side was mid-reconnect — its
+        // signaling socket briefly down for a stop/start cycle. The old
+        // remove-at-once behavior deleted the room, and the ring holding
+        // that hangup frame, before the rejoining side could ever open a
+        // fresh socket to receive it, so it reconnected into an empty room
+        // forever instead of learning the call had ended. The grace-expired
+        // empty room is reaped by the idle sweep (see _sweepIdleRooms);
+        // abandoned one-seat rooms still age out via the idle-TTL sweep.
+        // Deliberate call ends still propagate at the signaling layer
+        // (hangup envelopes), not by socket teardown.
         if (room.isMember(socket)) {
           for (final seat in room.members.values) {
             seat.removeWhere((s) => identical(s, socket));
@@ -320,22 +338,34 @@ class SignalingRelayServer {
           room.members.removeWhere((_, seat) => seat.isEmpty);
           room.lastActivity = _now();
           _logSink('room_member_left', callId: room.callId);
-          if (room.members.isEmpty && identical(_rooms[room.callId], room)) {
-            _rooms.remove(room.callId);
-            _logSink('room_closed', callId: room.callId);
+          if (room.members.isEmpty) {
+            room.emptiedAt = _now();
           }
         }
       }
     }
   }
 
-  /// Reaps rooms with no traffic for [AbuseControlConfig.idleRoomTtl] and
-  /// prunes the guard's transient session-tracking maps (bounded memory).
+  /// Reaps rooms with no traffic for [AbuseControlConfig.idleRoomTtl],
+  /// separately reaps rooms that have sat empty past
+  /// [AbuseControlConfig.emptyRoomGrace], and prunes the guard's transient
+  /// session-tracking maps (bounded memory).
   void _sweepIdleRooms() {
     _guard.prune();
-    final cutoff = _now().subtract(_guard.config.idleRoomTtl);
+    final now = _now();
+    final idleCutoff = now.subtract(_guard.config.idleRoomTtl);
+    final emptyCutoff = now.subtract(_guard.config.emptyRoomGrace);
     for (final room in _rooms.values.toList()) {
-      if (room.lastActivity.isAfter(cutoff)) continue;
+      final emptiedAt = room.emptiedAt;
+      if (emptiedAt != null && !emptiedAt.isAfter(emptyCutoff)) {
+        // No members means no sockets to close — the room simply stops
+        // being tracked (and its ring with it).
+        _rooms.remove(room.callId);
+        _guard.counters.emptyRoomsReaped++;
+        _logSink('empty_room_reaped', callId: room.callId);
+        continue;
+      }
+      if (room.lastActivity.isAfter(idleCutoff)) continue;
       _rooms.remove(room.callId);
       _guard.counters.idleRoomsReaped++;
       _logSink('idle_room_reaped', callId: room.callId);
@@ -352,6 +382,11 @@ class SignalingRelayServer {
   /// when the room already seats two OTHER identities.
   _Room? _joinRoom(String callId, String senderKey, WebSocket socket) {
     final room = _rooms.putIfAbsent(callId, () => _Room(callId, _now()));
+    // Any join means the room is no longer empty (an empty room can only
+    // be entered via the new-identity branch below, since an empty
+    // `members` map holds no seat to return into) — clear the grace timer
+    // so the sweep stops treating it as reapable.
+    room.emptiedAt = null;
     final seat = room.members[senderKey];
     if (seat != null) {
       if (seat.any((s) => identical(s, socket))) {
@@ -373,9 +408,14 @@ class SignalingRelayServer {
           ),
         );
       }
-      if (room.members.length == 2) {
-        room.flushPendingTo(socket, senderKey);
-      }
+      // Replay the ring to this fresh socket regardless of how many
+      // identities are currently seated — a lone rejoiner into a room its
+      // peer already left (and may have sent a final frame, such as a
+      // hangup, into) must still hear that history. flushPendingTo skips
+      // this identity's own frames, and each socket only ever passes
+      // through _joinRoom once (see _handleSocket), so a socket is never
+      // replayed twice.
+      room.flushPendingTo(socket, senderKey);
       return room;
     }
     if (room.members.length >= 2) {
@@ -383,9 +423,7 @@ class SignalingRelayServer {
     }
     room.members[senderKey] = <WebSocket>[socket];
     room.lastActivity = _now();
-    if (room.members.length == 2) {
-      room.flushPendingTo(socket, senderKey);
-    }
+    room.flushPendingTo(socket, senderKey);
     return room;
   }
 

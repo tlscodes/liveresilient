@@ -37,6 +37,8 @@ import 'package:media_webrtc/media_webrtc.dart'
         OpusWireNoCandidateFits,
         PeerConnectionStatus;
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
+import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart'
+    show CallLanes;
 import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:reference_app/src/media_adaptation_driver.dart';
 import 'package:signaling/signaling.dart';
@@ -637,6 +639,12 @@ class E2eCallStack {
           await port.rollbackLocalDescription();
         }
       },
+      // The same lane table production pre-opens (call_session.dart): every
+      // lane is in the first offer, so the journey peer's chat, photo and
+      // video receivers ride the call from its first second, and the
+      // messaging/video rows' later openDataChannel calls return the same
+      // objects (memoized per id) instead of duplicating a stream.
+      preOpenChannels: CallLanes.all,
     );
     final controller = CallController(
       callId: callId,

@@ -40,7 +40,9 @@ def main() -> int:
                 stamp = (RUN.search(r[6]) or [None, ''])[1]
                 if r[0] == feature and stamp == latest:
                     measured = r[4] if r[4] != '-' else '-'
-                    unit = 's' if feature == 'call_connect' and measured != '-' else ('ms' if feature == 'monitor_bar' and measured != '-' else '')
+                    # call_connect and the chat features are measured in seconds
+                    # (chat: send action to the phone's verified receipt).
+                    unit = 's' if feature != 'monitor_bar' and measured != '-' else ('ms' if feature == 'monitor_bar' and measured != '-' else '')
                     note = re.sub(r'\s*run=\S+', '', r[6])
                     print(f'{profile:<12} {feature:<13} {measured + unit:<10} {r[5]:<10} {note[:150]}')
                     break

@@ -6,4 +6,5 @@
 /// exact pattern call_signaling_adapter establishes for the signaling side.
 library;
 
+export 'src/call_lanes.dart';
 export 'src/media_channel_data_port.dart';

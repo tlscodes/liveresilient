@@ -194,7 +194,14 @@ Future<void> main() async {
     () async {
       final server = await SignalingRelayServer.bind(
         security: buildServerSecurityContext(),
-        abuseControls: AbuseControlConfig(maxNewCallIdsPerWindow: 1),
+        abuseControls: AbuseControlConfig(
+          maxNewCallIdsPerWindow: 1,
+          // An emptied room lives on for the grace (its replay ring may
+          // still owe a rejoiner the peer's hangup — 2026-09-03); shortened
+          // here so the sweep reaps it inside the test's wait budget.
+          emptyRoomGrace: const Duration(milliseconds: 200),
+          sweepInterval: const Duration(milliseconds: 200),
+        ),
       );
       addTearDown(server.close);
 
@@ -204,7 +211,7 @@ Future<void> main() async {
       // Caller drops; its SEAT vacates while the survivor keeps its socket
       // (raised 2026-08-07 — the peer-force-close amplified every
       // one-sided flap under loss). Closing the survivor too empties the
-      // room, which is removed at once.
+      // room, which the sweep reaps once the empty-room grace has passed.
       await first.a.close();
       await first.b.close();
       await waitForActiveRooms(server, 0);

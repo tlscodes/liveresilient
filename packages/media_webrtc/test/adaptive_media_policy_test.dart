@@ -2,7 +2,7 @@ import 'package:media_webrtc/media_webrtc.dart';
 import 'package:test/test.dart';
 
 RtcStatsSample _sample({
-  double packetLossFraction = 0.0,
+  double? packetLossFraction = 0.0,
   int rttMs = 50,
   int jitterMs = 0,
   int incomingBitrateBps = 0,
@@ -384,6 +384,85 @@ void main() {
           reason: 'the middling sample must have reset the clean streak',
         );
         expect(policy.profile, MediaProfile.low);
+      },
+    );
+  });
+
+  group('AdaptiveMediaPolicy null loss (no packets expected)', () {
+    test('a null-loss sample causes no downgrade and no upgrade', () {
+      final policy = AdaptiveMediaPolicy(initialProfile: MediaProfile.high);
+
+      final decision = policy.onSample(
+        _sample(packetLossFraction: null, rttMs: 30),
+      );
+
+      expect(
+        decision,
+        isNull,
+        reason: 'absence of loss evidence must not drive any shift',
+      );
+      expect(policy.profile, MediaProfile.high);
+    });
+
+    test('a null-loss sample leaves an in-progress clean streak unchanged, '
+        'rather than resetting it like a middling sample would', () {
+      final policy = AdaptiveMediaPolicy(initialProfile: MediaProfile.low);
+      const ample = 2000000;
+
+      // Build a partial clean streak.
+      for (var i = 0; i < config.cleanSamplesToUpgrade - 1; i++) {
+        policy.onSample(
+          _sample(
+            packetLossFraction: 0.0,
+            rttMs: 30,
+            availableOutgoingBitrateBps: ample,
+          ),
+        );
+      }
+
+      // A silent/DTX interval: no packets expected, loss unknown.
+      final nullLossDecision = policy.onSample(
+        _sample(
+          packetLossFraction: null,
+          rttMs: 30,
+          availableOutgoingBitrateBps: ample,
+        ),
+      );
+      expect(nullLossDecision, isNull);
+
+      // If the null sample had reset the streak (like the middling test
+      // proves a real 0.03 sample does), this next clean sample would
+      // only bring the streak to 1/8 and no upgrade would fire yet. It
+      // must instead complete the streak and upgrade immediately.
+      final afterNullLoss = policy.onSample(
+        _sample(
+          packetLossFraction: 0.0,
+          rttMs: 30,
+          availableOutgoingBitrateBps: ample,
+        ),
+      );
+      expect(
+        afterNullLoss,
+        isNotNull,
+        reason: 'the null-loss sample must not have reset the clean streak',
+      );
+      expect(afterNullLoss!.next, MediaProfile.medium);
+    });
+
+    test(
+      'a null-loss sample with a high RTT is still bad on RTT evidence '
+      'alone, and the reason string prints an em dash for the unknown loss',
+      () {
+        final policy = AdaptiveMediaPolicy(initialProfile: MediaProfile.high);
+
+        policy.onSample(_sample(packetLossFraction: null, rttMs: 700));
+        final decision = policy.onSample(
+          _sample(packetLossFraction: null, rttMs: 700),
+        );
+
+        expect(decision, isNotNull);
+        expect(decision!.next, MediaProfile.medium);
+        expect(decision.reason, contains('loss —'));
       },
     );
   });
