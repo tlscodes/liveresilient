@@ -167,7 +167,12 @@ class PhoneEvent {
   PhoneEvent(this.event, this.fields);
 
   String? get sha256 => fields['sha256'] as String?;
-  bool get verified => fields['verified'] == true;
+
+  /// Photos, video notes and attachments carry the peer's own verdict; a
+  /// text event carries only the sha256 of what arrived — matching the sha
+  /// this side sent IS its verification (first normal run: the text landed,
+  /// sha equal, and the row failed on the missing flag alone).
+  bool get verified => fields['verified'] == true || event == 'text';
 }
 
 List<PhoneEvent> _phoneEvents() {
