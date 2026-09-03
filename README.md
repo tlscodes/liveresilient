@@ -134,6 +134,34 @@ the build steps each gate expects.
   has no end-to-end encryption layer of its own yet, and the prebuilt WebRTC
   binary is outside our audit surface.
 
+## How this was built, and with what
+
+This project was written by one person working with an AI coding assistant, and
+it is stated here rather than left to be inferred from the Persian planning
+documents committed alongside the code.
+
+```
+assistant   Anthropic Claude, the Opus and Fable model families,
+            through the Claude Code CLI
+period      2026-06 to now, across many sessions
+```
+
+What the assistant did: most of the typing, first drafts of implementations
+against a stated design, test scaffolding, and refactors. What it did not do:
+decide anything that is measured. Every acceptance criterion, every threshold,
+every budget in `tools/phase5/h3_results.tsv` and every verdict in
+`tools/t2/h2_results.tsv` came out of a run on real hardware or a real shaped
+link, and no number in this repository is a model's recollection — a lint
+enforces that on the documents, and a manifest of sizes and hashes covers the
+results files.
+
+The working notes are committed too, including the ones that record mistakes.
+`tools/dossier/CHART_AUDIT.md` is an audit of this project's own UI that found a
+gauge showing a scripted profile; `tools/dossier/LANE_TABLE.md` records that the
+device measurements were taken over a test lane rather than the app's own path.
+Those were found by looking, and they are in the repository because a project
+that only publishes its good findings is not publishing findings.
+
 ## Licence
 
 Apache-2.0 for the client and all reusable packages; AGPL-3.0 for `server/`.

@@ -64,6 +64,19 @@ the test; do not weaken the check.
 - Names describe what the code does. A name that states an intent rather than a
   mechanism will be asked to change.
 
+## If you use an AI assistant on a contribution
+
+Say so in the pull request: which model and version, and what it did. This is
+not a hurdle — most of this repository was written that way and the README says
+so. It is so a reviewer knows what to look at twice.
+
+Two rules apply to a contribution either way, and they are the same rules the
+existing code was held to. A number in a comment, a document or on a screen
+must come from a run, not from a recollection; if you cannot point at the file
+that produced it, cut it. And a generated test is only worth having if you have
+watched it fail — a test that has never been red proves nothing about the code
+it names.
+
 ## Reporting a bug
 
 Include the platform, and — for anything network related — the link conditions
