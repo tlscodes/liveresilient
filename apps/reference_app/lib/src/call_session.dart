@@ -170,6 +170,12 @@ CallSessionHandle buildWebRtcCallSession({
   String Function(Uri uri)? proxyResolver,
   void Function(HttpClient client)? proxyConfigurator,
   SecurityContext? securityContext,
+
+  /// See `connectWebSocketWithCustomRules`: accepts a certificate that fails
+  /// validation for the named host and port. Null is strict. The dev relay
+  /// entry point passes a loopback-only relaxer; production never sets it.
+  bool Function(X509Certificate certificate, String host, int port)?
+  badCertificateCallback,
   ClipRecorder? recordVoiceClip,
   AudioFrameTap? audioFrameTap,
 
@@ -334,6 +340,7 @@ CallSessionHandle buildWebRtcCallSession({
         proxyResolver: proxyResolver,
         proxyConfigurator: proxyConfigurator,
         securityContext: securityContext,
+        badCertificateCallback: badCertificateCallback,
       );
       return _IoSignalingSocket(socket);
     },

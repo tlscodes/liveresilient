@@ -67,20 +67,30 @@ CONSTRAINTS — these are project rules, not preferences
 - Do not weaken or delete a test to make something pass.
 
 HOW TO TEST IT FOR REAL, in the terminal
-Two terminals. The relay first:
+Two terminals. The relay first — ON PORT 4443, because that is the port the
+app's dev entry point dials (main.dart, devConnectToLocalRelay) while the
+server's own default is 8443; run without --port and the app never connects:
 
-  dart run server/signaling_server/bin/signaling_server.dart
+  dart run server/signaling_server/bin/signaling_server.dart --port 4443
 
 Then the app against it. The datagram relay is separate if the run needs it:
 
   dart run server/signaling_server/bin/datagram_relay.dart
 
-Then place a call between two instances and confirm on screen that the chip
+Then place a call between two instances: on the first, tap Call and read the
+"Call key" the screen shows; on the second, tap "Join with key" and enter it
+(the second instance joins as the receiver). Confirm on screen that the chip
 reads "live path stats" and that the numbers move with the network rather than
 on a timer. Prove the difference: shape the link or pull the network mid-call
 and watch the gauge follow. A scripted feed recovers on schedule no matter what
 you do to the link — that is the test that tells the two apart, and it is the
 one that matters.
+
+The same journey, terminal-driven and self-contained (the relay is bound
+in-process on 4443, the second peer is a headless real stack that joins the
+key read off the screen; every number is printed as evidence):
+
+  cd apps/reference_app && flutter test integration_test/app_live_call_test.dart -d macos
 
 VERIFY BEFORE YOU CALL IT DONE
   cd apps/reference_app && dart analyze lib
