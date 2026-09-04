@@ -696,6 +696,32 @@ class E2eCallStack {
     final driver = MediaAdaptationDriver(
       port: () => stack.port,
       audioCeilingBps: constrainedLink ? wireBudget.opusRateBps : null,
+      // Same mid-call loop as production (call_session.dart): the
+      // measured link re-evaluates the wire policy; a ptime change is
+      // an SDP policy update plus a renegotiation.
+      initialWireBudget: wireBudget,
+      concurrentStreams: 2,
+      onRenegotiateWirePolicy: (policy) async {
+        stack.port?.updateOpusPolicy(
+          OpusSdpPolicy.forShapingState(
+            fixedTickEmitterRunning: false,
+            maxAverageBitrateBps: policy.opusRateBps,
+            ptimeMs: policy.ptimeMs,
+          ),
+        );
+        print(
+          'e2e ${role.name} wire policy: ${policy.opusRateBps}bps@'
+          '${policy.ptimeMs}ms for ${policy.bandwidthBps}bps '
+          '@${DateTime.now().difference(stack._builtAt).inSeconds}s',
+        );
+        await controller.requestRecovery(
+          cause: CallControllerException(
+            'wire_policy_renegotiation',
+            'audio ${policy.opusRateBps} bit/s at ${policy.ptimeMs} ms '
+                'for a ${policy.bandwidthBps} bit/s link',
+          ),
+        );
+      },
     );
     stack.adaptationDriver = driver;
     driver.decisions.listen(

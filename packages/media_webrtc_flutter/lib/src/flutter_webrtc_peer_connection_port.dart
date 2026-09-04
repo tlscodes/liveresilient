@@ -174,7 +174,18 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
 
   /// Opus fmtp knobs applied to every local description. Null means the stack's
   /// own defaults, which is what every existing caller gets.
-  final OpusSdpPolicy? _opusPolicy;
+  OpusSdpPolicy? _opusPolicy;
+
+  /// The Opus SDP policy in force for the NEXT local description this port
+  /// produces. Changing it does nothing by itself: the caller must
+  /// renegotiate (a fresh offer or answer) so the new receive preferences
+  /// travel to the far end's encoder — the mid-call half of the wire
+  /// budget (see MediaAdaptationDriver.onRenegotiateWirePolicy).
+  OpusSdpPolicy? get opusPolicy => _opusPolicy;
+
+  void updateOpusPolicy(OpusSdpPolicy? policy) {
+    _opusPolicy = policy;
+  }
 
   final _statusController = StreamController<PeerConnectionStatus>.broadcast();
   final _candidatesController = StreamController<IceCandidate>.broadcast();

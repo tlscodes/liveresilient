@@ -439,6 +439,29 @@ CallSessionHandle buildWebRtcCallSession({
   final adaptationDriver = MediaAdaptationDriver(
     port: () => livePort,
     audioCeilingBps: constrainedLink ? wireBudget.opusRateBps : null,
+    // The setup-time budget is the starting point; the transport's
+    // own bandwidth estimate re-evaluates it every sample. A packet-time
+    // change updates the port's SDP policy and renegotiates through the
+    // controller's recovery seam, so the far end's encoder is TOLD the
+    // new ptime (an encoder obeys the SDP it was sent).
+    initialWireBudget: wireBudget,
+    concurrentStreams: 2,
+    onRenegotiateWirePolicy: (policy) async {
+      livePort?.updateOpusPolicy(
+        OpusSdpPolicy.forShapingState(
+          fixedTickEmitterRunning: fixedTickEmitterRunning,
+          maxAverageBitrateBps: policy.opusRateBps,
+          ptimeMs: policy.ptimeMs,
+        ),
+      );
+      await controller.requestRecovery(
+        cause: CallControllerException(
+          'wire_policy_renegotiation',
+          'audio ${policy.opusRateBps} bit/s at ${policy.ptimeMs} ms '
+              'for a ${policy.bandwidthBps} bit/s link',
+        ),
+      );
+    },
   );
   // Survival mode: the ladder floor / a flapping path flips the call into
   // its first-class degraded phase instead of ever failing; voice-note
