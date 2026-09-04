@@ -61,6 +61,7 @@ class ChatDemoController extends ChangeNotifier {
               const Duration(milliseconds: 700),
           transportBufferedBytes: _bufferedBytesOf(photoLanePort),
           sendBudgetBytesPerSec: laneGovernor?.budgetBytesPerSec,
+          onBytesAcked: laneGovernor?.reportAcked,
         );
         _photoReceiver = StagedPhotoReceiver.arq(photoLanePort);
       }
@@ -73,6 +74,7 @@ class ChatDemoController extends ChangeNotifier {
               const Duration(milliseconds: 700),
           transportBufferedBytes: _bufferedBytesOf(videoLanePort),
           sendBudgetBytesPerSec: laneGovernor?.budgetBytesPerSec,
+          onBytesAcked: laneGovernor?.reportAcked,
         );
         _videoReceiver = VideoNoteReceiver(videoLanePort);
       }
@@ -113,8 +115,10 @@ class ChatDemoController extends ChangeNotifier {
       );
       _videoReceiver = VideoNoteReceiver(videoLanePeerEnd);
     }
-    // The window is a model of the frame on the path: the governor's rate
-    // gives the serialization term, its rtt seeds the round-trip term
+    // The window is a model of the frame on the path: the governor's
+    // MEASURED budget (acked bytes per second reported by the lanes and
+    // this messenger; the transport estimate is only logged) gives the
+    // serialization term, its rtt seeds the round-trip term
     // before any ack was sampled (on a >= 2 s path a fixed 2 s floor could
     // never sample one), and the transport buffer says whether a frame has
     // even left. Failure is 60 s of LIVE path per message (attachments pass
@@ -130,6 +134,7 @@ class ChatDemoController extends ChangeNotifier {
       sendBudgetBytesPerSec: () => laneGovernor?.budgetBytesPerSec(),
       transportBufferedBytes: _bufferedBytesOf(localPort),
       transportRttMs: () => laneGovernor?.readRttMs(),
+      onBytesAcked: laneGovernor?.reportAcked,
     );
 
     _photoUpdatesSub = _photoReceiver?.updates.listen(_onIncomingPhotoUpdate);

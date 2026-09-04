@@ -156,10 +156,19 @@ class ReliableMessenger {
   final Duration? deliveryBudget;
 
   /// The lane's send-rate budget in bytes per second (the same signal the
-  /// binary lanes read from the lane governor). Null or non-positive: the
-  /// messenger falls back to its own acked-bytes rate, then to no
-  /// serialization term at all.
+  /// binary lanes read from the lane governor). The rate the window and
+  /// the chunk sizing use is the MIN of this budget and the messenger's
+  /// own acked-bytes rate once that exists (3 acks over 2 s): a rate the
+  /// messenger has never achieved is not its rate, and a governor probing
+  /// above the link must not size chunks the link cannot carry. Null or
+  /// non-positive: the own rate alone, then no serialization term.
   final int? Function()? sendBudgetBytesPerSec;
+
+  /// Called once per acknowledged frame with that frame's wire length in
+  /// bytes — the messenger's delivery evidence for the lane governor.
+  /// A duplicate ack for a frame already removed from the pending set
+  /// does not fire it.
+  final void Function(int bytes)? onBytesAcked;
 
   /// Bytes queued in the transport (RTCDataChannel.bufferedAmount). Null:
   /// the buffer is unknown and every frame is assumed to have left.
@@ -196,8 +205,9 @@ class ReliableMessenger {
   /// Cumulative bytes handed to the port (data frames, retransmits, acks);
   /// with [transportBufferedBytes] this says how much has drained.
   int _handed = 0;
-  int _ackedBytes = 0;
-  int _acks = 0;
+
+  /// (ack time ms, acked frame bytes) inside the own-rate window.
+  final _ackSamples = <(int, int)>[];
   int? _firstSendMs;
   int _duplicateFrames = 0;
 
@@ -235,6 +245,7 @@ class ReliableMessenger {
     this.sendBudgetBytesPerSec,
     this.transportBufferedBytes,
     this.transportRttMs,
+    this.onBytesAcked,
     Clock? clock,
     Random? random,
     // Default to the zone-scoped clock (package:clock's top-level `clock`)
@@ -350,18 +361,38 @@ class ReliableMessenger {
   static int? _positive(int? value) =>
       value != null && value > 0 ? value : null;
 
+  /// The rate the window and the chunk sizing use: the smaller of the
+  /// governor's budget and the own acked-bytes rate when both exist,
+  /// else whichever exists, else null. The own rate needs 3 acks over
+  /// 2 s of live sending before it counts (one ack says nothing about
+  /// throughput).
   int? _rate() {
     final budget = _positive(sendBudgetBytesPerSec?.call());
-    if (budget != null) return budget;
-    final first = _firstSendMs;
-    if (first != null && _acks >= 3) {
-      final elapsed = _clock.now().millisecondsSinceEpoch - first;
-      if (elapsed >= 2000) {
-        final own = _ackedBytes * 1000 ~/ elapsed;
-        if (own > 0) return own;
-      }
+    final own = _ownAckedBytesPerSec();
+    if (budget != null && own != null) return min(budget, own);
+    return budget ?? own;
+  }
+
+  /// The delivery rate the messenger itself measured: bytes acked AFTER
+  /// the oldest ack in the window over the time between the oldest and
+  /// the newest ack (the classical delivery-rate estimator), inside a
+  /// sliding window of max(4 s, 4·srtt). A lifetime average pinned the
+  /// rate at the first slow acks after an idle stretch (chunks of 1 KiB,
+  /// windows of minutes — refuted 2026-09-04). Null until three acks span
+  /// two seconds inside the window; null again once the window empties.
+  int? _ownAckedBytesPerSec() {
+    final nowMs = _clock.now().millisecondsSinceEpoch;
+    final windowMs = max(4000, (4 * (_srttMs ?? 1000)).round());
+    _ackSamples.removeWhere((s) => nowMs - s.$1 > windowMs);
+    if (_ackSamples.length < 3) return null;
+    final span = _ackSamples.last.$1 - _ackSamples.first.$1;
+    if (span < 2000) return null;
+    var bytes = 0;
+    for (final s in _ackSamples.skip(1)) {
+      bytes += s.$2;
     }
-    return null;
+    final own = bytes * 1000 ~/ span;
+    return own > 0 ? own : null;
   }
 
   String get _seedSource {
@@ -539,8 +570,11 @@ class ReliableMessenger {
       case AckFrame(:final id):
         final acked = _pending.remove(id);
         if (acked != null) {
-          _acks++;
-          _ackedBytes += acked.frame.length;
+          _ackSamples.add((
+            _clock.now().millisecondsSinceEpoch,
+            acked.frame.length,
+          ));
+          onBytesAcked?.call(acked.frame.length);
           if (acked.attempts == 1) {
             final nowMs = _clock.now().millisecondsSinceEpoch;
             // The sample is the path's round trip, not the frame's drain:
@@ -548,7 +582,10 @@ class ReliableMessenger {
             // of the next small frame is not inflated by it.
             final raw =
                 nowMs - acked.firstSentMs - _serializationMs(acked).round();
-            _sampleRtt(max(1, raw));
+            // A non-positive remainder means the serialization estimate
+            // exceeded the observed time: the rate was wrong, not the
+            // path — no sample rather than a 1 ms one.
+            if (raw > 0) _sampleRtt(raw);
           }
           _deliveries.add((id, DeliveryState.delivered));
         }

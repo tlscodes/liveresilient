@@ -386,4 +386,31 @@ void main() {
     await resultF;
     expect(received.sha256Ok, true);
   }, timeout: const Timeout(Duration(minutes: 1)));
+
+  test('onBytesAcked sums to the object\'s byte length after a complete '
+      'transfer: once per chunk, the last chunk shorter', () async {
+    final (a, b) = pair(Random(3));
+    final rx = BinaryStreamReceiver(b);
+    addTearDown(rx.close);
+    const chunk = 4 * 1024;
+    final content = blob(10 * chunk + 37, 9); // 11 chunks, the last 37 B
+    final acked = <int>[];
+
+    final resultF = BinaryStreamSender(
+      a,
+      retransmitAfter: const Duration(milliseconds: 200),
+      chunkBytes: chunk,
+      onBytesAcked: acked.add,
+    ).send(content);
+    final received = await rx.completed.first.timeout(
+      const Duration(seconds: 10),
+    );
+    await resultF;
+
+    expect(received.sha256Ok, true);
+    expect(acked, hasLength((content.length / chunk).ceil()));
+    expect(acked.where((n) => n == chunk), hasLength(10));
+    expect(acked, contains(37));
+    expect(acked.fold<int>(0, (s, n) => s + n), content.length);
+  });
 }

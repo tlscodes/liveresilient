@@ -221,6 +221,7 @@ class StagedPhotoSender {
     int chunkBytes = 16 * 1024,
     int? Function()? transportBufferedBytes,
     int Function()? sendBudgetBytesPerSec,
+    void Function(int bytes)? onBytesAcked,
   }) : lane = StagedPhotoLane.arq,
        _fountain = null,
        _arq = BinaryStreamSender(
@@ -229,6 +230,7 @@ class StagedPhotoSender {
          chunkBytes: chunkBytes,
          transportBufferedBytes: transportBufferedBytes,
          sendBudgetBytesPerSec: sendBudgetBytesPerSec,
+         onBytesAcked: onBytesAcked,
        );
 
   StagedPhotoSender.fountain(

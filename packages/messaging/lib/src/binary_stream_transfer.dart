@@ -256,8 +256,25 @@ class BinaryStreamSender {
     this.chunkBytes = 16 * 1024,
     this.transportBufferedBytes,
     this.sendBudgetBytesPerSec,
+    this.onBytesAcked,
   }) : assert(windowSize >= 1),
        assert(chunkBytes >= 512);
+
+  /// Called once per chunk the receiver confirmed, with that chunk's
+  /// payload length in bytes (the last chunk is shorter than
+  /// [chunkBytes]). Fires for a plain ACK and for every chunk a HAVE
+  /// bitmap reports on resume, so the sum over a complete transfer is
+  /// the object's byte length. This is the lane's delivery evidence for
+  /// the governor: bytes the far side actually holds, not bytes offered.
+  final void Function(int bytes)? onBytesAcked;
+
+  /// Payload length of chunk [index] in a [contentLength]-byte object:
+  /// [chunkBytes] for every chunk but the last, which carries the rest.
+  int _chunkPayloadBytes(int index, int contentLength) {
+    final start = index * chunkBytes;
+    final end = start + chunkBytes;
+    return (end > contentLength ? contentLength : end) - start;
+  }
 
   /// Optional LIVE send-rate budget in bytes/second (token bucket, burst
   /// cap two seconds' worth). This is the link arbiter's lever: on a
@@ -362,6 +379,8 @@ class BinaryStreamSender {
                 acked[i] = true;
                 resumed++;
                 ackedChunks++;
+                // Not delivery evidence: the receiver already held these
+                // chunks before this transfer (same rule as the timed acks).
               }
             }
           }
@@ -369,6 +388,7 @@ class BinaryStreamSender {
           if (frame.index < total && !acked[frame.index]) {
             acked[frame.index] = true;
             ackedChunks++;
+            onBytesAcked?.call(_chunkPayloadBytes(frame.index, content.length));
             // Measurement, never assumption — and per Karn's rule only
             // from a chunk never retransmitted: a resend resets its
             // timestamp, and an ack racing that resend yields a bogus

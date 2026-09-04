@@ -146,6 +146,7 @@ class VideoNoteSender {
     int chunkBytes = 8 * 1024,
     int? Function()? transportBufferedBytes,
     int Function()? sendBudgetBytesPerSec,
+    void Function(int bytes)? onBytesAcked,
   }) : _announce = announce,
        _sender = BinaryStreamSender(
          lanePort,
@@ -153,6 +154,7 @@ class VideoNoteSender {
          chunkBytes: chunkBytes,
          transportBufferedBytes: transportBufferedBytes,
          sendBudgetBytesPerSec: sendBudgetBytesPerSec,
+         onBytesAcked: onBytesAcked,
        );
 
   final Future<void> Function(String text) _announce;

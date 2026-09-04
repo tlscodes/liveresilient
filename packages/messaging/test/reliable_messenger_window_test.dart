@@ -367,4 +367,89 @@ void main() {
     expect('$error', contains('reason=delivery budget 30000ms'));
     expect('$error', contains('rate=570B/s'));
   });
+
+  test('onBytesAcked fires once per acknowledged frame with that frame\'s '
+      'wire length', () async {
+    final acked = <int>[];
+    final alice = ReliableMessenger(
+      a,
+      peerId: 'alice',
+      clock: fake(),
+      onBytesAcked: acked.add,
+    );
+    final bob = ReliableMessenger(b, peerId: 'bob', clock: fake());
+    addTearDown(() async {
+      await alice.close();
+      await bob.close();
+    });
+    await alice.send('first');
+    final firstFrame = a.sentBytes;
+    a.deliverAll();
+    await _settle();
+    b.deliverAll();
+    await _settle();
+    expect(acked, [firstFrame]);
+    await alice.send('second, longer than the first one');
+    final secondFrame = a.sentBytes - firstFrame;
+    a.deliverAll();
+    await _settle();
+    b.deliverAll();
+    await _settle();
+    expect(acked, [firstFrame, secondFrame]);
+    expect(alice.pendingCount, 0);
+  });
+
+  test('the rate is the MIN of the governor budget and the own acked rate: '
+      'a governor at its 4 MB/s cap over a 570 B/s delivery sizes chunks '
+      'for 570 B/s', () async {
+    const governorCap = 4194304; // the governor's maxBytesPerSec
+    final alice = ReliableMessenger(
+      a,
+      peerId: 'alice',
+      clock: fake(),
+      sendBudgetBytesPerSec: () => governorCap,
+      transportRttMs: () => 3000,
+    );
+    final bob = ReliableMessenger(b, peerId: 'bob', clock: fake());
+    addTearDown(() async {
+      await alice.close();
+      await bob.close();
+    });
+    const framing = AttachmentChunk.framingOverhead;
+    // No own rate yet: the governor's number stands alone.
+    expect(alice.rateBytesPerSec, governorCap);
+    expect(alice.suggestedPayloadBytes(framingOverhead: framing), 12 * 1024);
+    final start = now;
+    // Three frames, each acknowledged 3 s after it was sent (the samples
+    // seed srtt at 3 s, as the transport said).
+    for (var i = 0; i < 3; i++) {
+      await alice.send('x' * 2000);
+      now = now.add(const Duration(seconds: 3));
+      a.deliverAll();
+      await _settle();
+      b.deliverAll();
+      await _settle();
+    }
+    expect(alice.pendingCount, 0);
+    // Two clean 3 s samples; the third ack is the one that makes the own
+    // rate exist (3 acks over 9 s ≈ 690 B/s), so its sample is reduced by
+    // the frame's serialization at that rate. srtt stays above 2.5 s, the
+    // point where 4·rtt reaches the 10 s target cap.
+    expect(alice.smoothedRttMs, inInclusiveRange(2500, 3000));
+    // Every frame alice sent was acked once: a.sentBytes is the acked total.
+    // Place the clock so that total / elapsed is exactly 570 B/s.
+    final elapsedMs = a.sentBytes * 1000 ~/ 570;
+    expect(elapsedMs, greaterThan(9000), reason: 'monotone clock');
+    now = start.add(Duration(milliseconds: elapsedMs));
+    // The delivery-rate estimator: bytes acked after the oldest ack over
+    // the interval between the oldest and newest ack (two 2.1 KB frames
+    // over 6 s ≈ 700 B/s), well under the governor's 4 MiB/s.
+    expect(alice.rateBytesPerSec, inInclusiveRange(500, 800));
+    // The 570 B/s answer of the rate test above: 2932 B.
+    expect(
+      alice.suggestedPayloadBytes(framingOverhead: framing),
+      inInclusiveRange(2500, 4200),
+      reason: 'sized for 500-800 B/s, not for 4 MiB/s',
+    );
+  });
 }
