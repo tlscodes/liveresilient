@@ -346,15 +346,21 @@ if ls "$MEDIA/$PROFILE"-* >/dev/null 2>&1; then
     mv "$old" "$MEDIA/superseded/$(basename "${old%.*}").$(date -r "$old" -u +%Y-%m-%dT%H%M%SZ).${old##*.}"
   done
 fi
-probe_media() {  # <photo|voice|video> <file> → ok(<detail>) or the check that failed
-  local kind=$1 f=$2
+probe_media() {  # <photo|voice|video> <file> <fixture> → ok(<detail>) or the check that failed
+  # The fixture is the reference: the returned file must decode to the SAME
+  # picture size / clip length the runner made for this link (sizes follow
+  # the profile, so a fixed floor would reject the thin-link clips).
+  local kind=$1 f=$2 fx=$3
   case "$kind" in
     photo)
       local w h
+      local fw fh
       w=$(sips -g pixelWidth "$f" 2>/dev/null | awk '/pixelWidth/{print $2}')
       h=$(sips -g pixelHeight "$f" 2>/dev/null | awk '/pixelHeight/{print $2}')
-      if [ "${w:-0}" -ge 320 ] 2>/dev/null && [ "${h:-0}" -ge 320 ] 2>/dev/null; then echo "ok(${w}x${h})"
-      else echo "photo-probe(${w:-?}x${h:-?},want>=320x320)"; fi ;;
+      fw=$(sips -g pixelWidth "$fx" 2>/dev/null | awk '/pixelWidth/{print $2}')
+      fh=$(sips -g pixelHeight "$fx" 2>/dev/null | awk '/pixelHeight/{print $2}')
+      if [ "${w:-0}" -ge 160 ] 2>/dev/null && [ "${h:-0}" -ge 90 ] 2>/dev/null && [ "$w" = "$fw" ] && [ "$h" = "$fh" ]; then echo "ok(${w}x${h})"
+      else echo "photo-probe(${w:-?}x${h:-?},fixture=${fw:-?}x${fh:-?})"; fi ;;
     voice)
       local dur peak
       dur=$(afinfo "$f" 2>/dev/null | sed -nE 's/.*estimated duration: ([0-9.]+) sec.*/\1/p' | head -1)
@@ -362,16 +368,19 @@ probe_media() {  # <photo|voice|video> <file> → ok(<detail>) or the check that
       python3 -c "import sys; d=float(sys.argv[1] or 0); m=float(sys.argv[2] or -99); print(('ok' if 3.0 <= d <= 8.0 and m > -20 else 'voice-probe') + '(%.1fs,max%.1fdB)' % (d, m))" "$dur" "$peak" 2>/dev/null \
         || echo "voice-probe(dur=${dur:-?},max=${peak:-?})" ;;
     video)
-      local info codec w h fr frame fbytes
+      local info codec w h fr frame fbytes fxinfo fxcodec fxw fxh fxfr fxdur
       info=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,nb_frames -of csv=p=0 "$f" 2>/dev/null | head -1)
       IFS=, read -r codec w h fr <<<"$info"
       local dur; dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f" 2>/dev/null | head -1 | cut -c1-5)
+      fxinfo=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,nb_frames -of csv=p=0 "$fx" 2>/dev/null | head -1)
+      IFS=, read -r fxcodec fxw fxh fxfr <<<"$fxinfo"
+      fxdur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$fx" 2>/dev/null | head -1 | cut -c1-5)
       frame="$MEDIA/$PROFILE-video-2s.jpg"
       ffmpeg -v error -y -ss 2 -i "$f" -frames:v 1 "$frame" >/dev/null 2>&1
       fbytes=$(stat -f %z "$frame" 2>/dev/null || echo 0)
-      if [ "${codec:-}" = h264 ] && [ "${w:-0}" -ge 320 ] 2>/dev/null && [ "${fr:-0}" -ge 24 ] 2>/dev/null && [ "$fbytes" -gt 2000 ]; then
+      if [ "${codec:-}" = h264 ] && [ "$w" = "$fxw" ] && [ "$h" = "$fxh" ] && [ "${fr:-0}" -ge 24 ] 2>/dev/null && [ "$dur" = "$fxdur" ] && [ "$fbytes" -gt 2000 ]; then
         echo "ok(h264,${w}x${h},${fr}f,${dur:-?}s)"
-      else echo "video-probe(${codec:-?},${w:-?}x${h:-?},${fr:-?}f,frame2s=${fbytes}B)"; fi ;;
+      else echo "video-probe(${codec:-?},${w:-?}x${h:-?},${fr:-?}f,${dur:-?}s,frame2s=${fbytes}B,fixture=${fxcodec:-?},${fxw:-?}x${fxh:-?},${fxdur:-?}s)"; fi ;;
     *) echo "probe(unknown_kind_$kind)" ;;
   esac
 }
@@ -401,7 +410,7 @@ for mf in photo voice_note video_note; do
     elif [ "$fsha" != "$bsha" ]; then result="sha-chain(fixture!=blob)"
     else
       cp "$blob" "$MEDIA/$PROFILE-$mk.$ext"
-      result=$(probe_media "$mk" "$MEDIA/$PROFILE-$mk.$ext")
+      result=$(probe_media "$mk" "$MEDIA/$PROFILE-$mk.$ext" "$fx")
     fi
   fi
   printf -v "decoded_$mf" '%s' "$result"
