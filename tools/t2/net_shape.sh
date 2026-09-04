@@ -267,7 +267,7 @@ load_anchor() {
 }
 
 shape() {
-  local bw=$1 delay=$2 plr=$3
+  local bw=$1 delay=$2 plr=$3 scope_arg="${4:-}"
   require_iface
   local cfg=""
   [ "$bw" != "-" ] && cfg="$cfg bw $bw"
@@ -347,11 +347,31 @@ shape() {
   # 5353) and because a verification probe must travel the same road as the
   # traffic whose impairment it certifies.
   local peer="${T2_PEER:-}"
+  local shape_all="${T2_SHAPE_ALL:-0}"
+  local tcp_ports="${T2_SHAPE_TCP_PORT:-}"
+  # THE SCOPE AS AN ARGUMENT (2026-09-05). The sudoers rule that lets the
+  # harness run this script without a password strips every environment
+  # variable ("you are not allowed to set ... T2_PEER, T2_SHAPE_TCP_PORT"),
+  # so the env forms above only work when run as root directly. The fourth
+  # positional argument carries the same choice through sudo:
+  #   all                      every packet on the interface
+  #   peer=<ip>                UDP (not mDNS) and ICMP to/from that address
+  #   peer=<ip>,tcp=<p1>+<p2>  the same plus TCP on those ports
+  case "$scope_arg" in
+    '') ;;
+    all) shape_all=1 ;;
+    peer=*)
+      peer=${scope_arg#peer=}; peer=${peer%%,*}
+      case "$scope_arg" in
+        *,tcp=*) tcp_ports="{ $(printf '%s' "${scope_arg#*,tcp=}" | tr '+' ',' | sed 's/,/, /g') }" ;;
+      esac ;;
+    *) echo "unknown scope: $scope_arg" >&2; return 2 ;;
+  esac
   local rules=""
   if [ -n "${T2_SHAPE_SPEC:-}" ]; then
     rules="dummynet in  quick on $IFACE ${T2_SHAPE_SPEC} pipe 1
 dummynet out quick on $IFACE ${T2_SHAPE_SPEC} pipe 2"
-  elif [ "${T2_SHAPE_ALL:-0}" = 1 ]; then
+  elif [ "$shape_all" = 1 ]; then
     if [ -n "$peer" ]; then
       rules="dummynet in  quick on $IFACE from $peer to any pipe 1
 dummynet out quick on $IFACE from any to $peer pipe 2"
@@ -373,10 +393,10 @@ dummynet out quick on $IFACE proto icmp from any to $peer pipe 2"
     # while the debugger stays untouched. Expected consequence, not a bug:
     # under heavy-loss profiles TCP retransmission may stall signalling long
     # before media degrades.
-    if [ -n "${T2_SHAPE_TCP_PORT:-}" ]; then
+    if [ -n "$tcp_ports" ]; then
       rules="$rules
-dummynet in  quick on $IFACE proto tcp from $peer to any port ${T2_SHAPE_TCP_PORT} pipe 1
-dummynet out quick on $IFACE proto tcp from any port ${T2_SHAPE_TCP_PORT} to $peer pipe 2"
+dummynet in  quick on $IFACE proto tcp from $peer to any port ${tcp_ports} pipe 1
+dummynet out quick on $IFACE proto tcp from any port ${tcp_ports} to $peer pipe 2"
     fi
   else
     rules="dummynet in  quick on $IFACE proto udp from any to any port != 5353 pipe 1
@@ -425,7 +445,7 @@ case "$1" in
   setup) setup ;;
   unsetup) unsetup ;;
   check) check ;;
-  shape) [ $# -eq 4 ] || usage; shape "$2" "$3" "$4" ;;
+  shape) [ $# -eq 4 ] || [ $# -eq 5 ] || usage; shape "$2" "$3" "$4" "${5:-}" ;;
   block) [ $# -eq 2 ] || usage; block "$2" ;;
   teardown) teardown ;;
   restore) restore ;;

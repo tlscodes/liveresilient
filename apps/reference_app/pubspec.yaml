@@ -83,6 +83,8 @@ dependencies:
     path: ../../packages/broadcast_media
   hamseda_codec:
     path: ../../packages/hamseda_codec
+  wakelock_plus: ^1.8.0
+  cryptography: ^2.9.0
 
 dev_dependencies:
   flutter_test:

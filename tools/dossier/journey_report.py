@@ -13,8 +13,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-PROFILES = ['normal', 'latency', 'loss10', 'bandwidth', 'narrow', 'loss60', 'extreme']
-FEATURES = ['call_connect', 'monitor_bar', 'chat_text', 'photo', 'video_note', 'voice_note']
+PROFILES = ['normal', 'latency', 'loss10', 'bandwidth', 'narrow', 'loss60', 'extreme', 'blackout']
+FEATURES = ['call_connect', 'monitor_bar', 'chat_text', 'photo', 'video_note', 'voice_note', 'blackout_message']
 RUN = re.compile(r'run=(\S+)')
 
 

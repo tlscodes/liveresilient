@@ -28,6 +28,8 @@ set -uo pipefail
 
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 PROFILE=${1:?profile}
+# The eighth profile has no call, no Mac app and no film: its own runner.
+[ "$PROFILE" = blackout ] && exec "$REPO/tools/t2/journey_blackout.sh"
 PHONE=${JOURNEY_PHONE:-00008030-001215003AF2802E}
 BUNDLE_ID=${JOURNEY_BUNDLE_ID:-com.tlscodes.referenceApp}
 IFACE=${T2_IFACE:-bridge100}

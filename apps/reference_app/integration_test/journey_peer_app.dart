@@ -28,12 +28,19 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:call_core/call_core.dart';
+import 'package:cryptography/cryptography.dart';
+import 'package:device_link/device_link.dart'
+    show DtnBundle, DtnBundleQueue, LinkMessagePriority;
+import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:flutter/material.dart';
 import 'package:media_webrtc/media_webrtc.dart' show RawRtcCounters;
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'support/e2e_support.dart';
 
@@ -59,7 +66,16 @@ class JourneyJob {
   final String key;
   final int holdS;
 
-  const JourneyJob({required this.run, required this.key, required this.holdS});
+  /// Present for the blackout profile: {bytes, probe_s, lifetime_s}. The
+  /// peer then holds a signed bundle instead of placing a call.
+  final Map<String, Object?>? blackout;
+
+  const JourneyJob({
+    required this.run,
+    required this.key,
+    required this.holdS,
+    this.blackout,
+  });
 
   static JourneyJob? tryParse(String body) {
     try {
@@ -71,7 +87,13 @@ class JourneyJob {
       if (run is! String || key is! String || run.isEmpty || key.isEmpty) {
         return null;
       }
-      return JourneyJob(run: run, key: key, holdS: hold is int ? hold : 400);
+      final blackout = decoded['blackout'];
+      return JourneyJob(
+        run: run,
+        key: key,
+        holdS: hold is int ? hold : 400,
+        blackout: blackout is Map<String, Object?> ? blackout : null,
+      );
     } on FormatException {
       return null;
     }
@@ -87,6 +109,11 @@ class JourneyPeer {
   MediaMode? _mode;
   String? _lastRun;
 
+  /// This install's Ed25519 key pair, made at boot; the public key rides
+  /// the boot event so the Mac can verify a bundle signed hours later.
+  SimpleKeyPair? _keyPair;
+  String? _pubkeyB64;
+
   void _note(String line) {
     final stamped =
         '${DateTime.now().toIso8601String().substring(11, 19)} $line';
@@ -101,12 +128,25 @@ class JourneyPeer {
     // answer it while the Mac side is still building, and never again for
     // the life of this install.
     _mode = await resolveMediaMode();
+    // A blackout job holds the phone for hours with no call to keep it
+    // awake; without this the screen locks and iOS suspends the prober.
+    try {
+      await WakelockPlus.enable();
+    } on Object catch (error) {
+      _note('wakelock unavailable: $error');
+    }
+    final keyPair = _keyPair = await Ed25519().newKeyPair();
+    _pubkeyB64 = base64Encode((await keyPair.extractPublicKey()).bytes);
     _note('boot media=${_mode!.name} hub=$journeyHubUrl');
     // `blob: true` tells the runner this install posts media bytes to /blob;
-    // an older install reports only sha256 receipts.
+    // an older install reports only sha256 receipts. `blackout: true` says
+    // it can hold a signed bundle across an outage, and `pubkey` is the
+    // Ed25519 public key the Mac verifies that bundle against.
     await _report('boot', <String, Object?>{
       'media': _mode!.name,
       'blob': true,
+      'blackout': true,
+      'pubkey': _pubkeyB64,
     });
     while (true) {
       final job = await _nextJob();
@@ -238,6 +278,10 @@ class JourneyPeer {
   }
 
   Future<void> _serve(JourneyJob job) async {
+    if (job.blackout != null) {
+      await _serveBlackout(job, job.blackout!);
+      return;
+    }
     status.value = 'job ${job.run}: preparing';
     _note('job run=${job.run} key=${job.key} hold=${job.holdS}s');
     final relay = await LoopbackRelay.start(); // remote: no in-process server
@@ -332,6 +376,158 @@ class JourneyPeer {
       await stack.dispose();
       await relay.close();
       status.value = 'job ${job.run}: finished';
+    }
+  }
+
+  /// The blackout job: no call. A signed bundle of [bytes] is created at T0,
+  /// put in the DURABLE store-and-forward queue (survives a process restart),
+  /// and the phone probes the hub every [probeS] seconds with one cheap GET.
+  /// The first probe that answers opens the queue's flush: the bundle is
+  /// POSTed to /bundle, the Mac verifies the Ed25519 signature and records
+  /// the arrival. Delivery time is whatever the link allowed — hours, not
+  /// seconds — and the row reports it in hours.
+  Future<void> _serveBlackout(JourneyJob job, Map<String, Object?> cfg) async {
+    _lastRun = job.run;
+    final bytes = cfg['bytes'] is int ? cfg['bytes']! as int : 1024;
+    final probeS = cfg['probe_s'] is int ? cfg['probe_s']! as int : 20;
+    final lifetimeS = cfg['lifetime_s'] is int
+        ? cfg['lifetime_s']! as int
+        : 6 * 3600;
+    _note(
+      'blackout job run=${job.run} bytes=$bytes probe=${probeS}s '
+      'lifetime=${lifetimeS}s',
+    );
+    status.value = 'job ${job.run}: blackout — holding $bytes B';
+
+    final createdMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final header = utf8.encode(
+      jsonEncode({'run': job.run, 'created_ms': createdMs, 'bytes': bytes}),
+    );
+    final random = Random.secure();
+    final payload = Uint8List(bytes);
+    payload.setRange(0, min(header.length, bytes), header);
+    for (var i = header.length; i < bytes; i++) {
+      payload[i] = random.nextInt(256);
+    }
+    final sha = contentSha256Hex(payload);
+    final id = sha.substring(0, 16);
+    final signature = await Ed25519().sign(payload, keyPair: _keyPair!);
+    final envelope = utf8.encode(
+      jsonEncode({
+        'run': job.run,
+        'id': id,
+        'created_ms': createdMs,
+        'payload': base64Encode(payload),
+        'sig': base64Encode(signature.bytes),
+        'pubkey': _pubkeyB64,
+      }),
+    );
+    final store = DurableBundleStore.open(
+      File('${Directory.systemTemp.path}/journey_blackout_bundles.jsonl'),
+    );
+    final queue = DtnBundleQueue(store: store);
+    final admission = queue.offer(
+      DtnBundle(
+        id: id,
+        payload: envelope,
+        priority: LinkMessagePriority.bulk,
+        createdAtMs: createdMs,
+        lifetimeMs: lifetimeS * 1000,
+      ),
+      nowMs: createdMs,
+    );
+    _note('bundle $id queued ($admission), sha256=$sha');
+    // The last event that can leave before the runner cuts the link.
+    await _report('blackout_armed', <String, Object?>{
+      'id': id,
+      'sha256': sha,
+      'created_ms': createdMs,
+      'bytes': bytes,
+      'probe_s': probeS,
+      'lifetime_s': lifetimeS,
+      'store': 'durable',
+    }, run: job.run);
+
+    var probes = 0;
+    var reachable = 0;
+    int? deliveredMs;
+    final deadlineMs = createdMs + lifetimeS * 1000;
+    while (DateTime.now().toUtc().millisecondsSinceEpoch < deadlineMs) {
+      await Future<void>.delayed(Duration(seconds: probeS));
+      probes++;
+      final heldS =
+          (DateTime.now().toUtc().millisecondsSinceEpoch - createdMs) ~/ 1000;
+      status.value =
+          'job ${job.run}: holding $bytes B for ${heldS}s, probe $probes';
+      if (!await _hubReachable()) continue;
+      reachable++;
+      final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+      final sent = await queue.flush(_postBundle, nowMs: nowMs);
+      if (sent > 0) {
+        deliveredMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+        break;
+      }
+    }
+    if (deliveredMs != null) {
+      final latencyS = (deliveredMs - createdMs) / 1000.0;
+      _note(
+        'bundle $id delivered after ${latencyS.toStringAsFixed(0)}s, '
+        'probes=$probes reachable=$reachable',
+      );
+      status.value = 'job ${job.run}: delivered after ${latencyS ~/ 60} min';
+      await _report('ended', <String, Object?>{
+        'phase': 'ended',
+        'reason': 'bundleDelivered',
+        'delivered_ms': deliveredMs,
+        'latency_s': latencyS,
+        'probes': probes,
+        'reachable_probes': reachable,
+      }, run: job.run);
+    } else {
+      _note('bundle $id NOT delivered within ${lifetimeS}s, probes=$probes');
+      status.value = 'job ${job.run}: bundle expired undelivered';
+      await _report('failed', <String, Object?>{
+        'error': 'bundle not delivered within ${lifetimeS}s',
+        'last_phase': 'blackout',
+        'probes': probes,
+        'reachable_probes': reachable,
+      }, run: job.run);
+    }
+  }
+
+  /// One cheap GET: the probe that decides whether a window is open.
+  Future<bool> _hubReachable() async {
+    try {
+      final response = await _http
+          .getUrl(Uri.parse('$journeyHubUrl/health'))
+          .then((request) => request.close())
+          .timeout(const Duration(seconds: 4));
+      await response.drain<void>();
+      return response.statusCode == 200;
+    } on Object {
+      return false;
+    }
+  }
+
+  /// The queue's forwarder: the whole signed envelope in one POST; true only
+  /// on a 200 so the queue keeps the bundle for the next window otherwise.
+  Future<bool> _postBundle(DtnBundle bundle) async {
+    try {
+      final request = await _http
+          .postUrl(Uri.parse('$journeyHubUrl/bundle'))
+          .timeout(const Duration(seconds: 5));
+      request.headers.contentType = ContentType.json;
+      request.contentLength = bundle.payload.length;
+      request.add(bundle.payload);
+      final response = await request.close().timeout(
+        const Duration(seconds: 15),
+      );
+      final body = await response.transform(utf8.decoder).join();
+      _note('bundle ${bundle.id} posted: ${response.statusCode} $body');
+      return response.statusCode == 200;
+    } on Object catch (error) {
+      _note('bundle ${bundle.id} post failed: $error');
+      return false;
     }
   }
 

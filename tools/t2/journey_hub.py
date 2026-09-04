@@ -36,8 +36,10 @@ USAGE  journey_hub.py --bind <addr> --port 8765 --dir <run dir>
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
+import time
 import os
 import re
 import sys
@@ -125,10 +127,68 @@ class Hub(BaseHTTPRequestHandler):
             raise BodyTooLarge()
         return self.rfile.read(length) if length > 0 else b""
 
+    def _bundle(self, raw: bytes) -> None:
+        """A signed store-and-forward bundle from the peer: verify the Ed25519
+        signature against the boot event's public key, keep the bytes, and
+        append one `bundle_received` event with the latency since the bundle
+        was created (the peer's clock) — the number the blackout row reports
+        in hours."""
+        try:
+            env = json.loads(raw.decode("utf-8"))
+            payload = base64.b64decode(env["payload"])
+            sig = base64.b64decode(env["sig"])
+            pubkey_b64 = str(env["pubkey"])
+            bundle_id = str(env["id"])
+            created_ms = int(env["created_ms"])
+        except (ValueError, KeyError, TypeError):
+            self._send(400, b"bad bundle\n")
+            return
+        if not SAFE_NAME.fullmatch(bundle_id):
+            self._send(400, b"bad id\n")
+            return
+        stored = self.run_dir / "peer_pubkey.b64"
+        pubkey_match = stored.exists() and stored.read_text().strip() == pubkey_b64
+        sig_ok = False
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+            Ed25519PublicKey.from_public_bytes(base64.b64decode(pubkey_b64)).verify(sig, payload)
+            sig_ok = True
+        except Exception:  # noqa: BLE001 — any failure is a bad signature
+            sig_ok = False
+        received_ms = int(time.time() * 1000)
+        blobs = self.run_dir / "blobs"
+        blobs.mkdir(exist_ok=True)
+        (blobs / f"bundle-{bundle_id}.bin").write_bytes(payload)
+        event = {
+            "event": "bundle_received",
+            "run": env.get("run"),
+            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "id": bundle_id,
+            "bytes": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "sig_ok": sig_ok,
+            "pubkey_match": pubkey_match,
+            "created_ms": created_ms,
+            "received_ms": received_ms,
+            "latency_s": round((received_ms - created_ms) / 1000, 1),
+        }
+        with self._lock:
+            with (self.run_dir / "phone_events.jsonl").open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(event, separators=(",", ":")) + "\n")
+        self._send(200, f"ok sig_ok={str(sig_ok).lower()} pubkey_match={str(pubkey_match).lower()}\n".encode())
+
     def do_POST(self):  # noqa: N802
         path, _, query = self.path.partition("?")
         if path == "/blob":
             self._blob(query)
+            return
+        if path == "/bundle":
+            try:
+                raw = self._read_body(BLOB_MAX_BYTES)
+            except BodyTooLarge:
+                self._refuse(413, b"too large\n")
+                return
+            self._bundle(raw)
             return
         if path != "/report":
             self._send(404, b"no such path\n")
@@ -139,6 +199,8 @@ class Hub(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError):
             self._send(400, b"bad json\n")
             return
+        if event.get("event") == "boot" and isinstance(event.get("pubkey"), str):
+            (self.run_dir / "peer_pubkey.b64").write_text(event["pubkey"] + "\n")
         line = json.dumps(event, separators=(",", ":"), ensure_ascii=False)
         with self._lock:
             with (self.run_dir / "phone_events.jsonl").open("a", encoding="utf-8") as fh:
