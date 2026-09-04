@@ -95,31 +95,41 @@ voice_dur=$(afinfo "$F/voice.wav" 2>/dev/null | sed -nE 's/.*estimated duration:
 dur_ok=$(python3 -c "print(1 if 3.0 <= float('$voice_dur') <= 8.0 else 0)" 2>/dev/null || echo 0)
 [ "$dur_ok" = 1 ] || fail "voice.wav lasts $voice_dur s, outside 3.0..8.0 s"
 
-# --- the photographs: two different real scenes, one for the photo, one for the video ---
-# macOS ships these as HEIC; sips converts and scales them. The choice is
-# random per run so the evidence of the matrix is not the same picture seven
-# times; the file name is printed so a reader knows which scene it was.
+# --- the photograph: the FaceTime camera when this process may use it, else a real
+# photograph macOS ships. Only PHOTOGRAPHS qualify: of the desktop pictures on this
+# Mac, "Sequoia Sunrise" is a photograph (a sequoia forest); "Sonoma" and "Sonoma
+# Horizon" are renderings and are not used (2026-09-04). The camera needs the
+# Camera permission granted to the app that runs this shell (System Settings >
+# Privacy & Security > Camera); a process without it gets "Input/output error"
+# from ffmpeg's avfoundation input and no prompt, so the fallback is silent
+# except for the printed source name.
 scenes=()
-for s in "/System/Library/Desktop Pictures/Sonoma.heic" \
-         "/System/Library/Desktop Pictures/.wallpapers/Sonoma Horizon/Sonoma Horizon.heic" \
-         "/System/Library/Desktop Pictures/.wallpapers/Sequoia Sunrise/Sequoia Sunrise.heic"; do
+for s in "/System/Library/Desktop Pictures/.wallpapers/Sequoia Sunrise/Sequoia Sunrise.heic"; do
   [ -f "$s" ] && scenes+=("$s")
 done
-pick_scene() {  # <exclude> → a path from $scenes, not equal to <exclude> when possible
-  local exclude=$1 n=${#scenes[@]} i cand
-  [ "$n" -gt 0 ] || fail "no photograph source: set JOURNEY_PHOTO_SRC (no macOS desktop scene found)"
-  i=$((RANDOM % n)); cand=${scenes[$i]}
-  if [ "$n" -gt 1 ] && [ "$cand" = "$exclude" ]; then cand=${scenes[$(((i + 1) % n))]}; fi
-  printf '%s' "$cand"
+pick_scene() {  # → a photograph path from $scenes (random when there are several)
+  local n=${#scenes[@]}
+  [ "$n" -gt 0 ] || fail "no photograph source: set JOURNEY_PHOTO_SRC (no macOS photograph found)"
+  printf '%s' "${scenes[$((RANDOM % n))]}"
+}
+camera_photo() {  # → photo_src.jpg from the FaceTime camera; 1 = camera unavailable
+  ffmpeg -v error -y -f avfoundation -framerate 30 -video_size 1280x720 -pixel_format uyvy422 \
+    -i "0" -t 1 -frames:v 1 -update 1 -q:v 3 "$F/photo_src.jpg" </dev/null >/dev/null 2>&1 \
+    && [ -s "$F/photo_src.jpg" ]
 }
 if [ -n "$PHOTO_SRC" ]; then
   [ -f "$PHOTO_SRC" ] || fail "JOURNEY_PHOTO_SRC not found: $PHOTO_SRC"
   photo_scene=$PHOTO_SRC
+  sips -s format jpeg -s formatOptions 85 -Z "$PHOTO_PX" "$photo_scene" --out "$F/photo_src.jpg" >/dev/null 2>&1 \
+    || fail "sips could not convert the photograph $photo_scene"
+elif [ "${JOURNEY_CAMERA:-1}" = 1 ] && camera_photo; then
+  photo_scene="FaceTime camera"
+  sips -Z "$PHOTO_PX" "$F/photo_src.jpg" >/dev/null 2>&1 || fail "sips could not scale the camera photo"
 else
-  photo_scene=$(pick_scene "")
+  photo_scene=$(pick_scene)
+  sips -s format jpeg -s formatOptions 85 -Z "$PHOTO_PX" "$photo_scene" --out "$F/photo_src.jpg" >/dev/null 2>&1 \
+    || fail "sips could not convert the photograph $photo_scene"
 fi
-sips -s format jpeg -s formatOptions 85 -Z "$PHOTO_PX" "$photo_scene" --out "$F/photo_src.jpg" >/dev/null 2>&1 \
-  || fail "sips could not convert the photograph $photo_scene"
 [ -s "$F/photo_src.jpg" ] || fail "photo_src.jpg missing or empty"
 photo_bytes=$(stat -f %z "$F/photo_src.jpg")
 photo_w=$(sips -g pixelWidth "$F/photo_src.jpg" 2>/dev/null | awk '/pixelWidth/{print $2}')

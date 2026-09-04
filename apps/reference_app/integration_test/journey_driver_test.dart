@@ -620,9 +620,9 @@ Future<List<FeatureOutcome>> _runFeatures(
                 : (chat.attachmentProgress[videoId] ?? 0) >= 1.0,
             startedAt: startedAt,
             note: lane
-                ? 'H.264/AAC clip made by ffmpeg (testsrc2 + tone), binary '
+                ? 'one-minute H.264/AAC clip from the runner (JOURNEY_VIDEO_FILE), binary '
                       'video lane, phone verified the sha256'
-                : 'H.264/AAC clip made by ffmpeg (testsrc2 + tone) via the '
+                : 'one-minute H.264/AAC clip from the runner (JOURNEY_VIDEO_FILE) via the '
                       'chunked text path (no video lane)',
           ),
         );
