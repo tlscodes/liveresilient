@@ -506,6 +506,14 @@ Future<List<FeatureOutcome>> _runFeatures(
     outcomes.add(_skipped('video_note', 'threw: $error'));
   }
 
+  // What the lane budget was last derived from — the row's explanation for
+  // a slow or a fast transfer.
+  print(
+    'JOURNEY_APP lane ${t()} budget_reason='
+    '${(chat.laneBudgetReason ?? 'none').replaceAll(' ', '_')} '
+    'last_failure=${(chat.lastSendFailure ?? '-').replaceAll(' ', '_')}',
+  );
+
   // Back to the call screen for the hang-up.
   final back = find.byType(BackButton);
   if (back.evaluate().isNotEmpty) {

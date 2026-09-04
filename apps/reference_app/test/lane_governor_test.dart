@@ -3,17 +3,52 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/lane_governor.dart';
 
 void main() {
-  test('a known link estimate gives the lane its share, clamped', () {
+  test('a known link estimate is the floor of the budget, clamped, and the '
+      'delay control may rise above it', () {
+    var now = DateTime.utc(2026, 1, 1);
     int? available = 32000;
+    var rtt = 40;
     final governor = LaneGovernor(
-      readRttMs: () => 40,
+      readRttMs: () => rtt,
       readAvailableOutgoingBps: () => available,
+      clock: Clock(() => now),
+      initialBytesPerSec: 500,
     );
-    expect(governor.budgetBytesPerSec(), 1000); // 25 % of 32 kbit/s
+    // 25 % of 32 kbit/s = 1000 B/s is vouched for even from a lower start.
+    expect(governor.budgetBytesPerSec(), 1000);
+    expect(governor.lastReason, contains('held at link share'));
+    // A clean round trip lets the budget climb past the share.
+    for (var i = 0; i < 8; i++) {
+      now = now.add(const Duration(milliseconds: 300));
+      governor.budgetBytesPerSec();
+    }
+    expect(governor.budgetBytesPerSec(), greaterThan(1000));
+    // An inflated round trip shrinks it, but never under the share.
+    rtt = 900;
+    for (var i = 0; i < 20; i++) {
+      now = now.add(const Duration(seconds: 1));
+      governor.budgetBytesPerSec();
+    }
+    expect(governor.budgetBytesPerSec(), 1000);
     available = 1000;
+    for (var i = 0; i < 20; i++) {
+      now = now.add(const Duration(seconds: 1));
+      governor.budgetBytesPerSec();
+    }
     expect(governor.budgetBytesPerSec(), 400); // the floor
     available = 800000000;
     expect(governor.budgetBytesPerSec(), 4 << 20); // the cap
+  });
+
+  test('a link estimate without a round trip yet raises the initial budget '
+      'to the share', () {
+    final governor = LaneGovernor(
+      readRttMs: () => null,
+      readAvailableOutgoingBps: () => 800000,
+      initialBytesPerSec: 1000,
+    );
+    expect(governor.budgetBytesPerSec(), 25000);
+    expect(governor.lastReason, contains('no rtt yet'));
   });
 
   test('without a link estimate the budget grows while the round trip stays '

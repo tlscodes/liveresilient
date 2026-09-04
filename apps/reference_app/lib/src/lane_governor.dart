@@ -69,20 +69,31 @@ class LaneGovernor {
 
   /// The budget in bytes per second, re-derived on every call (lane senders
   /// read it per chunk).
+  ///
+  /// The transport's estimate is a FLOOR, not a cap. Measured on the rig
+  /// (normal profile, unshaped, 2026-09-04): an audio-only call's
+  /// `availableOutgoingBitrate` sits near the audio send rate (~80 kbit/s)
+  /// because nothing probes higher — a quarter of it capped a 57 KB photo at
+  /// 21 s on a link that had carried it in 1.6 s the run before. So the lane
+  /// may always use that share (it is what the transport vouches for), and
+  /// the delay-based control decides how far above it the path allows.
   int budgetBytesPerSec() {
     final available = readAvailableOutgoingBps?.call();
+    int? fromLink;
     if (available != null && available > 0) {
-      final fromLink = (available * share / 8).round().clamp(
+      fromLink = (available * share / 8).round().clamp(
         minBytesPerSec,
         maxBytesPerSec,
       );
-      _budget = fromLink.toDouble();
-      lastReason = 'link estimate ${available}bps × $share';
-      return fromLink;
     }
     final rtt = readRttMs();
     if (rtt == null) {
-      lastReason = 'no readings yet';
+      if (fromLink != null) {
+        _budget = max(_budget, fromLink.toDouble());
+        lastReason = 'link estimate ${available}bps × $share, no rtt yet';
+      } else {
+        lastReason = 'no readings yet';
+      }
       return _budget.round();
     }
     final rttMs = rtt.toDouble();
@@ -94,6 +105,12 @@ class LaneGovernor {
     final stepEvery = Duration(milliseconds: max(200, rtt));
     final last = _lastStepAt;
     if (last != null && now.difference(last) < stepEvery) {
+      // Inside the current round trip: no new step, but the link share is
+      // still honoured (it may have just been reported).
+      if (fromLink != null && _budget < fromLink) {
+        _budget = fromLink.toDouble();
+        lastReason = 'held at link share ${available}bps × $share';
+      }
       return _budget.round();
     }
     _lastStepAt = now;
@@ -105,6 +122,10 @@ class LaneGovernor {
     } else {
       _budget = min(maxBytesPerSec.toDouble(), _budget * 1.25);
       lastReason = 'rtt ${rtt}ms near floor ${base.round()}ms';
+    }
+    if (fromLink != null && _budget < fromLink) {
+      _budget = fromLink.toDouble();
+      lastReason = '$lastReason; held at link share ${available}bps × $share';
     }
     return _budget.round();
   }
