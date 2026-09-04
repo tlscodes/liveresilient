@@ -106,6 +106,7 @@ cleanup() {
   pkill -f "xcodebuild.*reference_app" 2>/dev/null || true
   pkill -f "macos_assemble.sh" 2>/dev/null || true
   pkill -f "journey_hub.py" 2>/dev/null || true
+  touch "$RUN/rec_stop" 2>/dev/null || true
   echo "cleanup: shaping torn down, children stopped"
 }
 trap cleanup EXIT INT TERM
@@ -192,11 +193,29 @@ for _ in $(seq 1 240); do [ -f "$READY" ] && break; sleep 2.5; done
 echo "app       on screen"
 osascript -e 'tell application id "com.voicecallkit.referenceApp" to activate' >/dev/null 2>&1 || true
 
-# --- record the Mac screen for the whole run (unedited; stopped when the run ends) ---
-REC_S=$((HOLD + BUDGET + 4 * FEATURE_BUDGET + 120))
-screencapture -v -V "$REC_S" "$EVID/$PROFILE.mov" >/dev/null 2>&1 &
+# --- record the Mac screen for the whole run, unedited, in fixed segments ---
+# `screencapture -v` writes its file ONLY when its own -V timer ends: SIGINT
+# is ignored (measured 2026-09-04: a 60 s recording interrupted at 6 s ran
+# the full 60 s and then wrote 55 MB; a longer one killed early wrote
+# nothing, and every row of the night carried the size of the PREVIOUS
+# day's file). So the run is filmed as back-to-back 120 s segments that
+# each end on their own timer; the last one is awaited, never killed.
+# Earlier recordings of the profile are kept aside, not overwritten.
+REC_SEG_S=${JOURNEY_REC_SEGMENT_S:-120}
+if ls "$EVID/$PROFILE"*.mov >/dev/null 2>&1; then
+  mkdir -p "$EVID/superseded"
+  for old in "$EVID/$PROFILE"*.mov; do
+    mv "$old" "$EVID/superseded/$(basename "${old%.mov}").$(date -r "$old" -u +%Y-%m-%dT%H%M%SZ).mov"
+  done
+fi
+REC_STOP="$RUN/rec_stop"
+( seg=0
+  while [ ! -f "$REC_STOP" ]; do
+    seg=$((seg + 1))
+    screencapture -v -V "$REC_SEG_S" "$EVID/$PROFILE-$(printf '%02d' "$seg").mov" >/dev/null 2>&1
+  done ) &
 REC_PID=$!
-echo "recording $EVID/$PROFILE.mov (up to ${REC_S}s)"
+echo "recording $EVID/$PROFILE-NN.mov in ${REC_SEG_S}s segments"
 
 printf '%s\n' "$KEY" >"$GO"
 echo "go        key handed to the app"
@@ -213,15 +232,15 @@ wait "$APP_PID"; APP_RC=$?
 for _ in $(seq 1 60); do [ -f "$RUN/job.done" ] && break; sleep 1; done
 PHONE_RC=$([ -f "$RUN/job.done" ] && cat "$RUN/job.done" || echo "no-ended-event")
 cp "$EVENTS" "$LOGD/$PROFILE.phone.jsonl" 2>/dev/null || true
-# Stop the recorder: SIGINT ends a -v recording cleanly and writes the file;
-# escalate so the run never hangs on it (the display-asleep case).
-kill -INT "$REC_PID" 2>/dev/null || true
-for _ in $(seq 1 15); do kill -0 "$REC_PID" 2>/dev/null || break; sleep 1; done
-kill -TERM "$REC_PID" 2>/dev/null || true; sleep 2; kill -KILL "$REC_PID" 2>/dev/null || true
+# Stop filming: no new segment starts, the current one ends on its own
+# timer (at most REC_SEG_S more seconds) and writes itself.
+touch "$REC_STOP"
+for _ in $(seq 1 $((REC_SEG_S + 30))); do kill -0 "$REC_PID" 2>/dev/null || break; sleep 1; done
 wait "$REC_PID" 2>/dev/null || true
 shaper teardown >/dev/null 2>&1 || true
-rec_bytes=$(stat -f %z "$EVID/$PROFILE.mov" 2>/dev/null || echo 0)
-echo "runs      app rc=$APP_RC  phone=$PHONE_RC  recording ${rec_bytes} B"
+rec_parts=$(ls "$EVID/$PROFILE"-[0-9][0-9].mov 2>/dev/null | wc -l | tr -d ' ')
+rec_bytes=$(cat "$EVID/$PROFILE"-[0-9][0-9].mov 2>/dev/null | wc -c | tr -d ' ')
+echo "runs      app rc=$APP_RC  phone=$PHONE_RC  recording ${rec_parts} segment(s), ${rec_bytes} B"
 
 # --- rows ---
 [ -f "$TSV" ] || printf 'feature\tprofile\twire_B\tbudget_s\tmeasured_s\tstatus\tnote\n' >"$TSV"
@@ -232,7 +251,7 @@ loss_max=$(field loss_max); chip_live=$(field chip_live); chip_demo=$(field chip
 peer_end=$(phone_event ended | grep -oE '"reason":"[^"]+"' | cut -d'"' -f4)
 [ -n "$peer_end" ] || peer_end=$(phone_event failed | grep -oE '"last_phase":"[^"]+"' | cut -d'"' -f4 | sed 's/^/failed:/')
 shaped="run=$RUN_ID bw=$BW delay=$DELAY plr=$PLR icmp_rtt=${probe_rtt:-?} icmp_loss=${probe_loss}% scope=$SCOPE"
-rec_note="recording=${rec_bytes}B"; [ "${rec_bytes:-0}" -gt 1000000 ] || rec_note="recording=MISSING(${rec_bytes}B)"
+rec_note="recording=${rec_parts}x${REC_SEG_S}s,${rec_bytes}B"; [ "${rec_bytes:-0}" -gt 1000000 ] || rec_note="recording=MISSING(${rec_parts}parts,${rec_bytes}B)"
 
 connect_s=$(python3 -c "print(round(${connect_ms:-0}/1000,1))" 2>/dev/null || echo "?")
 case "$outcome" in Connected|Connected_—_survival_mode) cstat=PASS ;; *) cstat=FAIL ;; esac
@@ -265,5 +284,5 @@ for f in chat_text photo voice_note video_note; do
     "sender_ms=${fsender:-?} peer_ms=${fpeer:-?} sha_match=${fsha:-?} media=${peer_media:-?} $fnote $shaped" >>"$TSV"
 done
 echo "rows      appended to $TSV"
-echo "evidence  $EVID/$PROFILE.mov  $APPLOG  $LOGD/$PROFILE.phone.jsonl  $LOGD/$PROFILE.hub.log"
+echo "evidence  $EVID/$PROFILE-NN.mov  $APPLOG  $LOGD/$PROFILE.phone.jsonl  $LOGD/$PROFILE.hub.log"
 tail -n 6 "$TSV"

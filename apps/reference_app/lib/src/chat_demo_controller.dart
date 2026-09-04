@@ -585,10 +585,16 @@ class ChatDemoController extends ChangeNotifier {
       attachment,
       routeAdvisor: _routeAdvisor,
     );
-    final sub = handle.progress.listen((p) {
-      attachmentProgress[attachment.id] = p.fraction;
-      notifyListeners();
-    });
+    final sub = handle.progress.listen(
+      (p) {
+        attachmentProgress[attachment.id] = p.fraction;
+        notifyListeners();
+      },
+      // The failed chunk arrives here as an error EVENT as well as through
+      // `done`; without a handler it is an unhandled zone error (the rig,
+      // 2026-09-04: the driver died with the transfer). `done` carries it.
+      onError: (Object _) {},
+    );
     final fabric = _fabric;
     if (fabric != null) {
       // Resilience tap for large payloads: the fabric carries the bytes
