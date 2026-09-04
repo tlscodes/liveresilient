@@ -331,6 +331,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void _onChanged() {
     _syncLiveChat();
+    // The live thread's lanes follow the call's media path: frozen while
+    // it reconnects or renegotiates, resumed from their ack state after.
+    _liveChat?.setPathLive(
+      _call.phase == CallPhase.connected || _call.phase == CallPhase.degraded,
+    );
     // The ladder follows exactly what the gauge charts: measured readings
     // while a session exists, the demo feed otherwise — and nothing under
     // tests, where no demo stream is handed out, so no periodic timer can

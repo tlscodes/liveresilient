@@ -298,6 +298,28 @@ class ChatDemoController extends ChangeNotifier {
   /// null in the loopback demo and in tests without a path.
   final LaneGovernor? _governor;
 
+  bool _pathLive = true;
+
+  /// Whether the call's media path is live right now.
+  bool get pathLive => _pathLive;
+
+  /// Tells the lanes whether the call's media path is live. While it is
+  /// not (a recovery episode, a renegotiation) the photo and video lanes
+  /// freeze so the link belongs to signaling; on resume they continue
+  /// from their ack state. The text messenger keeps ticking: its
+  /// backed-off retransmissions are how a message survives the gap.
+  void setPathLive(bool live) {
+    if (live == _pathLive) return;
+    _pathLive = live;
+    if (live) {
+      _photoSender?.resume();
+      _videoSender?.resume();
+    } else {
+      _photoSender?.pause();
+      _videoSender?.pause();
+    }
+  }
+
   /// What the lane budget was last derived from, for the diagnostics
   /// panel and the rig's row note.
   String? get laneBudgetReason => _governor?.lastReason;

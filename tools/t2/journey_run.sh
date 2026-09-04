@@ -34,7 +34,12 @@ IFACE=${T2_IFACE:-bridge100}
 PEER=${T2_PEER:-192.168.2.2}
 SELF=$(ifconfig "$IFACE" 2>/dev/null | awk '/inet /{print $2; exit}')
 RELAY_PORT=${JOURNEY_RELAY_PORT:-4443}
-KEY=${JOURNEY_KEY:-journeyKeyAbCdEfGhIjKl}
+# A FRESH key per run. The relay keeps a room's replay ring for a grace after
+# it empties and replays it to every fresh joiner (so a peer's hangup is
+# never lost); with one fixed key across runs the NEXT run's app joined the
+# previous run's room and answered a stale offer (latency, 2026-09-04
+# 08:08Z: Negotiating at 1 s before the phone had GO, then Call failed).
+KEY=${JOURNEY_KEY:-journey$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 15)}
 HOLD=${JOURNEY_HOLD_S:-45}
 BUDGET=${JOURNEY_CONNECT_BUDGET_S:-300}
 PHOTO_BYTES=${JOURNEY_PHOTO_BYTES:-48000}
@@ -116,9 +121,23 @@ caffeinate -dimsu -w $$ >/dev/null 2>&1 &
 
 # --- the hub: the phone's job and evidence channel (plain HTTP on the bridge) ---
 HTTP_PORT=${JOURNEY_HTTP_PORT:-8765}
-python3 "$HUB" --bind "$SELF" --port "$HTTP_PORT" --dir "$RUN" >"$LOGD/$PROFILE.hub.log" 2>&1 &
-for _ in $(seq 1 20); do curl -s --max-time 1 "http://$SELF:$HTTP_PORT/health" >/dev/null 2>&1 && break; sleep 0.5; done
-curl -s --max-time 2 "http://$SELF:$HTTP_PORT/health" >/dev/null 2>&1 || die "the hub never came up on $SELF:$HTTP_PORT"
+# The previous run's hub may still be releasing the port (two of one
+# night's twenty-one starts lost that race and the profile died before
+# shaping): start, wait up to 20 s, and try three times, logging each.
+hub_up=""
+for hub_try in 1 2 3; do
+  python3 "$HUB" --bind "$SELF" --port "$HTTP_PORT" --dir "$RUN" >>"$LOGD/$PROFILE.hub.log" 2>&1 &
+  HUB_PID=$!
+  for _ in $(seq 1 40); do
+    curl -s --max-time 1 "http://$SELF:$HTTP_PORT/health" >/dev/null 2>&1 && { hub_up="try $hub_try"; break; }
+    kill -0 "$HUB_PID" 2>/dev/null || break
+    sleep 0.5
+  done
+  [ -n "$hub_up" ] && break
+  echo "hub       not up (try $hub_try): $(tail -1 "$LOGD/$PROFILE.hub.log" 2>/dev/null | cut -c1-100)"
+  kill "$HUB_PID" 2>/dev/null; sleep 3
+done
+[ -n "$hub_up" ] || die "the hub never came up on $SELF:$HTTP_PORT (see $LOGD/$PROFILE.hub.log)"
 
 echo "profile   $PROFILE  (bw=$BW delay=$DELAY plr=$PLR)  feature budget ${FEATURE_BUDGET}s"
 echo "iface     $IFACE   self $SELF   peer $PEER   relay wss://$SELF:$RELAY_PORT/"

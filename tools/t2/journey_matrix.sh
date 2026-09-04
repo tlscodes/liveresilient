@@ -21,7 +21,8 @@ mkdir -p "$(dirname "$LOG")"
 
 pgrep -f "signaling_server.dart --port $PORT" >/dev/null || { echo "ERROR: no relay on $PORT (tools/t2/relay_restart.sh $PORT)" >&2; exit 1; }
 free_gb=$(df -g / | awk 'NR==2{print $4}')
-[ "${free_gb:-0}" -ge 12 ] || { echo "ERROR: only ${free_gb} GB free; recordings need ~1.2 GB each (clear apps/reference_app/.dart_tool/flutter_build)" >&2; exit 1; }
+MIN_FREE_GB=${JOURNEY_MIN_FREE_GB:-12}
+[ "${free_gb:-0}" -ge "$MIN_FREE_GB" ] || { echo "ERROR: only ${free_gb} GB free (need $MIN_FREE_GB; JOURNEY_MIN_FREE_GB overrides); recordings are ~0.3-1.7 GB per profile" >&2; exit 1; }
 
 echo "matrix    ${PROFILES[*]}   (relay $PORT, ${free_gb} GB free)" | tee -a "$LOG"
 for p in "${PROFILES[@]}"; do

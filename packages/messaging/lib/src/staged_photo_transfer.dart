@@ -251,6 +251,19 @@ class StagedPhotoSender {
   /// One-line live evidence for a slow or dying delivery.
   String diag() => _arq?.diag() ?? 'fountain lane';
 
+  /// Freezes the ARQ lane: in-flight frames drain, nothing new goes out.
+  /// The accepted recovery-freeze design — during a call-recovery episode
+  /// the link belongs to signaling, and on [resume] the transfer continues
+  /// from its exact ack/HAVE state (content addressing makes the freeze
+  /// free). Measured 2026-09-04 (narrow, 16 kbit/s): a photo mid-transfer
+  /// through a renegotiation kept feeding a dead channel and needed 366 s
+  /// against a 276 s budget. The fountain lane has no pause: its rateless
+  /// symbols are simply useless while the channel is down and cheap after.
+  void pause() => _arq?.pause();
+
+  /// Resumes a paused ARQ lane from its ack state.
+  void resume() => _arq?.resume();
+
   /// ARQ-lane cumulative acked-chunk counter (0 on the fountain lane) —
   /// dedup evidence: a re-send answered from held bytes leaves it flat.
   int get arqAckedChunks => _arq?.ackedChunks ?? 0;
