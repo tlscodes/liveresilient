@@ -31,6 +31,12 @@ class AttachmentChunk {
   /// `_Partial` allocation via an absurd `total`.
   static const int maxChunks = 4096;
 
+  /// Frame bytes per payload byte: base64 (4/3) inside the JSON frame
+  /// and the messenger's envelope. Measured 2026-09-04: a 12,288-byte
+  /// chunk is a 16,621-byte frame (1.35x). The messenger sizes chunks
+  /// from the lane rate through this number.
+  static const double framingOverhead = 1.35;
+
   /// Encodes to a self-describing text frame carried by [ReliableMessenger].
   String encode() => jsonEncode({
     't': 'attach',
@@ -223,15 +229,27 @@ class AttachmentSendHandle {
 
 /// Starts sending [attachment] over [messenger] and returns a handle whose
 /// [AttachmentSendHandle.progress] reports bytesSent/totalBytes per chunk.
+///
+/// [maxChunkBytes] defaults to the messenger's rate model
+/// ([ReliableMessenger.suggestedPayloadBytes]): a chunk's wire time stays
+/// a few round trips instead of the fixed 12 KiB that took 32 s on a
+/// 570 B/s share and was resent twelve times before its first ack could
+/// arrive (rig, narrow, 2026-09-04). [deliveryBudget] is the live-clock
+/// time each chunk may stay undelivered before the transfer fails.
 AttachmentSendHandle startAttachmentSend(
   ReliableMessenger messenger,
   Attachment attachment, {
-  int maxChunkBytes = 12 * 1024,
+  int? maxChunkBytes,
   AttachmentRouteAdvisor? routeAdvisor,
+  Duration? deliveryBudget,
 }) {
   final chunks = AttachmentChunker.split(
     attachment,
-    maxChunkBytes: maxChunkBytes,
+    maxChunkBytes:
+        maxChunkBytes ??
+        messenger.suggestedPayloadBytes(
+          framingOverhead: AttachmentChunk.framingOverhead,
+        ),
   );
   // Shadow mode: ask, record, and keep sending the old way. Obeying the answer
   // needs the receive-side transferId -> layer router, which does not exist in
@@ -284,12 +302,21 @@ AttachmentSendHandle startAttachmentSend(
     try {
       handle._progress.add(AttachmentSendProgress(0, handle.totalBytes));
       for (final chunk in chunks) {
-        final message = await messenger.send(chunk.encode());
+        final message = await messenger.send(
+          chunk.encode(),
+          deliveryBudget: deliveryBudget,
+        );
         final state = await deliveryOf(message.id);
         if (state != DeliveryState.delivered) {
+          // The messenger's record says WHY (windows, rate, buffer state);
+          // the error carries it so a log line is enough to diagnose.
+          final failure = messenger.lastFailure;
+          final why = failure != null && failure.messageId == message.id
+              ? ': $failure'
+              : '';
           throw StateError(
             'attachment ${attachment.id} chunk ${chunk.index} failed '
-            'delivery (${state.name})',
+            'delivery (${state.name})$why',
           );
         }
         handle._bytesSent += chunk.data.length;
@@ -333,12 +360,14 @@ AttachmentSendHandle startAttachmentSend(
 Future<void> sendAttachment(
   ReliableMessenger messenger,
   Attachment attachment, {
-  int maxChunkBytes = 12 * 1024,
+  int? maxChunkBytes,
+  Duration? deliveryBudget,
 }) async {
   await startAttachmentSend(
     messenger,
     attachment,
     maxChunkBytes: maxChunkBytes,
+    deliveryBudget: deliveryBudget,
   ).done;
 }
 

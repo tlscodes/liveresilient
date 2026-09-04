@@ -44,9 +44,15 @@ HOLD=${JOURNEY_HOLD_S:-45}
 BUDGET=${JOURNEY_CONNECT_BUDGET_S:-300}
 PHOTO_BYTES=${JOURNEY_PHOTO_BYTES:-48000}
 VOICE_S=${JOURNEY_VOICE_S:-6}
-VIDEO_BYTES=${JOURNEY_VIDEO_BYTES:-64000}
+# CAPS on the REAL fixture files (tools/t2/journey_fixtures.sh: a spoken
+# voice note and an H.264 clip made once per run), not sizes: the row's
+# wire_B column is the length the app printed. Measured 2026-09-04:
+# voice.wav 20,574 B for 5.1 s, video.mp4 73,780 B for 48 frames.
+VOICE_BYTES=${JOURNEY_VOICE_BYTES:-24000}
+VIDEO_BYTES=${JOURNEY_VIDEO_BYTES:-96000}
 SHAPE="$REPO/tools/t2/net_shape.sh"
 HUB="$REPO/tools/t2/journey_hub.py"
+FIXTURES="$REPO/tools/t2/journey_fixtures.sh"
 EVID="$REPO/tools/dossier/evidence/journey"
 LOGD="$REPO/tools/dossier/logs/journey"
 TSV="$REPO/tools/dossier/app_journey_results.tsv"
@@ -62,6 +68,20 @@ RUN_ID=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 mkdir -p "$EVID" "$LOGD"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# --- tools and fixtures, BEFORE any shaping or hub start ---
+# The fixtures are made by `say` and ffmpeg; the media evidence after the
+# call is decoded by sips, afinfo, ffprobe and ffmpeg and chained by shasum.
+# A missing tool fails here, with nothing to tear down yet.
+for tool in say ffmpeg ffprobe afinfo sips shasum; do
+  command -v "$tool" >/dev/null 2>&1 || die "missing tool $tool (needed for the fixtures and the media probes)"
+done
+[ -x "$FIXTURES" ] || die "fixture script missing or not executable: $FIXTURES"
+# $RUN/fixtures/voice.wav and video.mp4 live in the app's container so the
+# sandboxed driver can read and send them; the driver writes photo.jpg there.
+fx_out=$(JOURNEY_VOICE_BYTES="$VOICE_BYTES" JOURNEY_VIDEO_BYTES="$VIDEO_BYTES" "$FIXTURES" "$RUN" "$RUN_ID" "$PROFILE") \
+  || die "the media fixtures could not be made (caps voice ${VOICE_BYTES} B, video ${VIDEO_BYTES} B)"
+printf '%s\n' "$fx_out" | sed 's/^fixture /fixtures  /'
 
 profile_args() {
   case "$1" in
@@ -83,7 +103,7 @@ read -r BW DELAY PLR <<<"$(profile_args "$PROFILE")"
 # a 20 s floor for the UI and the receiver's verification; the loss profiles
 # stretch it by 1/(1-plr)^2 (each direction loses independently). Clamped to
 # 30..420 s so a dead link still fails inside the recording.
-FEATURE_BUDGET=$(python3 - "$BW" "$DELAY" "$PLR" "$VIDEO_BYTES" <<'PY'
+FEATURE_BUDGET=$(python3 - "$BW" "$DELAY" "$PLR" "$(stat -f %z "$RUN/fixtures/video.mp4")" <<'PY'
 import sys
 bw, delay, plr, video = sys.argv[1:5]
 bps = 50_000_000 if bw == "-" else int(bw.replace("Kbit/s", "")) * 1000
@@ -168,12 +188,43 @@ if [ "$PLR" != "-" ] && [ "$PLR" != "0.0" ]; then
   [ "$ok" = 1 ] || die "loss did not take effect (${probe_loss}% seen, wanted >= ${want}%)"
 fi
 
-# --- the job, then the phone: launch the installed peer (never reinstall) ---
+# --- the Mac app, on its own screen (built and ready BEFORE the phone) ---
+# Keep the app awake and in front: an un-foregrounded app stalled ~25 s under
+# App Nap (2026-09-03) and both sides fell into reconnect.
+defaults write com.voicecallkit.referenceApp NSAppSleepDisabled -bool YES 2>/dev/null || true
+APPLOG="$LOGD/$PROFILE.app.log"
+( cd "$APP" && flutter test integration_test/journey_driver_test.dart -d macos \
+    --dart-define=JOURNEY_READY_FILE="$READY" --dart-define=JOURNEY_GO_FILE="$GO" \
+    --dart-define=JOURNEY_RUN_DIR="$RUN" \
+    --dart-define=JOURNEY_HOLD_S="$HOLD" --dart-define=E2E_CONNECT_BUDGET_S="$BUDGET" \
+    --dart-define=JOURNEY_FEATURE_BUDGET_S="$FEATURE_BUDGET" \
+    --dart-define=JOURNEY_PROFILE="$PROFILE" --dart-define=JOURNEY_RUN_ID="$RUN_ID" \
+    --dart-define=JOURNEY_PHOTO_BYTES="$PHOTO_BYTES" --dart-define=JOURNEY_VOICE_S="$VOICE_S" \
+    --dart-define=JOURNEY_VIDEO_BYTES="$VIDEO_BYTES" \
+    --dart-define=JOURNEY_VOICE_FILE="$RUN/fixtures/voice.wav" \
+    --dart-define=JOURNEY_VIDEO_FILE="$RUN/fixtures/video.mp4" \
+    >"$APPLOG" 2>&1 ) &
+APP_PID=$!
+# Up to 20 min: a cold macOS build took >10 min under the matrix on
+# 2026-09-04 (bandwidth: BUILD INTERRUPTED by the old 10-min wait). A dead
+# flutter process ends the wait at once.
+for _ in $(seq 1 480); do [ -f "$READY" ] && break; kill -0 "$APP_PID" 2>/dev/null || break; sleep 2.5; done
+[ -f "$READY" ] || die "the Mac app never reported ready (flutter alive: $(kill -0 "$APP_PID" 2>/dev/null && echo yes || echo no); see $APPLOG)"
+echo "app       on screen"
+osascript -e 'tell application id "com.voicecallkit.referenceApp" to activate' >/dev/null 2>&1 || true
+
+# --- the phone: launch the installed peer (never reinstall), then the job ---
+# Order matters twice. The Mac app is already on screen (above), so the
+# phone's 10-minute GO clock, started at stack_up, never contains a Mac
+# build. And the job is posted only after the FRESH instance reported
+# `boot` to THIS run's hub: the previous profile's instance keeps polling
+# the hub port until the launch terminates it, and posting first let it
+# take the job, offer, and die mid-negotiation (loss10, 2026-09-04 13:04Z:
+# two stack_up events, the app negotiating with a terminated peer).
 # The phone's hold is an upper bound: the app hangs up when its features are
 # done, and the peer ends on that remote hangup. hold_s here only guarantees
 # the call ends if the app side dies silently.
 PHONE_HOLD=$((HOLD + BUDGET + 4 * FEATURE_BUDGET + 60))
-printf '{"run":"%s","key":"%s","hold_s":%d,"profile":"%s"}\n' "$RUN_ID" "$KEY" "$PHONE_HOLD" "$PROFILE" >"$RUN/job.json"
 launched=""
 for try in 1 2 3 4 5; do
   out=$(xcrun devicectl device process launch --terminate-existing --device "$PHONE" "$BUNDLE_ID" 2>&1)
@@ -185,32 +236,23 @@ for try in 1 2 3 4 5; do
   sleep 2
 done
 [ -n "$launched" ] || die "the phone refused to launch $BUNDLE_ID five times (awake? trusts this Mac?)"
-echo "phone     launched ($launched), waiting for its stack"
+echo "phone     launched ($launched), waiting for it to boot"
 phone_event() { grep -o "\"event\":\"$1\"[^}]*" "$EVENTS" 2>/dev/null | tail -1; }
+# A `boot` line in this run's fresh events file can only come from a process
+# started after this hub came up, and proves the new instance reaches it.
+for _ in $(seq 1 60); do [ -n "$(phone_event boot)" ] && break; sleep 1; done
+[ -n "$(phone_event boot)" ] || die "the fresh peer never reported boot to this hub (see $EVENTS and $LOGD/$PROFILE.hub.log)"
+printf '{"run":"%s","key":"%s","hold_s":%d,"profile":"%s"}\n' "$RUN_ID" "$KEY" "$PHONE_HOLD" "$PROFILE" >"$RUN/job.json"
+echo "phone     booted, job posted, waiting for its stack"
 for _ in $(seq 1 120); do [ -n "$(phone_event stack_up)" ] && break; sleep 1; done
 [ -n "$(phone_event stack_up)" ] || die "the phone stack never came up (see $EVENTS and $LOGD/$PROFILE.hub.log)"
 peer_media=$(phone_event boot | grep -oE '"media":"[^"]+"' | cut -d'"' -f4)
 [ -n "$peer_media" ] || peer_media=$(phone_event stack_up | grep -oE '"media":"[^"]+"' | cut -d'"' -f4)
-echo "phone     stack up (media=${peer_media:-?}), waiting for go"
-
-# --- the Mac app, on its own screen ---
-# Keep the app awake and in front: an un-foregrounded app stalled ~25 s under
-# App Nap (2026-09-03) and both sides fell into reconnect.
-defaults write com.voicecallkit.referenceApp NSAppSleepDisabled -bool YES 2>/dev/null || true
-APPLOG="$LOGD/$PROFILE.app.log"
-( cd "$APP" && flutter test integration_test/journey_driver_test.dart -d macos \
-    --dart-define=JOURNEY_READY_FILE="$READY" --dart-define=JOURNEY_GO_FILE="$GO" \
-    --dart-define=JOURNEY_RUN_DIR="$RUN" \
-    --dart-define=JOURNEY_HOLD_S="$HOLD" --dart-define=E2E_CONNECT_BUDGET_S="$BUDGET" \
-    --dart-define=JOURNEY_FEATURE_BUDGET_S="$FEATURE_BUDGET" \
-    --dart-define=JOURNEY_PHOTO_BYTES="$PHOTO_BYTES" --dart-define=JOURNEY_VOICE_S="$VOICE_S" \
-    --dart-define=JOURNEY_VIDEO_BYTES="$VIDEO_BYTES" \
-    >"$APPLOG" 2>&1 ) &
-APP_PID=$!
-for _ in $(seq 1 240); do [ -f "$READY" ] && break; sleep 2.5; done
-[ -f "$READY" ] || die "the Mac app never reported ready (see $APPLOG)"
-echo "app       on screen"
-osascript -e 'tell application id "com.voicecallkit.referenceApp" to activate' >/dev/null 2>&1 || true
+# A peer built after 2026-09-04 says "blob":true in its boot event: it will
+# return every received media item's bytes through the hub (/blob). An older
+# peer cannot, and every media row of this run then fails as no-blob.
+peer_blob=no; phone_event boot | grep -q '"blob":true' && peer_blob=yes
+echo "phone     stack up (media=${peer_media:-?} blob=$peer_blob), waiting for go"
 
 # --- record the Mac screen for the whole run, unedited, in fixed segments ---
 # `screencapture -v` writes its file ONLY when its own -V timer ends: SIGINT
@@ -250,6 +292,17 @@ wait "$APP_PID"; APP_RC=$?
 # The phone ends on the app's hangup; give its `ended` event a moment to land.
 for _ in $(seq 1 60); do [ -f "$RUN/job.done" ] && break; sleep 1; done
 PHONE_RC=$([ -f "$RUN/job.done" ] && cat "$RUN/job.done" || echo "no-ended-event")
+# The peer posts each received item's bytes (/blob) before `ended`, but the
+# hub may still be writing when job.done appears: wait up to 5 s for one
+# blob event per media feature the app reported PASS.
+want_blobs=$(grep -cE 'JOURNEY_APP feature=(photo|voice_note|video_note) status=PASS' "$APPLOG" 2>/dev/null || true)
+if [ "$peer_blob" = yes ] && [ "${want_blobs:-0}" -gt 0 ]; then
+  for _ in $(seq 1 10); do
+    have_blobs=$(grep -c '"event":"blob"' "$EVENTS" 2>/dev/null || true)
+    [ "${have_blobs:-0}" -ge "$want_blobs" ] && break
+    sleep 0.5
+  done
+fi
 cp "$EVENTS" "$LOGD/$PROFILE.phone.jsonl" 2>/dev/null || true
 # Stop filming: no new segment starts, the current one ends on its own
 # timer (at most REC_SEG_S more seconds) and writes itself.
@@ -260,6 +313,83 @@ shaper teardown >/dev/null 2>&1 || true
 rec_parts=$(ls "$EVID/$PROFILE"-[0-9][0-9].mov 2>/dev/null | wc -l | tr -d ' ')
 rec_bytes=$(cat "$EVID/$PROFILE"-[0-9][0-9].mov 2>/dev/null | wc -c | tr -d ' ')
 echo "runs      app rc=$APP_RC  phone=$PHONE_RC  recording ${rec_parts} segment(s), ${rec_bytes} B"
+
+# --- media evidence: the bytes the phone RECEIVED, back on the Mac ---
+# The peer returns each received item through the hub (/blob). A media row
+# can PASS only when the chain holds — fixture file == returned blob == the
+# sha256 the app printed — AND Mac tools decode the returned file: sips for
+# the photo, afinfo plus ffmpeg volumedetect for the voice note, ffprobe plus
+# a frame grabbed at 2 s for the video note. The decoded files sit next to
+# the recordings (collect_evidence.sh puts every non-.mov file under
+# evidence/ into the manifest); earlier files of the profile are kept aside.
+MEDIA="$EVID/media"; mkdir -p "$MEDIA"
+if ls "$MEDIA/$PROFILE"-* >/dev/null 2>&1; then
+  mkdir -p "$MEDIA/superseded"
+  for old in "$MEDIA/$PROFILE"-*; do
+    [ -f "$old" ] || continue
+    mv "$old" "$MEDIA/superseded/$(basename "${old%.*}").$(date -r "$old" -u +%Y-%m-%dT%H%M%SZ).${old##*.}"
+  done
+fi
+probe_media() {  # <photo|voice|video> <file> → ok(<detail>) or the check that failed
+  local kind=$1 f=$2
+  case "$kind" in
+    photo)
+      local w h
+      w=$(sips -g pixelWidth "$f" 2>/dev/null | awk '/pixelWidth/{print $2}')
+      h=$(sips -g pixelHeight "$f" 2>/dev/null | awk '/pixelHeight/{print $2}')
+      if [ "${w:-0}" -ge 320 ] 2>/dev/null && [ "${h:-0}" -ge 320 ] 2>/dev/null; then echo "ok(${w}x${h})"
+      else echo "photo-probe(${w:-?}x${h:-?},want>=320x320)"; fi ;;
+    voice)
+      local dur peak
+      dur=$(afinfo "$f" 2>/dev/null | sed -nE 's/.*estimated duration: ([0-9.]+) sec.*/\1/p' | head -1)
+      peak=$(ffmpeg -hide_banner -nostats -i "$f" -af volumedetect -f null - 2>&1 | sed -nE 's/.*max_volume: (-?[0-9.]+) dB.*/\1/p' | head -1)
+      python3 -c "import sys; d=float(sys.argv[1] or 0); m=float(sys.argv[2] or -99); print(('ok' if 3.0 <= d <= 8.0 and m > -20 else 'voice-probe') + '(%.1fs,max%.1fdB)' % (d, m))" "$dur" "$peak" 2>/dev/null \
+        || echo "voice-probe(dur=${dur:-?},max=${peak:-?})" ;;
+    video)
+      local info codec w h fr frame fbytes
+      info=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,nb_frames -of csv=p=0 "$f" 2>/dev/null | head -1)
+      IFS=, read -r codec w h fr <<<"$info"
+      frame="$MEDIA/$PROFILE-video-2s.jpg"
+      ffmpeg -v error -y -ss 2 -i "$f" -frames:v 1 "$frame" >/dev/null 2>&1
+      fbytes=$(stat -f %z "$frame" 2>/dev/null || echo 0)
+      if [ "${codec:-}" = h264 ] && [ "${w:-0}" -ge 320 ] 2>/dev/null && [ "${fr:-0}" -ge 24 ] 2>/dev/null && [ "$fbytes" -gt 2000 ]; then
+        echo "ok(h264,${w}x${h},${fr}f)"
+      else echo "video-probe(${codec:-?},${w:-?}x${h:-?},${fr:-?}f,frame2s=${fbytes}B)"; fi ;;
+    *) echo "probe(unknown_kind_$kind)" ;;
+  esac
+}
+for mf in photo voice_note video_note; do
+  case "$mf" in
+    photo)      mk=photo; fx="$RUN/fixtures/photo.jpg"; ext=jpg ;;
+    voice_note) mk=voice; fx="$RUN/fixtures/voice.wav"; ext=wav ;;
+    *)          mk=video; fx="$RUN/fixtures/video.mp4"; ext=mp4 ;;
+  esac
+  mline=$(grep -o "JOURNEY_APP feature=$mf .*" "$APPLOG" 2>/dev/null | tail -1)
+  msha=$(printf '%s' "$mline" | grep -oE 'sha256=[0-9a-f]{64}' | head -1 | cut -d= -f2-)
+  ev=""; [ -n "$msha" ] && ev=$(grep -o '"event":"blob"[^}]*' "$EVENTS" 2>/dev/null | grep "\"sha256\":\"$msha\"" | tail -1)
+  ekind=$(printf '%s' "$ev" | grep -oE '"kind":"[^"]+"' | cut -d'"' -f4)
+  eid=$(printf '%s' "$ev" | grep -oE '"id":"[^"]+"' | cut -d'"' -f4)
+  blob="$RUN/blobs/$ekind-$eid.bin"
+  if [ -z "$mline" ]; then result="no-feature-line"
+  elif [ "$peer_blob" != yes ]; then result="no-blob(peer_predates_blob_posting)"
+  elif [ -z "$msha" ]; then result="no-sha(app_line_lacks_sha256)"
+  elif [ -z "$ev" ]; then result="no-blob(no_blob_event_for_sha)"
+  elif [ "$ekind" != "$mk" ]; then result="no-blob(event_kind_${ekind}_not_${mk})"
+  elif [ ! -s "$blob" ]; then result="no-blob(file_missing)"
+  else
+    bsha=$(shasum -a 256 "$blob" | awk '{print $1}')
+    fsha=""; [ -s "$fx" ] && fsha=$(shasum -a 256 "$fx" | awk '{print $1}')
+    if [ "$bsha" != "$msha" ]; then result="sha-chain(blob!=app)"
+    elif [ -z "$fsha" ]; then result="sha-chain(fixture_missing)"
+    elif [ "$fsha" != "$bsha" ]; then result="sha-chain(fixture!=blob)"
+    else
+      cp "$blob" "$MEDIA/$PROFILE-$mk.$ext"
+      result=$(probe_media "$mk" "$MEDIA/$PROFILE-$mk.$ext")
+    fi
+  fi
+  printf -v "decoded_$mf" '%s' "$result"
+  echo "media     $mf decoded=$result"
+done
 
 # --- rows ---
 [ -f "$TSV" ] || printf 'feature\tprofile\twire_B\tbudget_s\tmeasured_s\tstatus\tnote\n' >"$TSV"
@@ -298,10 +428,18 @@ for f in chat_text photo voice_note video_note; do
   fi
   ff() { printf '%s' "$line" | grep -oE "$1=[^ ]+" | head -1 | cut -d= -f2-; }
   fstat=$(ff status); fbytes=$(ff bytes); fpeer=$(ff peer_ms); fsender=$(ff sender_ms); fsha=$(ff sha_match); fnote=$(ff note | tr '_' ' ')
+  # Media rows: the driver's PASS is necessary, the runner's decode (above)
+  # is the last word — a broken sha chain, a missing blob or a file the Mac
+  # cannot decode turns the row into FAIL, with decoded= naming the check.
+  case "$f" in photo|voice_note|video_note)
+    dvar="decoded_$f"; decoded=${!dvar:-unchecked}
+    fnote="$fnote decoded=$decoded"
+    case "$decoded" in ok\(*\)) ;; *) fstat=FAIL ;; esac ;;
+  esac
   measured=$(python3 -c "print(round(${fpeer:-0}/1000,1))" 2>/dev/null || echo "-"); [ "$fpeer" = "-" ] && measured="-"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$f" "$PROFILE" "${fbytes:-?}" "$FEATURE_BUDGET" "$measured" "${fstat:-FAIL}" \
     "sender_ms=${fsender:-?} peer_ms=${fpeer:-?} sha_match=${fsha:-?} media=${peer_media:-?} $fnote $shaped" >>"$TSV"
 done
 echo "rows      appended to $TSV"
-echo "evidence  $EVID/$PROFILE-NN.mov  $APPLOG  $LOGD/$PROFILE.phone.jsonl  $LOGD/$PROFILE.hub.log"
+echo "evidence  $EVID/$PROFILE-NN.mov  $EVID/media/$PROFILE-*  $APPLOG  $LOGD/$PROFILE.phone.jsonl  $LOGD/$PROFILE.hub.log"
 tail -n 6 "$TSV"

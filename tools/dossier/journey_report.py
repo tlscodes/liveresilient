@@ -25,7 +25,7 @@ def main() -> int:
     for row in rows:
         by_profile[row[1]].append(row)
 
-    print('profile      feature       measured   status     note')
+    print('profile      feature       measured   status     decoded                      note')
     superseded: dict[str, list[str]] = {}
     for profile in PROFILES:
         prows = by_profile.get(profile, [])
@@ -44,7 +44,8 @@ def main() -> int:
                     # (chat: send action to the phone's verified receipt).
                     unit = 's' if feature != 'monitor_bar' and measured != '-' else ('ms' if feature == 'monitor_bar' and measured != '-' else '')
                     note = re.sub(r'\s*run=\S+', '', r[6])
-                    print(f'{profile:<12} {feature:<13} {measured + unit:<10} {r[5]:<10} {note[:150]}')
+                    decoded = (re.search(r'decoded=\S+', r[6]) or [None, ''])[0] or ''
+                    print(f'{profile:<12} {feature:<13} {measured + unit:<10} {r[5]:<10} {decoded:<28} {note[:150]}')
                     break
             else:
                 # NOT_WIRED rows carry no run stamp; take the first one.

@@ -23,9 +23,11 @@ import 'package:flutter/material.dart';
 import 'package:live_captions/live_captions.dart';
 import 'package:messaging/messaging.dart';
 
+import 'mp4_probe.dart';
 import 'photo_source.dart';
 import 'theme.dart';
 import 'ui/voice_note.dart';
+import 'wav_probe.dart';
 
 /// A minimal valid 1x1 transparent PNG — real decodable bytes so
 /// [Image.memory] never fails, with no network/asset image involved. Shared
@@ -839,6 +841,11 @@ class _Bubble extends StatelessWidget {
       case MediaKind.video:
       case MediaKind.file:
         if (isVoiceAttachment(attachment)) {
+          // A WAV the probe understands gives real bars (PCM16 / mu-law)
+          // and a real clock from its fmt chunk; any other audio payload
+          // keeps the deterministic decorative bars and a zero duration,
+          // which hides the clock instead of inventing one.
+          final wav = probeWav(attachment.bytes);
           content = InkWell(
             onTap: onPlayAudio == null ? null : () => onPlayAudio!(attachment),
             borderRadius: BorderRadius.circular(AppRadius.r12),
@@ -847,10 +854,10 @@ class _Bubble extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 VoiceNotePlayerBar(
-                  peaks: decorativeWaveformPeaks(attachment.bytes),
-                  // No length metadata on the wire yet — zero hides the
-                  // clock instead of inventing a duration.
-                  duration: Duration.zero,
+                  peaks:
+                      wav?.peaks(32) ??
+                      decorativeWaveformPeaks(attachment.bytes),
+                  duration: wav?.duration ?? Duration.zero,
                   onToggle: onPlayAudio == null
                       ? null
                       : () => onPlayAudio!(attachment),
@@ -869,6 +876,12 @@ class _Bubble extends StatelessWidget {
           );
           break;
         }
+        // A video clip whose MP4 headers parse shows its clock and picture
+        // size; a file, or a clip the probe cannot read, keeps the plain
+        // type · size line.
+        final mp4 = attachment.kind == MediaKind.video
+            ? probeMp4(attachment.bytes)
+            : null;
         content = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -881,8 +894,13 @@ class _Bubble extends StatelessWidget {
             const SizedBox(width: AppSpacing.s8),
             Flexible(
               child: Text(
-                '${attachment.contentType} · '
-                '${formatBytes(attachment.sizeBytes)}',
+                mp4 == null
+                    ? '${attachment.contentType} · '
+                          '${formatBytes(attachment.sizeBytes)}'
+                    : '${attachment.contentType} · '
+                          '${(mp4.durationMs / 1000).toStringAsFixed(1)} s · '
+                          '${mp4.width}×${mp4.height} · '
+                          '${formatBytes(attachment.sizeBytes)}',
                 overflow: TextOverflow.ellipsis,
               ),
             ),

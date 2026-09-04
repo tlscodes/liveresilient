@@ -11,8 +11,10 @@
 /// call stack (initiator) with the shared lane table → report `stack_up` →
 /// wait for /go → place the call → receive chat text, chunked attachments
 /// (voice notes, files), staged photos and video notes on their lanes,
-/// POSTing one event per item with its sha256 → hold until the app hangs
-/// up (or the job's hold expires) → report `ended` → loop.
+/// POSTing one event per item with its sha256 and the item's raw bytes to
+/// /blob (so the Mac can decode what the phone received) → hold until the
+/// app hangs up (or the job's hold expires) → drain the blob posts →
+/// report `ended` → loop.
 ///
 /// Defines:
 ///   E2E_RELAY_URI         wss://192.168.2.1:4443/  (the Mac's bridge address)
@@ -100,7 +102,12 @@ class JourneyPeer {
     // the life of this install.
     _mode = await resolveMediaMode();
     _note('boot media=${_mode!.name} hub=$journeyHubUrl');
-    await _report('boot', <String, Object?>{'media': _mode!.name});
+    // `blob: true` tells the runner this install posts media bytes to /blob;
+    // an older install reports only sha256 receipts.
+    await _report('boot', <String, Object?>{
+      'media': _mode!.name,
+      'blob': true,
+    });
     while (true) {
       final job = await _nextJob();
       if (job == null) {
@@ -168,6 +175,66 @@ class JourneyPeer {
     } on Object catch (error) {
       print('JOURNEY_PEER report failed event=$event error=$error');
     }
+  }
+
+  /// The raw bytes of one received media item to the hub's /blob route, so
+  /// the Mac can decode what the phone received instead of trusting a
+  /// sha256 receipt alone. Best effort, never throws: one try, then up to
+  /// three retries 1 s, 2 s, 4 s apart; true once the hub answered 200.
+  ///
+  /// The body goes through contentLength + add(bytes): `write` would send
+  /// the bytes as chunked text, and the hub compares the sha of exactly
+  /// what arrived against the query's sha256.
+  Future<bool> _postBlob({
+    required String run,
+    required String kind,
+    required String id,
+    required List<int> bytes,
+  }) async {
+    final sha = contentSha256Hex(bytes);
+    final url = Uri.parse(
+      '$journeyHubUrl/blob'
+      '?run=${Uri.encodeQueryComponent(run)}'
+      '&kind=${Uri.encodeQueryComponent(kind)}'
+      '&id=${Uri.encodeQueryComponent(id)}'
+      '&sha256=${Uri.encodeQueryComponent(sha)}',
+    );
+    // One try, then up to three retries with these delays between them.
+    const delays = [
+      Duration(seconds: 1),
+      Duration(seconds: 2),
+      Duration(seconds: 4),
+    ];
+    for (var attempt = 0; attempt <= delays.length; attempt++) {
+      var code = 0;
+      try {
+        final request = await _http
+            .postUrl(url)
+            .timeout(const Duration(seconds: 5));
+        request.headers.contentType = ContentType.binary;
+        request.contentLength = bytes.length;
+        request.add(bytes);
+        final response = await request.close().timeout(
+          const Duration(seconds: 15),
+        );
+        code = response.statusCode;
+        await response.drain<void>();
+      } on Object catch (error) {
+        _note('blob kind=$kind id=$id bytes=${bytes.length} error=$error');
+      }
+      _note(
+        'blob kind=$kind id=$id bytes=${bytes.length} status=$code '
+        'try=${attempt + 1}',
+      );
+      if (code == 200) return true;
+      // 400 (bad params) and 413 (too big) will not change on a retry;
+      // 409 (sha mismatch, a corrupted body in flight) and errors might.
+      if (code == 400 || code == 413) return false;
+      if (attempt < delays.length) {
+        await Future<void>.delayed(delays[attempt]);
+      }
+    }
+    return false;
   }
 
   Future<void> _serve(JourneyJob job) async {
@@ -240,6 +307,9 @@ class JourneyPeer {
         const Duration(seconds: 30),
       );
       _note('ended phase=${done.phase.name} reason=${done.endReason?.name}');
+      // The hub writes job.done on `ended`, and the runner stops waiting
+      // then — a blob posted after it is lost, so every post lands first.
+      await lanes.drainBlobs();
       await _report('ended', <String, Object?>{
         'phase': done.phase.name,
         'reason': done.endReason?.name,
@@ -250,6 +320,7 @@ class JourneyPeer {
       _note(
         'failed error=$error last_phase=${stack.controller.state.phase.name}',
       );
+      await lanes.drainBlobs(); // same reason as before `ended`
       await _report('failed', <String, Object?>{
         'error': '$error',
         'last_phase': stack.controller.state.phase.name,
@@ -296,6 +367,49 @@ class _Lanes {
   int attachments = 0;
   int photos = 0;
   int videos = 0;
+
+  /// Every /blob post fired so far, in receipt order; `drainBlobs` awaits
+  /// them before the terminal report.
+  final List<Future<bool>> _blobs = [];
+  int blobsPosted = 0;
+  int blobsFailed = 0;
+
+  /// Fires one /blob post for a verified item and queues it. Never throws:
+  /// this runs inside lane callbacks, and `_postBlob` swallows its errors.
+  void _post(String kind, String id, List<int> bytes) {
+    final posted = _peer._postBlob(run: _run, kind: kind, id: id, bytes: bytes);
+    _blobs.add(
+      posted.then((ok) {
+        if (ok) {
+          blobsPosted++;
+        } else {
+          blobsFailed++;
+        }
+        return ok;
+      }),
+    );
+  }
+
+  /// Waits for every queued /blob post, at most 30 s overall; never throws.
+  /// A post still in flight at the cap counts as neither posted nor
+  /// failed — the summary shows the gap against the item counts.
+  Future<void> drainBlobs() async {
+    if (_blobs.isEmpty) return;
+    try {
+      await Future.wait(_blobs).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          _peer._note(
+            'blob drain timed out: posted=$blobsPosted failed=$blobsFailed '
+            'of ${_blobs.length}',
+          );
+          return const <bool>[];
+        },
+      );
+    } on Object catch (error) {
+      _peer._note('blob drain error=$error');
+    }
+  }
 
   Future<void> open() async {
     final chatPort = MediaChannelDataPort(
@@ -352,6 +466,12 @@ class _Lanes {
             'verified': true, // chunk reassembly is complete; sha reported
           }, run: _run),
         );
+        // A voice note is an audio attachment; anything else is a file.
+        _post(
+          attachment.contentType.startsWith('audio/') ? 'voice' : 'file',
+          attachment.id,
+          attachment.bytes,
+        );
       }),
     );
     _subs.add(
@@ -373,6 +493,13 @@ class _Lanes {
             'deduplicated': update.deduplicated,
           }, run: _run),
         );
+        // Only the verified original goes to /blob — the preview stage
+        // carries different bytes and would break the Mac's sha chain.
+        if (original == null) {
+          _peer._note('photo id=${update.photoId} verified without bytes');
+          return;
+        }
+        _post('photo', update.photoId, original);
       }),
     );
     _subs.add(
@@ -389,6 +516,13 @@ class _Lanes {
             'verified': update.stage == VideoNoteStage.verified,
           }, run: _run),
         );
+        if (update.stage != VideoNoteStage.verified) return;
+        final bytes = update.state.bytes;
+        if (bytes == null) {
+          _peer._note('video id=${update.videoId} verified without bytes');
+          return;
+        }
+        _post('video', update.videoId, bytes);
       }),
     );
   }
@@ -398,6 +532,8 @@ class _Lanes {
     'attachments': attachments,
     'photos': photos,
     'videos': videos,
+    'blobs_posted': blobsPosted,
+    'blobs_failed': blobsFailed,
   };
 
   Future<void> close() async {

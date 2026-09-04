@@ -12,6 +12,20 @@ this tiny server on the Mac's bridge address:
   POST /report       one JSON event; appended verbatim as one line to
                      phone_events.jsonl; an `ended`/`failed` event also
                      marks the job done (job.done)
+  POST /blob?run=<run>&kind=<photo|voice|video|file>&id=<item>&sha256=<hex>
+                     the raw bytes the phone RECEIVED for one media item,
+                     returned so the runner can prove them against the
+                     fixture it sent: stored as blobs/<kind>-<id>.bin (a tmp
+                     file, then a rename) and logged as one `blob` event
+                     line {"event":"blob","run","at","kind","id","bytes",
+                     "sha256"} in phone_events.jsonl → 200 `ok`.
+                     409 `wrong run` when run is not the job's run;
+                     400 when kind or id is not [A-Za-z0-9._-]{1,80} or
+                     sha256 is not 64 hex; 413 over 16 MB; 409 `sha
+                     mismatch` when the body's sha256 differs from the query
+                     (the peer retries); a blob already stored with a
+                     DIFFERENT sha is refused 409, the same sha is an
+                     idempotent 200 (no second event line).
 
 Everything is a file in the run directory, which lives inside the Mac app's
 sandbox container so the app-journey driver can read the phone's events
@@ -22,10 +36,24 @@ USAGE  journey_hub.py --bind <addr> --port 8765 --dir <run dir>
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+import re
 import sys
+import threading
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs
+
+BLOB_MAX_BYTES = 16 * 1024 * 1024
+SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
+SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
+
+
+class BodyTooLarge(Exception):
+    """The request body exceeds the limit given to _read_body."""
 
 
 class Hub(BaseHTTPRequestHandler):
@@ -65,14 +93,18 @@ class Hub(BaseHTTPRequestHandler):
             return
         self._send(404, b"no such path\n")
 
-    def _read_body(self) -> bytes:
+    def _read_body(self, limit: int | None = None) -> bytes:
         # dart:io's HttpClient streams a written body as Transfer-Encoding:
         # chunked (no Content-Length) unless the caller sets contentLength;
         # BaseHTTPRequestHandler does not decode chunks — the first rig run
         # logged two reports as 400 "bad json" from an empty read.
+        # With a limit, a body that would exceed it raises BodyTooLarge: a
+        # declared Content-Length over the limit is refused before any read,
+        # a chunked body the moment its running total passes it.
         encoding = (self.headers.get("Transfer-Encoding") or "").lower()
         if "chunked" in encoding:
             chunks = []
+            total = 0
             while True:
                 size_line = self.rfile.readline().strip()
                 if not size_line:
@@ -82,14 +114,23 @@ class Hub(BaseHTTPRequestHandler):
                     while self.rfile.readline().strip():
                         pass  # trailers
                     break
+                total += size
+                if limit is not None and total > limit:
+                    raise BodyTooLarge()
                 chunks.append(self.rfile.read(size))
                 self.rfile.readline()  # the CRLF after each chunk
             return b"".join(chunks)
         length = int(self.headers.get("Content-Length") or 0)
+        if limit is not None and length > limit:
+            raise BodyTooLarge()
         return self.rfile.read(length) if length > 0 else b""
 
     def do_POST(self):  # noqa: N802
-        if self.path != "/report":
+        path, _, query = self.path.partition("?")
+        if path == "/blob":
+            self._blob(query)
+            return
+        if path != "/report":
             self._send(404, b"no such path\n")
             return
         raw = self._read_body()
@@ -99,10 +140,81 @@ class Hub(BaseHTTPRequestHandler):
             self._send(400, b"bad json\n")
             return
         line = json.dumps(event, separators=(",", ":"), ensure_ascii=False)
-        with (self.run_dir / "phone_events.jsonl").open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
+        with self._lock:
+            with (self.run_dir / "phone_events.jsonl").open("a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
         if event.get("event") in ("ended", "failed"):
             (self.run_dir / "job.done").write_text(event.get("event", "") + "\n")
+        self._send(200, b"ok\n")
+
+    # One lock for the blob directory and the events file: the peer may post
+    # two blobs at once, and a retry of the same blob may overlap the first.
+    _lock = threading.Lock()
+
+    def _refuse(self, code: int, body: bytes):
+        # Drain the body first (bounded) so the peer sees the status instead
+        # of a reset socket while it is still writing; then close.
+        try:
+            self._read_body(BLOB_MAX_BYTES)
+        except (BodyTooLarge, ValueError, OSError):
+            pass
+        self.close_connection = True
+        self._send(code, body)
+
+    def _blob(self, query: str):
+        q = {k: v[0] for k, v in parse_qs(query, keep_blank_values=True).items()}
+        run = q.get("run", "")
+        kind = q.get("kind", "")
+        item = q.get("id", "")
+        sha = q.get("sha256", "").lower()
+        job = self._job()
+        if not job or job.get("run") != run:
+            self._refuse(409, b"wrong run\n")
+            return
+        if not SAFE_NAME.match(kind) or not SAFE_NAME.match(item):
+            self._refuse(400, b"bad kind or id\n")
+            return
+        if not SHA256_HEX.match(sha):
+            self._refuse(400, b"bad sha256\n")
+            return
+        try:
+            body = self._read_body(BLOB_MAX_BYTES)
+        except BodyTooLarge:
+            self.close_connection = True
+            self._send(413, b"too large\n")
+            return
+        except ValueError:
+            self.close_connection = True
+            self._send(400, b"bad chunked body\n")
+            return
+        if hashlib.sha256(body).hexdigest() != sha:
+            self._send(409, b"sha mismatch\n")
+            return
+        blobs = self.run_dir / "blobs"
+        blobs.mkdir(parents=True, exist_ok=True)
+        dest = blobs / ("%s-%s.bin" % (kind, item))
+        with self._lock:
+            if dest.exists():
+                if hashlib.sha256(dest.read_bytes()).hexdigest() != sha:
+                    self._send(409, b"blob exists with a different sha\n")
+                    return
+                self._send(200, b"ok\n")  # the same bytes again: idempotent
+                return
+            tmp = blobs / (".%s-%s.%d.%d.tmp" % (kind, item, os.getpid(), threading.get_ident()))
+            tmp.write_bytes(body)
+            os.replace(tmp, dest)
+            event = {
+                "event": "blob",
+                "run": run,
+                "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "kind": kind,
+                "id": item,
+                "bytes": len(body),
+                "sha256": sha,
+            }
+            line = json.dumps(event, separators=(",", ":"), ensure_ascii=False)
+            with (self.run_dir / "phone_events.jsonl").open("a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
         self._send(200, b"ok\n")
 
     def _job(self):

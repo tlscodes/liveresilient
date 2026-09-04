@@ -71,6 +71,7 @@ class MyApp extends StatefulWidget {
     this.openSession,
     this.attachmentPicker,
     this.photoPicker,
+    this.voiceNoteSource,
   });
 
   /// Null only in widget tests that exercise screens in isolation.
@@ -87,6 +88,11 @@ class MyApp extends StatefulWidget {
   /// send goes through the real screens with no dialog to click.
   final Future<Attachment?> Function()? attachmentPicker;
   final Future<Uint8List?> Function(PhotoSource source)? photoPicker;
+
+  /// See [attachmentPicker]: the recorded bytes behind the voice-note
+  /// button. The rig injects a WAV spoken by the Mac; null keeps the
+  /// controller's dated placeholder, since production has no recorder yet.
+  final Future<Attachment?> Function(Duration length)? voiceNoteSource;
 
   /// Out-of-band manifest import, when this build has pinned signing keys.
   ///
@@ -121,6 +127,7 @@ class _MyAppState extends State<MyApp> {
         openSession: widget.openSession,
         attachmentPicker: widget.attachmentPicker,
         photoPicker: widget.photoPicker,
+        voiceNoteSource: widget.voiceNoteSource,
         themeMode: _themeMode,
         onThemeMode: (mode) => setState(() => _themeMode = mode),
       ),
@@ -139,6 +146,7 @@ class HomePage extends StatefulWidget {
     this.openSession,
     this.attachmentPicker,
     this.photoPicker,
+    this.voiceNoteSource,
     this.themeMode = ThemeMode.system,
     this.onThemeMode,
   });
@@ -152,9 +160,11 @@ class HomePage extends StatefulWidget {
   /// See [MyApp.openSession]. Null means the dev relay entry point.
   final SessionOpener? openSession;
 
-  /// See [MyApp.attachmentPicker] / [MyApp.photoPicker].
+  /// See [MyApp.attachmentPicker] / [MyApp.photoPicker] /
+  /// [MyApp.voiceNoteSource].
   final Future<Attachment?> Function()? attachmentPicker;
   final Future<Uint8List?> Function(PhotoSource source)? photoPicker;
+  final Future<Attachment?> Function(Duration length)? voiceNoteSource;
 
   /// Appearance selection, owned by [MyApp] (it must sit above the
   /// [MaterialApp] to take effect); Settings edits it through [onThemeMode].
@@ -188,6 +198,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   );
   late final ChatDemoController _chat = ChatDemoController(
     attachmentPicker: widget.attachmentPicker ?? pickAttachmentFile,
+    voiceNoteSource: widget.voiceNoteSource,
     photoPicker: widget.photoPicker ?? pickPhotoBytes,
     photoIngest: (raw) => compute(buildStagedPhotoArtifacts, raw),
     intelligenceFabric: widget.intelligence?.fabric,
@@ -313,6 +324,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             readAvailableOutgoingBps: () => _lastReading?.availableOutgoingBps,
           ),
           attachmentPicker: widget.attachmentPicker ?? pickAttachmentFile,
+          voiceNoteSource: widget.voiceNoteSource,
           photoPicker: widget.photoPicker ?? pickPhotoBytes,
           photoIngest: (raw) => compute(buildStagedPhotoArtifacts, raw),
           intelligenceFabric: widget.intelligence?.fabric,

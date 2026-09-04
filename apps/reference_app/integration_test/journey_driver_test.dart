@@ -20,9 +20,19 @@
 ///   JOURNEY_HOLD_S            seconds to sample the gauge once connected (45)
 ///   E2E_CONNECT_BUDGET_S      seconds to wait for Connected (300)
 ///   JOURNEY_FEATURE_BUDGET_S  seconds allowed per feature, link-derived (240)
-///   JOURNEY_PHOTO_BYTES       photo fixture target size (48000)
-///   JOURNEY_VOICE_S           voice note length in seconds (6)
-///   JOURNEY_VIDEO_BYTES       video note fixture size (96000)
+///   JOURNEY_PHOTO_BYTES       target size of the photo's WIRE original,
+///                             the staged ladder's re-encoding (48000)
+///   JOURNEY_VOICE_S           seconds the composer mic is held (6)
+///   JOURNEY_VOICE_FILE        voice-note fixture: an IMA ADPCM WAV spoken
+///                             by the Mac's `say`; absent = FAIL row
+///   JOURNEY_VIDEO_FILE        video-note fixture: an H.264/AAC MP4 made
+///                             by ffmpeg; absent = FAIL row
+///   JOURNEY_PROFILE           profile name written into the photo ('-')
+///
+/// The photo is rendered here (journey_scene.dart) and its wire original
+/// — what the staged ladder actually sends — is written to
+/// $JOURNEY_RUN_DIR/fixtures/photo.jpg, so the runner can hash the file,
+/// the phone's blob and the printed sha256 as one chain.
 @Timeout(Duration(minutes: 30))
 library;
 
@@ -35,7 +45,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:image/image.dart' as img;
 import 'package:integration_test/integration_test.dart';
 import 'package:messaging/messaging.dart'
     show Attachment, DeliveryState, MediaKind, contentSha256Hex;
@@ -45,7 +54,11 @@ import 'package:reference_app/src/demo_feeds.dart' show demoQualitySourceLabel;
 import 'package:reference_app/src/live_chat_registry.dart';
 import 'package:reference_app/src/live_quality_feed.dart'
     show liveQualitySourceLabel;
+import 'package:reference_app/src/photo_ingest.dart'
+    show buildStagedPhotoArtifacts;
 import 'package:reference_app/src/photo_source.dart';
+
+import 'journey_scene.dart';
 
 const String readyFile = String.fromEnvironment('JOURNEY_READY_FILE');
 const String goFile = String.fromEnvironment('JOURNEY_GO_FILE');
@@ -67,10 +80,18 @@ const int voiceSeconds = int.fromEnvironment(
   'JOURNEY_VOICE_S',
   defaultValue: 6,
 );
-const int videoBytes = int.fromEnvironment(
-  'JOURNEY_VIDEO_BYTES',
-  defaultValue: 96000,
+const String voiceFile = String.fromEnvironment('JOURNEY_VOICE_FILE');
+const String videoFile = String.fromEnvironment('JOURNEY_VIDEO_FILE');
+const String profileName = String.fromEnvironment(
+  'JOURNEY_PROFILE',
+  defaultValue: '-',
 );
+
+/// How often a pending send's messenger state is logged.
+const Duration _statusEvery = Duration(seconds: 10);
+
+/// True when a fixture path was given and the file is there right now.
+bool _fixturePresent(String path) => path.isNotEmpty && File(path).existsSync();
 
 final RegExp _rttShape = RegExp(r'^(\d+) ms$');
 final RegExp _lossShape = RegExp(r'^([\d.]+)% loss$');
@@ -122,39 +143,62 @@ bool _callOver() {
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
-/// Deterministic pseudo-random bytes (LCG), so a row's sha256 is reproducible
-/// from its seed and size alone.
-Uint8List _noise(int length, int seed) {
-  final out = Uint8List(length);
-  var x = seed;
-  for (var i = 0; i < length; i++) {
-    x = (x * 1103515245 + 12345) & 0x7fffffff;
-    out[i] = (x >> 16) & 0xff;
-  }
-  return out;
+/// The photo as the two byte strings the row needs: [raw] is what the
+/// picker hands the app (the rendered scene, JPEG q90); [wire] is what the
+/// app's staged ladder actually sends as the original (photo_ingest.dart
+/// re-encodes at q80 under a 2048 px cap). The row's bytes and sha256
+/// describe [wire], because that is what crossed and what the phone hashed.
+class PhotoFixture {
+  final Uint8List raw;
+  final Uint8List wire;
+  final int textureAmplitude;
+
+  const PhotoFixture(this.raw, this.wire, this.textureAmplitude);
 }
 
-/// A real JPEG the staged pipeline can decode, grown until it weighs at
-/// least [photoTargetBytes]: noise compresses poorly, so a modest canvas
-/// reaches the target quickly. The actual byte count is what the row reports.
-Uint8List _photoFixture() {
-  var width = 160;
-  var height = 120;
-  for (var attempt = 0; attempt < 12; attempt++) {
-    final image = img.Image(width: width, height: height);
-    var x = 0x5EED ^ (width * 31 + height);
-    for (var y = 0; y < height; y++) {
-      for (var i = 0; i < width; i++) {
-        x = (x * 1103515245 + 12345) & 0x7fffffff;
-        image.setPixelRgb(i, y, x >> 16 & 0xff, x >> 8 & 0xff, x & 0xff);
-      }
-    }
-    final encoded = Uint8List.fromList(img.encodeJpg(image, quality: 90));
-    if (encoded.length >= photoTargetBytes) return encoded;
-    width = (width * 1.25).round();
-    height = (height * 1.25).round();
+/// Renders the scene at 1024x768 and adds texture until the wire original
+/// weighs at least [photoTargetBytes]. Never throws: this runs before the
+/// app is on screen, and a throw here would cost every row; under target it
+/// keeps the largest and says so.
+PhotoFixture _photoFixture(DateTime at) {
+  // The runner's run id (JOURNEY_RUN_ID) names the picture; without it the
+  // run dir's basename, so a hand-run driver still tells its pictures apart.
+  const runIdDefine = String.fromEnvironment('JOURNEY_RUN_ID');
+  final runId = runIdDefine.isNotEmpty
+      ? runIdDefine
+      : (runDir.isEmpty ? 'local' : runDir.split('/').last);
+  PhotoFixture? best;
+  for (final amplitude in const [0, 6, 12, 18, 24]) {
+    final raw = renderJourneyScene(
+      width: 1024,
+      height: 768,
+      runId: runId,
+      profile: profileName,
+      at: at,
+      textureAmplitude: amplitude,
+    );
+    final wire = buildStagedPhotoArtifacts(raw).original;
+    final candidate = PhotoFixture(raw, wire, amplitude);
+    if (best == null || wire.length > best.wire.length) best = candidate;
+    if (wire.length >= photoTargetBytes) return candidate;
   }
-  throw StateError('photo fixture never reached $photoTargetBytes bytes');
+  print(
+    'JOURNEY_APP note photo fixture reached ${best!.wire.length} B '
+    'of target $photoTargetBytes',
+  );
+  return best;
+}
+
+/// Writes the wire original next to the runner's other fixtures, so the
+/// three-way chain (file == phone's blob == printed sha256) has its file.
+void _writePhotoFixture(PhotoFixture photo) {
+  if (runDir.isEmpty) return;
+  try {
+    Directory('$runDir/fixtures').createSync(recursive: true);
+    File('$runDir/fixtures/photo.jpg').writeAsBytesSync(photo.wire);
+  } on IOException catch (error) {
+    print('JOURNEY_APP note photo fixture not written: $error');
+  }
 }
 
 // ── Phone-side evidence ─────────────────────────────────────────────────────
@@ -212,6 +256,10 @@ class FeatureOutcome {
   final int? senderMs;
   final int? peerMs;
   final bool shaMatch;
+
+  /// The sha256 this side sent, as 64 hex chars ('-' for a skipped row):
+  /// the runner hashes the fixture file and the phone's blob against it.
+  final String sha256;
   final String status;
   final String note;
 
@@ -221,6 +269,7 @@ class FeatureOutcome {
     required this.senderMs,
     required this.peerMs,
     required this.shaMatch,
+    required this.sha256,
     required this.status,
     required this.note,
   });
@@ -228,7 +277,7 @@ class FeatureOutcome {
   String get line =>
       'JOURNEY_APP feature=$feature status=$status bytes=$bytes '
       'sender_ms=${senderMs ?? '-'} peer_ms=${peerMs ?? '-'} '
-      'sha_match=$shaMatch budget_s=$featureBudgetS '
+      'sha_match=$shaMatch sha256=$sha256 budget_s=$featureBudgetS '
       'note=${note.replaceAll(' ', '_')}';
 }
 
@@ -237,6 +286,7 @@ class FeatureOutcome {
 /// them into one outcome. The call ending early is a FAIL with its reason.
 Future<FeatureOutcome> _await(
   WidgetTester tester, {
+  required ChatDemoController chat,
   required String feature,
   required int bytes,
   required String sha256,
@@ -248,6 +298,7 @@ Future<FeatureOutcome> _await(
   int? senderMs;
   int? peerMs;
   final deadline = startedAt.add(Duration(seconds: featureBudgetS));
+  var nextStatusAt = startedAt.add(_statusEvery);
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 250));
     final now = DateTime.now();
@@ -259,6 +310,15 @@ Future<FeatureOutcome> _await(
     }
     if (senderMs != null && peerMs != null) break;
     if (_callOver()) break;
+    // The messenger's window while the send is pending, so a slow or
+    // stuck row explains itself without a rebuild.
+    if (!now.isBefore(nextStatusAt)) {
+      nextStatusAt = now.add(_statusEvery);
+      print(
+        'JOURNEY_APP messenger t=${now.difference(_driverStartedAt).inSeconds}s '
+        'feature=$feature phase=${_phaseOnScreen()} ${chat.messengerStatus}',
+      );
+    }
   }
   final over = _callOver();
   final pass = peerMs != null && senderMs != null && !over;
@@ -267,14 +327,20 @@ Future<FeatureOutcome> _await(
       : (peerMs == null
             ? 'phone never reported it verified within the budget'
             : (senderMs == null ? 'no sender-side delivery receipt' : ''));
+  final failure = chat.lastSendFailure;
   final outcome = FeatureOutcome(
     feature: feature,
     bytes: bytes,
     senderMs: senderMs,
     peerMs: peerMs,
     shaMatch: peerMs != null,
+    sha256: sha256,
     status: pass ? 'PASS' : 'FAIL',
-    note: [if (note.isNotEmpty) note, if (why.isNotEmpty) why].join('; '),
+    note: [
+      if (note.isNotEmpty) note,
+      if (why.isNotEmpty) why,
+      if (!pass && failure != null) 'last_failure=$failure',
+    ].join('; '),
   );
   print(outcome.line);
   return outcome;
@@ -287,6 +353,7 @@ FeatureOutcome _skipped(String feature, String why) {
     senderMs: null,
     peerMs: null,
     shaMatch: false,
+    sha256: '-',
     status: 'FAIL',
     note: why,
   );
@@ -304,6 +371,7 @@ ChatEntry? _lastMine(ChatDemoController chat) {
 Future<List<FeatureOutcome>> _runFeatures(
   WidgetTester tester,
   DateTime joinedAt,
+  PhotoFixture photo,
 ) async {
   final outcomes = <FeatureOutcome>[];
   String t() => 't=${DateTime.now().difference(joinedAt).inSeconds}s';
@@ -346,6 +414,7 @@ Future<List<FeatureOutcome>> _runFeatures(
     outcomes.add(
       await _await(
         tester,
+        chat: chat,
         feature: 'chat_text',
         bytes: utf8.encode(text).length,
         sha256: sha,
@@ -385,18 +454,28 @@ Future<List<FeatureOutcome>> _runFeatures(
         outcomes.add(_skipped('photo', 'the picker produced no photo'));
       } else {
         final sha = chat.sentSha256[photoId] ?? '';
+        final fixtureSha = contentSha256Hex(photo.wire);
+        if (sha != fixtureSha) {
+          // The line carries the app's sha; the runner's three-way chain
+          // (file == blob == printed sha) then fails, which is honest.
+          print(
+            'JOURNEY_APP note photo sha mismatch '
+            'fixture=$fixtureSha app=$sha',
+          );
+        }
         outcomes.add(
           await _await(
             tester,
+            chat: chat,
             feature: 'photo',
-            bytes: _photoBytes,
+            bytes: photo.wire.length,
             sha256: sha,
             kind: 'photo',
             senderDone: () => chat.outgoingPhotos[photoId]?.done ?? false,
             startedAt: startedAt,
             note:
-                'JPEG fixture via the photo button, staged ladder, '
-                'phone verified the original sha256',
+                'rendered scene (sky, sun, hills, colour bars, run id text), '
+                'staged ladder, phone verified the original sha256',
           ),
         );
       }
@@ -405,105 +484,134 @@ Future<List<FeatureOutcome>> _runFeatures(
     outcomes.add(_skipped('photo', 'threw: $error'));
   }
 
-  // 3. Voice note: the composer's mic, held for the note length, then send.
-  try {
-    final micKey = find.byKey(const ValueKey('composer-mic'));
-    final beforeIds = chat.sentSha256.keys.toSet();
-    final startedAt = DateTime.now();
-    var how = '';
-    if (micKey.evaluate().isNotEmpty) {
-      await tester.tap(micKey);
-      await tester.pump(const Duration(milliseconds: 300));
-      await _pumpUntil<bool>(
-        tester,
-        () => null,
-        budget: Duration(seconds: voiceSeconds),
-      );
-      final send = find.byIcon(Icons.send);
-      if (send.evaluate().isNotEmpty) {
-        await tester.tap(send.first);
-        how = 'recorded ${voiceSeconds}s with the composer mic, sent';
-      }
-    }
-    if (how.isEmpty) {
-      // The mic control is gated on ambient motion (hidden under
-      // FLUTTER_TEST); the same controller path the button calls.
-      await chat.sendVoiceNote(Duration(seconds: voiceSeconds));
-      how = 'sent via the controller path (mic control hidden under test)';
-    }
-    await tester.pump(const Duration(milliseconds: 200));
-    final voiceId = await _pumpUntil<String>(tester, () {
-      for (final id in chat.sentSha256.keys) {
-        if (!beforeIds.contains(id) && id.startsWith('voice-')) return id;
-      }
-      return null;
-    }, budget: const Duration(seconds: 15));
-    if (voiceId == null) {
-      outcomes.add(_skipped('voice_note', 'no voice note was produced ($how)'));
-    } else {
-      final sha = chat.sentSha256[voiceId]!;
-      final attachment = chat.entries
-          .map((e) => e.attachment)
-          .whereType<Attachment>()
-          .firstWhere((a) => a.id == voiceId);
-      outcomes.add(
-        await _await(
+  // 3. Voice note: the spoken WAV behind the composer's mic, held for the
+  // note length, then the recorder row's own send control.
+  if (!_fixturePresent(voiceFile)) {
+    outcomes.add(
+      _skipped('voice_note', 'fixture=missing (JOURNEY_VOICE_FILE)'),
+    );
+  } else {
+    try {
+      final micKey = find.byKey(const ValueKey('composer-mic'));
+      final beforeIds = chat.sentSha256.keys.toSet();
+      final startedAt = DateTime.now();
+      var how = '';
+      if (micKey.evaluate().isNotEmpty) {
+        await tester.tap(micKey);
+        await tester.pump(const Duration(milliseconds: 300));
+        await _pumpUntil<bool>(
           tester,
-          feature: 'voice_note',
-          bytes: attachment.bytes.length,
-          sha256: sha,
-          kind: 'attachment',
-          senderDone: () => (chat.attachmentProgress[voiceId] ?? 0) >= 1.0,
-          startedAt: startedAt,
-          note:
-              '$how; content is the app\'s placeholder audio (no recorder '
-              'dependency), transfer and integrity are real',
-        ),
-      );
+          () => null,
+          budget: Duration(seconds: voiceSeconds),
+        );
+        // The recorder row's control by its semantics label: the first
+        // Icons.send in the tree is not always this one.
+        final sendVoice = find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.label == 'Send voice note',
+        );
+        if (sendVoice.evaluate().isNotEmpty) {
+          await tester.tap(sendVoice);
+          how =
+              'recorded ${voiceSeconds}s with the composer mic control, sent '
+              'with the recorder\'s send control';
+        }
+      }
+      if (how.isEmpty) {
+        // The mic control is gated on ambient motion (hidden under
+        // FLUTTER_TEST); the same controller path the button calls.
+        await chat.sendVoiceNote(Duration(seconds: voiceSeconds));
+        how = 'sent via the controller path (mic control hidden under test)';
+      }
+      await tester.pump(const Duration(milliseconds: 200));
+      final voiceId = await _pumpUntil<String>(tester, () {
+        for (final id in chat.sentSha256.keys) {
+          if (!beforeIds.contains(id) && id.startsWith('voice-')) return id;
+        }
+        return null;
+      }, budget: const Duration(seconds: 15));
+      if (voiceId == null) {
+        outcomes.add(
+          _skipped('voice_note', 'no voice note was produced ($how)'),
+        );
+      } else {
+        final sha = chat.sentSha256[voiceId]!;
+        final attachment = chat.entries
+            .map((e) => e.attachment)
+            .whereType<Attachment>()
+            .firstWhere((a) => a.id == voiceId);
+        outcomes.add(
+          await _await(
+            tester,
+            chat: chat,
+            feature: 'voice_note',
+            bytes: attachment.bytes.length,
+            sha256: sha,
+            kind: 'attachment',
+            senderDone: () => (chat.attachmentProgress[voiceId] ?? 0) >= 1.0,
+            startedAt: startedAt,
+            note:
+                '$how; spoken by the Mac speech engine (say), IMA ADPCM WAV; '
+                'audible=files (the screen recording carries no audio)',
+          ),
+        );
+      }
+    } catch (error) {
+      outcomes.add(_skipped('voice_note', 'threw: $error'));
     }
-  } catch (error) {
-    outcomes.add(_skipped('voice_note', 'threw: $error'));
   }
 
-  // 4. Video note: attach a clip; it rides the video lane, sha-verified.
-  try {
-    final beforeIds = chat.sentSha256.keys.toSet();
-    final startedAt = DateTime.now();
-    await tester.tap(find.byIcon(Icons.attach_file));
-    await tester.pump(const Duration(milliseconds: 300));
-    final videoId = await _pumpUntil<String>(tester, () {
-      for (final id in chat.sentSha256.keys) {
-        if (!beforeIds.contains(id) && id.startsWith('video-')) return id;
+  // 4. Video note: the ffmpeg clip through the attach button; it rides the
+  // video lane, sha-verified on the phone.
+  if (!_fixturePresent(videoFile)) {
+    outcomes.add(
+      _skipped('video_note', 'fixture=missing (JOURNEY_VIDEO_FILE)'),
+    );
+  } else {
+    try {
+      final beforeIds = chat.sentSha256.keys.toSet();
+      final startedAt = DateTime.now();
+      await tester.tap(find.byIcon(Icons.attach_file));
+      await tester.pump(const Duration(milliseconds: 300));
+      final videoId = await _pumpUntil<String>(tester, () {
+        for (final id in chat.sentSha256.keys) {
+          if (!beforeIds.contains(id) && id.startsWith('video-')) return id;
+        }
+        return null;
+      }, budget: const Duration(seconds: 15));
+      if (videoId == null) {
+        outcomes.add(
+          _skipped('video_note', 'the attach picker produced no clip'),
+        );
+      } else {
+        final sha = chat.sentSha256[videoId]!;
+        final attachment = chat.entries
+            .map((e) => e.attachment)
+            .whereType<Attachment>()
+            .firstWhere((a) => a.id == videoId);
+        final lane = chat.canSendVideo;
+        outcomes.add(
+          await _await(
+            tester,
+            chat: chat,
+            feature: 'video_note',
+            bytes: attachment.bytes.length,
+            sha256: sha,
+            kind: lane ? 'video' : 'attachment',
+            senderDone: () => lane
+                ? chat.outgoingVideos.values.any((s) => s.done)
+                : (chat.attachmentProgress[videoId] ?? 0) >= 1.0,
+            startedAt: startedAt,
+            note: lane
+                ? 'H.264/AAC clip made by ffmpeg (testsrc2 + tone), binary '
+                      'video lane, phone verified the sha256'
+                : 'H.264/AAC clip made by ffmpeg (testsrc2 + tone) via the '
+                      'chunked text path (no video lane)',
+          ),
+        );
       }
-      return null;
-    }, budget: const Duration(seconds: 15));
-    if (videoId == null) {
-      outcomes.add(
-        _skipped('video_note', 'the attach picker produced no clip'),
-      );
-    } else {
-      final sha = chat.sentSha256[videoId]!;
-      final lane = chat.canSendVideo;
-      outcomes.add(
-        await _await(
-          tester,
-          feature: 'video_note',
-          bytes: videoBytes,
-          sha256: sha,
-          kind: lane ? 'video' : 'attachment',
-          senderDone: () => lane
-              ? chat.outgoingVideos.values.any((s) => s.done)
-              : (chat.attachmentProgress[videoId] ?? 0) >= 1.0,
-          startedAt: startedAt,
-          note: lane
-              ? 'synthetic clip bytes via the attach button, binary video '
-                    'lane, phone verified the sha256'
-              : 'synthetic clip bytes via the chunked text path (no video lane)',
-        ),
-      );
+    } catch (error) {
+      outcomes.add(_skipped('video_note', 'threw: $error'));
     }
-  } catch (error) {
-    outcomes.add(_skipped('video_note', 'threw: $error'));
   }
 
   // What the lane budget was last derived from — the row's explanation for
@@ -525,7 +633,8 @@ Future<List<FeatureOutcome>> _runFeatures(
   return outcomes;
 }
 
-int _photoBytes = 0;
+/// When the test body started: the messenger lines' t= clock.
+late DateTime _driverStartedAt;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -536,18 +645,29 @@ void main() {
     expect(readyFile, isNotEmpty, reason: 'JOURNEY_READY_FILE is required');
     expect(goFile, isNotEmpty, reason: 'JOURNEY_GO_FILE is required');
 
-    final photo = _photoFixture();
-    _photoBytes = photo.length;
-    final clip = _noise(videoBytes, 0xC11F);
+    _driverStartedAt = DateTime.now();
+    final photo = _photoFixture(DateTime.now().toUtc());
+    _writePhotoFixture(photo);
     await tester.pumpWidget(
       MyApp(
-        photoPicker: (PhotoSource source) async => photo,
-        attachmentPicker: () async => Attachment(
-          id: 'video-${DateTime.now().millisecondsSinceEpoch}',
-          kind: MediaKind.video,
-          contentType: 'video/mp4',
-          bytes: clip,
-        ),
+        photoPicker: (PhotoSource source) async => photo.raw,
+        attachmentPicker: () async {
+          if (!_fixturePresent(videoFile)) return null;
+          return Attachment(
+            id: 'video-${DateTime.now().millisecondsSinceEpoch}',
+            kind: MediaKind.video,
+            contentType: 'video/mp4',
+            bytes: File(videoFile).readAsBytesSync(),
+          );
+        },
+        voiceNoteSource: _fixturePresent(voiceFile)
+            ? (Duration length) async => Attachment(
+                id: 'voice-${DateTime.now().millisecondsSinceEpoch}',
+                kind: MediaKind.file,
+                contentType: 'audio/wav',
+                bytes: File(voiceFile).readAsBytesSync(),
+              )
+            : null,
       ),
     );
     await tester.pump();
@@ -555,8 +675,11 @@ void main() {
     File(readyFile).writeAsStringSync('ready\n');
     print(
       'JOURNEY_APP ready hold=${holdS}s budget=${connectBudgetS}s '
-      'feature_budget=${featureBudgetS}s photo_bytes=${photo.length} '
-      'voice_s=$voiceSeconds video_bytes=$videoBytes',
+      'feature_budget=${featureBudgetS}s photo_bytes=${photo.wire.length} '
+      'photo_raw_bytes=${photo.raw.length} '
+      'photo_texture=${photo.textureAmplitude} voice_s=$voiceSeconds '
+      'voice_file=${_fixturePresent(voiceFile) ? 'present' : 'missing'} '
+      'video_file=${_fixturePresent(videoFile) ? 'present' : 'missing'}',
     );
 
     final key = await _pumpUntil<String>(
@@ -670,7 +793,7 @@ void main() {
 
     var features = <FeatureOutcome>[];
     if (connected && !endedOnScreen) {
-      features = await _runFeatures(tester, joinedAt);
+      features = await _runFeatures(tester, joinedAt, photo);
       endedOnScreen = _callOver();
     } else {
       for (final f in const [
