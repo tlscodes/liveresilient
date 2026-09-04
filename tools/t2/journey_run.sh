@@ -49,7 +49,7 @@ VOICE_S=${JOURNEY_VOICE_S:-6}
 # wire_B column is the length the app printed. Measured 2026-09-04:
 # voice.wav 20,574 B for 5.1 s, video.mp4 73,780 B for 48 frames.
 VOICE_BYTES=${JOURNEY_VOICE_BYTES:-24000}
-VIDEO_BYTES=${JOURNEY_VIDEO_BYTES:-96000}
+# VIDEO_BYTES / PHOTO_PX are set per link once the profile is known (below).
 SHAPE="$REPO/tools/t2/net_shape.sh"
 HUB="$REPO/tools/t2/journey_hub.py"
 FIXTURES="$REPO/tools/t2/journey_fixtures.sh"
@@ -69,20 +69,6 @@ mkdir -p "$EVID" "$LOGD"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
-# --- tools and fixtures, BEFORE any shaping or hub start ---
-# The fixtures are made by `say` and ffmpeg; the media evidence after the
-# call is decoded by sips, afinfo, ffprobe and ffmpeg and chained by shasum.
-# A missing tool fails here, with nothing to tear down yet.
-for tool in say ffmpeg ffprobe afinfo sips shasum; do
-  command -v "$tool" >/dev/null 2>&1 || die "missing tool $tool (needed for the fixtures and the media probes)"
-done
-[ -x "$FIXTURES" ] || die "fixture script missing or not executable: $FIXTURES"
-# $RUN/fixtures/voice.wav and video.mp4 live in the app's container so the
-# sandboxed driver can read and send them; the driver writes photo.jpg there.
-fx_out=$(JOURNEY_VOICE_BYTES="$VOICE_BYTES" JOURNEY_VIDEO_BYTES="$VIDEO_BYTES" "$FIXTURES" "$RUN" "$RUN_ID" "$PROFILE") \
-  || die "the media fixtures could not be made (caps voice ${VOICE_BYTES} B, video ${VIDEO_BYTES} B)"
-printf '%s\n' "$fx_out" | sed 's/^fixture /fixtures  /'
-
 profile_args() {
   case "$1" in
     normal)    echo "-        40    0.0" ;;
@@ -97,6 +83,33 @@ profile_args() {
 }
 read -r BW DELAY PLR <<<"$(profile_args "$PROFILE")"
 
+# Fixture sizes follow the link, the way a real app's encoder would: the
+# video cap and the photo's long edge come from the profile's bandwidth
+# (JOURNEY_VIDEO_BYTES / JOURNEY_PHOTO_PX override). Measured lanes
+# 2026-09-04: 74 KB of video took 0.9 s unshaped, 43-52 s at 32 kbit/s,
+# 116 s at 16 kbit/s; the feature budget below scales with the file.
+case "$BW" in
+  -)         VIDEO_BYTES=${JOURNEY_VIDEO_BYTES:-1600000}; PHOTO_PX=${JOURNEY_PHOTO_PX:-1280} ;;
+  32Kbit/s)  VIDEO_BYTES=${JOURNEY_VIDEO_BYTES:-260000};  PHOTO_PX=${JOURNEY_PHOTO_PX:-800} ;;
+  16Kbit/s)  if [ "$DELAY" != "-" ] || [ "$PLR" != "0.0" ]; then VIDEO_BYTES=${JOURNEY_VIDEO_BYTES:-120000}; else VIDEO_BYTES=${JOURNEY_VIDEO_BYTES:-150000}; fi
+             PHOTO_PX=${JOURNEY_PHOTO_PX:-512} ;;
+  *)         VIDEO_BYTES=${JOURNEY_VIDEO_BYTES:-260000};  PHOTO_PX=${JOURNEY_PHOTO_PX:-800} ;;
+esac
+
+# --- tools and fixtures, BEFORE any shaping or hub start ---
+# The fixtures are made by `say` and ffmpeg; the media evidence after the
+# call is decoded by sips, afinfo, ffprobe and ffmpeg and chained by shasum.
+# A missing tool fails here, with nothing to tear down yet.
+for tool in say ffmpeg ffprobe afinfo sips shasum; do
+  command -v "$tool" >/dev/null 2>&1 || die "missing tool $tool (needed for the fixtures and the media probes)"
+done
+[ -x "$FIXTURES" ] || die "fixture script missing or not executable: $FIXTURES"
+# $RUN/fixtures/voice.wav and video.mp4 live in the app's container so the
+# sandboxed driver can read and send them; the driver writes photo.jpg there.
+fx_out=$(JOURNEY_VOICE_BYTES="$VOICE_BYTES" JOURNEY_VIDEO_BYTES="$VIDEO_BYTES" JOURNEY_PHOTO_PX="$PHOTO_PX" "$FIXTURES" "$RUN" "$RUN_ID" "$PROFILE") \
+  || die "the media fixtures could not be made (caps voice ${VOICE_BYTES} B, video ${VIDEO_BYTES} B)"
+printf '%s\n' "$fx_out" | sed 's/^fixture /fixtures  /'
+
 # Per-feature budget, LINK-DERIVED and printed in the row: the largest item
 # (the video note) at a quarter of the link's bit rate (the lane's share next
 # to audio and control), doubled for ARQ overhead, plus six round trips, plus
@@ -106,7 +119,9 @@ read -r BW DELAY PLR <<<"$(profile_args "$PROFILE")"
 FEATURE_BUDGET=$(python3 - "$BW" "$DELAY" "$PLR" "$(stat -f %z "$RUN/fixtures/video.mp4")" <<'PY'
 import sys
 bw, delay, plr, video = sys.argv[1:5]
-bps = 50_000_000 if bw == "-" else int(bw.replace("Kbit/s", "")) * 1000
+# Unshaped: the video lane measured ~640 kbit/s (74 KB in 0.9 s, 2026-09-04);
+# 1 Mbit/s keeps the budget honest for a 1.3 MB clip instead of a 20 s guess.
+bps = 1_000_000 if bw == "-" else int(bw.replace("Kbit/s", "")) * 1000
 rtt = 0.08 if delay == "-" else 2 * int(delay) / 1000
 loss = 0.0 if plr == "-" else float(plr)
 ideal = int(video) * 8 / (bps * 0.25)
@@ -199,6 +214,7 @@ APPLOG="$LOGD/$PROFILE.app.log"
     --dart-define=JOURNEY_HOLD_S="$HOLD" --dart-define=E2E_CONNECT_BUDGET_S="$BUDGET" \
     --dart-define=JOURNEY_FEATURE_BUDGET_S="$FEATURE_BUDGET" \
     --dart-define=JOURNEY_PROFILE="$PROFILE" --dart-define=JOURNEY_RUN_ID="$RUN_ID" \
+    --dart-define=JOURNEY_PHOTO_FILE="$RUN/fixtures/photo_src.jpg" \
     --dart-define=JOURNEY_PHOTO_BYTES="$PHOTO_BYTES" --dart-define=JOURNEY_VOICE_S="$VOICE_S" \
     --dart-define=JOURNEY_VIDEO_BYTES="$VIDEO_BYTES" \
     --dart-define=JOURNEY_VOICE_FILE="$RUN/fixtures/voice.wav" \
@@ -349,11 +365,12 @@ probe_media() {  # <photo|voice|video> <file> → ok(<detail>) or the check that
       local info codec w h fr frame fbytes
       info=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,nb_frames -of csv=p=0 "$f" 2>/dev/null | head -1)
       IFS=, read -r codec w h fr <<<"$info"
+      local dur; dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f" 2>/dev/null | head -1 | cut -c1-5)
       frame="$MEDIA/$PROFILE-video-2s.jpg"
       ffmpeg -v error -y -ss 2 -i "$f" -frames:v 1 "$frame" >/dev/null 2>&1
       fbytes=$(stat -f %z "$frame" 2>/dev/null || echo 0)
       if [ "${codec:-}" = h264 ] && [ "${w:-0}" -ge 320 ] 2>/dev/null && [ "${fr:-0}" -ge 24 ] 2>/dev/null && [ "$fbytes" -gt 2000 ]; then
-        echo "ok(h264,${w}x${h},${fr}f)"
+        echo "ok(h264,${w}x${h},${fr}f,${dur:-?}s)"
       else echo "video-probe(${codec:-?},${w:-?}x${h:-?},${fr:-?}f,frame2s=${fbytes}B)"; fi ;;
     *) echo "probe(unknown_kind_$kind)" ;;
   esac

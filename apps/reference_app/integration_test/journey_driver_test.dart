@@ -153,7 +153,16 @@ class PhotoFixture {
   final Uint8List wire;
   final int textureAmplitude;
 
-  const PhotoFixture(this.raw, this.wire, this.textureAmplitude);
+  /// `file` when [raw] is the runner's real photograph
+  /// (JOURNEY_PHOTO_FILE), `scene` for the rendered fallback.
+  final String source;
+
+  const PhotoFixture(
+    this.raw,
+    this.wire,
+    this.textureAmplitude, {
+    this.source = 'scene',
+  });
 }
 
 /// Renders the scene at 1024x768 and adds texture until the wire original
@@ -161,6 +170,14 @@ class PhotoFixture {
 /// app is on screen, and a throw here would cost every row; under target it
 /// keeps the largest and says so.
 PhotoFixture _photoFixture(DateTime at) {
+  // A real photograph from the runner wins over the rendered scene: the
+  // user judges the quality of a picture that exists outside the rig.
+  const photoFile = String.fromEnvironment('JOURNEY_PHOTO_FILE');
+  if (photoFile.isNotEmpty && File(photoFile).existsSync()) {
+    final raw = File(photoFile).readAsBytesSync();
+    final wire = buildStagedPhotoArtifacts(raw).original;
+    return PhotoFixture(raw, wire, 0, source: 'file');
+  }
   // The runner's run id (JOURNEY_RUN_ID) names the picture; without it the
   // run dir's basename, so a hand-run driver still tells its pictures apart.
   const runIdDefine = String.fromEnvironment('JOURNEY_RUN_ID');
@@ -473,9 +490,10 @@ Future<List<FeatureOutcome>> _runFeatures(
             kind: 'photo',
             senderDone: () => chat.outgoingPhotos[photoId]?.done ?? false,
             startedAt: startedAt,
-            note:
-                'rendered scene (sky, sun, hills, colour bars, run id text), '
-                'staged ladder, phone verified the original sha256',
+            note: photo.source == 'file'
+                ? 'real photograph from the runner (JOURNEY_PHOTO_FILE), '
+                : 'rendered scene (sky, sun, hills, colour bars, run id text), '
+                      'staged ladder, phone verified the original sha256',
           ),
         );
       }
