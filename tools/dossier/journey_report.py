@@ -42,7 +42,7 @@ def main() -> int:
                     measured = r[4] if r[4] != '-' else '-'
                     # call_connect and the chat features are measured in seconds
                     # (chat: send action to the phone's verified receipt).
-                    unit = 's' if feature != 'monitor_bar' and measured != '-' else ('ms' if feature == 'monitor_bar' and measured != '-' else '')
+                    unit = 'h' if feature == 'blackout_message' and measured != '-' else 's' if feature != 'monitor_bar' and measured != '-' else ('ms' if feature == 'monitor_bar' and measured != '-' else '')
                     note = re.sub(r'\s*run=\S+', '', r[6])
                     decoded = (re.search(r'decoded=\S+', r[6]) or [None, ''])[0] or ''
                     print(f'{profile:<12} {feature:<13} {measured + unit:<10} {r[5]:<10} {decoded:<28} {note[:150]}')
