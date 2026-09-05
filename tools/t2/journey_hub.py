@@ -98,6 +98,7 @@ import json
 import time
 import os
 import re
+import socket
 import socketserver
 import sys
 import threading
@@ -114,8 +115,18 @@ CHUNK_MAX_N = 4096  # pieces per bundle
 
 # Stream lane parameters. The hub is their single source: argv overrides
 # these and the values in force are echoed to the phone in the hello reply.
+# stall_s is derived, not chosen: the phone keeps up to inflight_bytes queued in
+# the shaped phone->hub pipe, and anything the phone sends after that (its own
+# TCP ACKs, a FIN, the next hello's SYN) waits behind that queue —
+# inflight_bytes / 2000 B/s = 16.4 s at the 16 kbit/s gate. A stall timeout
+# below that queue latency fires on a healthy window (measured 2026-09-05:
+# with stall_s 15 every window lost one session to a false stall, ~35 s each).
+# stall_s = inflight_bytes / rate_floor + 2 * ack_interval_s + margin
+#         = 16.4 + 4 + ~4  -> 25 s; the hub closes after 2 * stall_s = 50 s of
+# silence, which must stay below the shortest cut (MIN_M * 60 = 60 s).
+STREAM_RATE_FLOOR_BPS = 2000  # the 16 kbit/s gate the lane is sized for
 STREAM_DEFAULTS = {"piece_bytes": 8192, "ack_bytes": 8192, "ack_interval_s": 2,
-                   "inflight_bytes": 32768, "stall_s": 15}
+                   "inflight_bytes": 32768, "stall_s": 25}
 STREAM_LINE_MAX = 262144  # longest JSON line accepted on the stream lane
 STREAM_V = 3  # the hello's "v"
 STREAM_IDS_MAX = 4096  # ids per hello
@@ -651,6 +662,11 @@ class StreamSession(socketserver.StreamRequestHandler):
 
     def setup(self):
         super().setup()
+        # Every hub line (state, ack, done, error) is a small write. With Nagle
+        # it would wait for the phone's ACK of the previous line, and that ACK
+        # travels behind the phone's queued data on the shaped pipe — measured
+        # 2026-09-05: the phone saw no line for 15 s while this side wrote 14.
+        self.request.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.buf = bytearray()
         self.peer = "%s:%d" % self.client_address[:2]
         self.params = self.server.params

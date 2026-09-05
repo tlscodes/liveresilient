@@ -780,6 +780,11 @@ class JourneyPeer {
       _note('stream: connect $host:$port failed: $error');
       return null;
     }
+    // The hello and the record headers are small writes; with Nagle they
+    // would wait for the hub's ACK of the previous small segment, and that
+    // ACK rides behind up to inflight_bytes of queued data on the shaped
+    // pipe (16 s at 16 kbit/s).
+    socket.setOption(SocketOption.tcpNoDelay, true);
     final pending = queue.pendingInDeliveryOrder(nowMs);
     _note('stream: connected $host:$port, ${pending.length} pending');
     final lane = BlackoutStreamLane(port: port, log: _note);

@@ -46,7 +46,7 @@
 # bundle arrived signed AND every window that closed with bundles still pending
 # reached GATE_PCT utilization.
 #   JOURNEY_BLACKOUT_STREAM_PORT=8766       the hub's stream port (default HTTP_PORT+1)
-#   JOURNEY_BLACKOUT_STALL_S=15             the phone gives up after this long without a hub line
+#   JOURNEY_BLACKOUT_STALL_S=25             the phone gives up after this long without a hub line
 #   JOURNEY_BLACKOUT_PIECE_BYTES=8192  JOURNEY_BLACKOUT_INFLIGHT_BYTES=32768  JOURNEY_BLACKOUT_ACK_BYTES=8192
 #   JOURNEY_BLACKOUT_GATE_PCT=90            util_carried floor per non-final window
 #   JOURNEY_BLACKOUT_DRY=1                  print scope, hub argv and the job line, then exit 0
@@ -82,7 +82,7 @@ PLAN=${JOURNEY_BLACKOUT_PLAN:-'[{"kind":"text","bytes":200,"n":8},{"kind":"voice
 # the phone's plan is complete on its own. ack_interval_s has no hub argv (the
 # hub's default is the only value) and is mirrored here for job.json only.
 STREAM_PORT=${JOURNEY_BLACKOUT_STREAM_PORT:-$((HTTP_PORT + 1))}
-STALL_S=${JOURNEY_BLACKOUT_STALL_S:-15}
+STALL_S=${JOURNEY_BLACKOUT_STALL_S:-25}
 PIECE_BYTES=${JOURNEY_BLACKOUT_PIECE_BYTES:-8192}
 INFLIGHT_BYTES=${JOURNEY_BLACKOUT_INFLIGHT_BYTES:-32768}
 ACK_BYTES=${JOURNEY_BLACKOUT_ACK_BYTES:-8192}
@@ -210,7 +210,7 @@ cleanup() {
   pkill -f "journey_hub.py" 2>/dev/null || true
   echo "cleanup: link restored, hub stopped"
 }
-trap cleanup EXIT INT TERM
+trap 'exit 130' INT; trap 'exit 143' TERM; trap cleanup EXIT  # signals exit; EXIT cleans up once
 caffeinate -dimsu -w $$ >/dev/null 2>&1 &
 [ -n "$SELF" ] || die "$IFACE has no address — Internet Sharing on, phone joined?"
 sudo -n "$SHAPE" teardown >/dev/null 2>&1 || die "net_shape.sh needs the passwordless sudoers rule"

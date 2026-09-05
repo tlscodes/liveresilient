@@ -151,7 +151,7 @@ cleanup() {
   touch "$RUN/rec_stop" 2>/dev/null || true
   echo "cleanup: shaping torn down, children stopped"
 }
-trap cleanup EXIT INT TERM
+trap 'exit 130' INT; trap 'exit 143' TERM; trap cleanup EXIT  # signals exit; EXIT cleans up once
 # Keep display and system awake for the whole run (the recorder and the app
 # both stall when the display sleeps); caffeinate dies with this script.
 caffeinate -dimsu -w $$ >/dev/null 2>&1 &

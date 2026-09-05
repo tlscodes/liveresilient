@@ -442,6 +442,11 @@ def main_cases(run_dir: Path, hub: HubProc, key, pub_b64: str) -> int:
     f += check("16 chunked oversize → 413 then EOF", ok, reply.split(b"\r\n", 1)[0].decode(errors="replace"))
     # 17 the lane parameters are the module's defaults
     f += check("17 params == STREAM_DEFAULTS", params == STREAM_DEFAULTS, json.dumps(params))
+    # The stall timeout must cover the queue latency the inflight cap creates
+    # on the shaped pipe plus two ack intervals (journey_hub.py, STREAM_DEFAULTS).
+    floor = params["inflight_bytes"] / _hub_mod.STREAM_RATE_FLOOR_BPS + 2 * params["ack_interval_s"]
+    f += check("17 stall_s covers inflight/rate + 2*ack_interval",
+               params["stall_s"] >= floor, "stall_s=%s floor=%.1f" % (params["stall_s"], floor))
     return f
 
 
