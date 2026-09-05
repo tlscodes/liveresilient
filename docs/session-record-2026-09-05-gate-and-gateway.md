@@ -184,7 +184,16 @@ b888ea9  feat(rig): blackout v3 stream lane
 f3fcd63  evidence(journey): the hours-scale v2 run, 19 of 20, honestly annotated
 ```
 
-Uncommitted in the working tree, from the whitelist build, gates not yet run:
+**Update, same session, after this document was first written:** the whitelist build's Mac-only
+gates were all run and all passed, the phone wiring patch was applied and the analyzer stayed
+clean, and the whole profile was committed as `45d6e2f`. So the list below is now COMMITTED, not
+pending. The gates that passed: `bash -n` on both shapers and runners; the rule-text and
+rule-ORDER test for the whitelist subcommand; the door-probe and row-assembly tests;
+`journey_report.py`; `flutter analyze` clean; 17 door tests, 4 selected-pair tests, 8 relay
+tests, and 51 app tests across the four blackout and peer files; `dart analyze` clean on the
+relay. What is left is the rig, and the rig needs one phone rebuild.
+
+The files, all committed in `45d6e2f`:
 
 ```
 tools/t2/net_shape.sh                      the whitelist subcommand and its print-only twin
@@ -201,25 +210,30 @@ apps/reference_app/test/whitelist_door_test.dart
 apps/reference_app/integration_test/support/e2e_support.dart   relay-only ICE seam
 packages/media_webrtc_flutter/lib/src/flutter_webrtc_peer_connection_port.dart  selected pair
 packages/media_webrtc_flutter/test/selected_ice_pair_test.dart
-tools/t2/whitelist_peer_wiring.patch       the phone wiring, prepared but not applied
+apps/reference_app/integration_test/journey_peer_app.dart        the phone wiring, applied
 tools/dossier/journey_report.py            the new profile and row kinds
 ```
 
-Rig: idle and clean; the shaper is torn down; only the relay is running on 4443. Numbered
-backups are at 572. The phone still carries the build from before the Nagle fix.
+Rig at the end of the session: idle and clean, the shaper torn down, only the relay running on
+4443. Numbered backups at 573. The working tree has nothing of this work outstanding. **The
+phone still carries the build from before the Nagle fix and before the door loop** — that one
+rebuild is the gate to everything below.
 
 ## Part 9 — the exact next actions, in order
 
-1. Run the whitelist build's Mac-only gates and fix what they find: the two new python tests,
-   `bash -n` and the dry run of the runner, the relay package's tests, and the app's analyzer
-   and unit tests. Nothing here needs the phone or sudo.
-2. Apply `tools/t2/whitelist_peer_wiring.patch` to the phone peer, re-run the analyzer, and
-   commit the profile.
-3. One phone rebuild and install. It carries two things at once: the Nagle fix that the 90 gate
-   needs, and the door loop the whitelist profile needs.
-4. Re-run the blackout gate on v3 with the corrected stall value — 60 bundles, eight windows —
-   and record what `util_carried` does against the 90 gate and the printed ceiling.
-5. Run the whitelist profile and record the three numbers, with the negative controls and the
-   queue-off proof in the row.
-6. Then the widening: start the permitted door at one kilobyte and grow it on the same path
-   until the call stands, recording what each step buys.
+1. **One phone rebuild and install** (`tools/t2/journey_peer_install.sh`). It carries two things
+   at once: the Nagle fix that the 90 gate needs, and the door loop the whitelist profile needs.
+   Answer the microphone prompt on the phone once if it is asked.
+2. **Re-run the blackout gate on v3** with the corrected stall value — 60 bundles, eight windows,
+   1-2 minute cuts — and record what `util_carried` does against the 90 gate and the printed
+   per-window ceiling. This is the number the original goal is waiting on.
+3. **Run the whitelist profile** and record its three numbers, with the negative controls and the
+   queue-off proof in the row. Check first that the runner's dry mode prints what you expect.
+4. **Then the widening**, which is the direction Part 6 records: start the permitted door at one
+   kilobyte, grow it on the same path until the call stands, and record what each step buys. The
+   profile built here is the instrument that measures each step.
+
+Two things to know before touching the rig, both learned the hard way this session and both in
+the knowledge tree: every stage of a monitor pipeline must flush per line or the events sit
+invisible in a buffer, and a stopped runner is only stopped when `pgrep` shows nothing AND the
+shaper's status shows no pipes — the printed cleanup line is a claim, not evidence.
