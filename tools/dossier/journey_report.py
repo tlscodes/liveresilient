@@ -14,7 +14,9 @@ from collections import defaultdict
 from pathlib import Path
 
 PROFILES = ['normal', 'latency', 'loss10', 'bandwidth', 'narrow', 'loss60', 'extreme', 'blackout']
-FEATURES = ['call_connect', 'monitor_bar', 'chat_text', 'photo', 'video_note', 'voice_note', 'blackout_message']
+FEATURES = ['call_connect', 'monitor_bar', 'chat_text', 'photo', 'video_note', 'voice_note', 'blackout_message', 'blackout_gate']
+# The two blackout rows carry hours in the seconds columns (budget = lifetime, measured = latency).
+HOUR_FEATURES = {'blackout_message', 'blackout_gate'}
 RUN = re.compile(r'run=(\S+)')
 
 
@@ -42,7 +44,7 @@ def main() -> int:
                     measured = r[4] if r[4] != '-' else '-'
                     # call_connect and the chat features are measured in seconds
                     # (chat: send action to the phone's verified receipt).
-                    unit = 'h' if feature == 'blackout_message' and measured != '-' else 's' if feature != 'monitor_bar' and measured != '-' else ('ms' if feature == 'monitor_bar' and measured != '-' else '')
+                    unit = 'h' if feature in HOUR_FEATURES and measured != '-' else 's' if feature != 'monitor_bar' and measured != '-' else ('ms' if feature == 'monitor_bar' and measured != '-' else '')
                     note = re.sub(r'\s*run=\S+', '', r[6])
                     decoded = (re.search(r'decoded=\S+', r[6]) or [None, ''])[0] or ''
                     print(f'{profile:<12} {feature:<13} {measured + unit:<10} {r[5]:<10} {decoded:<28} {note[:150]}')

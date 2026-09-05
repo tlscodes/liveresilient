@@ -34,7 +34,7 @@ import 'dart:typed_data';
 import 'package:call_core/call_core.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:device_link/device_link.dart'
-    show DtnBundle, DtnBundleQueue, LinkMessagePriority;
+    show BundleAdmission, DtnBundle, DtnBundleQueue, LinkMessagePriority;
 import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:flutter/material.dart';
 import 'package:media_webrtc/media_webrtc.dart' show RawRtcCounters;
@@ -42,6 +42,7 @@ import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import 'blackout_forwarder.dart';
 import 'support/e2e_support.dart';
 
 const String journeyHubUrl = String.fromEnvironment(
@@ -66,8 +67,10 @@ class JourneyJob {
   final String key;
   final int holdS;
 
-  /// Present for the blackout profile: {bytes, probe_s, lifetime_s}. The
-  /// peer then holds a signed bundle instead of placing a call.
+  /// Present for the blackout profile: v1 {bytes, probe_s, lifetime_s}, or
+  /// v2 {v:2, plan:[{kind,bytes,n}...], probe_s, lifetime_s, chunk_bytes}
+  /// (see BlackoutPlan). The peer then holds signed bundles instead of
+  /// placing a call.
   final Map<String, Object?>? blackout;
 
   const JourneyJob({
@@ -105,6 +108,13 @@ class JourneyPeer {
   final ValueNotifier<List<String>> events = ValueNotifier<List<String>>([]);
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 3);
+
+  /// Bundle bodies ride a separate client: on a 16 kbit/s gate one 8 KB
+  /// chunk is about 4 s of wire time, so its connect and reply deadlines
+  /// are far longer than the probe's; a shared client would let the
+  /// probe's 3 s connect timeout cut every chunk short.
+  final HttpClient _bulkHttp = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 10);
 
   MediaMode? _mode;
   String? _lastRun;
@@ -388,6 +398,11 @@ class JourneyPeer {
   /// seconds — and the row reports it in hours.
   Future<void> _serveBlackout(JourneyJob job, Map<String, Object?> cfg) async {
     _lastRun = job.run;
+    final plan = BlackoutPlan.parse(cfg);
+    if (plan != null) {
+      await _serveBlackoutV2(job, plan);
+      return;
+    }
     final bytes = cfg['bytes'] is int ? cfg['bytes']! as int : 1024;
     final probeS = cfg['probe_s'] is int ? cfg['probe_s']! as int : 20;
     final lifetimeS = cfg['lifetime_s'] is int
@@ -495,6 +510,279 @@ class JourneyPeer {
     }
   }
 
+  /// The v2 blackout job: the window is a gate, not a probe. A plan of
+  /// bundles with real sizes and priorities is signed at T0 and kept in the
+  /// durable queue; a 2 s probe (one 60-byte GET) finds the window, and the
+  /// first probe that answers flushes the WHOLE queue in priority-then-age
+  /// order until the link drops or nothing is left. Bundles larger than the
+  /// chunk size travel as chunks with per-chunk acks, so a window that
+  /// closes mid-transfer keeps its progress on the hub and the next window
+  /// resumes from the first missing chunk. The runner shapes the window at
+  /// 16 kbit/s, so bytes delivered per window is a utilization figure.
+  Future<void> _serveBlackoutV2(JourneyJob job, BlackoutPlan plan) async {
+    final total = plan.items.length;
+    if (total == 0) {
+      _note('blackout v2 job run=${job.run}: empty plan');
+      await _report('failed', <String, Object?>{
+        'error': 'blackout v2 plan is empty',
+        'last_phase': 'blackout',
+        'delivered': 0,
+        'remaining': 0,
+      }, run: job.run);
+      return;
+    }
+    _note(
+      'blackout v2 job run=${job.run} bundles=$total '
+      'bytes=${plan.bytesTotal} probe=${plan.probeS}s '
+      'chunk=${plan.chunkBytes} lifetime=${plan.lifetimeS}s',
+    );
+    status.value = 'job ${job.run}: blackout v2 — holding $total bundles';
+    // Without the wakelock iOS suspends the app once the screen locks and
+    // the probe stops; the state is logged so a gap in the probe count has
+    // its explanation on the phone's own event list.
+    try {
+      _note('wakelock enabled=${await WakelockPlus.enabled}');
+    } on Object catch (error) {
+      _note('wakelock state unknown: $error');
+    }
+
+    final createdMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final random = Random.secure();
+    // One store file per run: a leftover from an earlier run must not ride
+    // along, while a restart of the same run resumes its own queue.
+    final safeRun = job.run.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final store = DurableBundleStore.open(
+      File('${Directory.systemTemp.path}/journey_blackout_v2_$safeRun.jsonl'),
+    );
+    final queue = DtnBundleQueue(store: store);
+    final ids = <String>[];
+    final payloadBytes = <String, int>{};
+    for (final item in plan.items) {
+      final payload = blackoutPayload(
+        run: job.run,
+        item: item,
+        createdMs: createdMs,
+        random: random,
+      );
+      final id = contentSha256Hex(payload).substring(0, 16);
+      final signature = await Ed25519().sign(payload, keyPair: _keyPair!);
+      final envelope = buildBlackoutEnvelope(
+        run: job.run,
+        id: id,
+        createdMs: createdMs,
+        payload: payload,
+        signature: signature.bytes,
+        pubkeyB64: _pubkeyB64!,
+      );
+      final admission = queue.offer(
+        DtnBundle(
+          id: id,
+          payload: envelope,
+          priority: item.priority,
+          createdAtMs: createdMs,
+          lifetimeMs: plan.lifetimeS * 1000,
+        ),
+        nowMs: createdMs,
+      );
+      if (admission != BundleAdmission.stored) {
+        _note('bundle $id ($item) not queued: ${admission.name}');
+      }
+      ids.add(id);
+      payloadBytes[id] = item.bytes;
+    }
+    _note(
+      '${ids.length} bundles queued, '
+      '${queue.pendingInDeliveryOrder(createdMs).length} pending',
+    );
+    // The last event that can leave before the runner cuts the link.
+    await _report('blackout_armed', <String, Object?>{
+      'v': 2,
+      'bundles': total,
+      'bytes_total': plan.bytesTotal,
+      'ids': ids,
+      'created_ms': createdMs,
+      'probe_s': plan.probeS,
+      'chunk_bytes': plan.chunkBytes,
+      'lifetime_s': plan.lifetimeS,
+      'store': 'durable',
+    }, run: job.run);
+
+    final forwarder = BlackoutForwarder(
+      _HubBlackoutTransport(this),
+      chunkBytes: plan.chunkBytes,
+      log: _note,
+    );
+    var probes = 0;
+    var reachable = 0;
+    var delivered = 0;
+    var deliveredBytes = 0;
+    var deliveredWireBytes = 0;
+    int? lastDeliveredMs;
+    Future<bool> forward(DtnBundle bundle) async {
+      final ok = await forwarder.forward(
+        id: bundle.id,
+        envelope: bundle.payload,
+        sha256: contentSha256Hex(bundle.payload),
+      );
+      if (ok) {
+        delivered++;
+        deliveredBytes += payloadBytes[bundle.id] ?? 0;
+        deliveredWireBytes += bundle.payload.length;
+        lastDeliveredMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+        _note(
+          'bundle ${bundle.id} delivered ($delivered/$total, '
+          '${forwarder.lastChunksPosted} chunks)',
+        );
+        status.value = 'job ${job.run}: delivered $delivered/$total';
+      }
+      return ok;
+    }
+
+    final deadlineMs = createdMs + plan.lifetimeS * 1000;
+    var nowMs = createdMs;
+    while (nowMs < deadlineMs) {
+      await Future<void>.delayed(Duration(seconds: plan.probeS));
+      probes++;
+      nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+      final heldS = (nowMs - createdMs) ~/ 1000;
+      status.value =
+          'job ${job.run}: $delivered/$total delivered, held ${heldS}s, '
+          'probe $probes';
+      // The probe and a flush never overlap: the flush is awaited before
+      // the next probe, so the 60-byte GET never competes with a chunk for
+      // the 16 kbit/s gate.
+      if (!await _hubReachable()) continue;
+      reachable++;
+      await queue.flush(forward, nowMs: nowMs);
+      nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+      if (queue.pendingInDeliveryOrder(nowMs).isEmpty) break;
+    }
+    final remaining = total - delivered;
+    if (remaining == 0 && lastDeliveredMs != null) {
+      final latencyS = (lastDeliveredMs! - createdMs) / 1000.0;
+      _note(
+        'all $total bundles delivered after ${latencyS.toStringAsFixed(0)}s, '
+        'probes=$probes reachable=$reachable',
+      );
+      status.value = 'job ${job.run}: delivered after ${latencyS ~/ 60} min';
+      await _report('ended', <String, Object?>{
+        'phase': 'ended',
+        'reason': 'queueDelivered',
+        'delivered': delivered,
+        'bytes': deliveredBytes,
+        'wire_bytes': deliveredWireBytes,
+        'delivered_ms': lastDeliveredMs,
+        'latency_s': latencyS,
+        'probes': probes,
+        'reachable_probes': reachable,
+      }, run: job.run);
+    } else {
+      _note(
+        '$remaining of $total bundles NOT delivered within '
+        '${plan.lifetimeS}s, probes=$probes',
+      );
+      status.value = 'job ${job.run}: $remaining bundles expired undelivered';
+      await _report('failed', <String, Object?>{
+        'error': '$remaining bundles not delivered within ${plan.lifetimeS}s',
+        'last_phase': 'blackout',
+        'delivered': delivered,
+        'remaining': remaining,
+        'bytes': deliveredBytes,
+        'wire_bytes': deliveredWireBytes,
+        'probes': probes,
+        'reachable_probes': reachable,
+      }, run: job.run);
+    }
+  }
+
+  /// One whole envelope to /bundle on the bulk client; true on 200. Used by
+  /// the v2 forwarder for envelopes that fit in one chunk.
+  Future<bool> _postWholeBundle(String id, List<int> envelope) async {
+    try {
+      final request = await _bulkHttp
+          .postUrl(Uri.parse('$journeyHubUrl/bundle'))
+          .timeout(const Duration(seconds: 15));
+      request.headers.contentType = ContentType.json;
+      request.contentLength = envelope.length;
+      request.add(envelope);
+      final response = await request.close().timeout(
+        const Duration(seconds: 30),
+      );
+      final body = await response.transform(utf8.decoder).join();
+      _note('bundle $id posted: ${response.statusCode} ${body.trim()}');
+      return response.statusCode == 200;
+    } on Object catch (error) {
+      _note('bundle $id post failed: $error');
+      return false;
+    }
+  }
+
+  /// GET /have?id=: the chunk indexes the hub holds; null when it could not
+  /// be asked.
+  Future<List<int>?> _haveChunks(String id) async {
+    try {
+      final response = await _bulkHttp
+          .getUrl(Uri.parse('$journeyHubUrl/have?id=$id'))
+          .then((request) => request.close())
+          .timeout(const Duration(seconds: 15));
+      final body = await response.transform(utf8.decoder).join();
+      if (response.statusCode != 200) {
+        _note('have $id: ${response.statusCode} ${body.trim()}');
+        return null;
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is! Map<String, Object?>) return null;
+      final have = decoded['have'];
+      if (have is! List) return null;
+      return [
+        for (final idx in have)
+          if (idx is int) idx,
+      ];
+    } on Object catch (error) {
+      _note('have $id failed: $error');
+      return null;
+    }
+  }
+
+  /// POST /chunk with the raw bytes: 8 KB is about 4 s on a 16 kbit/s gate,
+  /// so the reply deadline is 30 s, not the probe's 4 s.
+  Future<ChunkReply> _postChunk({
+    required String id,
+    required int idx,
+    required int n,
+    required String sha256,
+    required List<int> bytes,
+  }) async {
+    try {
+      final request = await _bulkHttp
+          .postUrl(
+            Uri.parse(
+              '$journeyHubUrl/chunk?id=$id&idx=$idx&n=$n&sha256=$sha256',
+            ),
+          )
+          .timeout(const Duration(seconds: 15));
+      request.headers.contentType = ContentType.binary;
+      request.contentLength = bytes.length;
+      request.add(bytes);
+      final response = await request.close().timeout(
+        const Duration(seconds: 30),
+      );
+      final body = (await response.transform(utf8.decoder).join()).trim();
+      if (response.statusCode != 200) {
+        _note('chunk $id#$idx/$n: ${response.statusCode} $body');
+        return ChunkReply.failed;
+      }
+      if (body.startsWith('complete')) {
+        _note('chunk $id#$idx/$n: $body');
+        return ChunkReply.complete;
+      }
+      return ChunkReply.stored;
+    } on Object catch (error) {
+      _note('chunk $id#$idx/$n failed: $error');
+      return ChunkReply.failed;
+    }
+  }
+
   /// One cheap GET: the probe that decides whether a window is open.
   Future<bool> _hubReachable() async {
     try {
@@ -543,6 +831,30 @@ class JourneyPeer {
       return null; // closed under us: the call just ended
     }
   }
+}
+
+/// The v2 forwarder's view of the hub: the three routes on the peer's
+/// bulk client.
+class _HubBlackoutTransport implements BlackoutTransport {
+  _HubBlackoutTransport(this._peer);
+
+  final JourneyPeer _peer;
+
+  @override
+  Future<bool> postWhole(String id, List<int> envelope) =>
+      _peer._postWholeBundle(id, envelope);
+
+  @override
+  Future<List<int>?> have(String id) => _peer._haveChunks(id);
+
+  @override
+  Future<ChunkReply> postChunk({
+    required String id,
+    required int idx,
+    required int n,
+    required String sha256,
+    required List<int> bytes,
+  }) => _peer._postChunk(id: id, idx: idx, n: n, sha256: sha256, bytes: bytes);
 }
 
 /// The receiving half of every lane, reporting each verified item.
