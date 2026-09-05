@@ -20,7 +20,22 @@ From tools/dossier/logs/journey/blackout.phone.jsonl and blackout.hub.log of the
   overhead (TCP handshake + slow start + one round trip per POST on an inflated pipe);
 - chunk cost: window 3 carried one 100,000 B video in 13 chunks of 8,192 B: 100 KB at 2,000 B/s
   is 50 s; the window's measured open time was 112 s ⇒ ~60 s of request overhead.
-Gate: a table `window | bytes | bytes/2000 | measured s | overhead s | requests` from the logs.
+Measured 2026-09-05 (self-test run 07:15:44Z, from blackout.phone.jsonl + blackout.hub.log lines 28-131):
+
+| window | bytes | ideal s (bytes/2000) | measured s | overhead s | requests (whole+have+chunk) | s per request |
+|---|---|---|---|---|---|---|
+| 1 | 76,600 | 38.3 | 112.6 | 74.3 | 29 (14+2+13) | 2.56 |
+| 2 | 135,000 | 67.5 | 112.9 | 45.4 | 24 (0+4+20) | 1.89 |
+| 3 | 100,000 | 50.0 | 112.8 | 62.8 | 22 (0+2+20) | 2.85 |
+| 4 | 100,000 | 50.0 | 74.1 | 24.1 | 14 (0+1+13) | 1.72 |
+| all | 411,600 | 205.8 | 412.4 | 206.6 | 89 (14+9+66) | 2.32 |
+
+Reading (bytes/measured s from the TSV row, timestamps from the phone jsonl, requests from the hub log; "inferred" marks a derivation):
+- Windows: received_ms clusters with gaps > 45 s at events 15|16 (167.3 s), 18|19 (179.7 s), 19|20 (214.7 s); cluster bytes 76,600 / 135,000 / 100,000 / 100,000 match window_bytes. Requests come from walking the hub log in arrival order: a `GET /health` lands only while a window is open, so the four probes (file lines 36, 66, 91, 114; line 29 is the runner's own check) mark the window starts. Chunk splits inferred from that: a578 all 8 chunks in W1 (lines 51-59); 86f7 chunks 0-4 in W1 (60-65) and 5-7 in W2 after a fresh `/have` (67-70); fb89 and c605 whole in W2 (71-88); f6e3 chunk 0 in W2 (89-90) and 1-16 in W3 (92-108); 0a94 chunks 0-3 in W3 (109-113) and 4-16 in W4 (115-128). 14 + 9 + 66 = 89.
+- The overhead column is three things. (a) Credit shift: W1 carried 40,960 B of 86f7 (+20.5 s) it is not credited for; W3 carried 32,768 B of 0a94 (+16.4 s) and inherited 8,192 B of f6e3 from W2; the shifts sum to zero. (b) Envelope inflation: chunks=8 for 45,000 B and chunks=17 for 100,000 B at chunk_bytes=8192 mean envelopes of 57,345-65,536 B and 131,073-139,264 B, i.e. ~4/3 of payload, and `ended.wire_bytes`=553,764 vs bytes=411,600 (x1.345) says the same — inferred, the encoding itself is not in the inputs. That is 68.6 s of the 412.4 s at 2,000 B/s. (c) The rest is idle pipe: 41.1 / 39.3 / 33.8 / 23.8 s = 138.0 s over 89 requests, 1.55 s per request (W1 1.42, W2 1.64, W3 1.54, W4 1.70).
+- The per-request cost is visible raw in the phone timestamps: the eight 200-B bundles landed 0.70-0.92 s apart against ≤ 0.25 s of transfer (~0.6 s fixed per POST); the 5,000-B bundles 4.0-4.7 s apart against 3.3 s (one outlier, 87a9, 8.5 s); each 45,000-B chunked bundle (a578, fb89, c605) took 44.2-44.8 s for ~60,000 wire B (30 s), i.e. ~14.5 s over 9 requests, 1.6 s per chunk request — a chunk request costs about twice a whole-bundle POST.
+- The probe is not the story: 4 of 67 probes reached, probe_s=2, so ≤ 8 s of 412.4 s (< 2 %). The first-byte delay by the stated method (open = first received_ms minus the bundle's own transfer time) is circular and gives 0.1 s for W1; the usable bound is: armed at created_ms 1788592549563, first bundle at 1788592613757 (64.2 s later) with cuts of ≥ 60 s, so W1's first byte came ≤ ~4 s after open (inferred). Inferred opens after armed: W1 ≈ +64 s, W2 ≈ +296 s, W3 ≈ +492 s, W4 ≈ +723 s; the four inferred cuts sum to ~384 s vs cut_total_s=375 (±3 s per boundary).
+- What dominates on the 412.4 s of open pipe: payload 205.8 s (49.9 %), per-request idle 138.0 s (33.5 %), envelope inflation 68.6 s (16.6 %), probes ≤ 8 s (≤ 2 %) inside the idle share. Steps 1-3 address the 138 s only; with a x1.345 wire/payload envelope the payload-basis utilization cannot exceed 74.3 % even at zero request cost, so a payload-basis 90 % gate needs the envelope counted or shrunk — that number is checked before Step 3's gate is set.
 The hub can log one line per accepted TCP connection to make `requests` exact.
 
 ## Step 1 — one connection per flush (expected: +20-30 points)

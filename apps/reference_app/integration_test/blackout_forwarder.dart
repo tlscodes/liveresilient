@@ -41,31 +41,47 @@ class BlackoutPlanItem {
   String toString() => '$kind#$seq(${bytes}B)';
 }
 
-/// The parsed "blackout" block of a v2 job.
+/// The parsed "blackout" block of a v2 or v3 job.
 class BlackoutPlan {
   const BlackoutPlan({
+    required this.v,
     required this.items,
     required this.probeS,
     required this.lifetimeS,
     required this.chunkBytes,
+    this.stream,
   });
 
+  /// 2 = chunked HTTP (this file's forwarder); 3 = the framed TCP stream
+  /// lane of blackout_stream.dart.
+  final int v;
   final List<BlackoutPlanItem> items;
   final int probeS;
   final int lifetimeS;
   final int chunkBytes;
 
+  /// The v3 job's `"stream"` map (port; the other lane parameters are
+  /// echoed by the hub in its state line). Null on v2.
+  final Map<String, Object?>? stream;
+
   int get bytesTotal => items.fold(0, (sum, item) => sum + item.bytes);
 
-  /// Null unless the block says `"v": 2`; a job without it is v1 and the
-  /// caller keeps today's single-bundle behaviour. A v2 block with no
-  /// usable plan entries yields an empty plan rather than null, so the
-  /// caller can fail the job loudly instead of silently running v1.
+  /// Null unless the block says `"v": 2` or `"v": 3`; a job without it is
+  /// v1 and the caller keeps today's single-bundle behaviour. A v2 block
+  /// with no usable plan entries yields an empty plan rather than null, so
+  /// the caller can fail the job loudly instead of silently running v1. A
+  /// v3 block without a `"stream"` map is unusable the same way: empty
+  /// plan, stream null.
   static BlackoutPlan? parse(Map<String, Object?> cfg) {
-    if (cfg['v'] != 2) return null;
+    final v = cfg['v'];
+    if (v != 2 && v != 3) return null;
+    final rawStream = cfg['stream'];
+    final stream = v == 3 && rawStream is Map
+        ? rawStream.map((k, value) => MapEntry(k.toString(), value))
+        : null;
     final items = <BlackoutPlanItem>[];
     final plan = cfg['plan'];
-    if (plan is List) {
+    if (plan is List && (v == 2 || stream != null)) {
       for (final entry in plan) {
         if (entry is! Map) continue;
         final kind = entry['kind'];
@@ -81,10 +97,12 @@ class BlackoutPlan {
       }
     }
     return BlackoutPlan(
+      v: v as int,
       items: items,
       probeS: _positiveInt(cfg['probe_s'], 2),
       lifetimeS: _positiveInt(cfg['lifetime_s'], 6 * 3600),
       chunkBytes: _positiveInt(cfg['chunk_bytes'], 8192),
+      stream: stream,
     );
   }
 

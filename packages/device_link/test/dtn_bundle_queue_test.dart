@@ -20,6 +20,31 @@ DtnBundle bundle(
   lifetimeMs: lifetimeMs,
 );
 
+/// In-memory store that records every remove call, so a test can see that
+/// the queue removed through the store and not just its own counters.
+class RecordingBundleStore implements BundleStore {
+  final InMemoryBundleStore _inner = InMemoryBundleStore();
+  final List<String> removed = [];
+
+  @override
+  void put(DtnBundle bundle) => _inner.put(bundle);
+
+  @override
+  void remove(String id) {
+    removed.add(id);
+    _inner.remove(id);
+  }
+
+  @override
+  bool contains(String id) => _inner.contains(id);
+
+  @override
+  Iterable<DtnBundle> values() => _inner.values();
+
+  @override
+  int get length => _inner.length;
+}
+
 void main() {
   group('offer admission', () {
     test('stores a fresh bundle and reports it pending', () {
@@ -240,6 +265,27 @@ void main() {
       expect(retryDelivered, 2);
       expect(retryForwarded, ['two', 'three']);
       expect(q.pendingCount, 0);
+    });
+
+    test('acknowledge removes one bundle through the store, drops the byte '
+        'accounting by its size, and returns false for an unknown id', () {
+      final store = RecordingBundleStore();
+      final q = DtnBundleQueue(store: store);
+      q.offer(bundle('a', sizeBytes: 6), nowMs: 0);
+      q.offer(bundle('b', sizeBytes: 10, createdAtMs: 1), nowMs: 1);
+      expect(q.pendingBytes, 16);
+
+      expect(q.acknowledge('b'), isTrue);
+      expect(q.pendingBytes, 6);
+      expect(q.pendingCount, 1);
+      expect(store.removed, ['b']);
+      expect(q.pendingInDeliveryOrder(2).map((x) => x.id), ['a']);
+
+      // Unknown (or already removed) ids are a no-op.
+      expect(q.acknowledge('b'), isFalse);
+      expect(q.acknowledge('missing'), isFalse);
+      expect(q.pendingBytes, 6);
+      expect(store.removed, ['b']);
     });
   });
 

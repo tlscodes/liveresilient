@@ -54,7 +54,40 @@ Everything is a file in the run directory, which lives inside the Mac app's
 sandbox container so the app-journey driver can read the phone's events
 directly (see journey_run.sh). No auth, no TLS: bridge100 is a cable.
 
+Stream lane (blackout v3): a second port in this process, default --port + 1,
+--stream-port 0 turns it off. Framed TCP: newline-delimited JSON lines plus
+raw payload bytes, one writer per bundle. The wire, in order:
+
+  phone→hub  {"v":3,"run":"<run>","pubkey":"<b64>","ids":["<id>",...]}
+             ids in delivery order, ≤ 4096, each [A-Za-z0-9._-]{1,80}
+  hub→phone  {"state":{"<id>":{"have":<int>,"complete":<bool>},...},
+              "piece_bytes","ack_bytes","ack_interval_s","inflight_bytes",
+              "stall_s"}   only ids the hub knows (absent = 0); the lane
+             parameters are the hub's (STREAM_DEFAULTS, overridden by argv)
+  phone→hub  {"id":"<id>","off":<have>,"len":<total-have>,"total":<int>,
+              "created_ms":<int>,"sig":"<b64 64 B>"} then exactly len raw
+             payload bytes; len 0 only when off == total (asks again for a
+             lost done)
+  hub→phone  {"ack":"<id>","have":<int>}   every ack_bytes, every
+             ack_interval_s with new bytes, and at record end
+  hub→phone  {"done":"<id>","sig_ok":<bool>,"pubkey_match":<bool>,
+              "bytes":<total>}   implies have = total
+  hub→phone  {"error":"<code>","id":<id|null>,"have":<int|null>} then
+             close; codes bad_hello wrong_run bad_id bad_sig bad_offset
+             meta_mismatch too_large line_too_long preempted
+
+Storage: stream/<id>.part (appended as bytes arrive), <id>.meta.json
+{total,sig,created_ms,run} claimed by the first header (a later header for
+the id must match it), <id>.complete.json {sig_ok,pubkey_match,bytes} once
+verified; the payload lands in blobs/bundle-<id>.bin with ONE
+`bundle_received` event carrying "stream": true. A new hello preempts any
+live session (one writer per .part); a session silent for 2 × stall_s is
+closed. stream_stats.json {bytes_carried,records,connections,updated_ms} is
+rewritten atomically on every ack, record end and session close.
+
 USAGE  journey_hub.py --bind <addr> --port 8765 --dir <run dir>
+         [--stream-port N] [--stream-stall-s S] [--stream-ack-bytes B]
+         [--stream-inflight-bytes B] [--stream-piece-bytes B]
 """
 from __future__ import annotations
 
@@ -65,6 +98,7 @@ import json
 import time
 import os
 import re
+import socketserver
 import sys
 import threading
 from datetime import datetime, timezone
@@ -78,6 +112,14 @@ SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 CHUNK_MAX_BYTES = 64 * 1024  # one /chunk body
 CHUNK_MAX_N = 4096  # pieces per bundle
 
+# Stream lane parameters. The hub is their single source: argv overrides
+# these and the values in force are echoed to the phone in the hello reply.
+STREAM_DEFAULTS = {"piece_bytes": 8192, "ack_bytes": 8192, "ack_interval_s": 2,
+                   "inflight_bytes": 32768, "stall_s": 15}
+STREAM_LINE_MAX = 262144  # longest JSON line accepted on the stream lane
+STREAM_V = 3  # the hello's "v"
+STREAM_IDS_MAX = 4096  # ids per hello
+
 
 class BodyTooLarge(Exception):
     """The request body exceeds the limit given to _read_body."""
@@ -87,16 +129,55 @@ class BadBundle(Exception):
     """The bytes are not the JSON envelope the peer signs; str() is the reply."""
 
 
+def _verify_sig(pubkey_b64: str, sig: bytes, payload: bytes) -> bool:
+    """True when sig is pubkey's Ed25519 signature over payload. The one
+    verifier for the envelope routes (/bundle, /chunk) and the stream lane."""
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        Ed25519PublicKey.from_public_bytes(base64.b64decode(pubkey_b64)).verify(sig, payload)
+        return True
+    except Exception:  # noqa: BLE001 — any failure is a bad signature
+        return False
+
+
 class Hub(BaseHTTPRequestHandler):
     run_dir: Path = Path(".")
+    # Keep-alive: the phone reuses one socket for a window's posts instead of
+    # paying a TCP handshake per bundle. A connection idle for `timeout`
+    # seconds is dropped so it does not hold a thread across a cut.
+    protocol_version = "HTTP/1.1"
+    timeout = 60
 
     def log_message(self, fmt, *args):  # quiet by default; the runner logs
         sys.stderr.write("hub %s - %s\n" % (self.address_string(), fmt % args))
+
+    def handle(self):
+        # One line at open and one at close per connection, on the same
+        # channel as the request lines, so the hub log shows how many
+        # requests each socket carried.
+        self._requests = 0
+        peer = "%s:%d" % self.client_address[:2]
+        sys.stderr.write("hub conn %s open\n" % peer)
+        try:
+            super().handle()
+        finally:
+            sys.stderr.write("hub conn %s closed after %d requests\n" % (peer, self._requests))
+
+    def handle_one_request(self):
+        self.raw_requestline = b""
+        super().handle_one_request()
+        if self.raw_requestline:  # empty at EOF or after a read timeout
+            self._requests += 1
 
     def _send(self, code: int, body: bytes = b"", ctype: str = "text/plain"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        if self.close_connection:
+            # Set by _refuse and the 413 paths: say so, so the client opens a
+            # fresh socket for its next request instead of writing into one
+            # the hub is about to close.
+            self.send_header("Connection", "close")
         self.end_headers()
         if body:
             self.wfile.write(body)
@@ -175,18 +256,16 @@ class Hub(BaseHTTPRequestHandler):
             raise BadBundle("bad bundle")
         if not SAFE_NAME.fullmatch(bundle_id):
             raise BadBundle("bad id")
-        stored = self.run_dir / "peer_pubkey.b64"
-        pubkey_match = stored.exists() and stored.read_text().strip() == pubkey_b64
-        sig_ok = False
-        try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-            Ed25519PublicKey.from_public_bytes(base64.b64decode(pubkey_b64)).verify(sig, payload)
-            sig_ok = True
-        except Exception:  # noqa: BLE001 — any failure is a bad signature
-            sig_ok = False
-        return env, payload, sig_ok, pubkey_match
+        return env, payload, _verify_sig(pubkey_b64, sig, payload), self._pubkey_match(pubkey_b64)
 
-    def _bundle_event(self, env: dict, payload: bytes, sig_ok: bool, pubkey_match: bool,
+    @classmethod
+    def _pubkey_match(cls, pubkey_b64: str) -> bool:
+        """True when pubkey_b64 is the key the peer's boot event registered."""
+        stored = cls.run_dir / "peer_pubkey.b64"
+        return stored.exists() and stored.read_text().strip() == pubkey_b64
+
+    @classmethod
+    def _bundle_event(cls, env: dict, payload: bytes, sig_ok: bool, pubkey_match: bool,
                       chunks: int | None = None) -> dict:
         """Write blobs/bundle-<id>.bin and build the `bundle_received` event
         with the latency since the bundle was created (the peer's clock) — the
@@ -194,7 +273,7 @@ class Hub(BaseHTTPRequestHandler):
         bundle_id = str(env["id"])
         created_ms = int(env["created_ms"])
         received_ms = int(time.time() * 1000)
-        blobs = self.run_dir / "blobs"
+        blobs = cls.run_dir / "blobs"
         blobs.mkdir(exist_ok=True)
         (blobs / f"bundle-{bundle_id}.bin").write_bytes(payload)
         event = {
@@ -214,9 +293,10 @@ class Hub(BaseHTTPRequestHandler):
             event["chunks"] = chunks
         return event
 
-    def _append_event(self, event: dict) -> None:
+    @classmethod
+    def _append_event(cls, event: dict) -> None:
         # Call with _lock held.
-        with (self.run_dir / "phone_events.jsonl").open("a", encoding="utf-8") as fh:
+        with (cls.run_dir / "phone_events.jsonl").open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(event, separators=(",", ":")) + "\n")
 
     @staticmethod
@@ -253,7 +333,9 @@ class Hub(BaseHTTPRequestHandler):
             self._bundle(raw)
             return
         if path != "/report":
-            self._send(404, b"no such path\n")
+            # Drain the body and close: an unread body would be parsed
+            # as the next request on a kept-alive socket.
+            self._refuse(404, b"no such path\n")
             return
         raw = self._read_body()
         try:
@@ -457,14 +539,357 @@ class Hub(BaseHTTPRequestHandler):
             (cdir / "complete.json").write_text(json.dumps(done))
         self._send(200, self._verdict("complete", sig_ok, pubkey_match))
 
-    def _job(self):
-        job = self.run_dir / "job.json"
+    @classmethod
+    def _job(cls):
+        job = cls.run_dir / "job.json"
         if not job.exists():
             return None
         try:
             return json.loads(job.read_text())
         except ValueError:
             return None
+    # ---- stream lane storage: stream/<id>.part, <id>.meta.json, <id>.complete.json
+    # meta.json {total, sig, created_ms, run} is claimed by the first header
+    # under the lock; a later header for the id must match it. complete.json
+    # {sig_ok, pubkey_match, bytes} exists once the .part was verified and
+    # logged; it makes completion idempotent (a re-asked done, no second
+    # event). _stream_gen is bumped by every accepted hello: a session whose
+    # gen is older is preempted before its next append, so one writer owns
+    # a .part at a time.
+    _stream_gen = 0
+    _stream_stats = {"bytes_carried": 0, "records": 0, "connections": 0}
+
+    @classmethod
+    def _stream_dir(cls) -> Path:
+        return cls.run_dir / "stream"
+
+    @classmethod
+    def _stream_state(cls, bundle_id: str):
+        """(have, meta or None, complete or None) for one bundle id: have is
+        the .part size, or the recorded total once complete. Call with _lock
+        held."""
+        sdir = cls._stream_dir()
+        meta = cls._read_json(sdir / f"{bundle_id}.meta.json")
+        complete = cls._read_json(sdir / f"{bundle_id}.complete.json")
+        if complete is not None:
+            return int(complete.get("bytes", 0)), meta, complete
+        part = sdir / f"{bundle_id}.part"
+        return (part.stat().st_size if part.exists() else 0), meta, None
+
+    @classmethod
+    def _stream_complete(cls, bundle_id: str, meta: dict, pubkey_b64: str) -> dict:
+        """Verify the finished .part with the hello's key, write the blob,
+        append ONE bundle_received event with "stream": true and record
+        complete.json. A second call returns the recorded verdict. Call with
+        _lock held."""
+        sdir = cls._stream_dir()
+        done_path = sdir / f"{bundle_id}.complete.json"
+        done = cls._read_json(done_path)
+        if done is not None:
+            return done
+        part = sdir / f"{bundle_id}.part"
+        payload = part.read_bytes() if part.exists() else b""
+        sig_ok = _verify_sig(pubkey_b64, base64.b64decode(meta["sig"]), payload)
+        pubkey_match = cls._pubkey_match(pubkey_b64)
+        env = {"run": meta.get("run"), "id": bundle_id, "created_ms": meta["created_ms"]}
+        event = cls._bundle_event(env, payload, sig_ok, pubkey_match)
+        event["stream"] = True
+        cls._append_event(event)
+        done = {"sig_ok": sig_ok, "pubkey_match": pubkey_match, "bytes": len(payload)}
+        done_path.write_text(json.dumps(done))
+        cls._stream_stats["records"] += 1
+        return done
+
+    @classmethod
+    def _stream_stats_write(cls) -> None:
+        """Rewrite stream_stats.json atomically (a tmp file, then a rename).
+        Call with _lock held."""
+        stats = dict(cls._stream_stats, updated_ms=int(time.time() * 1000))
+        path = cls.run_dir / "stream_stats.json"
+        tmp = path.with_name(".stream_stats.%d.%d.tmp" % (os.getpid(), threading.get_ident()))
+        tmp.write_text(json.dumps(stats, separators=(",", ":")))
+        os.replace(tmp, path)
+
+    @classmethod
+    def _stream_stats_load(cls) -> None:
+        """Continue the counters of a stream_stats.json left by an earlier
+        hub process on the same run dir."""
+        stats = cls._read_json(cls.run_dir / "stream_stats.json")
+        if isinstance(stats, dict):
+            for key in cls._stream_stats:
+                cls._stream_stats[key] = int(stats.get(key, 0))
+
+
+
+class StreamError(Exception):
+    """A protocol violation on the stream lane; args = (code, id or None,
+    have or None) — the error line the session sends before it closes."""
+
+
+class _StreamEof(Exception):
+    """The phone closed its side."""
+
+
+class _StreamSilent(Exception):
+    """Nothing arrived for 2 × stall_s."""
+
+
+class StreamServer(socketserver.ThreadingTCPServer):
+    """The stream lane's listener; one StreamSession thread per connection.
+    `params` are the lane parameters in force (STREAM_DEFAULTS + argv)."""
+    allow_reuse_address = True
+    daemon_threads = True
+    params: dict = dict(STREAM_DEFAULTS)
+
+
+class StreamSession(socketserver.StreamRequestHandler):
+    """One phone connection on the stream lane (wire in the module
+    docstring). Bytes are read into the session's own buffer with a short
+    socket timeout, so a timeout is a tick rather than a broken reader: every
+    tick checks preemption, silence and a time-based ack. Writes go through
+    wfile (unbuffered sendall)."""
+
+    def setup(self):
+        super().setup()
+        self.buf = bytearray()
+        self.peer = "%s:%d" % self.client_address[:2]
+        self.params = self.server.params
+        self.stall_s = float(self.params["stall_s"])
+        self.ack_interval_s = float(self.params["ack_interval_s"])
+        self.ack_bytes = int(self.params["ack_bytes"])
+        self.tick_s = max(0.1, min(1.0, self.stall_s / 2))
+        self.gen = None  # set by an accepted hello
+        self.run = None
+        self.pubkey_b64 = None
+        self.last_rx = time.monotonic()
+        # the record being written
+        self.rec_id = None
+        self.have = 0
+        self.counted = 0  # bytes of this record already added to the stats
+        self.acked = 0  # have at the last ack line
+        self.last_ack_t = time.monotonic()
+        self.request.settimeout(self.tick_s)
+
+    def handle(self):
+        sys.stderr.write("hub stream %s open\n" % self.peer)
+        reason = "eof"
+        try:
+            if self._hello():
+                while True:
+                    line = self._read_line()
+                    if line is None:
+                        break
+                    if line.strip():
+                        self._record(line)
+        except StreamError as e:
+            code, bundle_id, have = e.args
+            reason = "error %s id=%s have=%s" % (code, bundle_id, have)
+            self._send_line({"error": code, "id": bundle_id, "have": have}, best_effort=True)
+        except _StreamEof:
+            reason = "eof" if self.rec_id is None else "eof mid-record %s have=%d" % (self.rec_id, self.have)
+        except _StreamSilent:
+            reason = "silent %.0fs" % (2 * self.stall_s)
+        except OSError as e:
+            reason = "io %s" % e
+        finally:
+            with Hub._lock:
+                self._account()
+                if self.gen is not None:
+                    Hub._stream_stats_write()
+            sys.stderr.write("hub stream %s closed %s\n" % (self.peer, reason))
+
+    # -- reading
+
+    def _recv(self) -> None:
+        """Wait for more bytes into buf. A timeout is a tick."""
+        while True:
+            try:
+                data = self.request.recv(65536)
+            except TimeoutError:
+                self._tick()
+                continue
+            if not data:
+                raise _StreamEof()
+            self.buf += data
+            self.last_rx = time.monotonic()
+            return
+
+    def _tick(self) -> None:
+        now = time.monotonic()
+        with Hub._lock:
+            self._check_gen()
+        if now - self.last_rx > 2 * self.stall_s:
+            raise _StreamSilent()
+        if self.rec_id is not None and self.have > self.acked and now - self.last_ack_t >= self.ack_interval_s:
+            self._ack()
+
+    def _check_gen(self) -> None:
+        # Call with _lock held.
+        if self.gen is not None and Hub._stream_gen != self.gen:
+            raise StreamError("preempted", self.rec_id, self.have if self.rec_id else None)
+
+    def _read_line(self) -> bytes | None:
+        """One line without its newline; None when the phone closed before a
+        full line. More than STREAM_LINE_MAX bytes without a newline →
+        line_too_long."""
+        while True:
+            idx = self.buf.find(b"\n")
+            if idx >= 0:
+                line = bytes(self.buf[:idx])
+                del self.buf[:idx + 1]
+                return line
+            if len(self.buf) >= STREAM_LINE_MAX:
+                raise StreamError("line_too_long", self.rec_id, None)
+            try:
+                self._recv()
+            except _StreamEof:
+                return None
+
+    def _take(self, n: int) -> bytes:
+        """Up to n payload bytes, waiting for at least one."""
+        if not self.buf:
+            self._recv()
+        k = min(n, len(self.buf))
+        out = bytes(self.buf[:k])
+        del self.buf[:k]
+        return out
+
+    # -- writing
+
+    def _send_line(self, obj: dict, best_effort: bool = False) -> None:
+        # A line is small; give it more than one tick so a slow peer window
+        # does not turn a send into a timeout.
+        self.request.settimeout(max(5.0, 2 * self.stall_s))
+        try:
+            self.wfile.write(json.dumps(obj, separators=(",", ":")).encode() + b"\n")
+        except OSError:
+            if not best_effort:
+                raise
+        finally:
+            self.request.settimeout(self.tick_s)
+
+    def _account(self) -> None:
+        # Call with _lock held.
+        if self.have > self.counted:
+            Hub._stream_stats["bytes_carried"] += self.have - self.counted
+            self.counted = self.have
+
+    def _ack(self) -> None:
+        with Hub._lock:
+            self._account()
+            Hub._stream_stats_write()
+        self.acked = self.have
+        self.last_ack_t = time.monotonic()
+        self._send_line({"ack": self.rec_id, "have": self.have})
+
+    # -- the protocol
+
+    def _hello(self) -> bool:
+        line = self._read_line()
+        if line is None:
+            return False
+        try:
+            hello = json.loads(line.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            raise StreamError("bad_hello", None, None)
+        if not isinstance(hello, dict) or hello.get("v") != STREAM_V:
+            raise StreamError("bad_hello", None, None)
+        run, pubkey_b64, ids = hello.get("run"), hello.get("pubkey"), hello.get("ids")
+        if not (isinstance(run, str) and isinstance(pubkey_b64, str) and isinstance(ids, list)
+                and len(ids) <= STREAM_IDS_MAX
+                and all(isinstance(i, str) and SAFE_NAME.fullmatch(i) for i in ids)):
+            raise StreamError("bad_hello", None, None)
+        try:
+            if len(base64.b64decode(pubkey_b64, validate=True)) != 32:
+                raise ValueError("key length")
+        except ValueError:
+            raise StreamError("bad_hello", None, None)
+        job = Hub._job()
+        if not job or job.get("run") != run:
+            raise StreamError("wrong_run", None, None)
+        self.run, self.pubkey_b64 = run, pubkey_b64
+        state = {}
+        with Hub._lock:
+            Hub._stream_gen += 1
+            self.gen = Hub._stream_gen
+            Hub._stream_stats["connections"] += 1
+            for bundle_id in ids:
+                have, _meta, complete = Hub._stream_state(bundle_id)
+                if have > 0 or complete is not None:
+                    state[bundle_id] = {"have": have, "complete": complete is not None}
+            Hub._stream_stats_write()
+        reply = {"state": state}
+        reply.update({k: self.params[k] for k in STREAM_DEFAULTS})
+        self._send_line(reply)
+        sys.stderr.write("hub stream %s hello run=%s ids=%d known=%d gen=%d\n"
+                         % (self.peer, run, len(ids), len(state), self.gen))
+        return True
+
+    def _record(self, line: bytes) -> None:
+        try:
+            hdr = json.loads(line.decode("utf-8"))
+            bundle_id = hdr["id"]
+            off, length, total = int(hdr["off"]), int(hdr["len"]), int(hdr["total"])
+            created_ms, sig_b64 = int(hdr["created_ms"]), str(hdr["sig"])
+        except (ValueError, KeyError, TypeError, UnicodeDecodeError):
+            raise StreamError("bad_id", None, None)
+        if not isinstance(bundle_id, str) or not SAFE_NAME.fullmatch(bundle_id):
+            raise StreamError("bad_id", None, None)
+        try:
+            sig = base64.b64decode(sig_b64, validate=True)
+        except ValueError:
+            sig = b""
+        if len(sig) != 64:
+            raise StreamError("bad_sig", bundle_id, None)
+        if total < 0 or total > BLOB_MAX_BYTES:
+            raise StreamError("too_large", bundle_id, None)
+        sdir = Hub._stream_dir()
+        with Hub._lock:
+            self._check_gen()
+            have, meta, _complete = Hub._stream_state(bundle_id)
+            if meta is None:
+                sdir.mkdir(parents=True, exist_ok=True)
+                meta = {"total": total, "sig": sig_b64, "created_ms": created_ms, "run": self.run}
+                (sdir / f"{bundle_id}.meta.json").write_text(json.dumps(meta))
+        if (meta.get("total") != total or meta.get("created_ms") != created_ms
+                or base64.b64decode(str(meta.get("sig", ""))) != sig):
+            raise StreamError("meta_mismatch", bundle_id, have)
+        if off != have or length < 0 or off + length != total:
+            raise StreamError("bad_offset", bundle_id, have)
+        self.rec_id, self.have, self.counted, self.acked = bundle_id, have, have, have
+        self.last_ack_t = time.monotonic()
+        part = sdir / f"{bundle_id}.part"
+        remaining = length
+        while remaining > 0:
+            data = self._take(remaining)
+            with Hub._lock:
+                self._check_gen()
+                with part.open("ab") as fh:
+                    fh.write(data)
+                self.have += len(data)
+                # Account every append, not only at ack time: the runner reads
+                # stream_stats.json while a record is still open, and a
+                # bytes_carried that trails the .part by an ack interval
+                # (~2 s of payload) would move those bytes into the next
+                # window's baseline and drop them from every window's delta.
+                self._account()
+                Hub._stream_stats_write()
+            remaining -= len(data)
+            if (self.have - self.acked >= self.ack_bytes
+                    or time.monotonic() - self.last_ack_t >= self.ack_interval_s):
+                self._ack()
+        if self.have > self.acked:
+            self._ack()  # record end
+        with Hub._lock:
+            self._check_gen()
+            self._account()
+            done = Hub._stream_complete(bundle_id, meta, self.pubkey_b64)
+            Hub._stream_stats_write()
+        self._send_line({"done": bundle_id, "sig_ok": done["sig_ok"],
+                         "pubkey_match": done["pubkey_match"], "bytes": done["bytes"]})
+        sys.stderr.write("hub stream %s done %s bytes=%d sig_ok=%s\n"
+                         % (self.peer, bundle_id, done["bytes"], str(done["sig_ok"]).lower()))
+        self.rec_id = None
 
 
 def main() -> int:
@@ -472,11 +897,28 @@ def main() -> int:
     ap.add_argument("--bind", required=True)
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--dir", required=True)
+    ap.add_argument("--stream-port", type=int, default=None,
+                    help="stream lane port (default --port + 1; 0 = off)")
+    ap.add_argument("--stream-stall-s", type=int, default=STREAM_DEFAULTS["stall_s"])
+    ap.add_argument("--stream-ack-bytes", type=int, default=STREAM_DEFAULTS["ack_bytes"])
+    ap.add_argument("--stream-inflight-bytes", type=int, default=STREAM_DEFAULTS["inflight_bytes"])
+    ap.add_argument("--stream-piece-bytes", type=int, default=STREAM_DEFAULTS["piece_bytes"])
     args = ap.parse_args()
     Hub.run_dir = Path(args.dir)
     Hub.run_dir.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer((args.bind, args.port), Hub)
     sys.stderr.write("hub serving %s on %s:%d\n" % (Hub.run_dir, args.bind, args.port))
+    stream_port = args.port + 1 if args.stream_port is None else args.stream_port
+    if stream_port:
+        params = dict(STREAM_DEFAULTS)
+        params.update(piece_bytes=args.stream_piece_bytes, ack_bytes=args.stream_ack_bytes,
+                      inflight_bytes=args.stream_inflight_bytes, stall_s=args.stream_stall_s)
+        StreamServer.params = params
+        Hub._stream_stats_load()
+        stream = StreamServer((args.bind, stream_port), StreamSession)
+        threading.Thread(target=stream.serve_forever, daemon=True, name="stream-lane").start()
+        sys.stderr.write("hub stream lane on %s:%d %s\n"
+                         % (args.bind, stream_port, json.dumps(params, separators=(",", ":"))))
     try:
         server.serve_forever()
     except KeyboardInterrupt:

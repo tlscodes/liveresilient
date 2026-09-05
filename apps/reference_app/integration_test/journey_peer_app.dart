@@ -43,6 +43,7 @@ import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'blackout_forwarder.dart';
+import 'blackout_stream.dart';
 import 'support/e2e_support.dart';
 
 const String journeyHubUrl = String.fromEnvironment(
@@ -519,24 +520,37 @@ class JourneyPeer {
   /// closes mid-transfer keeps its progress on the hub and the next window
   /// resumes from the first missing chunk. The runner shapes the window at
   /// 16 kbit/s, so bytes delivered per window is a utilization figure.
+  ///
+  /// A v3 plan keeps the same probe loop and queue but flushes over the
+  /// framed TCP stream lane ([_streamFlush]) instead of the chunked HTTP
+  /// forwarder: one connection per probe answer, resumed from the hub's
+  /// byte offset, removed from the queue on the hub's `done`.
   Future<void> _serveBlackoutV2(JourneyJob job, BlackoutPlan plan) async {
     final total = plan.items.length;
-    if (total == 0) {
-      _note('blackout v2 job run=${job.run}: empty plan');
+    final streamPort = BlackoutStreamParams.portOf(plan.stream);
+    // Arm-time gate: a plan that can never deliver (no items, or a v3 plan
+    // whose stream map carries no usable port) fails now, not after
+    // lifetime_s of probes that each return before writing a byte.
+    final rejection = blackoutPlanRejection(plan);
+    if (rejection != null) {
+      _note('blackout v${plan.v} job run=${job.run}: $rejection');
       await _report('failed', <String, Object?>{
-        'error': 'blackout v2 plan is empty',
+        'error': rejection,
         'last_phase': 'blackout',
         'delivered': 0,
         'remaining': 0,
+        if (plan.v == 3) 'stream': true,
       }, run: job.run);
       return;
     }
     _note(
-      'blackout v2 job run=${job.run} bundles=$total '
+      'blackout v${plan.v} job run=${job.run} bundles=$total '
       'bytes=${plan.bytesTotal} probe=${plan.probeS}s '
-      'chunk=${plan.chunkBytes} lifetime=${plan.lifetimeS}s',
+      'chunk=${plan.chunkBytes} lifetime=${plan.lifetimeS}s'
+      '${plan.v == 3 ? ' stream_port=$streamPort' : ''}',
     );
-    status.value = 'job ${job.run}: blackout v2 — holding $total bundles';
+    status.value =
+        'job ${job.run}: blackout v${plan.v} — holding $total bundles';
     // Without the wakelock iOS suspends the app once the screen locks and
     // the probe stops; the state is logged so a gap in the probe count has
     // its explanation on the phone's own event list.
@@ -557,6 +571,9 @@ class JourneyPeer {
     final queue = DtnBundleQueue(store: store);
     final ids = <String>[];
     final payloadBytes = <String, int>{};
+    // Envelope size per id: the v3 flush removes a bundle from the queue on
+    // the hub's done, so its wire size is looked up here, not on the bundle.
+    final envelopeBytes = <String, int>{};
     for (final item in plan.items) {
       final payload = blackoutPayload(
         run: job.run,
@@ -589,6 +606,7 @@ class JourneyPeer {
       }
       ids.add(id);
       payloadBytes[id] = item.bytes;
+      envelopeBytes[id] = envelope.length;
     }
     _note(
       '${ids.length} bundles queued, '
@@ -596,7 +614,8 @@ class JourneyPeer {
     );
     // The last event that can leave before the runner cuts the link.
     await _report('blackout_armed', <String, Object?>{
-      'v': 2,
+      'v': plan.v,
+      if (plan.stream != null) 'stream': plan.stream,
       'bundles': total,
       'bytes_total': plan.bytesTotal,
       'ids': ids,
@@ -618,6 +637,22 @@ class JourneyPeer {
     var deliveredBytes = 0;
     var deliveredWireBytes = 0;
     int? lastDeliveredMs;
+    // Payload bytes the stream lane wrote and the hub acked, summed
+    // over every v3 session of this job (bytes_written - bytes_acked
+    // is what was in flight when the sessions ended).
+    var streamBytesWritten = 0;
+    var streamBytesAcked = 0;
+    // One record delivered, on either lane: [how] names the evidence
+    // (chunk count for v2, the hub's verdict for v3).
+    void recordDelivered(String id, String how) {
+      delivered++;
+      deliveredBytes += payloadBytes[id] ?? 0;
+      deliveredWireBytes += envelopeBytes[id] ?? 0;
+      lastDeliveredMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+      _note('bundle $id delivered ($delivered/$total, $how)');
+      status.value = 'job ${job.run}: delivered $delivered/$total';
+    }
+
     Future<bool> forward(DtnBundle bundle) async {
       final ok = await forwarder.forward(
         id: bundle.id,
@@ -625,15 +660,7 @@ class JourneyPeer {
         sha256: contentSha256Hex(bundle.payload),
       );
       if (ok) {
-        delivered++;
-        deliveredBytes += payloadBytes[bundle.id] ?? 0;
-        deliveredWireBytes += bundle.payload.length;
-        lastDeliveredMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-        _note(
-          'bundle ${bundle.id} delivered ($delivered/$total, '
-          '${forwarder.lastChunksPosted} chunks)',
-        );
-        status.value = 'job ${job.run}: delivered $delivered/$total';
+        recordDelivered(bundle.id, '${forwarder.lastChunksPosted} chunks');
       }
       return ok;
     }
@@ -653,7 +680,24 @@ class JourneyPeer {
       // the 16 kbit/s gate.
       if (!await _hubReachable()) continue;
       reachable++;
-      await queue.flush(forward, nowMs: nowMs);
+      if (plan.v == 3) {
+        final lane = await _streamFlush(
+          run: job.run,
+          plan: plan,
+          queue: queue,
+          nowMs: nowMs,
+          onDone: (id, sigOk, pubkeyMatch) => recordDelivered(
+            id,
+            'stream sig_ok=$sigOk pubkey_match=$pubkeyMatch',
+          ),
+        );
+        if (lane != null) {
+          streamBytesWritten += lane.bytesWritten;
+          streamBytesAcked += lane.bytesAcked;
+        }
+      } else {
+        await queue.flush(forward, nowMs: nowMs);
+      }
       nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
       if (queue.pendingInDeliveryOrder(nowMs).isEmpty) break;
     }
@@ -675,6 +719,11 @@ class JourneyPeer {
         'latency_s': latencyS,
         'probes': probes,
         'reachable_probes': reachable,
+        if (plan.v == 3) ...<String, Object?>{
+          'stream': true,
+          'bytes_written': streamBytesWritten,
+          'bytes_acked': streamBytesAcked,
+        },
       }, run: job.run);
     } else {
       _note(
@@ -691,8 +740,65 @@ class JourneyPeer {
         'wire_bytes': deliveredWireBytes,
         'probes': probes,
         'reachable_probes': reachable,
+        if (plan.v == 3) ...<String, Object?>{
+          'stream': true,
+          'bytes_written': streamBytesWritten,
+          'bytes_acked': streamBytesAcked,
+        },
       }, run: job.run);
     }
+  }
+
+  /// The v3 flush: one framed TCP session per probe answer. Connects to
+  /// the hub's stream port (the host of [journeyHubUrl], the port of the
+  /// plan's stream map), offers the queue's pending bundles in delivery
+  /// order to [BlackoutStreamLane.run] and removes each one from the
+  /// queue on the hub's done, then reports it through [onDone]. Returns
+  /// the lane for its counters, or null when no connection was made (the
+  /// next probe retries, as the v2 flush does after its first failure).
+  Future<BlackoutStreamLane?> _streamFlush({
+    required String run,
+    required BlackoutPlan plan,
+    required DtnBundleQueue queue,
+    required int nowMs,
+    required void Function(String id, bool sigOk, bool pubkeyMatch) onDone,
+  }) async {
+    final port = BlackoutStreamParams.portOf(plan.stream);
+    if (port == null) {
+      _note('stream: plan carries no stream port');
+      return null;
+    }
+    final host = Uri.parse(journeyHubUrl).host;
+    final Socket socket;
+    try {
+      socket = await Socket.connect(
+        host,
+        port,
+        timeout: const Duration(seconds: 10),
+      );
+    } on Object catch (error) {
+      _note('stream: connect $host:$port failed: $error');
+      return null;
+    }
+    final pending = queue.pendingInDeliveryOrder(nowMs);
+    _note('stream: connected $host:$port, ${pending.length} pending');
+    final lane = BlackoutStreamLane(port: port, log: _note);
+    final outcome = await lane.run(
+      run: run,
+      pubkeyB64: _pubkeyB64!,
+      pending: pending,
+      link: _SocketLink(socket, log: _note),
+      onDone: (id, sigOk, pubkeyMatch) {
+        queue.acknowledge(id);
+        onDone(id, sigOk, pubkeyMatch);
+      },
+    );
+    _note(
+      'stream: $outcome offered=${lane.recordsOffered} '
+      'skipped=${lane.recordsSkipped} done=${lane.doneCount} '
+      'written=${lane.bytesWritten} acked=${lane.bytesAcked}',
+    );
+    return lane;
   }
 
   /// One whole envelope to /bundle on the bulk client; true on 200. Used by
@@ -833,6 +939,19 @@ class JourneyPeer {
   }
 }
 
+/// Why a parsed blackout plan cannot be served, or null when it can. The
+/// error text is what the `failed` report carries. Two cases: no items
+/// (v2 or v3), and a v3 plan whose stream map carries no usable port
+/// (absent, 0, out of range, or not an int) — the flush would otherwise
+/// return before writing a byte on every probe until lifetime_s expires.
+String? blackoutPlanRejection(BlackoutPlan plan) {
+  if (plan.items.isEmpty) return 'blackout v${plan.v} plan is empty';
+  if (plan.v == 3 && BlackoutStreamParams.portOf(plan.stream) == null) {
+    return 'blackout v3 plan carries no stream port';
+  }
+  return null;
+}
+
 /// The v2 forwarder's view of the hub: the three routes on the peer's
 /// bulk client.
 class _HubBlackoutTransport implements BlackoutTransport {
@@ -855,6 +974,32 @@ class _HubBlackoutTransport implements BlackoutTransport {
     required String sha256,
     required List<int> bytes,
   }) => _peer._postChunk(id: id, idx: idx, n: n, sha256: sha256, bytes: bytes);
+}
+
+/// A connected dart:io socket as the stream lane's link: writes go to
+/// the socket, the hub's bytes are the socket's own stream, destroy drops
+/// the connection. A write error the socket reports later (on its done
+/// future) is logged, not thrown: the lane already ended that session on
+/// the stall, close, or error line it saw.
+class _SocketLink implements StreamLink {
+  _SocketLink(this._socket, {required this.log}) {
+    _socket.done.then<void>(
+      (_) {},
+      onError: (Object error) => log('stream: socket closed: $error'),
+    );
+  }
+
+  final Socket _socket;
+  final void Function(String line) log;
+
+  @override
+  void write(List<int> bytes) => _socket.add(bytes);
+
+  @override
+  Stream<List<int>> get inbound => _socket;
+
+  @override
+  Future<void> destroy() async => _socket.destroy();
 }
 
 /// The receiving half of every lane, reporting each verified item.
