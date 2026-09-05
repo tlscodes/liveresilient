@@ -29,10 +29,8 @@ Future<void> main(List<String> arguments) async {
     address: options.address,
     port: options.port,
     logSink: (event, {callId, error}) {
-      final suffix = error != null ? ' error=$error' : '';
       stderr.writeln(
-        '[signaling_server] $event'
-        '${callId != null ? ' callId=$callId' : ''}$suffix',
+        formatSignalingLogLine(event, callId: callId, error: error),
       );
     },
   );

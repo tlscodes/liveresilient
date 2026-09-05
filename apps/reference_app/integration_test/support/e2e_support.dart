@@ -120,6 +120,18 @@ List<Map<String, Object>> e2eIceServers() {
   ];
 }
 
+/// The list [e2eIceServers] builds with every non-TCP entry removed, so the
+/// only way out is `turn:<host>?transport=tcp`.
+///
+/// For the whitelist profile: that filter drops every UDP port but 53, so a
+/// UDP TURN entry cannot allocate and its candidates would only spend the
+/// connect budget. Derived from [e2eIceServers] rather than written out
+/// again — one list, one place, so a credential or host change cannot drift
+/// between the two profiles.
+List<Map<String, Object>> e2eIceServersTcpOnly() => e2eIceServers()
+    .where((server) => '${server['urls']}'.contains('transport=tcp'))
+    .toList(growable: false);
+
 /// Like `devLoopbackWsConnector`, but also relaxes certificate validation for
 /// the configured E2E relay host (the Mac's bridge address). TEST-ONLY: the
 /// relay presents the well-known dev certificate; there is nothing to protect.
@@ -558,6 +570,13 @@ class E2eCallStack {
     required String callId,
     required CallRole role,
     required MediaMode mode,
+    // Per-profile ICE overrides. Both default to the environment-derived
+    // values, so every existing caller is unchanged; the whitelist profile
+    // passes `e2eIceServersTcpOnly()` and 'relay' because that filter drops
+    // every UDP port but 53. The override enters HERE, at the one place the
+    // port is configured, instead of a second port factory.
+    List<Map<String, Object>>? iceServersOverride,
+    String? iceTransportPolicyOverride,
   }) {
     final client = SignalingClient(
       endpoint: endpoint,
@@ -588,13 +607,14 @@ class E2eCallStack {
       () async {
         final port = await FlutterWebRtcPeerConnectionPort.create(
           audio: mode == MediaMode.realAudio,
-          iceServers: e2eIceServers(),
+          iceServers: iceServersOverride ?? e2eIceServers(),
           // Gate 3c: the policy string comes from the same decision function
           // production uses, not from a shortcut. The environment flag now
           // feeds `iceProfileFor` through the manifest's own feature flags,
           // so the row exercises the production path instead of a parallel
           // one — a rig that proves a code path nobody ships proves nothing.
-          iceTransportPolicy: e2eIceTransportPolicy(),
+          iceTransportPolicy:
+              iceTransportPolicyOverride ?? e2eIceTransportPolicy(),
           opusPolicy: constrainedLink
               ? OpusSdpPolicy.forShapingState(
                   fixedTickEmitterRunning: false,

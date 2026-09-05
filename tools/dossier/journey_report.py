@@ -13,9 +13,13 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-PROFILES = ['normal', 'latency', 'loss10', 'bandwidth', 'narrow', 'loss60', 'extreme', 'blackout']
-FEATURES = ['call_connect', 'monitor_bar', 'chat_text', 'photo', 'video_note', 'voice_note', 'blackout_message', 'blackout_gate']
+PROFILES = ['normal', 'latency', 'loss10', 'bandwidth', 'narrow', 'loss60', 'extreme', 'blackout',
+            'whitelist']
+FEATURES = ['call_connect', 'monitor_bar', 'chat_text', 'photo', 'video_note', 'voice_note',
+            'blackout_message', 'blackout_gate', 'whitelist_door', 'whitelist_rendezvous']
 # The two blackout rows carry hours in the seconds columns (budget = lifetime, measured = latency).
+# The two whitelist rows are ordinary seconds: the moment allowed traffic was
+# answered, and the moment the rendezvous completed, both from the run's start.
 HOUR_FEATURES = {'blackout_message', 'blackout_gate'}
 RUN = re.compile(r'run=(\S+)')
 

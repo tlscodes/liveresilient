@@ -38,6 +38,8 @@ import 'package:device_link/device_link.dart'
 import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:flutter/material.dart';
 import 'package:media_webrtc/media_webrtc.dart' show RawRtcCounters;
+import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
+    show SelectedIcePair;
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -45,6 +47,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'blackout_forwarder.dart';
 import 'blackout_stream.dart';
 import 'support/e2e_support.dart';
+import 'whitelist_door.dart';
 
 const String journeyHubUrl = String.fromEnvironment(
   'JOURNEY_HUB_URL',
@@ -74,11 +77,19 @@ class JourneyJob {
   /// placing a call.
   final Map<String, Object?>? blackout;
 
+  /// Present for the whitelist profile: {url, interval_s, blocked_host,
+  /// rst_port, quic_port, quic_timeout_ms, relay_only} (see
+  /// [WhitelistDoorConfig]). The peer then runs the ordinary-traffic loop
+  /// and the two negative controls BESIDE the normal call — never instead
+  /// of it.
+  final Map<String, Object?>? whitelist;
+
   const JourneyJob({
     required this.run,
     required this.key,
     required this.holdS,
     this.blackout,
+    this.whitelist,
   });
 
   static JourneyJob? tryParse(String body) {
@@ -92,11 +103,13 @@ class JourneyJob {
         return null;
       }
       final blackout = decoded['blackout'];
+      final whitelist = decoded['whitelist'];
       return JourneyJob(
         run: run,
         key: key,
         holdS: hold is int ? hold : 400,
         blackout: blackout is Map<String, Object?> ? blackout : null,
+        whitelist: whitelist is Map<String, Object?> ? whitelist : null,
       );
     } on FormatException {
       return null;
@@ -295,13 +308,48 @@ class JourneyPeer {
     }
     status.value = 'job ${job.run}: preparing';
     _note('job run=${job.run} key=${job.key} hold=${job.holdS}s');
+    // The whitelist profile's config is parsed BEFORE anything is built: a
+    // job whose `url` is missing has no door to measure, and a run that
+    // quietly skipped the loop would report an empty door_samples and read
+    // like a pass.
+    WhitelistDoorConfig? whitelistConfig;
+    if (job.whitelist != null) {
+      try {
+        whitelistConfig = WhitelistDoorConfig.parse(job.whitelist!);
+      } on FormatException catch (error) {
+        _note('whitelist job rejected: ${error.message}');
+        await _report('failed', <String, Object?>{
+          'error': 'whitelist config: ${error.message}',
+        });
+        return;
+      }
+      _note('whitelist ${jsonEncode(whitelistConfig.toJson())}');
+    }
     final relay = await LoopbackRelay.start(); // remote: no in-process server
+    final relayOnly = whitelistConfig?.relayOnly ?? false;
     final stack = E2eCallStack.build(
       endpoint: relay.endpoint,
       callId: job.key,
       role: CallRole.initiator,
       mode: _mode!,
+      // Under the whitelist filter every UDP port but 53 is dropped, so the
+      // phone must not try a UDP TURN allocation at all: relay-only over the
+      // TCP TURN URL, taken from e2e_support's own list so the credentials
+      // and host stay in one place.
+      iceServersOverride: relayOnly ? e2eIceServersTcpOnly() : null,
+      iceTransportPolicyOverride: relayOnly ? 'relay' : null,
     );
+    final WhitelistDoor? door = whitelistConfig == null
+        ? null
+        : _buildWhitelistDoor(whitelistConfig, job.run);
+    // The loop and the two controls run BESIDE the call, never in place of
+    // it: they are unawaited, they never throw, and nothing in the call
+    // path waits on them.
+    if (door != null) {
+      unawaited(door.run());
+      unawaited(_reportWhitelistControls(door, job.run));
+    }
+    Map<String, Object?> whitelistEvidence = const <String, Object?>{};
     final lanes = _Lanes(this, stack, job.run);
     final startedAt = DateTime.now();
     try {
@@ -337,6 +385,14 @@ class JourneyPeer {
       });
       status.value = 'job ${job.run}: connected';
 
+      // The whitelist row's media proof, measured once the call is up and
+      // before the hold loop starts reading the same counters: WHICH pair
+      // carries the audio, and whether received packets really advance.
+      if (door != null) {
+        whitelistEvidence = await _whitelistIceEvidence(stack);
+        _note('whitelist ice ${jsonEncode(whitelistEvidence)}');
+      }
+
       final holdUntil = DateTime.now().add(Duration(seconds: job.holdS));
       while (DateTime.now().isBefore(holdUntil)) {
         await Future<void>.delayed(const Duration(seconds: 2));
@@ -370,6 +426,8 @@ class JourneyPeer {
         'reason': done.endReason?.name,
         'phases': stack.recentPhases(),
         ...lanes.summary(),
+        if (door != null) 'door_samples': door.samplesJson(),
+        ...whitelistEvidence,
       });
     } on Object catch (error) {
       _note(
@@ -381,13 +439,89 @@ class JourneyPeer {
         'last_phase': stack.controller.state.phase.name,
         'phases': stack.recentPhases(),
         ...lanes.summary(),
+        if (door != null) 'door_samples': door.samplesJson(),
+        ...whitelistEvidence,
       });
     } finally {
+      // The loop outlives neither the job nor the call: stopped here so the
+      // next job starts with its own door.
+      door?.stop();
       await lanes.close();
       await stack.dispose();
       await relay.close();
       status.value = 'job ${job.run}: finished';
     }
+  }
+
+  /// The door with its real, dart:io seams: one HttpClient that accepts the
+  /// rig's dev certificate for the configured host only, a plain TCP
+  /// connect, and one QUIC-shaped datagram.
+  WhitelistDoor _buildWhitelistDoor(WhitelistDoorConfig config, String run) {
+    return WhitelistDoor(
+      config: config,
+      http: _DoorHttpClient(Uri.parse(config.url).host),
+      tcp: const _DoorTcpConnector(),
+      udp: const _DoorUdpProber(),
+      clock: const SystemDoorClock(),
+      log: _note,
+      onOpen: (open) =>
+          unawaited(_report('door_open', open.toJson(), run: run)),
+    );
+  }
+
+  /// The two negative controls, once each, reported as they land. Never
+  /// throws: the door's own probes already turn every failure into an
+  /// outcome, and the call must not depend on this.
+  Future<void> _reportWhitelistControls(WhitelistDoor door, String run) async {
+    final reset = await door.probeResetElsewhere();
+    await _report('door_closed_elsewhere', reset.toJson(), run: run);
+    final quic = await door.probeQuicDead();
+    await _report('quic_dead', quic.toJson(), run: run);
+  }
+
+  /// The whitelist row's media proof: which candidate pair carries the
+  /// audio, and whether the received-packet counter really advances.
+  ///
+  /// `ice_pair_protocol` is the leg THIS phone put on the wire — a relay
+  /// candidate's `relayProtocol` when it has one, its own protocol
+  /// otherwise (see [SelectedIcePair.wireProtocol]). Classic TURN still
+  /// relays to the far peer over UDP on the server's own leg; what this
+  /// proves is that the phone emitted no UDP and still carried live audio.
+  Future<Map<String, Object?>> _whitelistIceEvidence(E2eCallStack stack) async {
+    final port = stack.port;
+    if (port == null) {
+      return <String, Object?>{
+        'ice_pair_type': null,
+        'ice_pair_protocol': null,
+        'rx_increasing': null,
+      };
+    }
+    SelectedIcePair? pair;
+    try {
+      pair = await port.readSelectedIcePair().timeout(
+        const Duration(seconds: 5),
+      );
+    } on Object catch (error) {
+      _note('whitelist ice pair unreadable: $error');
+    }
+    bool? rxIncreasing;
+    try {
+      await samplePacketsReceivedStrictlyIncreasing(
+        port,
+        label: 'whitelist phone rx',
+      );
+      rxIncreasing = true;
+    } on TimeoutException catch (error) {
+      _note('whitelist rx did not increase: ${error.message}');
+      rxIncreasing = false;
+    } on Object catch (error) {
+      _note('whitelist rx sampling failed: $error');
+    }
+    return <String, Object?>{
+      'ice_pair_type': pair?.localCandidateType,
+      'ice_pair_protocol': pair?.wireProtocol,
+      'rx_increasing': rxIncreasing,
+    };
   }
 
   /// The blackout job: no call. A signed bundle of [bytes] is created at T0,
@@ -979,6 +1113,120 @@ class _HubBlackoutTransport implements BlackoutTransport {
     required String sha256,
     required List<int> bytes,
   }) => _peer._postChunk(id: id, idx: idx, n: n, sha256: sha256, bytes: bytes);
+}
+
+/// The door's ordinary-traffic GET over dart:io.
+///
+/// Its own HttpClient, with a 3 s connect timeout and the dev certificate
+/// accepted for the configured host ONLY — the rig's relay presents the
+/// well-known dev certificate on the same address and port that serves this
+/// page, and there is nothing here to protect. The body is drained so the
+/// reported byte count is what actually arrived.
+class _DoorHttpClient implements DoorHttpGetter {
+  _DoorHttpClient(this.allowedHost);
+
+  final String allowedHost;
+
+  late final HttpClient _client = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 3)
+    ..badCertificateCallback = (X509Certificate cert, String host, int port) =>
+        host == allowedHost;
+
+  @override
+  Future<DoorHttpResponse> get(String url) async {
+    final request = await _client
+        .getUrl(Uri.parse(url))
+        .timeout(const Duration(seconds: 5));
+    final response = await request.close().timeout(const Duration(seconds: 10));
+    var bytes = 0;
+    await for (final chunk in response) {
+      bytes += chunk.length;
+    }
+    return DoorHttpResponse(status: response.statusCode, bytes: bytes);
+  }
+}
+
+/// The reset control over dart:io.
+///
+/// The distinction the whole control rests on is in the errno: an RST in
+/// answer to a SYN arrives as ECONNREFUSED (61 on darwin), an RST on an
+/// established connection as ECONNRESET (54). A DROP produces no answer at
+/// all and surfaces as ETIMEDOUT (60) or a SocketException whose message
+/// says the connect timed out — a different outcome, and not a pass.
+class _DoorTcpConnector implements DoorTcpConnector {
+  const _DoorTcpConnector();
+
+  static const int _econnreset = 54;
+  static const int _etimedout = 60;
+  static const int _econnrefused = 61;
+
+  @override
+  Future<TcpProbeOutcome> connect({
+    required String host,
+    required int port,
+    required Duration timeout,
+  }) async {
+    try {
+      final socket = await Socket.connect(host, port, timeout: timeout);
+      socket.destroy();
+      return TcpProbeOutcome.connected;
+    } on SocketException catch (error) {
+      final code = error.osError?.errorCode;
+      if (code == _econnrefused || code == _econnreset) {
+        return TcpProbeOutcome.reset;
+      }
+      if (code == _etimedout ||
+          error.message.toLowerCase().contains('timed out')) {
+        return TcpProbeOutcome.timedOut;
+      }
+      return TcpProbeOutcome.error;
+    } on TimeoutException {
+      return TcpProbeOutcome.timedOut;
+    }
+  }
+}
+
+/// The QUIC control over dart:io: one 1200-byte Initial-shaped datagram out
+/// of an ephemeral port, then silence for the whole timeout. Anything read
+/// back — including an ICMP-driven error the socket surfaces — ends the
+/// wait, because the control's claim is that NOTHING answers.
+class _DoorUdpProber implements DoorUdpProber {
+  const _DoorUdpProber();
+
+  @override
+  Future<UdpProbeOutcome> probe({
+    required String host,
+    required int port,
+    required Duration timeout,
+  }) async {
+    final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    final answered = Completer<UdpProbeOutcome>();
+    final subscription = socket.listen(
+      (event) {
+        if (answered.isCompleted) return;
+        if (event == RawSocketEvent.read) {
+          final datagram = socket.receive();
+          if (datagram != null) answered.complete(UdpProbeOutcome.replied);
+        }
+      },
+      onError: (Object _) {
+        if (!answered.isCompleted) answered.complete(UdpProbeOutcome.replied);
+      },
+    );
+    try {
+      final address = (await InternetAddress.lookup(host)).first;
+      socket.send(quicShapedInitialDatagram(), address, port);
+      return await answered.future.timeout(
+        timeout,
+        onTimeout: () => UdpProbeOutcome.silent,
+      );
+    } on Object {
+      return UdpProbeOutcome.error;
+    } finally {
+      await subscription.cancel();
+      socket.close();
+    }
+  }
 }
 
 /// A connected dart:io socket as the stream lane's link: writes go to

@@ -22,8 +22,12 @@
 # The shaper is the only privileged step and runs through the script-scoped
 # sudoers rule (`sudo -n tools/t2/net_shape.sh …`); nothing else needs root.
 #
-# USAGE  tools/t2/journey_run.sh <profile>      (normal|latency|loss10|bandwidth|narrow|loss60|extreme)
+# USAGE  tools/t2/journey_run.sh <profile>
+#          normal|latency|loss10|bandwidth|narrow|loss60|extreme|blackout|whitelist
 #        JOURNEY_PHONE=<udid> JOURNEY_HOLD_S=45 JOURNEY_KEY=<22 chars> override defaults.
+#        JOURNEY_DRY=1 tools/t2/journey_run.sh whitelist prints what that profile
+#        would do — the shaper argument, the turnserver argv, the job JSON and the
+#        two row templates — and exits before any sudo, hub, app or phone action.
 set -uo pipefail
 
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
@@ -36,6 +40,9 @@ IFACE=${T2_IFACE:-bridge100}
 PEER=${T2_PEER:-192.168.2.2}
 SELF=$(ifconfig "$IFACE" 2>/dev/null | awk '/inet /{print $2; exit}')
 RELAY_PORT=${JOURNEY_RELAY_PORT:-4443}
+# The hub's port is declared here rather than beside the hub below, because the
+# whitelist profile's filter argument names it before the hub is started.
+HTTP_PORT=${JOURNEY_HTTP_PORT:-8765}
 # A FRESH key per run. The relay keeps a room's replay ring for a grace after
 # it empties and replays it to every fresh joiner (so a peer's hangup is
 # never lost); with one fixed key across runs the NEXT run's app joined the
@@ -67,6 +74,7 @@ mkdir -p "$CONTAINER_TMP"
 RUN=$(mktemp -d "$CONTAINER_TMP/journey.XXXXXX")
 READY="$RUN/ready"; GO="$RUN/go"; EVENTS="$RUN/phone_events.jsonl"
 RUN_ID=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+RUN_EPOCH=$(date -u +%s)   # the same instant in seconds: the rows measure from it
 mkdir -p "$EVID" "$LOGD"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -80,10 +88,95 @@ profile_args() {
     loss10)    echo "-        -     0.10" ;;
     loss60)    echo "-        -     0.60" ;;
     extreme)   echo "16Kbit/s 1000  0.15" ;;
+    # whitelist shapes nothing: it loads a FILTER instead of a pipe (see the
+    # whitelist block below), so all three impairment fields stay unset and the
+    # bandwidth-derived fixture sizes fall to the unshaped lane.
+    whitelist) echo "-        -     0.0" ;;
     *) die "unknown profile $1" ;;
   esac
 }
 read -r BW DELAY PLR <<<"$(profile_args "$PROFILE")"
+
+# --- the whitelist profile: a filtered network, not an impaired one ---
+# It stays inside this runner (unlike blackout, which execs its own script)
+# because it must place a REAL call: one host and one port serve the ordinary
+# HTTPS request and the rendezvous. What it replaces is the shaper call and the
+# ICMP verification, both further down.
+TURN_TCP_PORT=${JOURNEY_TURN_TCP_PORT:-3478}
+WHITELIST_TCP=${JOURNEY_WHITELIST_TCP:-$RELAY_PORT+$TURN_TCP_PORT+$HTTP_PORT}
+# The literal port 443, used three times for one reason: it needs no listener
+# on this Mac, so both negative controls are real — the phone's TLS to a
+# non-allowed host is reset, and its QUIC datagram to UDP 443 gets nothing.
+# Single source for the shaper's rst=, the job's rst_port and its quic_port.
+WHITELIST_PORT_443=443
+WHITELIST_BLOCKED_HOST=${JOURNEY_WHITELIST_BLOCKED_HOST:-192.168.2.9}
+# A TCP port outside the allow list, for the Mac-side door probe below.
+WHITELIST_BLOCKED_TCP=${JOURNEY_WHITELIST_BLOCKED_TCP:-12345}
+WHITELIST_QUIC_TIMEOUT_MS=${JOURNEY_WHITELIST_QUIC_TIMEOUT_MS:-3000}
+WHITELIST_DOOR_INTERVAL_S=${JOURNEY_WHITELIST_DOOR_INTERVAL_S:-1}
+# One budget for both rows: the window the door and the rendezvous must share,
+# and the gap allowed between them.
+WHITELIST_WINDOW_S=${JOURNEY_WHITELIST_WINDOW_S:-120}
+TURN_BIN=${JOURNEY_TURN_BIN:-/usr/local/bin/turnserver}
+TURN_CONF="$REPO/infra/turn/turnserver.conf"
+TURN_PID=""
+DOOR_PROBE="$REPO/tools/t2/tcp_door_probe.py"
+WL_ROWS="$REPO/tools/t2/journey_whitelist_rows.py"
+# tools/t2/relay_restart.sh writes exactly this path; the rendezvous instant is
+# read off that log, so the two must not drift apart.
+RELAY_LOG=${RELAY_LOG:-${TMPDIR:-/tmp}/signaling_relay_$RELAY_PORT.log}
+# The dry print and the real run take the allowed address from one place. With
+# bridge100 down there is no address to take, so the dry print says which of
+# the two it used.
+WL_SELF=${SELF:-192.168.2.1}
+WHITELIST_ARG="peer=$PEER,allow=$WL_SELF,tcp=$WHITELIST_TCP,rst=$WHITELIST_PORT_443"
+TURN_ARGV=("$TURN_BIN" -c "$TURN_CONF" --listening-port="$TURN_TCP_PORT"
+           --listening-ip="$WL_SELF" --no-udp --no-tls --no-dtls --log-file=stdout)
+# Stated in both rows, never hidden: the filter SHAPE is faithful, the allowed
+# port NUMBERS are the ones a service can bind without root on this Mac.
+WHITELIST_FIDELITY="ports $RELAY_PORT/$TURN_TCP_PORT stand in for 443/80 (ports <1024 need root; rdr-anchor absent)"
+
+# The job the phone reads. For the whitelist profile it carries the map that
+# profile's peer needs: where the ordinary HTTPS loop knocks and how often,
+# which host and port must stay shut, and that ICE may use nothing but the TURN
+# relay. No `blackout` key is ever added, which is why the phone's
+# store-and-forward branch cannot be taken on this row.
+job_json() {  # <hold_s>
+  local hold=$1 wl=""
+  if [ "$PROFILE" = whitelist ]; then
+    wl=$(printf ',"whitelist":{"url":"https://%s:%s/","interval_s":%s,"blocked_host":"%s","rst_port":%s,"quic_port":%s,"quic_timeout_ms":%s,"relay_only":true}' \
+      "$WL_SELF" "$RELAY_PORT" "$WHITELIST_DOOR_INTERVAL_S" "$WHITELIST_BLOCKED_HOST" \
+      "$WHITELIST_PORT_443" "$WHITELIST_PORT_443" "$WHITELIST_QUIC_TIMEOUT_MS")
+  fi
+  printf '{"run":"%s","key":"%s","hold_s":%d,"profile":"%s"%s}\n' \
+    "$RUN_ID" "$KEY" "$hold" "$PROFILE" "$wl"
+}
+
+# --- JOURNEY_DRY=1: print what this profile would do, touch nothing ---
+# Deliberately BEFORE the fixtures, the hub, the shaper, the app and the phone,
+# so it runs on any machine, needs no sudo and asks for no password.
+if [ "${JOURNEY_DRY:-0}" = 1 ]; then
+  [ "$PROFILE" = whitelist ] || die "JOURNEY_DRY=1 is implemented for the whitelist profile only (got $PROFILE)"
+  if [ -n "$SELF" ]; then echo "dry       allowed address $WL_SELF (read from $IFACE)"
+  else echo "dry       $IFACE has no address; the lines below use the design's default $WL_SELF"; fi
+  echo "dry       whitelist loads a filter; ICMP is dropped by it, so a TCP probe replaces the ping check"
+  echo "shaper    sudo -n $SHAPE whitelist \"$WHITELIST_ARG\""
+  echo "turn      ${TURN_ARGV[*]}"
+  # The real hold_s follows the media fixtures; 30 s is this runner's own
+  # documented feature-budget floor, so the line shows the shape of the JSON
+  # with a stated placeholder, not a promise about the number.
+  echo "job       $(job_json $((HOLD + BUDGET + 4 * 30 + 60)))   (hold_s uses the 30 s feature-budget floor)"
+  printf 'row       '
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' whitelist_door whitelist '<door_bytes>' \
+    "$WHITELIST_WINDOW_S" '<t_allowed_s>' 'PASS|FAIL' \
+    "first ordinary HTTPS 200 t_allowed_source=door_open.at ... $WHITELIST_FIDELITY run=$RUN_ID"
+  printf 'row       '
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' whitelist_rendezvous whitelist 0 \
+    "$WHITELIST_WINDOW_S" '<t_rendezvous_s>' 'PASS|FAIL' \
+    "gap_s=<t_rendezvous-t_allowed> t_rendezvous_source=relay_log.room_rendezvous_complete ... $WHITELIST_FIDELITY run=$RUN_ID"
+  echo "dry       the rows are built by $WL_ROWS from $EVENTS and $RELAY_LOG"
+  exit 0
+fi
 
 # Fixture sizes follow the link, the way a real app's encoder would: the
 # video cap and the photo's long edge come from the profile's bandwidth
@@ -148,6 +241,10 @@ cleanup() {
   pkill -f "xcodebuild.*reference_app" 2>/dev/null || true
   pkill -f "macos_assemble.sh" 2>/dev/null || true
   pkill -f "journey_hub.py" 2>/dev/null || true
+  # coturn belongs to this run alone: the whitelist profile starts it, and the
+  # next profile's TURN port must not still be held when it does.
+  [ -n "$TURN_PID" ] && kill "$TURN_PID" 2>/dev/null
+  pkill -f "turnserver -c $TURN_CONF" 2>/dev/null || true
   touch "$RUN/rec_stop" 2>/dev/null || true
   echo "cleanup: shaping torn down, children stopped"
 }
@@ -157,7 +254,7 @@ trap 'exit 130' INT; trap 'exit 143' TERM; trap cleanup EXIT  # signals exit; EX
 caffeinate -dimsu -w $$ >/dev/null 2>&1 &
 
 # --- the hub: the phone's job and evidence channel (plain HTTP on the bridge) ---
-HTTP_PORT=${JOURNEY_HTTP_PORT:-8765}
+# HTTP_PORT is declared with the other ports at the top of this script.
 # The previous run's hub may still be releasing the port (two of one
 # night's twenty-one starts lost that race and the profile died before
 # shaping): start, wait up to 20 s, and try three times, logging each.
@@ -180,29 +277,65 @@ echo "profile   $PROFILE  (bw=$BW delay=$DELAY plr=$PLR)  feature budget ${FEATU
 echo "iface     $IFACE   self $SELF   peer $PEER   relay wss://$SELF:$RELAY_PORT/"
 echo "phone     $PHONE   key $KEY   hold ${HOLD}s   budget ${BUDGET}s   run $RUN_ID"
 
-# --- shape and VERIFY (rows under unverified shaping are worse than no row) ---
+# --- shape or filter, and VERIFY (rows under unverified shaping are worse than no row) ---
 shaper teardown >/dev/null 2>&1 || true
-if ! sudo -n T2_PEER="$PEER" T2_SHAPE_TCP_PORT="{ $RELAY_PORT }" "$SHAPE" shape "$BW" "$DELAY" "$PLR" 2>/dev/null; then
+if [ "$PROFILE" = whitelist ]; then
+  # coturn first: a missing binary must stop the run before pf is touched.
+  [ -x "$TURN_BIN" ] || die "the whitelist profile needs coturn — $TURN_BIN not found (install it with: brew install coturn)"
+  [ -f "$TURN_CONF" ] || die "the TURN config is missing: $TURN_CONF"
+  TURNLOG="$LOGD/$PROFILE.turn.log"
+  # The config file stays untouched; the listening address and port are
+  # overridden on the command line, and the UDP and TLS listeners are refused,
+  # so the phone can reach TURN only over the one allowed TCP port.
+  "${TURN_ARGV[@]}" >"$TURNLOG" 2>&1 &
+  TURN_PID=$!
+  turn_up=""
+  for _ in $(seq 1 20); do
+    python3 -c 'import socket,sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), 1).close()' \
+      "$WL_SELF" "$TURN_TCP_PORT" 2>/dev/null && { turn_up=yes; break; }
+    kill -0 "$TURN_PID" 2>/dev/null || break
+    sleep 0.5
+  done
+  [ -n "$turn_up" ] || die "coturn did not accept TCP on $WL_SELF:$TURN_TCP_PORT (see $TURNLOG)"
+  echo "turn      ${TURN_ARGV[*]}"
+  echo "turn      accepting tcp on $WL_SELF:$TURN_TCP_PORT (pid $TURN_PID, log $TURNLOG)"
+  sudo -n "$SHAPE" whitelist "$WHITELIST_ARG" || die "could not load the whitelist filter ($WHITELIST_ARG)"
+  SCOPE="whitelist on $IFACE: tcp {$WHITELIST_TCP} + udp 53 to $WL_SELF, tcp $WHITELIST_PORT_443 elsewhere reset, all else from $PEER dropped"
+  shaper status | sed 's/^/  status: /' | head -12
+  # ICMP is dropped by this filter BY DESIGN, so the ping check the other
+  # profiles use would kill the run here. The TCP probe asserts BOTH halves of
+  # the claim — a definite answer on an allowed port, silence on a blocked one
+  # — because a check that only proves the allowed port works cannot tell a
+  # whitelist from an open network.
+  probe_rtt=""; probe_loss="-"
+  door_probe=$(python3 "$DOOR_PROBE" "$PEER" "$RELAY_PORT" "$WHITELIST_BLOCKED_TCP" 3)
+  door_rc=$?
+  echo "verified  tcp $door_probe  (allowed $RELAY_PORT, blocked $WHITELIST_BLOCKED_TCP, host $PEER)"
+  [ "$door_rc" = 0 ] || die "the filter is not what the rows would claim: $door_probe — the allowed port must answer (refused|open) and the blocked port must time out"
+  SCOPE="$SCOPE; tcp_probe($door_probe)"
+elif ! sudo -n T2_PEER="$PEER" T2_SHAPE_TCP_PORT="{ $RELAY_PORT }" "$SHAPE" shape "$BW" "$DELAY" "$PLR" 2>/dev/null; then
   echo "note: sudo refused env for the shaper; shaping ALL UDP+ICMP on $IFACE (relay TCP leg unshaped)"
   SCOPE="udp+icmp on $IFACE, relay TCP unshaped"
   shaper shape "$BW" "$DELAY" "$PLR" || die "could not apply shaping"
 else
   SCOPE="udp+icmp+tcp:$RELAY_PORT to $PEER"
 fi
-shaper status | sed 's/^/  status: /' | head -12
-PROBE_N=10; [ "$PLR" != "-" ] && [ "$PLR" != "0.0" ] && PROBE_N=40  # 10 pings cannot verify 15% loss: 0.72^10 = 4% chance of seeing none
-probe=$(ping -c "$PROBE_N" -i 0.2 -q "$PEER" 2>/dev/null | tail -2)
-probe_rtt=$(printf '%s' "$probe" | awk -F'/' '/round-trip|avg/ {print $5}' | head -1)
-probe_loss=$(printf '%s' "$probe" | grep -oE '[0-9.]+% packet loss' | grep -oE '^[0-9.]+' || echo 0)
-echo "verified  icmp rtt ${probe_rtt:-?} ms  loss ${probe_loss}%"
-if [ "$DELAY" != "-" ]; then
-  ok=$(python3 -c "print(1 if ${probe_rtt:-0} >= ${DELAY} else 0)" 2>/dev/null || echo 0)
-  [ "$ok" = 1 ] || die "shaping did not take effect (rtt ${probe_rtt:-?} < ${DELAY})"
-fi
-if [ "$PLR" != "-" ] && [ "$PLR" != "0.0" ]; then
-  want=$(python3 -c "print(round(float('$PLR') * 100 * 0.4))" 2>/dev/null || echo 0)
-  ok=$(python3 -c "print(1 if ${probe_loss:-0} >= ${want} else 0)" 2>/dev/null || echo 0)
-  [ "$ok" = 1 ] || die "loss did not take effect (${probe_loss}% seen, wanted >= ${want}%)"
+if [ "$PROFILE" != whitelist ]; then
+  shaper status | sed 's/^/  status: /' | head -12
+  PROBE_N=10; [ "$PLR" != "-" ] && [ "$PLR" != "0.0" ] && PROBE_N=40  # 10 pings cannot verify 15% loss: 0.72^10 = 4% chance of seeing none
+  probe=$(ping -c "$PROBE_N" -i 0.2 -q "$PEER" 2>/dev/null | tail -2)
+  probe_rtt=$(printf '%s' "$probe" | awk -F'/' '/round-trip|avg/ {print $5}' | head -1)
+  probe_loss=$(printf '%s' "$probe" | grep -oE '[0-9.]+% packet loss' | grep -oE '^[0-9.]+' || echo 0)
+  echo "verified  icmp rtt ${probe_rtt:-?} ms  loss ${probe_loss}%"
+  if [ "$DELAY" != "-" ]; then
+    ok=$(python3 -c "print(1 if ${probe_rtt:-0} >= ${DELAY} else 0)" 2>/dev/null || echo 0)
+    [ "$ok" = 1 ] || die "shaping did not take effect (rtt ${probe_rtt:-?} < ${DELAY})"
+  fi
+  if [ "$PLR" != "-" ] && [ "$PLR" != "0.0" ]; then
+    want=$(python3 -c "print(round(float('$PLR') * 100 * 0.4))" 2>/dev/null || echo 0)
+    ok=$(python3 -c "print(1 if ${probe_loss:-0} >= ${want} else 0)" 2>/dev/null || echo 0)
+    [ "$ok" = 1 ] || die "loss did not take effect (${probe_loss}% seen, wanted >= ${want}%)"
+  fi
 fi
 
 # --- the Mac app, on its own screen (built and ready BEFORE the phone) ---
@@ -260,7 +393,7 @@ phone_event() { grep -o "\"event\":\"$1\"[^}]*" "$EVENTS" 2>/dev/null | tail -1;
 # started after this hub came up, and proves the new instance reaches it.
 for _ in $(seq 1 60); do [ -n "$(phone_event boot)" ] && break; sleep 1; done
 [ -n "$(phone_event boot)" ] || die "the fresh peer never reported boot to this hub (see $EVENTS and $LOGD/$PROFILE.hub.log)"
-printf '{"run":"%s","key":"%s","hold_s":%d,"profile":"%s"}\n' "$RUN_ID" "$KEY" "$PHONE_HOLD" "$PROFILE" >"$RUN/job.json"
+job_json "$PHONE_HOLD" >"$RUN/job.json"
 echo "phone     booted, job posted, waiting for its stack"
 for _ in $(seq 1 120); do [ -n "$(phone_event stack_up)" ] && break; sleep 1; done
 [ -n "$(phone_event stack_up)" ] || die "the phone stack never came up (see $EVENTS and $LOGD/$PROFILE.hub.log)"
@@ -468,6 +601,16 @@ for f in chat_text photo voice_note video_note; do
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$f" "$PROFILE" "${fbytes:-?}" "$FEATURE_BUDGET" "$measured" "${fstat:-FAIL}" \
     "sender_ms=${fsender:-?} peer_ms=${fpeer:-?} sha_match=${fsha:-?} media=${peer_media:-?} $fnote $shaped" >>"$TSV"
 done
+# The whitelist profile's own two rows: the moment ordinary allowed traffic
+# succeeded, the moment the rendezvous completed, and the gap between them.
+# The judging lives in journey_whitelist_rows.py, which has a unit test — the
+# PASS rule is the part no rig run should be spent discovering is wrong.
+if [ "$PROFILE" = whitelist ]; then
+  python3 "$WL_ROWS" --events "$EVENTS" --relay-log "$RELAY_LOG" --key "$KEY" \
+    --run-epoch "$RUN_EPOCH" --window-s "$WHITELIST_WINDOW_S" --summary "$summary" \
+    --shaped "$shaped" --fidelity "$WHITELIST_FIDELITY" >>"$TSV" \
+    || echo "note: the whitelist rows could not be built (see $EVENTS and $RELAY_LOG)"
+fi
 echo "rows      appended to $TSV"
 echo "evidence  $EVID/$PROFILE-NN.mov  $EVID/media/$PROFILE-*  $APPLOG  $LOGD/$PROFILE.phone.jsonl  $LOGD/$PROFILE.hub.log"
 tail -n 6 "$TSV"

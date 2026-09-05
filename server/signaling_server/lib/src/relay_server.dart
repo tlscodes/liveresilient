@@ -43,6 +43,36 @@ typedef SignalingLogSink =
 
 void _noopLogSink(String event, {String? callId, Object? error}) {}
 
+/// The single place a [SignalingLogSink] event becomes a text line.
+///
+/// Every line carries `at=<UTC ISO-8601>` first, because external readers
+/// (the T2 rig) take the MOMENT of an event off the log rather than from a
+/// separate channel. Formatting lives here, not at the call sites, so no
+/// event can be emitted without its instant.
+String formatSignalingLogLine(
+  String event, {
+  String? callId,
+  Object? error,
+  DateTime? at,
+}) {
+  final instant = (at ?? DateTime.now()).toUtc().toIso8601String();
+  final callIdPart = callId != null ? ' callId=$callId' : '';
+  final errorPart = error != null ? ' error=$error' : '';
+  return '[signaling_server] at=$instant $event$callIdPart$errorPart';
+}
+
+/// Body of the ordinary page served on a non-upgrade `GET /`.
+///
+/// This host answers both an ordinary HTTPS request and the WebSocket
+/// rendezvous on the same address and port. The page is static, contains no
+/// external references, and describes itself in one sentence.
+const String domesticHostPageHtml =
+    '<!DOCTYPE html>\n'
+    '<html lang="en">\n'
+    '<head><meta charset="utf-8"><title>Local page</title></head>\n'
+    '<body><p>This is an ordinary web page served by this host.</p></body>\n'
+    '</html>\n';
+
 /// A two-party relay room keyed by `callId`.
 class _Room {
   _Room(this.callId, this.lastActivity);
@@ -85,6 +115,11 @@ class _Room {
   /// the moment any member (re)joins. Reaped by the idle sweep once the
   /// grace elapses.
   DateTime? emptiedAt;
+
+  /// Set the first time this room reached two seated identities, so
+  /// `room_rendezvous_complete` is emitted exactly once per room even if a
+  /// seat is vacated and refilled.
+  bool rendezvousLogged = false;
 
   static const int maxSocketsPerSeat = 3;
 
@@ -215,8 +250,7 @@ class SignalingRelayServer {
 
   Future<void> _handleRequest(HttpRequest request) async {
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
-      request.response.statusCode = HttpStatus.upgradeRequired;
-      await request.response.close();
+      await _serveNonUpgrade(request);
       return;
     }
     // Transient source key for in-memory limiting only — never stored in
@@ -231,6 +265,24 @@ class SignalingRelayServer {
       return;
     }
     unawaited(_handleSocket(socket, sourceKey));
+  }
+
+  /// Answers a request that is not a WebSocket upgrade.
+  ///
+  /// `GET /` returns the ordinary static page ([domesticHostPageHtml]) so
+  /// this address and port serve a plain HTTPS service alongside the
+  /// rendezvous; every other non-upgrade request returns 404. The upgrade
+  /// path is untouched.
+  Future<void> _serveNonUpgrade(HttpRequest request) async {
+    final response = request.response;
+    if (request.method == 'GET' && request.uri.path == '/') {
+      response.statusCode = HttpStatus.ok;
+      response.headers.contentType = ContentType.html;
+      response.write(domesticHostPageHtml);
+    } else {
+      response.statusCode = HttpStatus.notFound;
+    }
+    await response.close();
   }
 
   Future<void> _handleSocket(WebSocket socket, String sourceKey) async {
@@ -423,6 +475,11 @@ class SignalingRelayServer {
     }
     room.members[senderKey] = <WebSocket>[socket];
     room.lastActivity = _now();
+    _logSink('room_member_joined', callId: callId);
+    if (room.members.length >= 2 && !room.rendezvousLogged) {
+      room.rendezvousLogged = true;
+      _logSink('room_rendezvous_complete', callId: callId);
+    }
     room.flushPendingTo(socket, senderKey);
     return room;
   }
