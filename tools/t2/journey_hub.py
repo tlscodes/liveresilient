@@ -158,20 +158,34 @@ CHUNK_MAX_N = 4096  # pieces per bundle
 # beats the floor.
 #
 # So the window starts at a FRACTION of a second of link — STREAM_W0, 0.1 s at
-# the floor rate — and each ack may add at most STREAM_RAMP_S seconds of link
-# to it. The limit is a TIME, not a ratio, because what must stay bounded is
-# how much LATER each acknowledgement arrives than the one before: a step of
-# rate * 0.1 s pushes the next ack 0.1 s further out, and the sender's smoothed
-# estimate moves about an eighth of the way toward each sample while its
-# variance term moves a quarter, so a fixed 0.1 s increment is one the estimate
-# always outruns (samples 0.2, 0.3, 0.4 s against timers of 0.30, 0.41, 0.53 s,
-# the margin widening every step). A RATIO fails at both ends: 2x doubles the
-# ack time each step and overtakes the timer by the fourth (0.8 s against
-# 0.79 s), while on a fast link any ratio is far too slow — measured here, 1.5x
-# per read left the window at 1.5 kB after 200 kB had already been carried,
-# because the hub reads 64 kB at a time and therefore acks once per 64 kB. The
-# time rule scales itself: on a 10 MB/s link 0.1 s is a megabyte, so the window
-# reaches its ceiling on the first ack.
+# the floor rate. Above that it grows GEOMETRICALLY, by STREAM_RAMP_G per ack,
+# and below it freely: a window that drains inside STREAM_FREE_S cannot produce
+# a late acknowledgement for a timer whose floor is longer than that, so on a
+# fast link, where 0.1 s is a megabyte, the ceiling is reached on the first ack.
+#
+# The ratio is what the sender's estimator can follow. Under steady geometric
+# growth its timer settles at about 1.9x the current round trip for ANY ratio
+# (the smoothed mean lags proportionally, and the variance term it adds four of
+# grows by exactly as much as the mean falls behind) — so the ratio is not what
+# decides safety in the steady state. What decides it is the START: after the
+# handshake the smoothed estimate is a millisecond, so the timer sits at its
+# floor for the first several samples while the estimate climbs an eighth of
+# the way per sample. A fixed increment of link-seconds is what pass 3 tried,
+# and it doubled, tripled and quadrupled the ack time across exactly those
+# first samples: measured, that cost a fixed ~9950 bytes of retransmission per
+# session, every byte of it inside the first three seconds and none afterwards,
+# in four consecutive runs whose windows and ack cadences were otherwise
+# entirely different. A ratio keeps those first steps proportional — 0.1 s,
+# 0.115, 0.132, 0.152 — so the estimate is never more than one step behind.
+#
+# Which is why the gentle ratio is only for those samples. After
+# STREAM_RAMP_WARM acks the estimate has moved two thirds of the way to the
+# real round trip and its timer is the 1.9x of the steady state, so the ramp
+# opens up to STREAM_RAMP_G_WARM. Measured: at a flat 1.15 the storm was gone
+# outright — rx_dupe 0 on a window of 45 kB records, against 9949 the run
+# before — but the window took so long to reach the link's size that the link
+# sat 30 % idle and carried 68.5 %. The ramp has two jobs, and opening up is
+# the second one.
 # The steady target is T_QUEUE = 2 s of link: throughput is W / RTT =
 # rate * T / (T + return), and the return path is a 50-byte line on its own
 # pipe, so a 2 s queue fills ~97 % of the link once the estimate has followed
@@ -198,13 +212,20 @@ CHUNK_MAX_N = 4096  # pieces per bundle
 # window 10 s instead of 25.
 STREAM_RATE_FLOOR_BPS = 2000  # the 16 kbit/s gate the lane is sized for
 STREAM_DEFAULTS = {"piece_bytes": 8192, "ack_bytes": 8192, "ack_interval_s": 2,
-                   "inflight_bytes": 32768, "stall_s": 10}
-STREAM_T_QUEUE_S = 2.0  # steady-state standing queue, seconds of link
+                   "inflight_bytes": 32768, "stall_s": 15}
+STREAM_T_QUEUE_S = 3.0  # steady-state standing queue, seconds of link
 STREAM_T_MEAS_S = 4.0  # rate window: long enough to smooth, short enough to react
 STREAM_W_MIN = 1448  # one segment: the floor the steady-state target never goes below
-STREAM_W0 = 200  # 0.1 s at the floor rate: the first ack beats the sender's RTO floor
-STREAM_RAMP_S = 0.1  # seconds of link a single ack may add to the window
-STREAM_ACK_MIN = 64  # smallest ack step, so even the first 200-byte window is clocked
+STREAM_W0 = 600  # 0.3 s at the floor rate: inside the 1 s initial RTO, and six
+                 # gentle ramp steps shorter than starting at 0.1 s
+STREAM_FREE_S = 0.1  # a window draining inside this is free: grow straight to it
+STREAM_RAMP_G = 1.15  # growth per ack while the sender's estimate is still cold
+STREAM_RAMP_G_WARM = 1.5  # growth per ack once it has had STREAM_RAMP_WARM samples;
+                          # 2.0 doubled the round trip at the handover and cost one
+                          # spurious retransmit, ~4.3 kB per session (measured)
+STREAM_RAMP_WARM = 8  # acks; 1 - (7/8)^8 = 2/3 of the way out of the handshake
+STREAM_RAMP_MIN = 16  # smallest ramp step, so a tiny window still moves
+STREAM_ACK_MIN = 512  # ack step floor; below it the whole window is one ack
 STREAM_LINE_MAX = 262144  # longest JSON line accepted on the stream lane
 STREAM_V = 3  # the hello's "v"
 STREAM_IDS_MAX = 4096  # ids per hello
@@ -762,6 +783,7 @@ class StreamSession(socketserver.StreamRequestHandler):
         self.counted = 0  # bytes of this record already added to the stats
         self.acked = 0  # have at the last ack line
         self.last_ack_t = time.monotonic()
+        self.acks_sent = 0  # round-trip samples the sender has had from this lane
         # the advertised window: rate samples (t_mono, n) per received payload
         # slice, the first-byte time, the cap in force and its range this session
         self.inflight_max = int(self.params["inflight_bytes"])
@@ -823,7 +845,18 @@ class StreamSession(socketserver.StreamRequestHandler):
             self._check_gen()
         if now - self.last_rx > 2 * self.stall_s:
             raise _StreamSilent()
-        if self.rec_id is not None and self.have > self.acked and now - self.last_ack_t >= self.ack_interval_s:
+        # An ack every ack_interval_s while a record is open, whether or not
+        # `have` advanced. The repeat is the KEEP-ALIVE, and it is what makes
+        # the sender's stall timeout mean "the hub is gone" instead of "my own
+        # bytes are not arriving": while the sender is inside a retransmit
+        # timeout nothing reaches this side, so an ack-only-on-progress rule
+        # goes quiet exactly when the sender is most fragile. Measured
+        # 2026-09-06 with a 10 s stall: windows 2 and 3 of a gate run each lost
+        # their session mid-record to that silence and paid the ramp again,
+        # carrying 58 % and 47 % where a single session carried 87-89 %. A
+        # repeated ack is idempotent for the sender — it credits at most what
+        # it has written — and costs 50 bytes.
+        if self.rec_id is not None and now - self.last_ack_t >= self.ack_interval_s:
             self._ack()
 
     def _check_gen(self) -> None:
@@ -883,6 +916,7 @@ class StreamSession(socketserver.StreamRequestHandler):
             Hub._stream_stats_write()
         self.acked = self.have
         self.last_ack_t = time.monotonic()
+        self.acks_sent += 1
         self._send_line({"ack": self.rec_id, "have": self.have, "inflight": self._window()})
 
     def _sample(self, n: int) -> None:
@@ -895,11 +929,11 @@ class StreamSession(socketserver.StreamRequestHandler):
     def _window(self) -> int:
         """The phone's inflight cap: a TARGET of rate * STREAM_T_QUEUE_S (never
         below STREAM_W_MIN, never above inflight_max), approached by at most
-        STREAM_RAMP_S seconds of link per ack. The ramp limit is the
-        load-bearing half — it bounds how much later each acknowledgement can
-        arrive than the one before, which is what keeps every one of them
-        inside the retransmit timer the previous steps built, so the sender's
-        estimate climbs with the window. The rate is a windowed mean over the
+        STREAM_RAMP_G per ack once the window is large enough to matter. The
+        ramp limit is the load-bearing half — it bounds how much later each
+        acknowledgement can arrive than the one before, which is what keeps
+        every one of them inside the retransmit timer the previous steps built,
+        so the sender's estimate climbs with the window. The rate is a windowed mean over the
         last STREAM_T_MEAS_S (or since the first byte, if less): deterministic,
         and idle time inside the window biases it DOWN, the safe direction."""
         now = time.monotonic()
@@ -910,9 +944,17 @@ class StreamSession(socketserver.StreamRequestHandler):
         span = min(STREAM_T_MEAS_S, now - self.first_rx_t)
         rate = sum(n for _, n in self.samples) / max(span, 0.05)
         target = max(STREAM_W_MIN, int(rate * STREAM_T_QUEUE_S))
-        # STREAM_ACK_MIN keeps the ramp moving when the measured rate is so
-        # low that a whole ramp interval of it rounds to nothing.
-        step = self.w + max(STREAM_ACK_MIN, int(rate * STREAM_RAMP_S))
+        # Any window that drains inside STREAM_FREE_S is reached at once — its
+        # ack cannot be late for a timer whose floor is longer than that — and
+        # above it the window grows geometrically, which is what the sender's
+        # estimator can follow: under a steady ratio its timer settles at about
+        # 1.9x the round trip whatever the ratio, but only AFTER the first few
+        # samples have pulled the estimate up out of the handshake. Those first
+        # samples are the whole risk, and a ratio is what keeps their steps
+        # proportional instead of doubling.
+        free = int(rate * STREAM_FREE_S)
+        g = STREAM_RAMP_G if self.acks_sent < STREAM_RAMP_WARM else STREAM_RAMP_G_WARM
+        step = max(free, int(self.w * g), self.w + STREAM_RAMP_MIN)
         w = min(self.inflight_max, step, target)
         self.w = w
         self.w_min_seen = min(self.w_min_seen, w)
@@ -933,8 +975,16 @@ class StreamSession(socketserver.StreamRequestHandler):
         fast as the pipe drained, so any jitter left it idle — measured at a
         half, the standing queue averaged 1.7 kB against a 4 kB window and the
         window carried 86.5 % of the link instead of the ~97 % the queue model
-        predicts."""
-        return max(STREAM_ACK_MIN, min(self.ack_bytes, self.w // 4))
+        predicts.
+
+        The floor is a whole window while the window is smaller than
+        STREAM_ACK_MIN, never a fixed byte count below it: with a 64-byte floor
+        the ramp's first steps acked every 64 bytes, which at 2000 B/s is
+        thirty-one 50-byte lines per second — as much traffic as the payload
+        itself — and the return pipe saturated, so the acks the sender was
+        waiting for arrived late and it retransmitted. That cost a measured
+        10 kB per session, the same ~9960 bytes in three consecutive runs."""
+        return max(min(self.w, STREAM_ACK_MIN), min(self.ack_bytes, self.w // 4))
 
     # -- the protocol
 

@@ -463,13 +463,16 @@ def main_cases(run_dir: Path, hub: HubProc, key, pub_b64: str) -> int:
     # The starting window drains well inside a platform RTO floor (~0.2 s) at
     # the rate this lane is sized for, and the ramp is gentler than doubling.
     start_drain = _hub_mod.STREAM_W0 / _hub_mod.STREAM_RATE_FLOOR_BPS
-    ok = (start_drain <= 0.15
-          and 0 < _hub_mod.STREAM_RAMP_S <= 0.15
+    ok = (start_drain <= 0.35
+          and 0 < _hub_mod.STREAM_FREE_S <= 0.15
+          and 1.0 < _hub_mod.STREAM_RAMP_G <= 1.25
+          and _hub_mod.STREAM_RAMP_G < _hub_mod.STREAM_RAMP_G_WARM
+          and _hub_mod.STREAM_RAMP_WARM >= 8
           and _hub_mod.STREAM_W0 < _hub_mod.STREAM_W_MIN <= 1500
           and _hub_mod.STREAM_W_MIN < STREAM_DEFAULTS["inflight_bytes"])
-    f += check("17 W0 drains inside the RTO floor and one ack adds <= RAMP_S of link", ok,
-               "W0=%s drain=%.2fs ramp_s=%s W_MIN=%s" % (
-                   _hub_mod.STREAM_W0, start_drain, _hub_mod.STREAM_RAMP_S, _hub_mod.STREAM_W_MIN))
+    f += check("17 W0 drains inside the RTO floor and the ramp above it is geometric", ok,
+               "W0=%s drain=%.2fs free_s=%s W_MIN=%s" % (
+                   _hub_mod.STREAM_W0, start_drain, _hub_mod.STREAM_FREE_S, _hub_mod.STREAM_W_MIN))
     return f
 
 
@@ -581,12 +584,12 @@ def window_cases(key, pub_b64: str) -> int:
         # This sender ignores the window (it paces by wall clock), so its first
         # slice arrives in one burst and the first rate sample reads high; every
         # step after it is bounded by the measured 2000 B/s.
-        step_max = int(2600 * _hub_mod.STREAM_RAMP_S)
-        late = [ws[i + 1] - ws[i] for i in range(len(ws) - 1)][-4:]
+        late = [(ws[i + 1] - ws[i]) / ws[i] for i in range(len(ws) - 1)][-4:]
         ok = (len(acks) >= 4 and all(isinstance(w, int) for w in ws)
               and all(ws[i] < ws[i + 1] for i in range(len(ws) - 1))
-              and ws[0] <= 2000 and ws[-1] <= 4200
-              and all(st <= step_max for st in late) and haves[0] <= 600)
+              and ws[0] <= 2000 and ws[-1] <= 6200
+              and all(g <= _hub_mod.STREAM_RAMP_G_WARM - 1 + 0.02 for g in late)
+              and haves[0] <= 1200)
         f += check("W1 paced 2000 B/s: the window ramps toward rate * T_QUEUE",
                    ok, f"acks={len(acks)} inflight={ws} haves={haves}")
         lane.close()
@@ -613,7 +616,7 @@ def window_cases(key, pub_b64: str) -> int:
         # and the ramp is what the window follows — it never jumps to the floor.
         ok = (len(acks) >= 1 and all(isinstance(w, int) and W0 <= w <= WMIN for w in ws)
               and all(ws[i] < ws[i + 1] for i in range(len(ws) - 1))
-              and all(ws[i + 1] - ws[i] <= int(400 * _hub_mod.STREAM_RAMP_S) + _hub_mod.STREAM_ACK_MIN
+              and all(ws[i + 1] <= int(ws[i] * _hub_mod.STREAM_RAMP_G) + _hub_mod.STREAM_RAMP_MIN
                       for i in range(len(ws) - 1)))
         f += check("W2 trickle: the window ramps in steps of the measured rate, "
                    "bounded by the W_MIN target", ok, f"acks={len(acks)} inflight={ws}")
@@ -657,10 +660,21 @@ def window_cases(key, pub_b64: str) -> int:
         grown = max(a.get("inflight", 0) for a in acks_a) if acks_a else 0
         time.sleep(4.5)
         lane.send(payload[16000:16500])
-        msg = lane.line(timeout=3.0)
-        ok = grown > W0 and msg is not None and msg.get("inflight") == WMIN and msg.get("have") == 16500
-        f += check("W8 idle 4.5 s inside a session: window falls to W_MIN", ok,
-                   f"grown_to={grown} then {json.dumps(msg)}")
+        # The idle is filled with keep-alive acks repeating the same `have`;
+        # the line that matters is the first one carrying the resumed offset.
+        keepalives = 0
+        msg = None
+        for _ in range(12):
+            line = lane.line(timeout=3.0)
+            if line is None:
+                break
+            if line.get("have") == 16500:
+                msg = line
+                break
+            keepalives += 1
+        ok = grown > W0 and msg is not None and msg.get("inflight") == WMIN and keepalives >= 1
+        f += check("W8 idle 4.5 s: keep-alives repeat, then the window is W_MIN", ok,
+                   f"grown_to={grown} keepalives={keepalives} then {json.dumps(msg)}")
         lane.close()
         # W1 companion: the hub log names the window's range at close.
         time.sleep(0.3)

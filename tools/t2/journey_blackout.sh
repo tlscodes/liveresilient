@@ -69,7 +69,11 @@ WINDOWS=${JOURNEY_BLACKOUT_WINDOWS:-3}
 BYTES=${JOURNEY_BLACKOUT_BYTES:-1024}
 V=${JOURNEY_BLACKOUT_V:-1}
 [ "$V" = 1 ] || [ "$V" = 2 ] || [ "$V" = 3 ] || { echo "ERROR: JOURNEY_BLACKOUT_V must be 1, 2 or 3 (got $V)" >&2; exit 1; }
-if [ "$V" -ge 2 ]; then PROBE_S=${JOURNEY_BLACKOUT_PROBE_S:-2}; else PROBE_S=${JOURNEY_BLACKOUT_PROBE_S:-20}; fi
+# v3 probes every second: the probe is a 60-byte GET, and half the probe period
+# is dead time at every window open (the ceiling model charges probe_s / 2).
+if [ "$V" = 3 ]; then PROBE_S=${JOURNEY_BLACKOUT_PROBE_S:-1}
+elif [ "$V" = 2 ]; then PROBE_S=${JOURNEY_BLACKOUT_PROBE_S:-2}
+else PROBE_S=${JOURNEY_BLACKOUT_PROBE_S:-20}; fi
 LIFETIME_S=${JOURNEY_BLACKOUT_LIFETIME_S:-21600}
 CHUNK_BYTES=${JOURNEY_BLACKOUT_CHUNK_BYTES:-8192}
 WINDOW_KBPS=${JOURNEY_BLACKOUT_WINDOW_KBPS:-16}
@@ -82,7 +86,7 @@ PLAN=${JOURNEY_BLACKOUT_PLAN:-'[{"kind":"text","bytes":200,"n":8},{"kind":"voice
 # the phone's plan is complete on its own. ack_interval_s has no hub argv (the
 # hub's default is the only value) and is mirrored here for job.json only.
 STREAM_PORT=${JOURNEY_BLACKOUT_STREAM_PORT:-$((HTTP_PORT + 1))}
-STALL_S=${JOURNEY_BLACKOUT_STALL_S:-10}
+STALL_S=${JOURNEY_BLACKOUT_STALL_S:-15}
 PIECE_BYTES=${JOURNEY_BLACKOUT_PIECE_BYTES:-8192}
 INFLIGHT_BYTES=${JOURNEY_BLACKOUT_INFLIGHT_BYTES:-32768}
 ACK_BYTES=${JOURNEY_BLACKOUT_ACK_BYTES:-8192}
@@ -244,19 +248,42 @@ fi
 echo "phone     $PHONE   run $RUN_ID"
 
 # --- the phone: fresh instance, boot (with its public key), then the job ---
+# `Launched application` is not proof of a FRESH instance: measured 2026-09-06,
+# a launch issued while the peer was already running attached to the live
+# process about every second time, so its startup — and the boot event this
+# runner waits for — never ran again, and the run died at the wait below. The
+# boot event is the only evidence that matters, so the launch is retried until
+# that event appears rather than trusted once.
+phone_event() { grep -o "\"event\":\"$1\"[^}]*" "$EVENTS" 2>/dev/null | tail -1; }
 launched=""
 for try in 1 2 3 4 5; do
   out=$(xcrun devicectl device process launch --terminate-existing --device "$PHONE" "$BUNDLE_ID" 2>&1)
-  if printf '%s' "$out" | grep -q 'Launched application'; then launched="try $try"; break; fi
   if printf '%s' "$out" | grep -q 'no app record'; then die "the journey peer is not installed on $PHONE"; fi
+  if printf '%s' "$out" | grep -q 'Launched application'; then
+    launched="try $try"
+    # 35 s covers the microphone probe's own 30 s fallback on a cold start.
+    for _ in $(seq 1 35); do [ -n "$(phone_event boot)" ] && break; sleep 1; done
+    [ -n "$(phone_event boot)" ] && break
+    echo "phone     launched but no boot event (try $try) — relaunching"
+    launched=""
+  fi
   sleep 2
 done
 [ -n "$launched" ] || die "the phone refused to launch $BUNDLE_ID five times"
-phone_event() { grep -o "\"event\":\"$1\"[^}]*" "$EVENTS" 2>/dev/null | tail -1; }
-for _ in $(seq 1 60); do [ -n "$(phone_event boot)" ] && break; sleep 1; done
 [ -n "$(phone_event boot)" ] || die "the fresh peer never reported boot"
 phone_event boot | grep -q '"blackout":true' || die "this peer install predates the blackout job (rebuild with journey_peer_install.sh)"
 [ -s "$RUN/peer_pubkey.b64" ] || die "the boot event carried no public key"
+# The stream lane is closed BEFORE the job is offered. Between arming and the
+# first cut the link is otherwise open and unshaped, and the phone's first
+# probe comes one probe_s after it arms: measured 2026-09-06, that was enough
+# for the whole 1.2 MB queue to arrive at LAN speed, and the run opened its
+# first window with nothing left to carry (`delivered=60/60`, 0 B carried).
+# The hub's HTTP port stays open here so the phone can still fetch the job and
+# report that it armed; the full cut follows at the top of the first window.
+if [ "$V" = 3 ]; then
+  sudo -n "$SHAPE" shape - - 1.0 "peer=$PEER,tcp=$RELAY_PORT+$STREAM_PORT" >/dev/null 2>&1 \
+    || die "could not close the stream lane before arming"
+fi
 job_line >"$RUN/job.json"
 for _ in $(seq 1 60); do [ -n "$(phone_event blackout_armed)" ] && break; sleep 1; done
 armed=$(phone_event blackout_armed)
