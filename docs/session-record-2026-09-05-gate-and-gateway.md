@@ -111,23 +111,23 @@ needs one phone rebuild first, because the Nagle change is on the phone side.
 
 The user's correction, and it changes the target:
 
-> The right path is not white phones. It is **the gateway they pass through** — the whitelist
+> The right path is not white phones. It is the gateway they pass through — the whitelist
 > itself. That is where a kilobyte must open for us and then widen until our app connects.
 > It is a new network over the same road. Nothing that resembles taking over someone's device
 > without consent; engineering only.
 
-So the subject is not a privileged handset and not a courier. It is the **gateway**: the
+So the subject is not a privileged handset and not a courier. It is the gateway: the
 allow-listed door that ordinary permitted traffic already goes through. Our app has to be
 ordinary traffic to that door, on the same host and the same port as a normal service, starting
 from a single kilobyte and widening on the same path until a live call stands on it.
 
 That reframes the three profiles into one line of work:
 
-- **the door opens** — one kilobyte crosses through the permitted door, live, never queued;
-- **the door widens** — the same host and the same port carry the rendezvous;
-- **the road becomes a network** — the call stands up and audio flows on that same path.
+- the door opens — one kilobyte crosses through the permitted door, live, never queued;
+- the door widens — the same host and the same port carry the rendezvous;
+- the road becomes a network — the call stands up and audio flows on that same path.
 
-The answer to the question the user asked at the end, plainly: **yes.** The main gateway — the
+The answer to the question the user asked at the end, plainly: yes. The main gateway — the
 place the allow-list lets traffic through — is the target. One kilobyte first, then the same
 path widened until the app is connected. The white-SIM handset is not the subject and the
 courier design is set aside as a separate idea, because the user's requirement is that nothing
@@ -229,9 +229,9 @@ rebuild is the gate to everything below.
    per-window ceiling. This is the number the original goal is waiting on.
 3. **Run the whitelist profile** and record its three numbers, with the negative controls and the
    queue-off proof in the row. Check first that the runner's dry mode prints what you expect.
-4. **Then the widening**, which is the direction Part 6 records: start the permitted door at one
-   kilobyte, grow it on the same path until the call stands, and record what each step buys. The
-   profile built here is the instrument that measures each step.
+4. **Then the widening**: start the permitted door at one kilobyte, grow it on the same path
+   until the call stands, and record what each step buys. The profile built here is the
+   instrument that measures each step.
 
 Two things to know before touching the rig, both learned the hard way this session and both in
 the knowledge tree: every stage of a monitor pipeline must flush per line or the events sit
