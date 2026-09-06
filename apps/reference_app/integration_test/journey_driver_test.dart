@@ -43,12 +43,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:call_core/call_core.dart' show CallPhase, DegradedMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:messaging/messaging.dart'
     show Attachment, DeliveryState, MediaKind, contentSha256Hex;
 import 'package:reference_app/main.dart';
+import 'package:reference_app/src/call_screen.dart' show CallScreen;
 import 'package:reference_app/src/chat_screen.dart' show ChatEntry;
 import 'package:reference_app/src/demo_feeds.dart' show demoQualitySourceLabel;
 import 'package:reference_app/src/live_chat_registry.dart';
@@ -112,6 +114,7 @@ Future<T?> _pumpUntil<T>(
   final deadline = DateTime.now().add(budget);
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(step);
+    _observeSurvival();
     final value = found();
     if (value != null) return value;
   }
@@ -140,6 +143,143 @@ bool _callOver() {
   final phase = _phaseOnScreen();
   return phase == 'Call ended' || phase == 'Call failed';
 }
+
+// ── The queue proof ─────────────────────────────────────────────────────────
+
+/// What this side observed about the store-and-forward path, sampled at every
+/// pump this test performs.
+///
+/// The whitelist profile fails when the call fell back to queued voice notes
+/// (design_whitelist.md, "Queue OFF, and proven off"), and
+/// `tools/t2/journey_whitelist_rows.py` reads `queued_clips` and
+/// `degraded_voice_notes` out of the `JOURNEY_APP summary` line this file
+/// prints. Nothing printed them before, so both parsed as absent, both
+/// compared unequal to 0, and the profile could never go green.
+///
+/// [voiceNoteTicks] is the number of sampled moments at which the [CallScreen]
+/// this app renders carried [DegradedMode.voiceNotes] — the value
+/// `LiveCallController` publishes from the live call state, read as a widget
+/// field rather than scraped from pixels. It is a SAMPLE, so [ticks] is
+/// printed beside it: a zero with no ticks behind it proves nothing.
+class SurvivalProof {
+  /// Sampled moments at which a [CallScreen] was on screen to read.
+  int ticks = 0;
+
+  /// Sampled moments whose phase was [CallPhase.degraded].
+  int degradedTicks = 0;
+
+  /// Sampled moments whose mode was [DegradedMode.voiceNotes] — the mode in
+  /// which `DegradedModeDriver` records and queues clips
+  /// (degraded_mode_driver.dart:170).
+  int voiceNoteTicks = 0;
+
+  /// Folds one sample in. The mode is judged on its own value, never gated on
+  /// the phase, so a mode seen without its phase still counts against the run.
+  void record({required CallPhase phase, required DegradedMode? mode}) {
+    ticks++;
+    if (phase == CallPhase.degraded) degradedTicks++;
+    if (mode == DegradedMode.voiceNotes) voiceNoteTicks++;
+  }
+}
+
+/// This run's observations. Sampled from [_observeSurvival] wherever the test
+/// pumps: the wait loops and the gauge sampling loop.
+final SurvivalProof survivalProof = SurvivalProof();
+
+void _observeSurvival() {
+  final elements = find.byType(CallScreen).evaluate();
+  if (elements.isEmpty) return;
+  final screen = elements.first.widget as CallScreen;
+  survivalProof.record(phase: screen.phase, mode: screen.degradedMode);
+}
+
+/// Counts the `put` records in a durable store-and-forward log
+/// (`DurableBundleStore`, packages/device_link): one JSON object per line,
+/// `{"op":"put",...}` when a bundle was queued and `{"op":"remove",...}` when
+/// one left. Puts are never rewritten by a delivery, so the count is "how
+/// many bundles this call ever queued", not "how many are still waiting".
+/// Blank lines and a torn trailing line are not puts.
+int storeAndForwardPutRecords(Iterable<String> lines) {
+  var puts = 0;
+  for (final line in lines) {
+    final text = line.trim();
+    if (text.isEmpty) continue;
+    Object? decoded;
+    try {
+      decoded = jsonDecode(text);
+    } catch (_) {
+      continue;
+    }
+    if (decoded is Map && decoded['op'] == 'put') puts++;
+  }
+  return puts;
+}
+
+/// The durable store-and-forward log a call opens for [callKey].
+///
+/// The path is the one `call_session.dart` builds for every session
+/// (`_defaultStoreAndForwardDir` + `survival_$callId.jsonl`, call_session.dart:
+/// 475-484 and 653-659). Both parts are private there, so this test states
+/// them again; `journey_driver_summary_test.dart` pins the two literals in
+/// that file so the copy cannot drift silently.
+File survivalLogFile(String callKey, {Directory? storeDir}) {
+  final dir =
+      storeDir ??
+      Directory('${Directory.systemTemp.path}/voice_call_kit_survival');
+  return File('${dir.path}/survival_$callKey.jsonl');
+}
+
+/// How many bundles [callKey]'s survival log ever accepted, or -1 when the log
+/// is absent.
+///
+/// -1 is deliberate and fails closed: the log is created when the session is
+/// built, so a missing file means the queue proof could not be taken at all,
+/// and `journey_whitelist_rows.py` fails a row whose `queued_clips` is not 0.
+int queuedBundlesFor(String callKey, {Directory? storeDir}) {
+  final file = survivalLogFile(callKey, storeDir: storeDir);
+  if (!file.existsSync()) return -1;
+  try {
+    return storeAndForwardPutRecords(file.readAsLinesSync());
+  } on FileSystemException {
+    return -1;
+  }
+}
+
+/// The one place the `JOURNEY_APP summary` line is built.
+///
+/// The orchestrator reads this line by name — `journey_run.sh:598-601` and
+/// `journey_whitelist_rows.py:157-158` — so the emitter is a function with a
+/// test on it rather than an inline string, and every key a consumer reads is
+/// asserted against this output in `journey_driver_summary_test.dart`.
+/// `screen` is free text and stays last; nothing may be appended after it.
+String journeySummaryLine({
+  required String outcome,
+  required int connectMs,
+  required int samples,
+  required int? rttMin,
+  required int? rttMax,
+  required double lossMax,
+  required int chipLive,
+  required int chipDemo,
+  required int reconnects,
+  required int attemptMax,
+  required int featuresPass,
+  required int featuresTotal,
+  required int queuedClips,
+  required int degradedVoiceNotes,
+  required int survivalTicks,
+  required String queueSource,
+  required String end,
+  required String screen,
+}) =>
+    'JOURNEY_APP summary outcome=${outcome.replaceAll(' ', '_')} '
+    'connect_ms=$connectMs samples=$samples rtt_min=${rttMin ?? '-'} '
+    'rtt_max=${rttMax ?? '-'} loss_max=$lossMax chip_live=$chipLive '
+    'chip_demo=$chipDemo reconnects=$reconnects attempt_max=$attemptMax '
+    'features_pass=$featuresPass/$featuresTotal '
+    'queued_clips=$queuedClips degraded_voice_notes=$degradedVoiceNotes '
+    'survival_ticks=$survivalTicks queue_source=$queueSource '
+    'end=${end.replaceAll(' ', '_')} screen=$screen';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -318,6 +458,7 @@ Future<FeatureOutcome> _await(
   var nextStatusAt = startedAt.add(_statusEvery);
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 250));
+    _observeSurvival();
     final now = DateTime.now();
     if (senderMs == null && senderDone()) {
       senderMs = now.difference(startedAt).inMilliseconds;
@@ -769,6 +910,7 @@ void main() {
       final holdUntil = DateTime.now().add(Duration(seconds: holdS));
       while (DateTime.now().isBefore(holdUntil)) {
         await tester.pump(const Duration(milliseconds: 500));
+        _observeSurvival();
         final phase = _phaseOnScreen();
         int? rtt;
         double? loss;
@@ -835,15 +977,35 @@ void main() {
         return (phase == 'Call ended' || phase == 'Call failed') ? true : null;
       }, budget: const Duration(seconds: 30));
     }
+    _observeSurvival();
     final endTexts = _visibleTexts().where((t) => t.length < 70).join(' | ');
     final passed = features.where((f) => f.status == 'PASS').length;
+    // The queue proof is read AFTER the call is over, so the log carries
+    // everything this call ever queued.
+    final queuedClips = queuedBundlesFor(key);
     print(
-      'JOURNEY_APP summary outcome=${(outcome ?? 'timeout').replaceAll(' ', '_')} '
-      'connect_ms=$connectMs samples=$samples rtt_min=${rttMin ?? '-'} '
-      'rtt_max=${rttMax ?? '-'} loss_max=$lossMax chip_live=$chipLive '
-      'chip_demo=$chipDemo reconnects=$reconnects attempt_max=$attemptMax '
-      'features_pass=$passed/${features.length} '
-      'end=${_phaseOnScreen().replaceAll(' ', '_')} screen=$endTexts',
+      journeySummaryLine(
+        outcome: outcome ?? 'timeout',
+        connectMs: connectMs,
+        samples: samples,
+        rttMin: rttMin,
+        rttMax: rttMax,
+        lossMax: lossMax,
+        chipLive: chipLive,
+        chipDemo: chipDemo,
+        reconnects: reconnects,
+        attemptMax: attemptMax,
+        featuresPass: passed,
+        featuresTotal: features.length,
+        queuedClips: queuedClips,
+        degradedVoiceNotes: survivalProof.voiceNoteTicks,
+        survivalTicks: survivalProof.ticks,
+        queueSource: queuedClips < 0
+            ? 'survival_log_absent+call_screen_mode'
+            : 'survival_log+call_screen_mode',
+        end: _phaseOnScreen(),
+        screen: endTexts,
+      ),
     );
     await tester.pump(const Duration(seconds: 1));
   });

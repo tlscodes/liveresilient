@@ -277,6 +277,7 @@ jobs:
         run: |
           if grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|AKIA[0-9A-Z]{16}|-----BEGIN PRIVATE KEY-----|xox[bpors]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{36}|sk-[A-Za-z0-9]{20,})' \
              --include='*.dart' --include='*.yaml' --include='*.json' --include='*.md' \
+             --include='*.py' --include='*.sh' --include='*.js' --include='*.ts' \
              --exclude-dir=.git --exclude-dir=.dart_tool --exclude-dir=.backups \
              --exclude='e2e_dev_tls.dart' . ; then
             echo "::error::possible secret committed"; exit 1
