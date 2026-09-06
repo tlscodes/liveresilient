@@ -30,6 +30,7 @@ class ResilientLaneIds {
   static const String primaryUdp = 'resilient.udp';
   static const String webSocketRelay = 'resilient.wss';
   static const String httpLongPoll = 'resilient.https';
+  static const String txtQuery = 'resilient.dns-valve';
   static const String localMesh = 'resilient.mesh';
 }
 
@@ -44,6 +45,7 @@ class ResilientLaneEndpoints {
     this.udpRemote,
     this.relayUri,
     this.longPollUri,
+    this.txtQueryValve,
     this.meshSender,
     this.meshProbe,
     this.meshConsent,
@@ -57,6 +59,13 @@ class ResilientLaneEndpoints {
 
   /// HTTP endpoint for the long-poll lane of last resort on the WAN.
   final Uri? longPollUri;
+
+  /// The TXT query valve, the last WAN path when the other lanes are
+  /// gone. Null when this build names no valve zone.
+  ///
+  /// The lane needs no helper process and nothing beyond a UDP socket,
+  /// so it is offered on phones exactly as it is on desktops.
+  final TxtQueryValve? txtQueryValve;
 
   /// Hands a payload to a nearby peer over the platform's link radio.
   final Future<SendResult> Function(List<int> payload)? meshSender;
@@ -72,6 +81,7 @@ class ResilientLaneEndpoints {
       udpRemote != null ||
       relayUri != null ||
       longPollUri != null ||
+      txtQueryValve != null ||
       meshSender != null;
 
   /// Public endpoints usable for development, and ONLY for development.
@@ -151,6 +161,11 @@ class ResilientLaneEndpoints {
   static const String wsEnvVar = 'FALLBACK_WS_ENDPOINT';
   static const String httpEnvVar = 'FALLBACK_HTTP_ENDPOINT';
 
+  /// Zone of the TXT query valve's authoritative responder. Naming it
+  /// turns the DNS lane on; the resolvers that reach it are discovered
+  /// per device, so no address belongs in the build.
+  static const String valveDomainEnvVar = 'FALLBACK_DNS_VALVE_DOMAIN';
+
   /// Hostname of a border relay deployed from
   /// `tools/cloudflare_relay_worker`. Naming it derives both WAN lane URIs
   /// from the worker's route schema, so a deployment sets one variable
@@ -198,6 +213,7 @@ class ResilientLaneEndpoints {
         udpRemote: defaults.udpRemote,
         relayUri: derived.relayUri,
         longPollUri: derived.longPollUri,
+        txtQueryValve: defaults.txtQueryValve,
         meshSender: defaults.meshSender,
         meshProbe: defaults.meshProbe,
         meshConsent: defaults.meshConsent,
@@ -206,6 +222,7 @@ class ResilientLaneEndpoints {
     final defaultsToUse = resolvedDefaults;
 
     final udp = read(udpEnvVar);
+    final valveDomain = read(valveDomainEnvVar);
     final ws = read(wsEnvVar);
     final http = read(httpEnvVar);
 
@@ -215,6 +232,9 @@ class ResilientLaneEndpoints {
       longPollUri: http == null
           ? defaultsToUse.longPollUri
           : _parseUri(httpEnvVar, http),
+      txtQueryValve: valveDomain == null
+          ? defaultsToUse.txtQueryValve
+          : TxtQueryValve(domain: valveDomain),
       meshSender: defaultsToUse.meshSender,
       meshProbe: defaultsToUse.meshProbe,
       meshConsent: defaultsToUse.meshConsent,
@@ -271,6 +291,9 @@ class ResilientFallbackLanes {
       httpLongPoll: endpoints.longPollUri == null
           ? null
           : HttpLongPollLane(sendUri: endpoints.longPollUri!),
+      txtQuery: endpoints.txtQueryValve == null
+          ? null
+          : TxtQueryLane.forValve(endpoints.txtQueryValve!),
       localMesh: mesh == null
           ? null
           : LocalMeshLane(peerSender: mesh, peerProbe: endpoints.meshProbe),
@@ -290,7 +313,8 @@ class ResilientFallbackLanes {
   /// fabric subtracts `costRank * 0.05` from live health when ranking, so
   /// these are the tie-breakers that decide the stack order before any
   /// traffic has flowed: direct UDP (0) → relay, one hop (1) → long-poll,
-  /// most bytes per frame (2) → local mesh (3). The mesh ranks LAST
+  /// most bytes per frame (2) → DNS valve, the last WAN path when the
+  /// others are gone (3) → local mesh (4). The mesh ranks LAST
   /// despite carrying no WAN cost: it depends on a third party's radio and
   /// willingness to relay, so it is a last resort, not a cheap default.
   /// Its higher [LaneProfile.energyRank] additionally demotes it when the
@@ -304,6 +328,7 @@ class ResilientFallbackLanes {
     TransportChannel? primaryUdp,
     TransportChannel? webSocketRelay,
     TransportChannel? httpLongPoll,
+    TransportChannel? txtQuery,
     TransportChannel? localMesh,
     DeviceLinkConsent? meshConsent,
   }) {
@@ -343,11 +368,20 @@ class ResilientFallbackLanes {
       ),
     );
     add(
+      txtQuery,
+      const LaneProfile(
+        id: ResilientLaneIds.txtQuery,
+        kind: LaneKind.internet,
+        costRank: 3,
+        energyRank: 1,
+      ),
+    );
+    add(
       localMesh,
       LaneProfile(
         id: ResilientLaneIds.localMesh,
         kind: LaneKind.localPeer,
-        costRank: 3,
+        costRank: 4,
         energyRank: 2,
         consent: meshConsent,
       ),
@@ -367,6 +401,7 @@ class ResilientFallbackLanes {
       ResilientLaneIds.primaryUdp,
       ResilientLaneIds.webSocketRelay,
       ResilientLaneIds.httpLongPoll,
+      ResilientLaneIds.txtQuery,
       ResilientLaneIds.localMesh,
     ]) {
       fabric.unregisterLane(id);

@@ -10,6 +10,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:adaptive_transport/adaptive_transport.dart' show TxtQueryValve;
 import 'package:call_core/call_core.dart';
 import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:call_signaling_adapter/call_signaling_adapter.dart';
@@ -148,6 +149,29 @@ const String defaultBorderRelayHost =
 ///
 /// No UDP lane — the relay speaks HTTP and WebSocket only. Set
 /// `FALLBACK_UDP_ENDPOINT` to add a direct media endpoint of your own.
+
+/// Zone the TXT query valve's authoritative responder answers for, or null
+/// when this build names none.
+///
+/// Read first from a compile-time `--dart-define=DNS_VALVE_DOMAIN=...`,
+/// which is the only configuration a phone build actually carries, and then
+/// from the process environment for desktop and test runs.
+///
+/// The lane stays off until a zone is named, and that is not a platform
+/// check: the lane runs anywhere now. It is that a valve aimed at a zone
+/// nobody answers spends its whole failure budget on timeouts before it
+/// reports DOWN, and that time comes out of the call's fallback budget.
+final String? txtQueryValveDomain = _readTxtQueryValveDomain();
+
+String? _readTxtQueryValveDomain() {
+  const String compiled = String.fromEnvironment('DNS_VALVE_DOMAIN');
+  final String named = compiled.isNotEmpty
+      ? compiled
+      : (Platform.environment['DNS_VALVE_DOMAIN'] ?? '');
+  final trimmed = named.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
 ResilientLaneEndpoints defaultBorderRelayEndpoints({
   required String callId,
   required CallRole role,
@@ -157,10 +181,22 @@ ResilientLaneEndpoints defaultBorderRelayEndpoints({
   // replaced rather than rejected, so an id with a colon or slash in it
   // still yields a usable session instead of failing the whole call.
   final session = callId.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '-');
-  return ResilientLaneEndpoints.cloudflareWorker(
+  final relay = ResilientLaneEndpoints.cloudflareWorker(
     workerHost: relayHost,
     session: session.isEmpty ? 'unnamed' : session,
     role: role == CallRole.initiator ? 'a' : 'b',
+  );
+  // The TXT query lane rides behind both WAN lanes: it is configured here
+  // so the fabric holds it from the start of the call. Every platform is
+  // offered it — the lane is a UDP socket and a DNS message, and a phone
+  // has both.
+  final valveDomain = txtQueryValveDomain;
+  return ResilientLaneEndpoints(
+    relayUri: relay.relayUri,
+    longPollUri: relay.longPollUri,
+    txtQueryValve: valveDomain == null
+        ? null
+        : TxtQueryValve(domain: valveDomain),
   );
 }
 
