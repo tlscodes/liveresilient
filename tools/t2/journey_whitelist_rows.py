@@ -36,6 +36,29 @@ non-allowed destination is RESET", "UDP 443 got nothing") was not proven. A
 timer alone is satisfied by a host that is simply unreachable, which is the
 same green the filter would produce switched off.
 
+THE DOOR IS JUDGED ON THE PHONE'S OWN CLOCK. `t_allowed` is printed as seconds
+from the run's start so it is comparable with `t_rendezvous`, but the run's
+start is the instant journey_run.sh began — before the fixtures, before the
+macOS build (which the runner itself waits up to 20 minutes for) and before the
+phone has the job. Judging that number against the window would measure the
+Mac's build time. The door's own anchor is `door_open.t_ms`, milliseconds from
+the FIRST GET of the loop to the first 200, and that is what the window judges.
+
+THE LOOP'S TOTALS ARE JUDGED, NOT DECORATION. `door_samples` is a FIELD of the
+phone's `ended`/`failed` report (journey_peer_app.dart:429/442
+`if (door != null) 'door_samples': door.samplesJson()`), never an event of its
+own, so it is read with `field_anywhere`. A run whose door answered once and
+then failed every later second is the "single lucky second" the loop exists to
+rule out: at least MIN_DOOR_OK_SAMPLES successes are required, and the
+successes must not be outnumbered by the failures.
+
+THE RENDEZVOUS NEEDS THE INDEPENDENT WITNESS. `room_rendezvous_complete` in the
+relay's log is the host's own statement that two members met in this run's
+room; the phone's `connected` event is the phone's statement about itself. When
+the relay line is missing the phone's number is still printed, as a diagnostic,
+but the row is a FAIL — a row whose independent witness can vanish without
+changing the verdict was never judging the witness.
+
   python3 tools/t2/journey_whitelist_rows.py --events ... --relay-log ... >> results.tsv
 """
 import argparse
@@ -45,6 +68,11 @@ import sys
 from datetime import datetime, timezone
 
 PROFILE = 'whitelist'
+
+# The loop reports one GET per interval for the whole job. One success proves a
+# moment; the design asks the loop to prove a window, so a run that never got a
+# second success is a FAIL however early the first one landed.
+MIN_DOOR_OK_SAMPLES = 2
 
 
 def load_events(text: str) -> list[dict]:
@@ -115,6 +143,13 @@ def _seconds(value: float | None) -> str:
     return '-' if value is None else f'{round(value, 1)}'
 
 
+def _number(value) -> float | None:
+    """The value as a number, or None. `True` is not a millisecond count."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
 def control_failure(event: dict, label: str, missing: str) -> str | None:
     """Judge one negative control, or say why it cannot be judged.
 
@@ -134,6 +169,27 @@ def control_failure(event: dict, label: str, missing: str) -> str | None:
     return f'{label}={event.get("outcome")}'
 
 
+def door_samples_failure(samples) -> str | None:
+    """Judge the loop's totals, or say why they cannot be judged.
+
+    The counts come from `WhitelistDoor.samplesJson()`, nested in the phone's
+    `ended`/`failed` report. Absent counts are a FAIL: without them the row's
+    sentence ("the door was open in that second, and stayed open") rests on the
+    single stamped sample.
+    """
+    if not isinstance(samples, dict):
+        return 'door_samples_absent'
+    ok = _number(samples.get('ok'))
+    fail = _number(samples.get('fail'))
+    if ok is None or fail is None:
+        return 'door_samples_absent'
+    if ok < MIN_DOOR_OK_SAMPLES:
+        return f'door_samples={int(ok)}ok<{MIN_DOOR_OK_SAMPLES}ok'
+    if fail > ok:
+        return f'door_samples={int(ok)}ok/{int(fail)}fail_majority_failed'
+    return None
+
+
 def _budget(window_s: float) -> str:
     """The budget column, printed the way the runner's other rows print it."""
     return str(int(window_s)) if float(window_s).is_integer() else str(window_s)
@@ -150,7 +206,9 @@ def build_rows(
     fidelity: str,
 ) -> list[list[str]]:
     door = last_event(events, 'door_open')
-    samples = last_event(events, 'door_samples')
+    # `door_samples` is a field of the `ended`/`failed` report, not an event.
+    samples = field_anywhere(events, 'door_samples')
+    samples_map = samples if isinstance(samples, dict) else {}
     closed = last_event(events, 'door_closed_elsewhere')
     quic = last_event(events, 'quic_dead')
     connected = last_event(events, 'connected')
@@ -159,11 +217,12 @@ def build_rows(
     # milliseconds, because the row's number is "seconds from run start" and
     # only the instant is comparable with the relay's clock.
     door_at = iso_epoch(door.get('at'))
+    door_t_ms = _number(door.get('t_ms'))
     if door_at is not None:
         t_allowed = door_at - run_epoch
         door_source = 'door_open.at'
-    elif isinstance(door.get('t_ms'), (int, float)):
-        t_allowed = float(door['t_ms']) / 1000.0
+    elif door_t_ms is not None:
+        t_allowed = door_t_ms / 1000.0
         door_source = 'door_open.t_ms'
     else:
         t_allowed, door_source = None, 'none'
@@ -183,7 +242,14 @@ def build_rows(
         if rv_source.startswith('relay_log')
         else f'relay_line=absent_for_callId_{key}'
     )
-    gap = None if (t_rendezvous is None or t_allowed is None) else t_rendezvous - t_allowed
+    # A gap is a difference of two wall-clock instants. When the door has no
+    # instant, only elapsed milliseconds from the loop's own start, there is no
+    # comparable number and the row says so instead of printing a mixture.
+    gap = (
+        None
+        if (t_rendezvous is None or t_allowed is None or door_source != 'door_open.at')
+        else t_rendezvous - t_allowed
+    )
 
     ice_type = field_anywhere(events, 'ice_pair_type')
     ice_protocol = field_anywhere(events, 'ice_pair_protocol')
@@ -195,8 +261,9 @@ def build_rows(
     reset_outcome = closed.get('outcome')
     quic_outcome = quic.get('outcome')
 
-    # The queue proof and the two negative controls judge BOTH rows: either
-    # one failing means the window was not what the rows would claim.
+    # The queue proof, the loop's totals and the two negative controls judge
+    # BOTH rows: any of them failing means the window was not what the rows
+    # would claim.
     shared_fail = []
     if has_blackout_event(events):
         shared_fail.append('blackout_event_present')
@@ -210,20 +277,37 @@ def build_rows(
     quic_fail = control_failure(quic, 'quic_control', 'no_quic_dead')
     if quic_fail:
         shared_fail.append(quic_fail)
+    samples_fail = door_samples_failure(samples)
+    if samples_fail:
+        shared_fail.append(samples_fail)
 
     door_fail = list(shared_fail)
     if not door:
         door_fail.append('no_door_open_event')
-    elif door.get('status') != 200:
-        door_fail.append(f"door_status={door.get('status')}")
+    else:
+        if door.get('status') != 200:
+            door_fail.append(f"door_status={door.get('status')}")
+        # The window judges the loop's own elapsed milliseconds, never seconds
+        # from the runner's start: everything before the phone receives the job
+        # (fixtures, the macOS build, the phone's boot) is not the door.
+        if door_t_ms is None:
+            door_fail.append('no_door_t_ms')
+        elif door_t_ms > window_s * 1000.0:
+            door_fail.append(f'door_t_ms>{window_s}s')
     if t_allowed is None:
         door_fail.append('no_t_allowed')
-    elif t_allowed > window_s:
-        door_fail.append(f't_allowed>{window_s}s')
 
     rv_fail = list(shared_fail)
     if t_rendezvous is None:
         rv_fail.append('no_t_rendezvous')
+    if t_relay is None:
+        # The relay's line is the independent witness. Without it the phone's
+        # self-report is a diagnostic, never the verdict.
+        rv_fail.append('no_relay_rendezvous_line')
+    if t_phone is None:
+        rv_fail.append('no_phone_connected')
+    elif t_relay is not None and abs(t_relay - t_phone) > window_s:
+        rv_fail.append(f'relay_phone_skew={round(abs(t_relay - t_phone), 1)}s')
     if gap is None:
         rv_fail.append('no_gap')
     elif abs(gap) > window_s:
@@ -234,7 +318,8 @@ def build_rows(
         rv_fail.append(f'rx_increasing={rx_increasing}')
 
     common_note = (
-        f'door_samples={samples.get("ok")}ok/{samples.get("fail")}fail '
+        f'door_samples={samples_map.get("ok")}ok/{samples_map.get("fail")}fail '
+        f'door_loop={"held" if samples_fail is None else "FAILED"} '
         f'door_closed_elsewhere_rst_ms={rst_ms} '
         f'door_closed_elsewhere_outcome={reset_outcome} '
         f'reset_control={"held" if reset_fail is None else "FAILED"} '
@@ -246,6 +331,7 @@ def build_rows(
     )
     door_note = (
         f'first ordinary HTTPS 200 t_allowed_source={door_source} '
+        f'door_t_ms={door.get("t_ms")} '
         f'status={door.get("status")} bytes={door.get("bytes")} '
         f'{common_note}'
     )

@@ -25,6 +25,13 @@ MIN_FREE_GB=${JOURNEY_MIN_FREE_GB:-12}
 [ "${free_gb:-0}" -ge "$MIN_FREE_GB" ] || { echo "ERROR: only ${free_gb} GB free (need $MIN_FREE_GB; JOURNEY_MIN_FREE_GB overrides); recordings are ~0.3-1.7 GB per profile" >&2; exit 1; }
 
 echo "matrix    ${PROFILES[*]}   (relay $PORT, ${free_gb} GB free)" | tee -a "$LOG"
+
+# The TXT query gate needs no rig — loopback only — so it runs first and its
+# red stops the matrix before an hour of shaped runs is spent.
+python3 "$REPO/tools/t2/journey_txt_query.py" >>"$LOG" 2>&1
+valve_rc=$?
+tail -1 "$LOG"
+[ "$valve_rc" -eq 0 ] || { echo "ERROR: journey_txt_query gate failed (see $LOG)" >&2; exit 1; }
 for p in "${PROFILES[@]}"; do
   echo "=== $p  $(date -u +%H:%M:%SZ) ===" | tee -a "$LOG"
   "$REPO/tools/t2/journey_run.sh" "$p" 2>&1 | tee -a "$LOG" | grep -E "^(profile|verified|phone|app|go|runs|rows|ERROR|note)" || true
