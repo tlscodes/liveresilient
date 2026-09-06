@@ -1,0 +1,6 @@
+{
+  "_why": "Rows in the wave ledger that closed without quoting the command whose exit decided the claim. tools/ledger_proof_gate.py fails on CHANGE against this list -- a new unproven row, or a listed row that has since acquired a proof and left this entry stale -- rather than on the standing debt. Adding an entry here is a recorded debt with a closing slot, never a way to make a red row quiet.",
+  "unproven_rows": {
+    "### موج ۵ · 6c و 6e — موج بسته شد · ۲۰۲۶-۰۸-۱۳ · سبز": "recorded 2026-09-07. The row lists the four files it added and the test counts written into them, which says what was authored, not what was run; no runner output is quoted. The evidence cannot be reconstructed honestly after the fact, because a suite passing today is not the suite that closed the wave on 2026-08-13. Closing slot: the next session that touches packages/signed_config quotes that run's output into the row as a dated re-verification, labelled as such, and removes this entry."
+  }
+}

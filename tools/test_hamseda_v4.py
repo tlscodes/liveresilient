@@ -23,6 +23,21 @@ def check(name, ok, detail=''):
 
 
 def main():
+    # Without this, running the file with no argument raised IndexError from
+    # inside json.load, which reads as a broken suite rather than as a missing
+    # input. It is excluded from tools/run_python_suites.py for the same
+    # reason it needs an argument: the capture lives outside the repository.
+    if len(sys.argv) < 2:
+        print(__doc__.strip(), file=sys.stderr)
+        print(
+            '\nno capture given: this suite runs against a token capture that '
+            'is not part of the repository.',
+            file=sys.stderr,
+        )
+        # Exit non-zero: a missing input must never read as a pass. `main` is
+        # called for its side effects and ends in sys.exit, so returning here
+        # would have exited 0.
+        sys.exit(2)
     d = json.load(open(sys.argv[1]))
     cols = [tuple(c) for c in d['cols']]
     n_rows, sec = d['n_rows'], d['sec']
