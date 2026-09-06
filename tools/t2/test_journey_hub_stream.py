@@ -209,8 +209,11 @@ def main_cases(run_dir: Path, hub: HubProc, key, pub_b64: str) -> int:
     lane = Lane()
     state = lane.hello(pub_b64, ["nothing-yet", "also-nothing"])
     params = {k: state.get(k) for k in STREAM_DEFAULTS}
-    ok = state.get("state") == {} and params == STREAM_DEFAULTS
-    f += check("1 hello state + params", ok, json.dumps(state)[:120])
+    # The phone STARTS at STREAM_W0 and learns the ceiling from inflight_max.
+    expect_params = dict(STREAM_DEFAULTS, inflight_bytes=_hub_mod.STREAM_W0)
+    ok = (state.get("state") == {} and params == expect_params
+          and state.get("inflight_max") == STREAM_DEFAULTS["inflight_bytes"])
+    f += check("1 hello state + params (W0 start, inflight_max)", ok, json.dumps(state)[:160])
     lane.close()
     # 2 a 200 B record in one go
     p2 = payload_of(200, 2)
@@ -218,8 +221,10 @@ def main_cases(run_dir: Path, hub: HubProc, key, pub_b64: str) -> int:
     lane = Lane()
     lane.hello(pub_b64, ["c2"])
     acks, done = send_whole(lane, "c2", p2, now_ms - 3_600_000, sig2)
-    ok = done == {"done": "c2", "sig_ok": True, "pubkey_match": True, "bytes": 200}
-    f += check("2 200 B → done", ok, json.dumps(done))
+    w2 = done.pop("inflight", None) if done else None
+    ok = (done == {"done": "c2", "sig_ok": True, "pubkey_match": True, "bytes": 200}
+          and isinstance(w2, int) and _hub_mod.STREAM_W0 <= w2 <= STREAM_DEFAULTS["inflight_bytes"])
+    f += check("2 200 B → done (carries inflight)", ok, f"{json.dumps(done)} inflight={w2}")
     ev = events(run_dir, "c2")
     ok = (len(ev) == 1 and ev[0].get("stream") is True and "chunks" not in ev[0]
           and ev[0]["bytes"] == 200 and ev[0]["sig_ok"] and ev[0]["pubkey_match"]
@@ -324,6 +329,8 @@ def main_cases(run_dir: Path, hub: HubProc, key, pub_b64: str) -> int:
     acks, done = send_whole(lane, "c8", bad8, now_ms, sig8)
     ev = events(run_dir, "c8")
     comp = json.loads((run_dir / "stream" / "c8.complete.json").read_text())
+    if done:
+        done.pop("inflight", None)
     ok = (done == {"done": "c8", "sig_ok": False, "pubkey_match": True, "bytes": 5000}
           and len(ev) == 1 and ev[0]["sig_ok"] is False and comp["sig_ok"] is False)
     f += check("8 tampered → sig_ok false", ok, f"{json.dumps(done)} complete={json.dumps(comp)}")
@@ -334,6 +341,8 @@ def main_cases(run_dir: Path, hub: HubProc, key, pub_b64: str) -> int:
     lane = Lane()
     lane.hello(b64(other), ["c9"])
     acks, done = send_whole(lane, "c9", p9, now_ms, other.sign(p9))
+    if done:
+        done.pop("inflight", None)
     ok = done == {"done": "c9", "sig_ok": True, "pubkey_match": False, "bytes": 3000}
     f += check("9 foreign key → pubkey_match false", ok, json.dumps(done))
     lane.close()
@@ -441,12 +450,26 @@ def main_cases(run_dir: Path, hub: HubProc, key, pub_b64: str) -> int:
     ok = reply.startswith(b"HTTP/1.1 413")
     f += check("16 chunked oversize → 413 then EOF", ok, reply.split(b"\r\n", 1)[0].decode(errors="replace"))
     # 17 the lane parameters are the module's defaults
-    f += check("17 params == STREAM_DEFAULTS", params == STREAM_DEFAULTS, json.dumps(params))
-    # The stall timeout must cover the queue latency the inflight cap creates
-    # on the shaped pipe plus two ack intervals (journey_hub.py, STREAM_DEFAULTS).
-    floor = params["inflight_bytes"] / _hub_mod.STREAM_RATE_FLOOR_BPS + 2 * params["ack_interval_s"]
-    f += check("17 stall_s covers inflight/rate + 2*ack_interval",
+    f += check("17 params == STREAM_DEFAULTS with the W0 start", params == expect_params, json.dumps(params))
+    # The stall timeout must cover the queue latency the inflight CEILING can
+    # create on the shaped pipe plus two ack intervals (journey_hub.py, the
+    # parameters block).
+    floor = _hub_mod.STREAM_T_QUEUE_S + 2 * params["ack_interval_s"]
+    f += check("17 stall_s covers T_QUEUE + 2*ack_interval",
                params["stall_s"] >= floor, "stall_s=%s floor=%.1f" % (params["stall_s"], floor))
+    # 2 * stall_s (the hub's silence close) must stay under the shortest cut.
+    f += check("17 2*stall_s < 60 s shortest cut", 2 * params["stall_s"] < 60,
+               "2*stall_s=%s" % (2 * params["stall_s"]))
+    # The starting window drains well inside a platform RTO floor (~0.2 s) at
+    # the rate this lane is sized for, and the ramp is gentler than doubling.
+    start_drain = _hub_mod.STREAM_W0 / _hub_mod.STREAM_RATE_FLOOR_BPS
+    ok = (start_drain <= 0.15
+          and 0 < _hub_mod.STREAM_RAMP_S <= 0.15
+          and _hub_mod.STREAM_W0 < _hub_mod.STREAM_W_MIN <= 1500
+          and _hub_mod.STREAM_W_MIN < STREAM_DEFAULTS["inflight_bytes"])
+    f += check("17 W0 drains inside the RTO floor and one ack adds <= RAMP_S of link", ok,
+               "W0=%s drain=%.2fs ramp_s=%s W_MIN=%s" % (
+                   _hub_mod.STREAM_W0, start_drain, _hub_mod.STREAM_RAMP_S, _hub_mod.STREAM_W_MIN))
     return f
 
 
@@ -474,11 +497,15 @@ def time_ack_case(key, pub_b64: str) -> int:
         state = lane.hello(pub_b64, [])
         payload = payload_of(100_000, 15)
         lane.header("c15", 0, 100_000, 100_000, int(time.time() * 1000), key.sign(payload))
-        lane.send(payload[:500])
+        # Fewer bytes than the byte threshold (half of the starting window), so
+        # only the ack_interval_s timer can produce this line.
+        lane.send(payload[:40])
         t0 = time.monotonic()
         msg = lane.line(timeout=3.5)
         dt = time.monotonic() - t0
-        ok = state.get("ack_bytes") == 1_000_000 and msg == {"ack": "c15", "have": 500} and dt < 3.0
+        ok = (state.get("ack_bytes") == 1_000_000 and msg is not None
+              and msg.get("ack") == "c15" and msg.get("have") == 40
+              and isinstance(msg.get("inflight"), int) and dt < 3.0)
         lane.close()
         return check("15 time-based ack within 3 s", ok, f"{json.dumps(msg)} after {dt:.2f}s")
     finally:
@@ -515,6 +542,137 @@ def stats_per_append_case(key, pub_b64: str) -> int:
         hub.stop()
 
 
+def window_cases(key, pub_b64: str) -> int:
+    """The advertised inflight window: W = clamp(rate * T_QUEUE, W_MIN, inflight_max),
+    at most double the previous value, measured over the last T_MEAS seconds, reset
+    to W0 by every hello; the ack threshold follows W // 4."""
+    W0, WMIN, WMAX = _hub_mod.STREAM_W0, _hub_mod.STREAM_W_MIN, STREAM_DEFAULTS["inflight_bytes"]
+    f = 0
+    run_dir = new_run_dir()
+    hub = HubProc(run_dir, [])
+    try:
+        now_ms = int(time.time() * 1000)
+        # W1/W6: paced at the floor rate (2000 B/s for 4 s) the window holds at W0
+        # and one ack arrives per W // 4 = 2000 B.
+        payload = payload_of(100_000, 21)
+        lane = Lane()
+        lane.hello(pub_b64, [])
+        lane.header("w1", 0, 100_000, 100_000, now_ms, key.sign(payload))
+        sent = 0
+        t0 = time.monotonic()
+        for i in range(16):
+            lane.send(payload[sent:sent + 500])
+            sent += 500
+            time.sleep(max(0.0, t0 + 0.25 * (i + 1) - time.monotonic()))
+        acks = []
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            try:
+                msg = lane.line(timeout=max(0.05, deadline - time.monotonic()))
+            except TimeoutError:
+                break
+            if msg is None:
+                break
+            acks.append(msg)
+        ws = [a.get("inflight") for a in acks]
+        haves = [a["have"] for a in acks]
+        # At 2000 B/s one ramp interval is 200 B, so the window climbs in
+        # 200-byte steps toward rate * T_QUEUE = 4000 B, and never jumps.
+        # This sender ignores the window (it paces by wall clock), so its first
+        # slice arrives in one burst and the first rate sample reads high; every
+        # step after it is bounded by the measured 2000 B/s.
+        step_max = int(2600 * _hub_mod.STREAM_RAMP_S)
+        late = [ws[i + 1] - ws[i] for i in range(len(ws) - 1)][-4:]
+        ok = (len(acks) >= 4 and all(isinstance(w, int) for w in ws)
+              and all(ws[i] < ws[i + 1] for i in range(len(ws) - 1))
+              and ws[0] <= 2000 and ws[-1] <= 4200
+              and all(st <= step_max for st in late) and haves[0] <= 600)
+        f += check("W1 paced 2000 B/s: the window ramps toward rate * T_QUEUE",
+                   ok, f"acks={len(acks)} inflight={ws} haves={haves}")
+        lane.close()
+        # W2: a trickle (200 B/s) clamps at the floor on every ack.
+        lane = Lane()
+        lane.hello(pub_b64, [])
+        lane.header("w2", 0, 100_000, 100_000, now_ms, key.sign(payload))
+        t0 = time.monotonic()
+        for i in range(8):
+            lane.send(payload[i * 100:(i + 1) * 100])
+            time.sleep(max(0.0, t0 + 0.5 * (i + 1) - time.monotonic()))
+        acks = []
+        deadline = time.monotonic() + 2.5
+        while time.monotonic() < deadline:
+            try:
+                msg = lane.line(timeout=max(0.05, deadline - time.monotonic()))
+            except TimeoutError:
+                break
+            if msg is None:
+                break
+            acks.append(msg)
+        ws = [a.get("inflight") for a in acks]
+        # 200 B/s * T_QUEUE = 400 B is below the floor, so the target is W_MIN
+        # and the ramp is what the window follows — it never jumps to the floor.
+        ok = (len(acks) >= 1 and all(isinstance(w, int) and W0 <= w <= WMIN for w in ws)
+              and all(ws[i] < ws[i + 1] for i in range(len(ws) - 1))
+              and all(ws[i + 1] - ws[i] <= int(400 * _hub_mod.STREAM_RAMP_S) + _hub_mod.STREAM_ACK_MIN
+                      for i in range(len(ws) - 1)))
+        f += check("W2 trickle: the window ramps in steps of the measured rate, "
+                   "bounded by the W_MIN target", ok, f"acks={len(acks)} inflight={ws}")
+        lane.close()
+        # W3/W5: a burst over loopback grows the window at most 2x per ack up to
+        # inflight_max, and the done line carries the last value.
+        big = payload_of(200_000, 23)
+        lane = Lane()
+        lane.hello(pub_b64, [])
+        lane.header("w3", 0, 200_000, 200_000, now_ms, key.sign(big))
+        lane.send(big)
+        acks, done = lane.until_done()
+        ws = [a.get("inflight") for a in acks]
+        # Loopback carries megabytes per second, so one ramp interval is far
+        # more than the ceiling: the window reaches inflight_max at once and
+        # stays there, which is the point of a time-based ramp.
+        ok = (len(ws) >= 2 and all(w <= WMAX for w in ws) and ws[-1] == WMAX
+              and done is not None and done.get("done") == "w3" and done.get("inflight") == WMAX)
+        f += check("W3 burst: a fast link reaches inflight_max at once; done carries it",
+                   ok, f"inflight={ws[:4]}..{ws[-2:]} done_inflight={done.get('inflight') if done else None}")
+        lane.close()
+        # W7: a fresh hello starts again at W0, whatever the last session reached.
+        lane = Lane()
+        state = lane.hello(pub_b64, [])
+        ok = (state.get("inflight_bytes") == W0 == _hub_mod.STREAM_W0
+              and state.get("inflight_max") == WMAX)
+        f += check("W7 new hello restarts at W0", ok, json.dumps({k: state.get(k) for k in ("inflight_bytes", "inflight_max")}))
+        # W8: after growing, 4.5 s of idle inside one session drops the window to the floor.
+        lane.header("w8", 0, 100_000, 100_000, now_ms, key.sign(payload))
+        lane.send(payload[:16000])
+        acks_a = []
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            try:
+                msg = lane.line(timeout=max(0.05, deadline - time.monotonic()))
+            except TimeoutError:
+                break
+            if msg is None:
+                break
+            acks_a.append(msg)
+        grown = max(a.get("inflight", 0) for a in acks_a) if acks_a else 0
+        time.sleep(4.5)
+        lane.send(payload[16000:16500])
+        msg = lane.line(timeout=3.0)
+        ok = grown > W0 and msg is not None and msg.get("inflight") == WMIN and msg.get("have") == 16500
+        f += check("W8 idle 4.5 s inside a session: window falls to W_MIN", ok,
+                   f"grown_to={grown} then {json.dumps(msg)}")
+        lane.close()
+        # W1 companion: the hub log names the window's range at close.
+        time.sleep(0.3)
+        text = hub.log_text()
+        w_lines = [ln for ln in text.splitlines() if " closed " in ln and " w=" in ln and "last=" in ln]
+        f += check("W9 close line carries w=min..max last=", len(w_lines) >= 1,
+                   w_lines[-1][:120] if w_lines else text[-200:].replace("\n", " | "))
+    finally:
+        hub.stop()
+    return f
+
+
 def main() -> int:
     key = Ed25519PrivateKey.generate()
     pub_b64 = b64(key)
@@ -528,6 +686,7 @@ def main() -> int:
         hub.stop()
     failures += stall_case(pub_b64)
     failures += time_ack_case(key, pub_b64)
+    failures += window_cases(key, pub_b64)
     failures += stats_per_append_case(key, pub_b64)
     print(f"failures={failures}")
     return 1 if failures else 0

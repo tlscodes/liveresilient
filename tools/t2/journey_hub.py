@@ -62,16 +62,23 @@ raw payload bytes, one writer per bundle. The wire, in order:
              ids in delivery order, ≤ 4096, each [A-Za-z0-9._-]{1,80}
   hub→phone  {"state":{"<id>":{"have":<int>,"complete":<bool>},...},
               "piece_bytes","ack_bytes","ack_interval_s","inflight_bytes",
-              "stall_s"}   only ids the hub knows (absent = 0); the lane
-             parameters are the hub's (STREAM_DEFAULTS, overridden by argv)
+              "inflight_max","stall_s"}   only ids the hub knows (absent = 0);
+             the lane parameters are the hub's (STREAM_DEFAULTS, overridden by
+             argv). inflight_bytes is the phone's STARTING cap (STREAM_W0, a
+             tenth of a second of link); every ack/done line then advertises
+             the cap in force, never above inflight_max, growing by at most
+             STREAM_RAMP_S seconds of link per ack so the sender's retransmit
+             timer can follow it (see the derivation above STREAM_DEFAULTS)
   phone→hub  {"id":"<id>","off":<have>,"len":<total-have>,"total":<int>,
               "created_ms":<int>,"sig":"<b64 64 B>"} then exactly len raw
              payload bytes; len 0 only when off == total (asks again for a
              lost done)
-  hub→phone  {"ack":"<id>","have":<int>}   every ack_bytes, every
-             ack_interval_s with new bytes, and at record end
+  hub→phone  {"ack":"<id>","have":<int>,"inflight":<int>}   every
+             ack_bytes_eff (= inflight // 4, at least STREAM_ACK_MIN, at most
+             ack_bytes), every ack_interval_s with new bytes, and at record
+             end; inflight is the phone's cap from here on
   hub→phone  {"done":"<id>","sig_ok":<bool>,"pubkey_match":<bool>,
-              "bytes":<total>}   implies have = total
+              "bytes":<total>,"inflight":<int>}   implies have = total
   hub→phone  {"error":"<code>","id":<id|null>,"have":<int|null>} then
              close; codes bad_hello wrong_run bad_id bad_sig bad_offset
              meta_mismatch too_large line_too_long preempted
@@ -115,18 +122,89 @@ CHUNK_MAX_N = 4096  # pieces per bundle
 
 # Stream lane parameters. The hub is their single source: argv overrides
 # these and the values in force are echoed to the phone in the hello reply.
-# stall_s is derived, not chosen: the phone keeps up to inflight_bytes queued in
-# the shaped phone->hub pipe, and anything the phone sends after that (its own
-# TCP ACKs, a FIN, the next hello's SYN) waits behind that queue —
-# inflight_bytes / 2000 B/s = 16.4 s at the 16 kbit/s gate. A stall timeout
-# below that queue latency fires on a healthy window (measured 2026-09-05:
-# with stall_s 15 every window lost one session to a false stall, ~35 s each).
-# stall_s = inflight_bytes / rate_floor + 2 * ack_interval_s + margin
-#         = 16.4 + 4 + ~4  -> 25 s; the hub closes after 2 * stall_s = 50 s of
-# silence, which must stay below the shortest cut (MIN_M * 60 = 60 s).
+#
+# THE INFLIGHT WINDOW IS ADVERTISED, NOT FIXED, AND THE QUEUE IT TARGETS IS
+# SHORTER THAN THE SENDER'S RETRANSMIT TIMER (2026-09-06, two measured passes).
+#
+# Pass 1. A fixed 32 KiB application window on a 2000 B/s pipe is a 16 s
+# standing queue. Measured with nettop on this socket over three photo-only
+# windows: rx_dupe 47-50 % of bytes_in, rtt_avg 21-26 s, 54-282 pipe drops per
+# window, util_carried 39-42 % against a 93.6 % ceiling. The phone's TCP cannot
+# track a 1 ms -> 16 s RTT jump, so it retransmits segments that are still
+# queued and the retransmits push the 50-slot droptail queue past its cliff.
+# The RECEIVER is the only side that sees the true in-order drain rate, so it
+# measures that rate over STREAM_T_MEAS_S and advertises the phone's cap in
+# every ack and done line:
+#     W = clamp(rate * STREAM_T_QUEUE_S, STREAM_W_MIN, inflight_max),  W <= 2 * W_prev
+#
+# Pass 2 measured a 1 s target queue with a one-segment start and the storm
+# survived: rx_dupe 81 % of bytes_in on a photo-only window, with the shaper
+# reporting ZERO drops in that window and a queue 7 slots deep out of 50. No
+# loss, no full queue, and still four bytes on the wire per byte delivered.
+# That falsifies "the queue is too deep" and names the real quantity.
+#
+# Pass 3 — the ramp, and why the START is what matters. What the sender cannot
+# tolerate is an acknowledgement that arrives after its retransmit timer fires,
+# and that timer is not derived from this link: a connection takes its first
+# round-trip sample from the handshake, which crosses an EMPTY pipe in about a
+# millisecond, so the timer sits at its platform floor — a fifth of a second —
+# while one full segment needs 0.72 s just to serialize at 2000 B/s. The first
+# window therefore times out before its first ack whatever its size, the copy
+# is queued behind the original, and Karn's rule then refuses a round-trip
+# sample from any retransmitted segment, so the estimate cannot grow to catch
+# up. That is the whole storm, and it explains the one thing queue depth never
+# could: the same run's small-record window sat at 4 % duplicates and carried
+# 91 % of the link, because a 200-byte record serializes in 0.1 s and its ack
+# beats the floor.
+#
+# So the window starts at a FRACTION of a second of link — STREAM_W0, 0.1 s at
+# the floor rate — and each ack may add at most STREAM_RAMP_S seconds of link
+# to it. The limit is a TIME, not a ratio, because what must stay bounded is
+# how much LATER each acknowledgement arrives than the one before: a step of
+# rate * 0.1 s pushes the next ack 0.1 s further out, and the sender's smoothed
+# estimate moves about an eighth of the way toward each sample while its
+# variance term moves a quarter, so a fixed 0.1 s increment is one the estimate
+# always outruns (samples 0.2, 0.3, 0.4 s against timers of 0.30, 0.41, 0.53 s,
+# the margin widening every step). A RATIO fails at both ends: 2x doubles the
+# ack time each step and overtakes the timer by the fourth (0.8 s against
+# 0.79 s), while on a fast link any ratio is far too slow — measured here, 1.5x
+# per read left the window at 1.5 kB after 200 kB had already been carried,
+# because the hub reads 64 kB at a time and therefore acks once per 64 kB. The
+# time rule scales itself: on a 10 MB/s link 0.1 s is a megabyte, so the window
+# reaches its ceiling on the first ack.
+# The steady target is T_QUEUE = 2 s of link: throughput is W / RTT =
+# rate * T / (T + return), and the return path is a 50-byte line on its own
+# pipe, so a 2 s queue fills ~97 % of the link once the estimate has followed
+# it there.
+#
+# The hello reply's inflight_bytes is the phone's STARTING cap, STREAM_W0;
+# inflight_max is the ceiling argv sets (--stream-inflight-bytes). The ack byte
+# threshold is a quarter of the window in force (never below STREAM_ACK_MIN), so
+# ramp is clocked by the window itself rather than by a fixed 8 KiB that a
+# 200-byte window would never reach. Idle time inside the measurement window
+# biases the rate DOWN, the safe error; every session starts again at
+# STREAM_W0, because the sender's timer starts again with it.
+#
+# stall_s is derived from the queue this design creates, not from the ceiling:
+# the phone's own TCP ACKs, its FIN and the next hello's SYN wait behind at
+# most T_QUEUE seconds of payload now, not inflight_max / rate_floor (16.4 s,
+# which is what forced stall_s 25 while the window was fixed). A stall timeout
+# below the queue latency fires on a healthy window (measured 2026-09-05: with
+# stall_s 15 against a 16 s queue every window lost one session to a false
+# stall, ~35 s each).
+# stall_s = T_QUEUE + 2 * ack_interval_s + margin = 2 + 4 + 4 -> 10 s; the hub
+# closes after 2 * stall_s = 20 s of silence, which must stay below the
+# shortest cut (MIN_M * 60 = 60 s), and a session that does go quiet costs the
+# window 10 s instead of 25.
 STREAM_RATE_FLOOR_BPS = 2000  # the 16 kbit/s gate the lane is sized for
 STREAM_DEFAULTS = {"piece_bytes": 8192, "ack_bytes": 8192, "ack_interval_s": 2,
-                   "inflight_bytes": 32768, "stall_s": 25}
+                   "inflight_bytes": 32768, "stall_s": 10}
+STREAM_T_QUEUE_S = 2.0  # steady-state standing queue, seconds of link
+STREAM_T_MEAS_S = 4.0  # rate window: long enough to smooth, short enough to react
+STREAM_W_MIN = 1448  # one segment: the floor the steady-state target never goes below
+STREAM_W0 = 200  # 0.1 s at the floor rate: the first ack beats the sender's RTO floor
+STREAM_RAMP_S = 0.1  # seconds of link a single ack may add to the window
+STREAM_ACK_MIN = 64  # smallest ack step, so even the first 200-byte window is clocked
 STREAM_LINE_MAX = 262144  # longest JSON line accepted on the stream lane
 STREAM_V = 3  # the hello's "v"
 STREAM_IDS_MAX = 4096  # ids per hello
@@ -684,6 +762,14 @@ class StreamSession(socketserver.StreamRequestHandler):
         self.counted = 0  # bytes of this record already added to the stats
         self.acked = 0  # have at the last ack line
         self.last_ack_t = time.monotonic()
+        # the advertised window: rate samples (t_mono, n) per received payload
+        # slice, the first-byte time, the cap in force and its range this session
+        self.inflight_max = int(self.params["inflight_bytes"])
+        self.samples: list[tuple[float, int]] = []
+        self.first_rx_t = None
+        self.w = min(STREAM_W0, self.inflight_max)
+        self.w_min_seen = self.w
+        self.w_max_seen = self.w
         self.request.settimeout(self.tick_s)
 
     def handle(self):
@@ -712,7 +798,8 @@ class StreamSession(socketserver.StreamRequestHandler):
                 self._account()
                 if self.gen is not None:
                     Hub._stream_stats_write()
-            sys.stderr.write("hub stream %s closed %s\n" % (self.peer, reason))
+            sys.stderr.write("hub stream %s closed %s w=%d..%d last=%d\n"
+                             % (self.peer, reason, self.w_min_seen, self.w_max_seen, self.w))
 
     # -- reading
 
@@ -796,7 +883,58 @@ class StreamSession(socketserver.StreamRequestHandler):
             Hub._stream_stats_write()
         self.acked = self.have
         self.last_ack_t = time.monotonic()
-        self._send_line({"ack": self.rec_id, "have": self.have})
+        self._send_line({"ack": self.rec_id, "have": self.have, "inflight": self._window()})
+
+    def _sample(self, n: int) -> None:
+        """One received payload slice of n bytes, for the rate estimate."""
+        now = time.monotonic()
+        if self.first_rx_t is None:
+            self.first_rx_t = now
+        self.samples.append((now, n))
+
+    def _window(self) -> int:
+        """The phone's inflight cap: a TARGET of rate * STREAM_T_QUEUE_S (never
+        below STREAM_W_MIN, never above inflight_max), approached by at most
+        STREAM_RAMP_S seconds of link per ack. The ramp limit is the
+        load-bearing half — it bounds how much later each acknowledgement can
+        arrive than the one before, which is what keeps every one of them
+        inside the retransmit timer the previous steps built, so the sender's
+        estimate climbs with the window. The rate is a windowed mean over the
+        last STREAM_T_MEAS_S (or since the first byte, if less): deterministic,
+        and idle time inside the window biases it DOWN, the safe direction."""
+        now = time.monotonic()
+        cutoff = now - STREAM_T_MEAS_S
+        self.samples = [s for s in self.samples if s[0] >= cutoff]
+        if self.first_rx_t is None:
+            return self.w
+        span = min(STREAM_T_MEAS_S, now - self.first_rx_t)
+        rate = sum(n for _, n in self.samples) / max(span, 0.05)
+        target = max(STREAM_W_MIN, int(rate * STREAM_T_QUEUE_S))
+        # STREAM_ACK_MIN keeps the ramp moving when the measured rate is so
+        # low that a whole ramp interval of it rounds to nothing.
+        step = self.w + max(STREAM_ACK_MIN, int(rate * STREAM_RAMP_S))
+        w = min(self.inflight_max, step, target)
+        self.w = w
+        self.w_min_seen = min(self.w_min_seen, w)
+        self.w_max_seen = max(self.w_max_seen, w)
+        return w
+
+    @property
+    def ack_bytes_eff(self) -> int:
+        """Ack every quarter of the window in force (never below
+        STREAM_ACK_MIN), so the ramp is clocked by the window itself: a fixed
+        8 KiB threshold is forty windows of payload while the window is still
+        200 bytes, and the ramp would run at one step per time-based ack
+        instead of one per fraction of a window.
+
+        A quarter, not a half, because the sender cannot write again until an
+        ack reaches it, and that ack crosses a queue as deep as the window
+        itself: acking at a half meant the sender refilled the pipe exactly as
+        fast as the pipe drained, so any jitter left it idle — measured at a
+        half, the standing queue averaged 1.7 kB against a 4 kB window and the
+        window carried 86.5 % of the link instead of the ~97 % the queue model
+        predicts."""
+        return max(STREAM_ACK_MIN, min(self.ack_bytes, self.w // 4))
 
     # -- the protocol
 
@@ -836,6 +974,10 @@ class StreamSession(socketserver.StreamRequestHandler):
             Hub._stream_stats_write()
         reply = {"state": state}
         reply.update({k: self.params[k] for k in STREAM_DEFAULTS})
+        # The phone STARTS at the floor link's window and follows the value
+        # advertised in every ack/done line, never above inflight_max.
+        reply["inflight_max"] = self.inflight_max
+        reply["inflight_bytes"] = self.w
         self._send_line(reply)
         sys.stderr.write("hub stream %s hello run=%s ids=%d known=%d gen=%d\n"
                          % (self.peer, run, len(ids), len(state), self.gen))
@@ -878,6 +1020,7 @@ class StreamSession(socketserver.StreamRequestHandler):
         remaining = length
         while remaining > 0:
             data = self._take(remaining)
+            self._sample(len(data))
             with Hub._lock:
                 self._check_gen()
                 with part.open("ab") as fh:
@@ -891,7 +1034,7 @@ class StreamSession(socketserver.StreamRequestHandler):
                 self._account()
                 Hub._stream_stats_write()
             remaining -= len(data)
-            if (self.have - self.acked >= self.ack_bytes
+            if (self.have - self.acked >= self.ack_bytes_eff
                     or time.monotonic() - self.last_ack_t >= self.ack_interval_s):
                 self._ack()
         if self.have > self.acked:
@@ -902,7 +1045,8 @@ class StreamSession(socketserver.StreamRequestHandler):
             done = Hub._stream_complete(bundle_id, meta, self.pubkey_b64)
             Hub._stream_stats_write()
         self._send_line({"done": bundle_id, "sig_ok": done["sig_ok"],
-                         "pubkey_match": done["pubkey_match"], "bytes": done["bytes"]})
+                         "pubkey_match": done["pubkey_match"], "bytes": done["bytes"],
+                         "inflight": self._window()})
         sys.stderr.write("hub stream %s done %s bytes=%d sig_ok=%s\n"
                          % (self.peer, bundle_id, done["bytes"], str(done["sig_ok"]).lower()))
         self.rec_id = None

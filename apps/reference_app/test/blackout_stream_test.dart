@@ -111,6 +111,7 @@ Map<String, Object?> _stateLine({
   Map<String, Object?> state = const {},
   int pieceBytes = 8192,
   int inflightBytes = 32768,
+  int? inflightMax,
   int stallS = 15,
 }) => {
   'state': state,
@@ -118,6 +119,7 @@ Map<String, Object?> _stateLine({
   'ack_bytes': 8192,
   'ack_interval_s': 2,
   'inflight_bytes': inflightBytes,
+  'inflight_max': ?inflightMax,
   'stall_s': stallS,
 };
 
@@ -243,14 +245,17 @@ void main() {
       expect(s.hub.bodies['a'], payloadA);
       expect(s.hub.rawBytes, 200);
       expect(s.lane.bytesWritten, 200);
+      // A state line without inflight_max caps at inflight_bytes.
       expect(s.lane.params!.toJson(), {
         'port': 8766,
         'piece_bytes': 8192,
         'ack_bytes': 8192,
         'ack_interval_s': 2,
         'inflight_bytes': 32768,
+        'inflight_max': 32768,
         'stall_s': 15,
       });
+      expect(s.lane.inflightCap, 32768);
     });
   });
 
@@ -486,5 +491,121 @@ void main() {
     expect(v2.items.length, 3);
     expect(v2.chunkBytes, 8192);
     expect(BlackoutPlan.parse({'v': 4, 'plan': plan}), isNull);
+  });
+
+  // ---- the advertised inflight window -------------------------------------
+
+  test('13 the state line inflight_bytes is the starting cap', () {
+    fakeAsync((fa) {
+      final s = _start(fa, [_bundle('big', payloadBig)]);
+      s.link.send(_stateLine(inflightBytes: 8000, inflightMax: 32768));
+      fa.flushMicrotasks();
+      expect(s.lane.inflightCap, 8000);
+      expect(s.lane.bytesWritten, 8000);
+      expect(s.lane.params!.inflightMax, 32768);
+    });
+  });
+
+  test('14 an ack inflight below the outstanding amount pauses writes, '
+      'then the cap governs every later write', () {
+    fakeAsync((fa) {
+      final s = _start(fa, [_bundle('big', payloadBig)]);
+      s.link.send(_stateLine());
+      fa.flushMicrotasks();
+      expect(s.lane.bytesWritten, 32768);
+      s.link.send({'ack': 'big', 'have': 8192, 'inflight': 4096});
+      fa.flushMicrotasks();
+      expect(s.lane.inflightCap, 4096);
+      expect(s.lane.bytesWritten, 32768, reason: '24576 outstanding > cap');
+      s.link.send({'ack': 'big', 'have': 32768, 'inflight': 4096});
+      fa.flushMicrotasks();
+      expect(s.lane.bytesWritten, 32768 + 4096);
+      s.link.send({'ack': 'big', 'have': 32768 + 4096, 'inflight': 4096});
+      fa.flushMicrotasks();
+      expect(s.lane.bytesWritten, 32768 + 8192);
+      expect(s.lane.bytesWritten - s.lane.bytesAcked, lessThanOrEqualTo(4096));
+      expect(s.outcome, isNull);
+    });
+  });
+
+  test('15 an ack without inflight keeps the cap in force', () {
+    fakeAsync((fa) {
+      final s = _start(fa, [_bundle('big', payloadBig)]);
+      s.link.send(_stateLine());
+      fa.flushMicrotasks();
+      s.link.send({'ack': 'big', 'have': 8192});
+      fa.flushMicrotasks();
+      expect(s.lane.inflightCap, 32768);
+      expect(s.lane.bytesWritten, 32768 + 8192);
+    });
+  });
+
+  test('16 an advertised window above inflight_max is clamped', () {
+    fakeAsync((fa) {
+      final s = _start(fa, [_bundle('big', payloadBig)]);
+      s.link.send(_stateLine(inflightBytes: 8000, inflightMax: 16384));
+      fa.flushMicrotasks();
+      expect(s.lane.bytesWritten, 8000);
+      s.link.send({'ack': 'big', 'have': 8000, 'inflight': 1000000});
+      fa.flushMicrotasks();
+      expect(s.lane.inflightCap, 16384);
+      expect(s.lane.bytesWritten, 8000 + 16384);
+    });
+  });
+
+  test('17 a malformed inflight is ignored, never bad_line', () {
+    fakeAsync((fa) {
+      final s = _start(fa, [_bundle('big', payloadBig)]);
+      s.link.send(_stateLine(inflightBytes: 8000));
+      fa.flushMicrotasks();
+      s.link.send({'ack': 'big', 'have': 4000, 'inflight': -1});
+      fa.flushMicrotasks();
+      expect(s.lane.inflightCap, 8000);
+      expect(s.lane.bytesAcked, 4000);
+      expect(s.lane.bytesWritten, 12000);
+      s.link.send({'ack': 'big', 'have': 8000, 'inflight': 'x'});
+      fa.flushMicrotasks();
+      expect(s.lane.inflightCap, 8000);
+      expect(s.lane.bytesWritten, 16000);
+      expect(s.outcome, isNull);
+    });
+  });
+
+  test('18 a done line carrying inflight governs the next record', () {
+    fakeAsync((fa) {
+      final s = _start(fa, [
+        _bundle('a', payloadA),
+        _bundle('big', payloadBig),
+      ]);
+      s.link.send(_stateLine());
+      fa.flushMicrotasks();
+      // a (200 B) then big's header and pieces up to the 32768 cap.
+      expect(s.lane.bytesWritten, 32768);
+      s.link.send({
+        'done': 'a',
+        'sig_ok': true,
+        'pubkey_match': true,
+        'bytes': 200,
+        'inflight': 4096,
+      });
+      fa.flushMicrotasks();
+      expect(s.lane.inflightCap, 4096);
+      expect(s.lane.bytesWritten, 32768, reason: '32568 of big outstanding');
+      s.link.send({'ack': 'big', 'have': 32568, 'inflight': 4096});
+      fa.flushMicrotasks();
+      expect(s.lane.bytesWritten, 32768 + 4096);
+      expect(s.dones, ['a:true:true']);
+    });
+  });
+
+  test('19 inflight_max below inflight_bytes clamps the starting cap', () {
+    fakeAsync((fa) {
+      final s = _start(fa, [_bundle('big', payloadBig)]);
+      s.link.send(_stateLine(inflightBytes: 32768, inflightMax: 16384));
+      fa.flushMicrotasks();
+      expect(s.lane.inflightCap, 16384);
+      expect(s.lane.bytesWritten, 16384);
+      expect(s.lane.params!.toJson()['inflight_max'], 16384);
+    });
   });
 }

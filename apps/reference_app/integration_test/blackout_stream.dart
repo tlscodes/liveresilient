@@ -7,9 +7,15 @@
 /// inflight cap, stall timeout) and how much of each id it already holds.
 /// The phone then writes, per record, a header line followed by the raw
 /// payload bytes from the hub's offset, in pieces of `piece_bytes`, never
-/// letting more than `inflight_bytes` ride unacknowledged. The next record's
-/// header goes out as soon as the previous record's bytes are written; the
-/// phone does not wait for its `done`. A `done` line, whatever its
+/// letting more than the inflight window ride unacknowledged. That window
+/// is the hub's: the state line's `inflight_bytes` to start, then the
+/// `inflight` field of every ack and done line, clamped at `inflight_max`
+/// (the hub measures its own drain rate and sizes the window to a few
+/// seconds of queue on any link; a fixed 32 KiB was a 16 s standing queue
+/// on the 16 kbit/s gate and cost half the link in TCP retransmits,
+/// measured 2026-09-06). The next record's header goes out as soon as the
+/// previous record's bytes are written; the phone does not wait for its
+/// `done`. A `done` line, whatever its
 /// `sig_ok`, is the only thing that reports a record through [onDone]; the
 /// caller removes it from its queue there. Any hub line resets the stall
 /// timer; an `error` line, a stall, or the hub closing ends the session and
@@ -21,11 +27,12 @@
 /// phone→hub  {"v":3,"run":"<run>","pubkey":"<b64>","ids":["<id>",...]}\n
 /// hub→phone  {"state":{"<id>":{"have":<int>,"complete":<bool>},...},
 ///             "piece_bytes":8192,"ack_bytes":8192,"ack_interval_s":2,
-///             "inflight_bytes":32768,"stall_s":15}\n
+///             "inflight_bytes":8000,"inflight_max":32768,"stall_s":25}\n
 /// phone→hub  {"id":"<id>","off":<have>,"len":<total-have>,"total":<total>,
 ///             "created_ms":<int>,"sig":"<b64>"}\n + exactly len raw bytes
-/// hub→phone  {"ack":"<id>","have":<int>}\n
-/// hub→phone  {"done":"<id>","sig_ok":<bool>,"pubkey_match":<bool>,"bytes":<total>}\n
+/// hub→phone  {"ack":"<id>","have":<int>,"inflight":<int>}\n
+/// hub→phone  {"done":"<id>","sig_ok":<bool>,"pubkey_match":<bool>,"bytes":<total>,
+///             "inflight":<int>}\n
 /// hub→phone  {"error":"<code>","id":<id|null>,"have":<int|null>}\n  then close
 /// ```
 library;
@@ -59,13 +66,22 @@ class BlackoutStreamParams {
     required this.ackIntervalS,
     required this.inflightBytes,
     required this.stallS,
-  });
+    int? inflightMax,
+  }) : inflightMax = inflightMax ?? inflightBytes;
 
   final int port;
   final int pieceBytes;
   final int ackBytes;
   final int ackIntervalS;
+
+  /// The inflight cap the session STARTS with (the state line's
+  /// `inflight_bytes`); every ack/done line may replace it, see
+  /// [BlackoutStreamLane.inflightCap].
   final int inflightBytes;
+
+  /// The ceiling no advertised window may exceed (`inflight_max`; a hub
+  /// that omits it caps at [inflightBytes], the pre-window behaviour).
+  final int inflightMax;
   final int stallS;
 
   /// The `"port"` of a v3 plan's `"stream"` map; null when absent or not
@@ -87,6 +103,7 @@ class BlackoutStreamParams {
     final ackBytes = _positiveInt(state['ack_bytes']);
     final ackIntervalS = _positiveInt(state['ack_interval_s']);
     final inflightBytes = _positiveInt(state['inflight_bytes']);
+    final inflightMax = _positiveInt(state['inflight_max']);
     final stallS = _positiveInt(state['stall_s']);
     if (pieceBytes == null ||
         ackBytes == null ||
@@ -101,6 +118,7 @@ class BlackoutStreamParams {
       ackBytes: ackBytes,
       ackIntervalS: ackIntervalS,
       inflightBytes: inflightBytes,
+      inflightMax: inflightMax,
       stallS: stallS,
     );
   }
@@ -116,6 +134,7 @@ class BlackoutStreamParams {
     'ack_bytes': ackBytes,
     'ack_interval_s': ackIntervalS,
     'inflight_bytes': inflightBytes,
+    'inflight_max': inflightMax,
     'stall_s': stallS,
   };
 }
@@ -280,6 +299,12 @@ class BlackoutStreamLane {
   /// The lane parameters once the hub's state line arrived; null before.
   BlackoutStreamParams? params;
 
+  /// The inflight cap in force: the state line's `inflight_bytes` at first,
+  /// then whatever the latest ack/done line advertised (clamped at
+  /// `inflight_max`). 0 before the state line.
+  int get inflightCap => _cap;
+  int _cap = 0;
+
   final List<_Slot> _slots = <_Slot>[];
   final Map<String, _Slot> _byId = <String, _Slot>{};
   final List<int> _lineBuf = <int>[];
@@ -415,6 +440,7 @@ class BlackoutStreamLane {
       return;
     }
     params = parsed;
+    _cap = min(parsed.inflightBytes, parsed.inflightMax);
     _armStall(parsed.stallS);
     for (final slot in _slots) {
       final entry = state[slot.record.id];
@@ -449,6 +475,7 @@ class BlackoutStreamLane {
       _fail('bad_line');
       return;
     }
+    _adoptWindow(msg);
     final slot = _byId[id];
     if (slot == null) {
       log?.call('stream: ack for unknown id $id');
@@ -458,12 +485,27 @@ class BlackoutStreamLane {
     _pump();
   }
 
+  /// Adopts the hub's advertised inflight window when the line carries one:
+  /// a positive int, clamped at `inflight_max`. Anything else is logged and
+  /// ignored, never a `bad_line` — the cap is flow control, not framing.
+  void _adoptWindow(Map<String, Object?> msg) {
+    if (!msg.containsKey('inflight')) return;
+    final w = msg['inflight'];
+    final p = params;
+    if (w is int && w > 0 && p != null) {
+      _cap = min(w, p.inflightMax);
+    } else {
+      log?.call('stream: ignoring inflight $w');
+    }
+  }
+
   void _onDoneLine(Map<String, Object?> msg) {
     final id = msg['done'];
     if (id is! String) {
       _fail('bad_line');
       return;
     }
+    _adoptWindow(msg);
     final slot = _byId[id];
     if (slot == null) {
       log?.call('stream: done for unknown id $id');
@@ -508,7 +550,9 @@ class BlackoutStreamLane {
 
   /// Writes what the cap allows: the current record's next pieces, then
   /// the next record's header and its pieces, until the inflight amount
-  /// reaches `inflight_bytes` or nothing is left to write.
+  /// reaches [inflightCap] or nothing is left to write. A cap that shrinks
+  /// below what is already outstanding simply pauses writes until acks
+  /// bring the amount under it again.
   void _pump() {
     final p = params;
     if (p == null) return;
@@ -528,11 +572,8 @@ class BlackoutStreamLane {
         continue;
       }
       final inflight = bytesWritten - bytesAcked;
-      if (inflight >= p.inflightBytes) return;
-      final n = min(
-        p.pieceBytes,
-        min(slot.remaining, p.inflightBytes - inflight),
-      );
+      if (inflight >= _cap) return;
+      final n = min(p.pieceBytes, min(slot.remaining, _cap - inflight));
       if (n <= 0) return;
       _write(slot.record.payload.sublist(slot.sent, slot.sent + n));
       if (_isFinished) return;

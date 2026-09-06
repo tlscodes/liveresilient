@@ -82,7 +82,7 @@ PLAN=${JOURNEY_BLACKOUT_PLAN:-'[{"kind":"text","bytes":200,"n":8},{"kind":"voice
 # the phone's plan is complete on its own. ack_interval_s has no hub argv (the
 # hub's default is the only value) and is mirrored here for job.json only.
 STREAM_PORT=${JOURNEY_BLACKOUT_STREAM_PORT:-$((HTTP_PORT + 1))}
-STALL_S=${JOURNEY_BLACKOUT_STALL_S:-25}
+STALL_S=${JOURNEY_BLACKOUT_STALL_S:-10}
 PIECE_BYTES=${JOURNEY_BLACKOUT_PIECE_BYTES:-8192}
 INFLIGHT_BYTES=${JOURNEY_BLACKOUT_INFLIGHT_BYTES:-32768}
 ACK_BYTES=${JOURNEY_BLACKOUT_ACK_BYTES:-8192}
@@ -232,7 +232,10 @@ for hub_try in 1 2 3; do
 done
 [ -n "$hub_up" ] || die "the hub never came up on $SELF:$HTTP_PORT"
 if [ "$V" = 3 ]; then
-  echo "profile   blackout v3 stream lane  (no path; random blocked ${MIN_M}-${MAX_M} min, window ${WINDOW_S}s x ${WINDOWS} shaped ${WINDOW_KBPS} kbit/s, probe ${PROBE_S}s, stream port ${STREAM_PORT} piece ${PIECE_BYTES} B inflight ${INFLIGHT_BYTES} B stall ${STALL_S}s, gate ${GATE_PCT}%)"
+  # The inflight window is the hub's: it starts at journey_hub.py's STREAM_W0
+  # and every ack advertises the value in force, never above INFLIGHT_BYTES.
+  W0=$(python3 -c "import sys; sys.path.insert(0, '$REPO/tools/t2'); import journey_hub as h; print(min(h.STREAM_W0, $INFLIGHT_BYTES))" 2>/dev/null || echo '?')
+  echo "profile   blackout v3 stream lane  (no path; random blocked ${MIN_M}-${MAX_M} min, window ${WINDOW_S}s x ${WINDOWS} shaped ${WINDOW_KBPS} kbit/s, probe ${PROBE_S}s, stream port ${STREAM_PORT} piece ${PIECE_BYTES} B inflight ${W0}..${INFLIGHT_BYTES} B hub-advertised, stall ${STALL_S}s, gate ${GATE_PCT}%)"
 elif [ "$V" = 2 ]; then
   echo "profile   blackout v2 gate  (no path; random blocked ${MIN_M}-${MAX_M} min, window ${WINDOW_S}s x ${WINDOWS} shaped ${WINDOW_KBPS} kbit/s, probe ${PROBE_S}s, chunk ${CHUNK_BYTES} B)"
 else
@@ -354,6 +357,13 @@ if [ "$V" -ge 2 ]; then
     carried_list="${carried_list:+$carried_list,}${w_carried}%@${w_open_s}s"
     ceiling_list="${ceiling_list:+$ceiling_list,}${w_ceiling}%"
     open_s_list="${open_s_list:+$open_s_list,}$w_open_s"
+    # The receiver's TCP view of the live stream socket at close. rx_dupe and
+    # rx_ooo are the retransmissions the pipe totals cannot separate from
+    # payload (2026-09-06: rx_dupe was 50 % of bytes_in at a fixed 32 KiB
+    # window; the advertised window is falsified if it stays above ~5 % or
+    # rtt_avg above ~6 s).
+    tcp_row=$(nettop -L 1 -n -m tcp -J bytes_in,rx_dupe,rx_ooo,re-tx,rtt_avg 2>/dev/null | grep -E ":${STREAM_PORT}<->[0-9]" | tail -n 1)
+    echo "tcp       window $w stream socket ${tcp_row:-(none live)}  (name,bytes_in,rx_dupe,rx_ooo,re-tx,rtt_avg)"
     # The shaper's view at close; pipe 1's Drp minus the open baseline above
     # is the drop count that explains any gap between util_carried and ceiling.
     { echo "# window $w close run=$RUN_ID $(date -u +%H:%M:%SZ) open_ms=$open_ms close_ms=$close_ms  (this window's drops = this Drp - open Drp)"; sudo -n "$SHAPE" status; } >>"$LOGD/$PROFILE.shape.log" 2>&1
