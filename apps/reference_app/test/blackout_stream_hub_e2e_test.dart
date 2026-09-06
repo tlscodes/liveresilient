@@ -56,6 +56,14 @@ final List<RegExp> _hubErrorPatterns = [
   RegExp(r'preempted'),
 ];
 
+/// An abortive close arriving at the hub: the peer sent a reset instead of a
+/// clean shutdown. Errno 54 is ECONNRESET on macOS, 104 on Linux; 32 is EPIPE
+/// on a hub write that raced the reset.
+final RegExp _abortiveClose = RegExp(
+  r'closed io \[Errno (54|104|32)\]|'
+  r'closed io .*(Connection reset by peer|Broken pipe)',
+);
+
 /// cwd for this suite is apps/reference_app.
 String get _repoRoot => Directory.current.parent.parent.path;
 
@@ -138,6 +146,27 @@ class _HubProcess {
   List<String> get errorLines =>
       log.where((l) => _hubErrorPatterns.any((p) => p.hasMatch(l))).toList();
 
+  /// Error lines the hub raised on its own behalf.
+  ///
+  /// The cut connection's reset is not one of them. Run 1 calls
+  /// `Socket.destroy()` on purpose, and an abortive close reaches the hub as
+  /// ECONNRESET or as EOF depending on whether unread acknowledgement bytes
+  /// were sitting in the receive buffer at that instant — a kernel-level race
+  /// this test cannot and should not control. Measured before this was
+  /// separated out: two failures in three consecutive local runs, every one of
+  /// them with all sixty bundles delivered, hash-verified and accounted for.
+  /// The assertion was failing on the artifact of its own scenario.
+  ///
+  /// Every other error line still fails the gate, including an abortive close
+  /// on the resumed connection or on the hub's own probe connections, none of
+  /// which this test causes. [cutPeer] is the cut link's own address, taken
+  /// from the socket rather than guessed from the log: the hub accepts an
+  /// earlier short-lived stream connection before this one, so "the first
+  /// stream peer in the log" is not the connection that gets cut.
+  List<String> unexpectedErrorLines(String cutPeer) => errorLines
+      .where((l) => !(l.contains(' $cutPeer ') && _abortiveClose.hasMatch(l)))
+      .toList();
+
   Future<int> stop() async {
     process.kill();
     return process.exitCode;
@@ -174,8 +203,15 @@ Future<int> _postBoot(String pubkeyB64) async {
 /// the first time it returns true and drops that and every later write.
 class _SocketLink implements StreamLink {
   _SocketLink(this._socket, {this.cutWhen}) {
+    // Read now, not lazily: once the socket is destroyed the port is gone, and
+    // the cut is exactly when this value is needed.
+    peer = '${_socket.address.address}:${_socket.port}';
     _socket.done.then<void>((_) {}, onError: (Object _) {});
   }
+
+  /// This link's local address as the hub prints it in its log, which is how
+  /// the assertions name the one connection this test cuts on purpose.
+  late final String peer;
 
   final Socket _socket;
   final bool Function()? cutWhen;
@@ -408,7 +444,19 @@ void main() {
       expect(stats['bytes_carried'], _planBytes, reason: '$stats');
       expect(stats['records'], _planBundles, reason: '$stats');
       expect(stats['connections'], 2, reason: '$stats');
-      expect(hub!.errorLines, isEmpty, reason: hub!.log.join('\n'));
+      expect(
+        hub!.unexpectedErrorLines(run1.link.peer),
+        isEmpty,
+        reason: hub!.log.join('\n'),
+      );
+      // Only the connection run 1 destroys may close abortively, and only once.
+      expect(
+        hub!.errorLines.length,
+        lessThanOrEqualTo(1),
+        reason:
+            'at most the cut connection may close abortively:\n'
+            '${hub!.log.join('\n')}',
+      );
     },
     timeout: const Timeout(Duration(seconds: 120)),
   );

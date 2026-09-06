@@ -34,8 +34,17 @@ import '../bin/load_soak.dart' as harness;
 /// leak predicate is the MINIMUM growth over consecutive identical runs
 /// (early-exit on the first delta under the bound): a plateauing high-water
 /// mark produces a small delta within a few runs, while a genuine per-room
-/// leak grows on EVERY run and keeps all deltas over the bound. At ~2-3 s
-/// per 100-room run, the worst case (~5 runs) stays far inside the timeout.
+/// leak grows on EVERY run and keeps all deltas over the bound.
+///
+/// Cost, measured 2026-09-07 on this Mac: 4.3-8.6 s per 100-room run, 30 s for
+/// the full five alone. The "~2-3 s per run, far inside the timeout" that used
+/// to be written here had gone stale, and the margin it promised did not
+/// exist: with other suites running on the same machine only two of the five
+/// runs finished inside the old 60 s watchdog, and the test failed with every
+/// functional signal clean — 2000/2000 frames delivered, zero errors, zero
+/// rooms after teardown, on both completed runs. See the watchdog note at the
+/// end of the test for why the answer is a wider watchdog rather than fewer
+/// runs.
 const int maxLeakProbeRuns = 5;
 
 void expectCleanRun(harness.LoadSoakSummary summary, int rooms, int messages) {
@@ -85,7 +94,14 @@ void main() {
         '(reported, not gated — see the comment above)',
       );
     }
-  }, timeout: const Timeout(Duration(seconds: 60)));
+    // This test asserts nothing about elapsed time: its pass criteria are zero
+    // errors, full delivery, zero rooms after teardown, on five identical
+    // runs. So the timeout is a watchdog against a hang, not a performance
+    // gate, and setting it near the work's own cost only converts a busy
+    // machine into a false red — which is exactly what it did. Six minutes is
+    // roughly twelve times the measured idle cost and in the same range as the
+    // 1k-room tier's ten minutes; a genuine hang still trips it.
+  }, timeout: const Timeout(Duration(minutes: 6)));
 
   test(
     'G8 1k-room soak tier: zero errors, full delivery, clean teardown',
