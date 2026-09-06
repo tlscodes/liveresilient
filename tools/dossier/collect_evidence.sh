@@ -37,16 +37,33 @@ while IFS= read -r f; do items+=("${f#"$REPO"/}"); done \
 while IFS= read -r f; do items+=("${f#"$REPO"/}"); done \
   < <(find "$REPO/tools/phase5/logs" -name 'gate_*.log' ! -name '*.check.log' -type f | sort)
 # captures copied above
-# Screen recordings (tools/dossier/evidence/journey/*.mov, ~0.5-1.2 GB each)
-# stay OUT of git and out of the manifest; their sizes and sha256 go into a
-# small TSV that IS in the manifest, so the recordings remain attributable
-# without a multi-gigabyte repository.
-if ls "$DOS"/evidence/journey/*.mov >/dev/null 2>&1; then
-  { printf "path\tbytes\tsha256\n"; for m in "$DOS"/evidence/journey/*.mov; do
-      printf "%s\t%s\t%s\n" "${m#"$REPO"/}" "$(stat -f %z "$m")" "$(shasum -a 256 "$m" | awk '{print $1}')"; done; } >"$DOS/evidence/journey/RECORDINGS.tsv"
-fi
-while IFS= read -r f; do items+=("${f#"$REPO"/}"); done \
-  < <(find "$DOS/evidence" -type f ! -name "*.mov" 2>/dev/null | sort)
+# Screen recordings (journey/*.mov and journey/superseded/*.mp4, 10 MB to
+# 1.2 GB each, 4.9 GB in all) stay OUT of git and out of the manifest; their
+# sizes and sha256 go into a small TSV that IS in the manifest, so the
+# recordings remain attributable without a multi-gigabyte repository.
+{ printf "path\tbytes\tsha256\n"
+  find "$DOS/evidence/journey" \( -name '*.mov' -o -path '*/superseded/*.mp4' \) -type f 2>/dev/null | sort |
+  while IFS= read -r m; do
+    printf "%s\t%s\t%s\n" "${m#"$REPO"/}" "$(stat -f %z "$m")" "$(shasum -a 256 "$m" | awk '{print $1}')"
+  done; } >"$DOS/evidence/journey/RECORDINGS.tsv"
+# THE MANIFEST LISTS ONLY WHAT THE REPOSITORY CARRIES (2026-09-06). CI verifies
+# these hashes on a fresh checkout, so an entry for a file that was never
+# committed cannot pass — it is not a changed artifact, it is an absent one.
+# That is exactly what broke the gate: the rig started writing .mp4 screen
+# captures into evidence/journey/superseded/, the sweep below excluded only
+# .mov, and 31 uncommitted recordings totalling 328 MB entered the manifest.
+# Untracked files are reported here rather than silently dropped, so a genuine
+# new artifact that still needs `git add` is visible instead of missing.
+untracked=0
+while IFS= read -r f; do
+  rel="${f#"$REPO"/}"
+  if git -C "$REPO" ls-files --error-unmatch "$rel" >/dev/null 2>&1; then
+    items+=("$rel")
+  else
+    echo "UNTRACKED (excluded; git add it to record it): $rel" >&2
+    untracked=$((untracked + 1))
+  fi
+done < <(find "$DOS/evidence" -type f ! -name "*.mov" ! -path '*/superseded/*.mp4' 2>/dev/null | sort)
 
 TMPF="$MAN.tmp.$$"
 printf 'path\tbytes\tsha256\n' > "$TMPF"
@@ -61,4 +78,4 @@ for p in "${items[@]}"; do
     "$(shasum -a 256 "$REPO/$p" | awk '{print $1}')" >> "$TMPF"
 done
 mv "$TMPF" "$MAN"
-echo "manifest rows: $(($(wc -l < "$MAN") - 1)), missing inputs: $missing"
+echo "manifest rows: $(($(wc -l < "$MAN") - 1)), missing inputs: $missing, untracked excluded: $untracked"
