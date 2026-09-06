@@ -23,7 +23,20 @@ void main() {
     final security = SecurityContext()
       ..useCertificateChain(certificate.certificatePath)
       ..usePrivateKey(certificate.privateKeyPath);
-    server = await SignalingRelayServer.bind(security: security, port: 0);
+    // An emptied room is deliberately kept for AbuseControlConfig.emptyRoomGrace
+    // (60 s by default, reaped by a 30 s sweep) so a peer that is mid-reconnect
+    // can still receive the buffered hangup frame — field evidence 2026-09-03.
+    // This suite asks a different question: does teardown leave anything behind
+    // at all. So it shortens the grace and the sweep to milliseconds rather than
+    // asserting the policy away, and the reap path is still the one under test.
+    server = await SignalingRelayServer.bind(
+      security: security,
+      port: 0,
+      abuseControls: AbuseControlConfig(
+        emptyRoomGrace: const Duration(milliseconds: 20),
+        sweepInterval: const Duration(milliseconds: 20),
+      ),
+    );
   });
 
   tearDown(() async {
