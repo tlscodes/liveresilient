@@ -44,6 +44,16 @@ class _FakeValve {
   /// Drop this many queries before answering anything again.
   int dropFirst = 0;
 
+  /// Answer this many queries and drop every one after them.
+  ///
+  /// The counter, not a timer, is what makes "go quiet part way through a
+  /// payload" reproducible. A `Future.delayed` that flips a flag mid-send
+  /// depends on the send being slower than the delay, which is a property of
+  /// the machine and not of the lane: the same case passed six times on a
+  /// developer's Mac and failed on the Linux runner, where the whole payload
+  /// finished before the timer fired.
+  int? answerThenDrop;
+
   /// Answer with this rcode instead of carrying the payload.
   int? rcode;
 
@@ -61,6 +71,8 @@ class _FakeValve {
       dropFirst -= 1;
       return;
     }
+    final ceiling = answerThenDrop;
+    if (ceiling != null && queries > ceiling) return;
     final query = TxtQueryWire.parseDnsQueryPacket(datagram.data);
     final parsed = TxtQueryWire.parseQueryName(query.name, _domain);
     final session = _sessions.putIfAbsent(
@@ -238,11 +250,8 @@ void main() {
       ], timeout: const Duration(milliseconds: 60));
       addTearDown(lane.dispose);
       // Answer the first chunk, then go quiet for the rest of the payload.
-      unawaited(
-        Future<void>.delayed(const Duration(milliseconds: 3), () {
-          valve.dropFirst = 20;
-        }),
-      );
+      // Counted, not timed: see the note on [_FakeValve.answerThenDrop].
+      valve.answerThenDrop = 1;
 
       final result = await lane.send(List<int>.filled(200, 3));
 
