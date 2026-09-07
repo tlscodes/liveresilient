@@ -49,12 +49,18 @@ every security property below as *designed and tested by the authors*, not
   a short string aloud mid-call is the weaker fallback for parties who cannot
   meet, not the primary mechanism — a caller under duress can be talked past
   it, and it verifies one session rather than the identity behind it.
-- **The Android transport library ships prebuilt.** `libpt_transport.so`
-  (arm64-v8a and x86_64) is committed under `apps/reference_app/android/`
-  because the Android build consumes it directly and no source build exists in
-  this repository yet. A reader cannot currently reproduce those two files from
-  source; building them from source is open work, and until it lands they carry
-  the same caveat as any vendored binary.
+- **The transport library ships prebuilt on every platform.** On Android,
+  `libpt_transport.so` (arm64-v8a and x86_64) is committed under
+  `apps/reference_app/android/`. On Apple platforms, `PtTransport.xcframework`
+  is committed under `packages/pt_transport_darwin/ios/Frameworks/`, carrying
+  three slices — `ios-arm64` (4,266,568 B), `ios-x86_64-simulator`, and
+  `macos-arm64_x86_64` (10,488,440 B). Each build consumes its binary directly
+  and no source build exists in this repository yet, so a reader cannot
+  currently reproduce any of them from source. This is the layer nearest the
+  network and the one place the repository cannot be checked end to end;
+  building it from published source, reproducibly and in CI, is open work, and
+  until it lands every one of these files carries the same caveat as any
+  vendored binary.
 - **Prebuilt native dependencies** are outside our audit surface. The WebRTC
   implementation arrives as a prebuilt binary through its package; we do not
   build it from source, and we cannot vouch for what upstream shipped. The
