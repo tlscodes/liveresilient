@@ -306,10 +306,16 @@ the bar showed (`monitor_bar bandwidth ... chip_live=87 chip_demo=0 rtt=62..1806
 loss_max=36.4% reconnects=1`, line 411), it is not a pass being reported as
 something else.
 
-The other 302 run-stamped rows are the earlier attempts of the same profiles,
-including the failures that were fixed along the way. Counting the whole file as
-one result would overstate it in both directions; the selection rule above is
-stated so it can be checked.
+Most of the other 302 run-stamped rows are earlier attempts of the same
+profiles, including failures fixed along the way — but not all of them are
+earlier, and saying so plainly matters more than a tidy sentence. Six rows carry
+the `blackout` profile and are LATER than the sweep's last run of 21:26:27Z:
+`2026-09-04T23:33:26Z`, `23:36:50Z`, `2026-09-05T07:15:44Z`, `07:29:41Z`,
+`09:49:01Z` and `2026-09-06T02:51:53Z`. Two of them are FAIL, and one of those is
+the newest row in the whole file: `gate_fail=window 1 util_carried=82.5% < gate
+90%`. That gate has not been met. Nothing here should be read as "everything red
+is historical". Counting the whole file as one result would overstate it in both
+directions; the selection rule above is stated so it can be checked.
 
 ## What is still not proven
 
@@ -341,14 +347,34 @@ The 2026-09-02 version said a beta could not advertise the measured numbers
 because the app's chat went over a different lane than the one that produced the
 2.5 s chat figure in `e2e_ios_results.tsv`. That instruction has been carried out:
 the application's own path now has its own numbers, in
-`app_journey_results.tsv`. Quote the app file for what a user experiences and the
-harness file for what the transport and codecs do, and never one for the other.
+`app_journey_results.tsv`. Quote the app file for what the application's own path
+does and the harness file for what the transport and codecs do, and never one for
+the other.
+
+Neither file answers what a user experiences, and this table must not be read as
+if it does. "Wired into the app today" means the lane is opened and carried by
+the app's own call path — it does not mean a user can reach it. The only
+signalling endpoint in the application is `wss://localhost:4443`
+(`main.dart:784`, `startup_manifest.dart:166`), reached through
+`devConnectToLocalRelay` (`main.dart:751`), and `main.dart:4-5` says so in the
+file's own header: the real device and network wiring "is kept available but
+only from the clearly-marked dev entry point at the bottom of this file". So
+these rows describe a path the project can drive end to end, against a relay it
+runs itself. Measuring the path a user would take is exactly what milestone M4's
+supervised pilot exists to do, and until that happens no figure in either file
+may be quoted to anyone outside the project as what a user will experience.
 
 ## What this table changes elsewhere
 
 ```
-README.md:38                            says "three of the six have no production
-                                        wiring yet"; it is two — news and ptt
+README.md:38                            FIXED 2026-09-07 — said "three of the six
+                                        have no production wiring yet"; it is two,
+                                        news page and push-to-talk, and the four
+                                        others are named as dev-entry-point only
+tools/BRIEF_matrix_app_journey.md:26    FIXED 2026-09-07 — same stale figure. The
+                                        figure is on :26; an earlier draft of this
+                                        list said ":25,61", and neither of those
+                                        lines carries it
 tools/dossier/PROBLEM_STATEMENT.md:91   cites this file for the transport/app
                                         distinction — still correct
 tools/dossier/APPLICATION_NLNET.md:41   cites this file for "which are wired
@@ -356,9 +382,9 @@ tools/dossier/APPLICATION_NLNET.md:41   cites this file for "which are wired
 tools/dossier/APPLICATION_DDP.md:123    cites this file for "over the test
                                         harness lane" — still correct
 tools/dossier/NLNET_SUBMISSION_READY.md moved here from the repository root
-tools/BRIEF_matrix_app_journey.md:25,61 quotes the old "three of the six" figure
 PLAN_HARDENING.md                       week 4's pilot must measure the app's path
-                                        — done for seven profiles on 2026-09-04
+                                        — done for seven profiles on 2026-09-04,
+                                        on the project's own path, not a user's
 ```
 
 Those are not corrected by this file. Each one is its own edit, and until it is

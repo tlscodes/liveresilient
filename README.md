@@ -35,9 +35,12 @@ The same six payloads over a shaped link on a physical iPhone, each inside a
 budget derived from the link physics rather than chosen by hand. Read these as
 what they are: a measurement of the transport and the codecs, taken over the
 test harness's datagram lane. The application's own chat path is the WebRTC
-data channel, and three of the six have no production wiring yet —
-`tools/dossier/LANE_TABLE.md` says which is which, and closing that gap is
-funded work rather than a finished claim.
+data channel, and two of the six — the news page and push-to-talk — are not
+wired into it at all; the other four are carried by the app's own call path,
+which today can only be driven from a clearly-marked dev entry point against a
+relay the project runs itself. `tools/dossier/LANE_TABLE.md` says which is
+which, with the file and line behind each row, and closing that gap is funded
+work rather than a finished claim.
 
 | Feature    | Budget | Measured | Status |
 |------------|--------|----------|--------|

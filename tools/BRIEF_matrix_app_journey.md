@@ -23,9 +23,10 @@ shows what the path is actually doing. Record all of it. Fix what breaks.
 WHY THIS AND NOT MORE UNIT TESTS
 tools/t2/h2_results.tsv already proves the TRANSPORT survives these profiles.
 tools/dossier/LANE_TABLE.md records the uncomfortable corollary: those rows were
-measured over a test-harness lane, and three of the six features have no
-production wiring. Nobody has ever watched the app itself work at 16 kbit/s with
-1000 ms of delay and 15% loss. That gap is what this closes.
+measured over a test-harness lane, and two of the six features — the news page
+and push-to-talk — are still not wired into the app at all. Nobody has ever
+watched the app itself work at 16 kbit/s with 1000 ms of delay and 15% loss on a
+path a user could take. That gap is what this closes.
 
 THE PROFILES — exact shaping, from tools/t2/h2_run.sh:49
   name        bw          delay   loss    what it is
