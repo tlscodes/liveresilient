@@ -204,8 +204,16 @@ with tempfile.TemporaryDirectory() as tmp:
     good, log = stub_run("200", tmp)
     check("a relay answering 200 passes the precondition",
           "ordinary-service page 200" in good.stdout, good.stdout[-300:])
-    check("and the run then continues to the fixtures, not past them silently",
-          good.returncode != 0 and "fixture script missing" in good.stderr,
+    # The property is that the runner STOPS at a named precondition rather
+    # than continuing silently. Which precondition it names first belongs to
+    # the host, not to the runner: this Mac reaches the fixture check, while
+    # the Linux CI runner stops earlier on `say`, a macOS-only tool the media
+    # probes need. Pinning the fixture message alone measured the host and
+    # failed on the runner with every other check green.
+    check("and the run then stops at a named precondition, not past it silently",
+          good.returncode != 0
+          and ("fixture script missing" in good.stderr
+               or "missing tool" in good.stderr),
           f"rc={good.returncode} stderr={good.stderr[-200:]!r}")
 
 # --- 5. the other profiles keep the soft note, not this gate ----------------
