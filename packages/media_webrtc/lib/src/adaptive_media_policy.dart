@@ -262,24 +262,25 @@ class AdaptiveMediaPolicy {
   /// Feeds one sample; returns a decision when the profile changed, null
   /// otherwise.
   MediaPolicyDecision? onSample(RtcStatsSample sample) {
-    final severe = sample.packetLossFraction >= config.lossSevereThreshold;
+    // Null loss means no packets were expected this interval (a silent/DTX
+    // gap, or the peer sending nothing) -- absence of evidence, not evidence
+    // of a clean or a bad path. It must never satisfy `severe`/`bad` (no
+    // fabricated downgrade) nor `clean` (no fabricated upgrade progress).
+    final loss = sample.packetLossFraction;
+    final severe = loss != null && loss >= config.lossSevereThreshold;
     final bad =
         severe ||
-        sample.packetLossFraction >= config.lossDowngradeThreshold ||
+        (loss != null && loss >= config.lossDowngradeThreshold) ||
         sample.rttMs >= config.rttDowngradeThresholdMs;
     final clean =
-        sample.packetLossFraction < config.lossCleanThreshold &&
+        loss != null &&
+        loss < config.lossCleanThreshold &&
         sample.rttMs < config.rttDowngradeThresholdMs;
 
     if (severe) {
       _consecutiveBad = 0;
       _consecutiveClean = 0;
-      return _shift(
-        steps: 2,
-        reason:
-            'severe loss '
-            '${(sample.packetLossFraction * 100).toStringAsFixed(1)}%',
-      );
+      return _shift(steps: 2, reason: 'severe loss ${_lossPct(loss)}');
     }
 
     if (bad) {
@@ -291,7 +292,7 @@ class AdaptiveMediaPolicy {
           steps: 1,
           reason:
               'sustained loss/delay '
-              '(loss ${(sample.packetLossFraction * 100).toStringAsFixed(1)}%, '
+              '(loss ${_lossPct(loss)}, '
               'rtt ${sample.rttMs}ms)',
         );
       }
@@ -307,11 +308,23 @@ class AdaptiveMediaPolicy {
         _consecutiveClean = 0;
         return _shift(steps: -1, reason: 'sustained clean conditions');
       }
-    } else {
+    } else if (loss != null) {
+      // Loss was measured but landed in the "middling" zone (>= clean, <
+      // downgrade) -- real, if modest, evidence against quality, so it
+      // interrupts the clean streak exactly as before.
       _consecutiveClean = 0;
     }
+    // else: loss is null. Leave the clean streak untouched rather than
+    // penalizing a traffic pause as if it were a quality regression --
+    // resetting here would make a heavily DTX'd call unable to ever
+    // accumulate cleanSamplesToUpgrade.
     return null;
   }
+
+  /// Formats a loss fraction for log/reason strings; null (no packets
+  /// expected this interval) prints as an em dash, never a fabricated 0%.
+  static String _lossPct(double? loss) =>
+      loss == null ? '—' : '${(loss * 100).toStringAsFixed(1)}%';
 
   bool _canUpgrade(RtcStatsSample sample) {
     if (_profile == MediaProfile.high) return false;

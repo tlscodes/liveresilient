@@ -11,4 +11,5 @@ export 'src/fountain_stream_transfer.dart';
 export 'src/reliable_messenger.dart';
 export 'src/staged_photo_transfer.dart';
 export 'src/thumb_hash.dart';
+export 'src/video_note_transfer.dart';
 export 'src/wire_frame.dart';

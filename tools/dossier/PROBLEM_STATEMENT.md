@@ -25,8 +25,19 @@ in any country, in a country of over ninety million people.
              a country of over 90 million people   NetBlocks, January update
 ```
 
-Casualty figures for the period are disputed across more than an order of
-magnitude and are documented elsewhere. This document relies on none of them.
+What happened to people in those weeks is documented by NAMED lists, and the
+two kinds of figure must not be confused. Iran International published, on
+3 February 2026, a list of 6,634 protest-related deaths ‹src:Iran International, 3 Feb 2026›
+documented by name, photograph, city, circumstances and family testimony, and
+stated that fewer than 100 of those names appeared on the official list ‹src:Iran International, 3 Feb 2026›.
+HRANA's report on the first fifty days lists 7,007 confirmed deaths by name ‹src:HRANA, The Crimson Winter, 23 Feb 2026›
+with 11,744 further cases under review ‹src:HRANA, The Crimson Winter, 23 Feb 2026›. The
+official list carried 2,986 names ‹src:Al Jazeera, 5 Feb 2026› out of 3,117 announced ‹src:Al Jazeera, 5 Feb 2026›.
+Far larger figures stated at the political level over the following months
+carry no published method, and this document does not rely on them. That an
+official list and an independent one share fewer than a hundred names is why
+this project cites the connectivity record rather than a casualty total.
+
 The engineering case rests on the connectivity record, which is measured,
 consistent, and published by organisations that do this for a living.
 
@@ -151,7 +162,21 @@ IranWire - the NetBlocks hour count
   https://iranwire.com/en/news/151163-netblocks-1056-hours-of-internet-shutdown-in-iran-officials-and-influencers-dominate/
 Access Now / #KeepItOn - statement on the shutdown
   https://www.accessnow.org/press-release/iran-internet-shutdown-2026/
+Iran International, 9 Jan 2026 - the dead of Iran's protests (named entries)
+  https://www.iranintl.com/en/202601094892
+Iran International, 3 Feb 2026 - 6,634 documented deaths; fewer than 100 on the official list
+  https://www.iranintl.com/en/202602026857
+HRANA, 23 Feb 2026 - "The Crimson Winter": 7,007 confirmed deaths by name, 11,744 under review
+  https://www.en-hrana.org/category/publications/   (report index; the site refuses automated fetches)
+  https://gulfnews.com/world/mena/death-toll-from-irans-crackdown-on-protests-rises-beyond-7000-activists-say-1.500440296
+Al Jazeera, 5 Feb 2026 - the official list of 2,986 names out of 3,117 announced
+  https://www.aljazeera.com/news/2026/2/5/questions-after-irans-government-releases-victim-list-in-protest-killings
+Wikipedia - deaths during the 2025-2026 Iranian protests (index of the lists above)
+  https://en.wikipedia.org/wiki/Deaths_during_the_2025%E2%80%932026_Iranian_protests
 ```
+
+The named lists are linked, not copied: they are records of identified people
+and belong with the organisations that maintain and correct them.
 
 Every measurement file cited above is committed to this repository with its
 size and hash recorded in `tools/dossier/manifest.tsv`, so a reviewer can check

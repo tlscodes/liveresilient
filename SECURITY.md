@@ -49,12 +49,18 @@ every security property below as *designed and tested by the authors*, not
   a short string aloud mid-call is the weaker fallback for parties who cannot
   meet, not the primary mechanism — a caller under duress can be talked past
   it, and it verifies one session rather than the identity behind it.
-- **The Android transport library ships prebuilt.** `libpt_transport.so`
-  (arm64-v8a and x86_64) is committed under `apps/reference_app/android/`
-  because the Android build consumes it directly and no source build exists in
-  this repository yet. A reader cannot currently reproduce those two files from
-  source; building them from source is open work, and until it lands they carry
-  the same caveat as any vendored binary.
+- **The transport library ships prebuilt on every platform.** On Android,
+  `libpt_transport.so` (arm64-v8a and x86_64) is committed under
+  `apps/reference_app/android/`. On Apple platforms, `PtTransport.xcframework`
+  is committed under `packages/pt_transport_darwin/ios/Frameworks/`, carrying
+  three slices — `ios-arm64` (4,266,568 B), `ios-x86_64-simulator`, and
+  `macos-arm64_x86_64` (10,488,440 B). Each build consumes its binary directly
+  and no source build exists in this repository yet, so a reader cannot
+  currently reproduce any of them from source. This is the layer nearest the
+  network and the one place the repository cannot be checked end to end;
+  building it from published source, reproducibly and in CI, is open work, and
+  until it lands every one of these files carries the same caveat as any
+  vendored binary.
 - **Prebuilt native dependencies** are outside our audit surface. The WebRTC
   implementation arrives as a prebuilt binary through its package; we do not
   build it from source, and we cannot vouch for what upstream shipped. The
@@ -65,9 +71,19 @@ every security property below as *designed and tested by the authors*, not
 
 ## Operational advice for deployers
 
-The code in this repository contains no server addresses, keys, or hostnames —
-by design. Those belong to a deployment, not to the source tree, and should be
-distributed to users through a channel you control rather than committed here.
+The code in this repository contains no keys or secrets — by design. It does
+contain default hostnames: a relay on a commercial edge platform
+(`apps/reference_app/lib/src/call_session.dart`), public STUN servers
+(`startup_manifest.dart`), and two vendors' DNS-over-HTTPS resolvers
+(`packages/adaptive_transport/lib/src/resilient/txt_query_transport.dart`).
+These are public, unauthenticated endpoints, and in the default build every call
+registers with that relay host.
+
+Replace them before deploying to users you are responsible for — the relay by
+its configured hostname, the STUN and resolver lists by their defaults. Anything
+that identifies your deployment belongs to the deployment, not to the source
+tree, and should be distributed to users through a channel you control rather
+than committed here.
 
 ## Measured claims
 

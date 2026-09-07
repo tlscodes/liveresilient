@@ -33,6 +33,34 @@ void main() {
       await sub.cancel();
     });
 
+    test('start() announces presence with a join control frame, which the '
+        'peer ignores', () async {
+      // The relay puts a socket in a room only on its first frame; a silent
+      // receiver was never in the room and never got the offer (measured
+      // 2026-09-03, app-to-phone journey). So start() must send something.
+      final events = <SignalingEvent>[];
+      final sub = signaling.events.listen(events.add);
+      await signaling.start(callId: 'call-1', role: CallRole.receiver);
+
+      expect(gateway.sendCalls, hasLength(1));
+      final join = gateway.sendCalls.single;
+      expect(join.callId, 'call-1');
+      expect(join.type, SignalType.callControl);
+      expect(join.payload, {'action': 'join', 'role': 'receiver'});
+
+      // The same frame arriving from the other side is a no-op, not a hangup.
+      gateway.pushInbound(
+        testEnvelope(
+          callId: 'call-1',
+          type: SignalType.callControl,
+          payload: const {'action': 'join', 'role': 'initiator'},
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(events, isEmpty);
+      await sub.cancel();
+    });
+
     test('start() drops malformed inbound payloads', () async {
       final events = <SignalingEvent>[];
       final sub = signaling.events.listen(events.add);
@@ -55,8 +83,8 @@ void main() {
       await signaling.start(callId: 'call-1', role: CallRole.initiator);
       await signaling.send(SendHangupCommand('done'));
 
-      expect(gateway.sendCalls, hasLength(1));
-      final call = gateway.sendCalls.single;
+      expect(gateway.sendCalls, hasLength(2));
+      final call = gateway.sendCalls.last;
       expect(call.callId, 'call-1');
       expect(call.type, SignalType.callControl);
       expect(call.payload, {'action': 'hangup', 'reason': 'done'});
@@ -66,7 +94,7 @@ void main() {
       await signaling.start(callId: 'call-1', role: CallRole.initiator);
       await signaling.send(const SendRestartRequestCommand());
 
-      final call = gateway.sendCalls.single;
+      final call = gateway.sendCalls.last;
       expect(call.type, SignalType.callControl);
       expect(call.payload, {'action': 'restartRequest'});
     });
@@ -111,7 +139,7 @@ void main() {
       stopwatch.stop();
 
       expect(stopwatch.elapsed, lessThan(const Duration(seconds: 1)));
-      expect(gateway.sendCalls.single.payload, {
+      expect(gateway.sendCalls.last.payload, {
         'action': 'hangup',
         'reason': 'user_left',
       });

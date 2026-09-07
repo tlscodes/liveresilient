@@ -348,4 +348,119 @@ Future<void> main() async {
     await pairY.a.close();
     await pairY.b.close();
   });
+
+  test('a lone rejoiner is replayed the ring (peer still present)', () async {
+    final server = await SignalingRelayServer.bind(
+      security: buildServerSecurityContext(),
+    );
+    addTearDown(server.close);
+
+    final pair = await connectAndPair(server.port, 'call-lone-rejoin');
+
+    pair.b.add(envelope('call-lone-rejoin', body: 'f1', from: 'b'));
+    await pair.aFrames.waitForCount(1, 'f1 relayed live to a');
+
+    await pair.a.close();
+    // Let the server observe the disconnect and vacate the seat before
+    // asserting on room state.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(server.activeRooms, 1, reason: 'b is still seated');
+
+    final a2 = await connectClient(server.port);
+    final a2Frames = FrameCollector();
+    a2.listen((event) => a2Frames.add(event as String));
+    a2.add(envelope('call-lone-rejoin', body: '__back__', from: 'a'));
+
+    await a2Frames.waitForCount(2, 'ring replayed to the rejoined socket');
+    expect(a2Frames.frames, [
+      envelope('call-lone-rejoin', body: '__seed__', from: 'b'),
+      envelope('call-lone-rejoin', body: 'f1', from: 'b'),
+    ]);
+
+    await a2.close();
+    await pair.b.close();
+  });
+
+  test('a member that rejoins after its peer hung up (and both are gone) '
+      'still receives the hangup frame from the ring (field evidence '
+      '2026-09-03: the app relayed "Reconnecting..." forever because the '
+      'room, and the ring holding the hangup, were removed at once before '
+      'it came back)', () async {
+    final server = await SignalingRelayServer.bind(
+      security: buildServerSecurityContext(),
+    );
+    addTearDown(server.close);
+
+    final pair = await connectAndPair(server.port, 'call-rejoin-hangup');
+
+    await pair.a.close();
+    // Let the server vacate a's seat before b's hangup frame is sent, so
+    // it lands in the ring with no one present to relay it to live.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    pair.b.add(envelope('call-rejoin-hangup', body: 'peer-hangup', from: 'b'));
+    await pair.b.close();
+    // Let the server vacate b's seat too: the room is now empty and
+    // must be kept (not removed) for the grace period.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(
+      server.activeRooms,
+      1,
+      reason: 'an emptied room is kept alive during its grace',
+    );
+
+    final a2 = await connectClient(server.port);
+    final a2Frames = FrameCollector();
+    a2.listen((event) => a2Frames.add(event as String));
+    a2.add(envelope('call-rejoin-hangup', body: '__back__', from: 'a'));
+
+    await a2Frames.waitForCount(
+      2,
+      'ring replayed on rejoin into an '
+      'emptied room',
+    );
+    expect(a2Frames.frames, [
+      envelope('call-rejoin-hangup', body: '__seed__', from: 'b'),
+      envelope('call-rejoin-hangup', body: 'peer-hangup', from: 'b'),
+    ]);
+
+    await a2.close();
+  });
+
+  test('an empty room is reaped after its grace elapses', () async {
+    final server = await SignalingRelayServer.bind(
+      security: buildServerSecurityContext(),
+      abuseControls: AbuseControlConfig(
+        emptyRoomGrace: const Duration(milliseconds: 300),
+        sweepInterval: const Duration(milliseconds: 50),
+      ),
+    );
+    addTearDown(server.close);
+
+    final pair = await connectAndPair(server.port, 'call-empty-grace');
+
+    await pair.a.close();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await pair.b.close();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // Still within the grace: the emptied room is kept, not reaped yet.
+    expect(server.activeRooms, 1);
+    expect(server.counters.emptyRoomsReaped, 0);
+
+    // Once the grace elapses the sweep reaps it.
+    await waitForActiveRooms(server, 0);
+    expect(server.counters.emptyRoomsReaped, 1);
+
+    // A later joiner on the same callId starts a brand new, empty room:
+    // nothing from the reaped ring is replayed to it.
+    final c = await connectClient(server.port);
+    final cFrames = FrameCollector();
+    c.listen((event) => cFrames.add(event as String));
+    c.add(envelope('call-empty-grace', body: 'fresh-start', from: 'c'));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(cFrames.frames, isEmpty);
+
+    await c.close();
+  });
 }

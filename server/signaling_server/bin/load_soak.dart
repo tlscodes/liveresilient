@@ -54,8 +54,14 @@ AbuseControlConfig loadTestAbuseControls({required int rooms}) {
     maxConcurrentRoomsGlobal: rooms + 64,
     maxConcurrentRoomsPerSource: rooms + 64,
     // Idle TTL stays far above the run length so the sweep never reaps a
-    // live room mid-measurement; sweep cadence keeps the default.
+    // live room mid-measurement. Emptied rooms (both peers closed at
+    // teardown) are kept for the empty-room grace so a rejoiner can still
+    // be replayed its peer's hangup; the harness waits ~15 s for the room
+    // count to reach zero, so the grace and the sweep cadence are shortened
+    // to fit that window.
     idleRoomTtl: const Duration(minutes: 30),
+    emptyRoomGrace: const Duration(seconds: 1),
+    sweepInterval: const Duration(seconds: 2),
   );
 }
 

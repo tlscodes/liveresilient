@@ -15,6 +15,15 @@ import 'dart:io';
 /// argument has forgotten, and the architecture test can tell them apart.
 Future<String?> platformHostResolution(String host) async => null;
 
+/// True for the names and addresses a relay on this machine is reached by.
+///
+/// Scopes a relaxed certificate check to the local machine only: the dev
+/// relay's certificate is self-signed, and accepting it for loopback is the
+/// documented dev contract (`devLoopbackWsConnector`). A production connector
+/// pins or validates instead; this never returns true for a remote host.
+bool isLoopbackHost(String host) =>
+    host == 'localhost' || host == '127.0.0.1' || host == '::1';
+
 /// A robust WebSocket connection helper supporting standard host resolution,
 /// optional forward-proxy configuration, and custom client rules.
 ///
@@ -32,6 +41,17 @@ Future<WebSocket> connectWebSocketWithCustomRules(
   void Function(HttpClient client)? proxyConfigurator,
   Duration timeout = const Duration(seconds: 10),
   SecurityContext? securityContext,
+
+  /// Decides whether a certificate that fails validation is accepted anyway,
+  /// per host and port. Null keeps strict validation — the production
+  /// default. The dev relay presents a self-signed certificate, and until
+  /// this seam existed the app's own connect path had no way to accept it:
+  /// every call from the app failed the TLS handshake while a separate,
+  /// relaxed dev connector sat unused. Applied on BOTH TLS paths below (the
+  /// [HttpClient] and the per-attempt [SecureSocket] upgrade), because a
+  /// resolver makes the second path the one that actually runs.
+  bool Function(X509Certificate certificate, String host, int port)?
+  badCertificateCallback,
 }) async {
   if (endpoint.scheme != 'ws' && endpoint.scheme != 'wss') {
     throw ArgumentError.value(
@@ -46,6 +66,10 @@ Future<WebSocket> connectWebSocketWithCustomRules(
 
   final client = HttpClient(context: securityContext)
     ..connectionTimeout = timeout;
+
+  if (badCertificateCallback != null) {
+    client.badCertificateCallback = badCertificateCallback;
+  }
 
   if (proxyResolver != null) {
     client.findProxy = proxyResolver;
@@ -89,10 +113,15 @@ Future<WebSocket> connectWebSocketWithCustomRules(
         }
         if (url.scheme != 'wss' && url.scheme != 'https') return socket;
         try {
+          final acceptBadCertificate = badCertificateCallback;
           return await SecureSocket.secure(
             socket,
             host: url.host,
             context: securityContext,
+            onBadCertificate: acceptBadCertificate == null
+                ? null
+                : (certificate) =>
+                      acceptBadCertificate(certificate, url.host, url.port),
           );
         } catch (_) {
           socket.destroy();

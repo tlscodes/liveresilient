@@ -202,6 +202,21 @@ class BinaryStreamSender {
   /// for never-retransmitted chunks (Karn); RTT probes provide them
   /// unconditionally — every probe nonce is unique, so its echo can
   /// never be mistaken for another transmission's answer.
+  /// The wait before a chunk (or the hello) is re-sent: the configured
+  /// [retransmitAfter] until a clean round trip was measured, then
+  /// srtt + 4·rttvar (RFC 6298) with [retransmitAfter] as the floor and
+  /// 30 s as the cap. A fixed 700 ms wait under a 1.9 s queueing round trip
+  /// re-sent every chunk ~3× before its ack could land, tripling the load
+  /// on the link that was already saturated (rig, bandwidth profile,
+  /// 2026-09-04).
+  Duration _retransmitWait() {
+    if (srttMs == 0) return retransmitAfter;
+    final rto = (srttMs + 4 * rttvarMs).round();
+    return Duration(
+      milliseconds: rto.clamp(retransmitAfter.inMilliseconds, 30000),
+    );
+  }
+
   void _recordCleanRtt(double sampleMs) {
     if (srttMs == 0) {
       // RFC 6298 seeding: srtt = sample, rttvar = sample/2.
@@ -241,8 +256,25 @@ class BinaryStreamSender {
     this.chunkBytes = 16 * 1024,
     this.transportBufferedBytes,
     this.sendBudgetBytesPerSec,
+    this.onBytesAcked,
   }) : assert(windowSize >= 1),
        assert(chunkBytes >= 512);
+
+  /// Called once per chunk the receiver confirmed, with that chunk's
+  /// payload length in bytes (the last chunk is shorter than
+  /// [chunkBytes]). Fires for a plain ACK and for every chunk a HAVE
+  /// bitmap reports on resume, so the sum over a complete transfer is
+  /// the object's byte length. This is the lane's delivery evidence for
+  /// the governor: bytes the far side actually holds, not bytes offered.
+  final void Function(int bytes)? onBytesAcked;
+
+  /// Payload length of chunk [index] in a [contentLength]-byte object:
+  /// [chunkBytes] for every chunk but the last, which carries the rest.
+  int _chunkPayloadBytes(int index, int contentLength) {
+    final start = index * chunkBytes;
+    final end = start + chunkBytes;
+    return (end > contentLength ? contentLength : end) - start;
+  }
 
   /// Optional LIVE send-rate budget in bytes/second (token bucket, burst
   /// cap two seconds' worth). This is the link arbiter's lever: on a
@@ -347,6 +379,8 @@ class BinaryStreamSender {
                 acked[i] = true;
                 resumed++;
                 ackedChunks++;
+                // Not delivery evidence: the receiver already held these
+                // chunks before this transfer (same rule as the timed acks).
               }
             }
           }
@@ -354,6 +388,7 @@ class BinaryStreamSender {
           if (frame.index < total && !acked[frame.index]) {
             acked[frame.index] = true;
             ackedChunks++;
+            onBytesAcked?.call(_chunkPayloadBytes(frame.index, content.length));
             // Measurement, never assumption — and per Karn's rule only
             // from a chunk never retransmitted: a resend resets its
             // timestamp, and an ack racing that resend yields a bogus
@@ -489,7 +524,7 @@ class BinaryStreamSender {
           return windowBytes;
         }
 
-        final waitDeadline = DateTime.now().add(retransmitAfter);
+        final waitDeadline = DateTime.now().add(_retransmitWait());
         while ((buffered() ?? 0) > gateBytes() &&
             DateTime.now().isBefore(waitDeadline) &&
             !done.isCompleted &&
@@ -535,7 +570,7 @@ class BinaryStreamSender {
       while (!haveBitmap && !done.isCompleted) {
         await Future<void>.delayed(const Duration(milliseconds: 25));
         if (!haveBitmap &&
-            DateTime.now().difference(helloSentAt) >= retransmitAfter) {
+            DateTime.now().difference(helloSentAt) >= _retransmitWait()) {
           await _port.send(hello);
           helloSentAt = DateTime.now();
         }

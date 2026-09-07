@@ -15,3 +15,14 @@ abstract class DataChannelPort {
   /// Closes the channel and releases its resources.
   Future<void> close();
 }
+
+/// A port that can say how many bytes it still holds un-drained — the
+/// transport's send buffer (RTCDataChannel.bufferedAmount). Lane senders use
+/// it as the definitive backpressure signal: a frame handed over while the
+/// buffer holds a window's worth would queue, not travel. Optional: ports
+/// that cannot measure it stay plain [DataChannelPort]s and senders fall
+/// back to ack pacing alone.
+abstract class BufferedDataChannelPort implements DataChannelPort {
+  /// Bytes queued in the transport, null when the transport cannot say.
+  int? get bufferedAmount;
+}

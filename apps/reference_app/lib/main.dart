@@ -6,21 +6,23 @@
 library;
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:call_core/call_core.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:media_webrtc/media_webrtc.dart' show OpusSdpPolicy;
-import 'package:messaging/messaging.dart' show DeliveryState;
+import 'package:messaging/messaging.dart' show Attachment, DeliveryState;
 import 'package:signed_config/signed_config.dart'
     show EndpointManifest, OobManifestImport, buildRtcIceConfig, iceProfileFor;
 
 import 'src/attachment_picker.dart';
-import 'src/call_demo_controller.dart';
 import 'src/call_screen.dart';
 import 'src/call_session.dart';
+import 'src/live_call_controller.dart';
+import 'src/live_chat_registry.dart';
 import 'src/live_quality_feed.dart';
-import 'src/ws_connector.dart' show platformHostResolution;
+import 'src/ws_connector.dart' show isLoopbackHost, platformHostResolution;
 import 'package:live_captions/live_captions.dart' show ChannelInvite;
 
 import 'src/chat_demo_controller.dart';
@@ -28,6 +30,7 @@ import 'src/chat_screen.dart';
 import 'src/demo_feeds.dart';
 import 'src/photo_ingest.dart';
 import 'src/photo_picker.dart';
+import 'src/photo_source.dart';
 import 'src/intelligence/assistant_view.dart';
 import 'src/intelligence/device_bindings.dart';
 import 'src/intelligence/foresight_card.dart';
@@ -35,6 +38,7 @@ import 'src/intelligence/intelligence_boot.dart';
 import 'src/intelligence/intelligence_hub.dart';
 import 'src/import_manifest_sheet.dart';
 import 'src/join_channel_sheet.dart';
+import 'src/lane_governor.dart';
 import 'src/startup_manifest.dart';
 import 'src/theme.dart';
 import 'src/ui/conversations_screen.dart';
@@ -44,6 +48,7 @@ import 'src/ui/settings_screen.dart';
 
 export 'src/call_demo_controller.dart';
 export 'src/chat_demo_controller.dart';
+export 'src/live_call_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,10 +64,35 @@ Future<void> main() async {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.intelligence, this.oobImport});
+  const MyApp({
+    super.key,
+    this.intelligence,
+    this.oobImport,
+    this.openSession,
+    this.attachmentPicker,
+    this.photoPicker,
+    this.voiceNoteSource,
+  });
 
   /// Null only in widget tests that exercise screens in isolation.
   final IntelligenceStack? intelligence;
+
+  /// Builds the call tab's session. Null uses the dev relay entry point
+  /// ([devConnectWithStartupManifest]); widget tests inject a fake so a tap
+  /// on Call exercises the real wiring — phase from the session's controller,
+  /// readings from the session — with no network and no WebRTC engine.
+  final SessionOpener? openSession;
+
+  /// Pickers behind the chat threads' attach and photo buttons. Null uses
+  /// the platform dialogs; the app-journey rig injects fixtures so a real
+  /// send goes through the real screens with no dialog to click.
+  final Future<Attachment?> Function()? attachmentPicker;
+  final Future<Uint8List?> Function(PhotoSource source)? photoPicker;
+
+  /// See [attachmentPicker]: the recorded bytes behind the voice-note
+  /// button. The rig injects a WAV spoken by the Mac; null keeps the
+  /// controller's dated placeholder, since production has no recorder yet.
+  final Future<Attachment?> Function(Duration length)? voiceNoteSource;
 
   /// Out-of-band manifest import, when this build has pinned signing keys.
   ///
@@ -94,6 +124,10 @@ class _MyAppState extends State<MyApp> {
       home: HomePage(
         intelligence: widget.intelligence,
         oobImport: widget.oobImport,
+        openSession: widget.openSession,
+        attachmentPicker: widget.attachmentPicker,
+        photoPicker: widget.photoPicker,
+        voiceNoteSource: widget.voiceNoteSource,
         themeMode: _themeMode,
         onThemeMode: (mode) => setState(() => _themeMode = mode),
       ),
@@ -109,6 +143,10 @@ class HomePage extends StatefulWidget {
     super.key,
     this.intelligence,
     this.oobImport,
+    this.openSession,
+    this.attachmentPicker,
+    this.photoPicker,
+    this.voiceNoteSource,
     this.themeMode = ThemeMode.system,
     this.onThemeMode,
   });
@@ -119,6 +157,15 @@ class HomePage extends StatefulWidget {
   /// the import control is not offered at all.
   final OobManifestImport? oobImport;
 
+  /// See [MyApp.openSession]. Null means the dev relay entry point.
+  final SessionOpener? openSession;
+
+  /// See [MyApp.attachmentPicker] / [MyApp.photoPicker] /
+  /// [MyApp.voiceNoteSource].
+  final Future<Attachment?> Function()? attachmentPicker;
+  final Future<Uint8List?> Function(PhotoSource source)? photoPicker;
+  final Future<Attachment?> Function(Duration length)? voiceNoteSource;
+
   /// Appearance selection, owned by [MyApp] (it must sit above the
   /// [MaterialApp] to take effect); Settings edits it through [onThemeMode].
   final ThemeMode themeMode;
@@ -128,7 +175,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _index = 0;
 
   /// A manifest the user imported out of band this session. Held so the
@@ -141,14 +188,36 @@ class _HomePageState extends State<HomePage> {
   /// the caption strip area (full channel session arrives with the STT
   /// engine wiring).
   ChannelInvite? _joinedChannel;
-  final CallDemoController _call = CallDemoController();
+
+  /// The call tab's controller: a REAL session per call, opened through
+  /// [HomePage.openSession] (the dev relay by default), its phase mirrored
+  /// from the session's own [CallController]. The demo controller that used
+  /// to sit here changed an enum on a timer; nothing it showed was measured.
+  late final LiveCallController _call = LiveCallController(
+    open: widget.openSession ?? _openDevSession,
+  );
   late final ChatDemoController _chat = ChatDemoController(
-    attachmentPicker: pickAttachmentFile,
-    photoPicker: pickPhotoBytes,
+    attachmentPicker: widget.attachmentPicker ?? pickAttachmentFile,
+    voiceNoteSource: widget.voiceNoteSource,
+    photoPicker: widget.photoPicker ?? pickPhotoBytes,
     photoIngest: (raw) => compute(buildStagedPhotoArtifacts, raw),
     intelligenceFabric: widget.intelligence?.fabric,
     hub: widget.intelligence?.hub,
   );
+
+  /// The chat thread bound to the LIVE call's data lanes — built when a
+  /// session handle appears, disposed when it goes. Null between calls,
+  /// so the conversations list shows the thread only while it can send.
+  ChatDemoController? _liveChat;
+
+  /// The handle [_liveChat] was built for, so a new session gets a new
+  /// thread and a stale build never binds a fresh call's lanes.
+  CallSessionHandle? _liveChatHandle;
+  int _liveChatGeneration = 0;
+
+  /// The newest measured reading of the live path, null between calls —
+  /// what the live thread's lane governor sizes its send budget from.
+  CallQualityReading? _lastReading;
 
   /// Demo-labeled network-quality feed for the gauge and diagnostics panel.
   /// GATED ON [AppMotion.ambientEnabled]: under `flutter test` no stream is
@@ -157,11 +226,13 @@ class _HomePageState extends State<HomePage> {
   /// measured RTCStats (see path_health_monitor.dart).
   final DemoQualityFeed _quality = DemoQualityFeed();
 
-  /// Measured readings from a live session, when one exists. The reference
-  /// app's default screen is a demo controller with no network, so this stays
-  /// null there and the demo feed stands in — labelled as such. A session
-  /// opened through the dev entry point supplies real ones.
-  Stream<CallQualityReading>? _liveQuality;
+  /// Measured readings from the live session, null when none is open. A
+  /// getter rather than a field on purpose: it is null exactly when the
+  /// session's handle is null, so the chart source and its label flip with
+  /// teardown and there is no assign/clear pair to keep in step by hand. The
+  /// field this replaces was declared, read twice and never assigned, so the
+  /// gauge charted a scripted profile for every call ever placed.
+  Stream<CallQualityReading>? get _liveQuality => _call.qualityReadings;
 
   /// The readings actually charted: measured when available, demo otherwise.
   Stream<CallQualityReading>? get _chartedQuality =>
@@ -179,6 +250,16 @@ class _HomePageState extends State<HomePage> {
   OperatingRung? _rung;
   StreamSubscription<CallQualityReading>? _rungSub;
 
+  /// What [_rungSub] is bound to, so the ladder re-binds when the charted
+  /// source changes. `canHangUp` turns true BEFORE the session exists, and a
+  /// subscription taken at that moment would pin the demo feed for the whole
+  /// call. The live stream is one object per session so identity works for
+  /// it; the demo feed hands out a fresh wrapper per access, so it is tracked
+  /// as a flag rather than compared by identity (a re-bind per notification
+  /// would restart its timer every time).
+  Stream<CallQualityReading>? _rungLiveSource;
+  bool _rungOnDemoFeed = false;
+
   /// True while a pull-to-refresh replays the conversations skeleton.
   bool _conversationsLoading = false;
 
@@ -187,45 +268,161 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _call.addListener(_onChanged);
     _chat.addListener(_onChanged);
   }
 
+  /// Backgrounding policy, stated rather than implied. `paused`, `inactive`
+  /// and `hidden` leave the call running: on a desktop they mean the window
+  /// is minimised or occluded while the process and its audio keep going, and
+  /// hanging up on a cosmetic event would end a live call. `detached` means
+  /// the process is going away: hang up so the peer gets a clean local-hangup
+  /// signal instead of a silent socket drop; the terminal state then disposes
+  /// the handle exactly once through the controller's one teardown path.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) unawaited(_call.hangUp());
+  }
+
+  /// Binds a chat thread to the live call's lanes the moment its session
+  /// handle exists, and tears it down when the session goes. Opening the
+  /// lanes is asynchronous (they wait for the media engine to start), so
+  /// a generation token drops a late build if the call ended or a new one
+  /// began meanwhile.
+  void _syncLiveChat() {
+    final handle = _call.handle;
+    if (identical(handle, _liveChatHandle)) return;
+    _liveChatHandle = handle;
+    final generation = ++_liveChatGeneration;
+    final old = _liveChat;
+    if (old != null) {
+      _liveChat = null;
+      liveChatController.value = null;
+      old.removeListener(_onChanged);
+      old.dispose();
+    }
+    final openChat = handle?.openChatPort;
+    if (handle == null || openChat == null) return;
+    unawaited(() async {
+      try {
+        final chatPort = await openChat();
+        final photoPort = await handle.openPhotoLanePort?.call();
+        final videoPort = await handle.openVideoLanePort?.call();
+        if (generation != _liveChatGeneration || !mounted) {
+          await chatPort.close();
+          await photoPort?.close();
+          await videoPort?.close();
+          return;
+        }
+        final chat = ChatDemoController(
+          callChannelPort: chatPort,
+          photoLanePort: photoPort,
+          videoLanePort: videoPort,
+          laneGovernor: LaneGovernor(
+            readRttMs: () => _lastReading?.rttMs,
+            readAvailableOutgoingBps: () => _lastReading?.availableOutgoingBps,
+          ),
+          attachmentPicker: widget.attachmentPicker ?? pickAttachmentFile,
+          voiceNoteSource: widget.voiceNoteSource,
+          photoPicker: widget.photoPicker ?? pickPhotoBytes,
+          photoIngest: (raw) => compute(buildStagedPhotoArtifacts, raw),
+          intelligenceFabric: widget.intelligence?.fabric,
+          hub: widget.intelligence?.hub,
+        );
+        chat.addListener(_onChanged);
+        _liveChat = chat;
+        liveChatController.value = chat;
+        setState(() {});
+      } catch (_) {
+        // A lane that failed to open leaves the thread absent; the call
+        // itself is unaffected and the conversations list says so.
+      }
+    }());
+  }
+
   void _onChanged() {
-    // The rung subscription lives only while a call is active (and never
-    // under tests): the demo feed stops its timer when its last listener
-    // cancels, so nothing periodic outlives the call.
+    _syncLiveChat();
+    // The live thread's lanes follow the call's media path: frozen while
+    // it reconnects or renegotiates, resumed from their ack state after.
+    _liveChat?.setPathLive(
+      _call.phase == CallPhase.connected || _call.phase == CallPhase.degraded,
+    );
+    // The ladder follows exactly what the gauge charts: measured readings
+    // while a session exists, the demo feed otherwise — and nothing under
+    // tests, where no demo stream is handed out, so no periodic timer can
+    // outlive a test. The demo feed stops its timer when its last listener
+    // cancels, so nothing periodic outlives the call either.
     final inCall = _call.canHangUp;
-    if (_liveFeedsAllowed && inCall && _rungSub == null) {
-      _rungSub = (_chartedQuality ?? _quality.stream).listen((reading) {
-        final rung = _ladder.report(reading.bitrateBps ?? 0);
-        if (rung != _rung && mounted) setState(() => _rung = rung);
-      });
-    } else if (!inCall && _rungSub != null) {
-      unawaited(_rungSub!.cancel());
+    final live = inCall ? _liveQuality : null;
+    final wantDemo = inCall && live == null && _liveFeedsAllowed;
+    if (!identical(live, _rungLiveSource) || wantDemo != _rungOnDemoFeed) {
+      unawaited(_rungSub?.cancel());
       _rungSub = null;
       _rung = null;
+      _rungLiveSource = live;
+      _rungOnDemoFeed = wantDemo;
+      final source = live ?? (wantDemo ? _quality.stream : null);
+      _lastReading = null;
+      if (source != null) {
+        _rungSub = source.listen((reading) {
+          if (live != null) _lastReading = reading;
+          final rung = _ladder.report(reading.bitrateBps ?? 0);
+          if (rung != _rung && mounted) setState(() => _rung = rung);
+        });
+      }
     }
     setState(() {});
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _call.removeListener(_onChanged);
     _chat.removeListener(_onChanged);
     unawaited(_rungSub?.cancel());
     _quality.dispose();
     _call.dispose();
     _chat.dispose();
+    final live = _liveChat;
+    _liveChat = null;
+    if (identical(liveChatController.value, live)) {
+      liveChatController.value = null;
+    }
+    live?.removeListener(_onChanged);
+    live?.dispose();
     super.dispose();
+  }
+
+  /// The production opener: resolves the startup manifest — a verified one
+  /// first, then the one imported out of band this session, then the dev
+  /// file, then the public STUN fallback — and connects to the dev relay in
+  /// [role]. The imported manifest is passed HERE, at call time, which is what
+  /// the banner at the top of this screen promises; see the comment on that
+  /// banner for the version of this app in which it was not.
+  Future<CallSessionHandle?> _openDevSession({
+    required String callId,
+    required CallRole role,
+  }) async {
+    final result = await devConnectWithStartupManifest(
+      callId: callId,
+      role: role,
+      outOfBandManifest: _importedManifest,
+      hub: widget.intelligence?.hub,
+    );
+    return result.session;
   }
 
   /// Maps the live loopback thread's last entry to a truth-ladder status for
   /// the conversations list — real delivery signals only (delivered/failed
   /// from the messenger's ack stream; anything else visible is "sent").
-  MessageTruthStatus? _lastStatus(ChatEntry entry) {
-    if (entry.message.senderId != _chat.localSenderId) return null;
-    return switch (_chat.deliveryStates[entry.message.id]) {
+  MessageTruthStatus? _lastStatus(
+    ChatEntry entry, [
+    ChatDemoController? thread,
+  ]) {
+    final chat = thread ?? _chat;
+    if (entry.message.senderId != chat.localSenderId) return null;
+    return switch (chat.deliveryStates[entry.message.id]) {
       DeliveryState.delivered => MessageTruthStatus.delivered,
       DeliveryState.failed => MessageTruthStatus.failed,
       null => MessageTruthStatus.sent,
@@ -249,7 +446,28 @@ class _HomePageState extends State<HomePage> {
     final now = DateTime.now();
     final entries = _chat.entries;
     final last = entries.isEmpty ? null : entries.last;
+    final live = _liveChat;
+    final liveLast = live == null || live.entries.isEmpty
+        ? null
+        : live.entries.last;
     return [
+      if (live != null)
+        ConversationSummary(
+          id: 'live',
+          title: 'Call peer',
+          lastMessage: liveLast == null
+              ? 'In-call chat: text, photos and notes ride the live call'
+              : _lastLabel(liveLast),
+          lastAt: liveLast == null
+              ? now
+              : DateTime.fromMillisecondsSinceEpoch(liveLast.message.sentAtMs),
+          avatarSeed: 0x11FE,
+          unreadCount: 0,
+          lastIsMine:
+              liveLast != null &&
+              liveLast.message.senderId == live.localSenderId,
+          lastStatus: liveLast == null ? null : _lastStatus(liveLast, live),
+        ),
       ConversationSummary(
         id: 'loopback',
         title: 'Loopback peer',
@@ -293,6 +511,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openThread(ConversationSummary summary) {
+    final live = _liveChat;
+    if (summary.id == 'live' && live != null) {
+      _pushThread(live, title: 'Call peer');
+      return;
+    }
     if (summary.id != 'loopback') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -301,29 +524,34 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
+    _pushThread(_chat, title: 'Loopback peer');
+  }
+
+  /// One screen for both threads: the loopback demo and the live call's.
+  void _pushThread(ChatDemoController chat, {required String title}) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Loopback peer')),
+          appBar: AppBar(title: Text(title)),
           body: ListenableBuilder(
-            listenable: _chat,
+            listenable: chat,
             builder: (context, _) => ChatScreen(
-              entries: _chat.entries,
-              localSenderId: _chat.localSenderId,
-              onSend: _chat.sendText,
-              deliveryStates: _chat.deliveryStates,
-              attachmentProgress: _chat.attachmentProgress,
-              onPickAttachment: () => unawaited(_chat.pickAndSendAttachment()),
-              onSendPhoto: _chat.canPickPhoto ? _chat.pickAndSendPhoto : null,
-              outgoingPhotos: _chat.outgoingPhotos,
-              incomingPhotos: _chat.incomingPhotos,
-              onPlayAudio: _chat.playAudio,
-              captions: _chat.captions,
+              entries: chat.entries,
+              localSenderId: chat.localSenderId,
+              onSend: chat.sendText,
+              deliveryStates: chat.deliveryStates,
+              attachmentProgress: chat.attachmentProgress,
+              onPickAttachment: () => unawaited(chat.pickAndSendAttachment()),
+              onSendPhoto: chat.canPickPhoto ? chat.pickAndSendPhoto : null,
+              outgoingPhotos: chat.outgoingPhotos,
+              incomingPhotos: chat.incomingPhotos,
+              onPlayAudio: chat.playAudio,
+              captions: chat.captions,
               captionLanguage: 'fa',
               amplitudeSource: _liveFeedsAllowed
                   ? syntheticAmplitudeSource()
                   : null,
-              onSendVoiceNote: _chat.sendVoiceNote,
+              onSendVoiceNote: chat.sendVoiceNote,
             ),
           ),
         ),
@@ -355,10 +583,13 @@ class _HomePageState extends State<HomePage> {
         phase: _call.phase,
         reconnectAttempt: _call.reconnectAttempt,
         endReason: _call.endReason,
+        degradedMode: _call.degradedMode,
         audioOnly: _call.audioOnly,
         callId: _call.callId,
+        failureDetail: _call.error?.toString(),
         onCall: _call.canCall ? _call.placeCall : null,
-        onHangUp: _call.canHangUp ? _call.hangUp : null,
+        onJoin: _call.canCall ? _call.joinCall : null,
+        onHangUp: _call.canHangUp ? () => unawaited(_call.hangUp()) : null,
         quality: _chartedQuality,
         qualitySourceLabel: _chartedQualityLabel,
         rung: _rung,
@@ -523,6 +754,12 @@ CallSessionHandle? devConnectToLocalRelay({
   int? iceFailureCount,
   OpusSdpPolicy opusPolicy = const OpusSdpPolicy(),
   IntelligenceHub? hub,
+
+  /// Which side of the call this instance is. Two instances can only meet
+  /// when one joins the other's call key as the receiver; until this
+  /// parameter existed the role was hardcoded to initiator, so the UI could
+  /// place calls that nothing could ever answer.
+  CallRole role = CallRole.initiator,
 }) {
   // The id is resolved before anything else: the failure ledger is keyed by
   // call id, so the id must exist before the count for it can be read.
@@ -546,10 +783,16 @@ CallSessionHandle? devConnectToLocalRelay({
     return buildWebRtcCallSession(
       endpoint: Uri.parse('wss://localhost:4443'),
       callId: resolvedCallId,
-      role: CallRole.initiator,
+      role: role,
       iceConfig: iceConfig,
       opusPolicy: opusPolicy,
       hub: hub,
+      // The dev relay presents a self-signed certificate (see
+      // `ensureDevCertificate` in the server). Accepting it is scoped to
+      // loopback hosts only — the same contract `devLoopbackWsConnector`
+      // documents — and never to a remote host. Without this the handshake
+      // was rejected on every call and the session died in signaling.
+      badCertificateCallback: (certificate, host, port) => isLoopbackHost(host),
       // Gate 6b: named, not omitted. The dev relay is reached by a literal
       // host, so the platform's own resolution is the right choice here —
       // but it is a CHOICE, and it says so. An architecture test fails any
@@ -636,6 +879,8 @@ devConnectWithStartupManifest({
   EndpointManifest? verifiedManifest,
   EndpointManifest? outOfBandManifest,
   int? iceFailureCount,
+  CallRole role = CallRole.initiator,
+  IntelligenceHub? hub,
 }) async {
   final startup = await loadStartupManifest(
     verifiedManifest: verifiedManifest,
@@ -645,6 +890,8 @@ devConnectWithStartupManifest({
     callId: callId,
     manifest: startup.manifest,
     iceFailureCount: iceFailureCount,
+    role: role,
+    hub: hub,
   );
   return (session: session, manifest: startup);
 }

@@ -13,7 +13,9 @@ import 'signaling_gateway.dart';
 ///
 /// - [start] wires the gateway's inbound envelope stream to decoded
 ///   [SignalingEvent]s, dropping malformed payloads and envelopes for any
-///   call other than the one this session started for.
+///   call other than the one this session started for, and sends one
+///   `join` control frame so the relay puts this socket in the call's room
+///   before anything else is exchanged (see the comment in [start]).
 /// - [send] maps the command to a wire `(type, payload)` pair and awaits
 ///   the terminal outbox outcome: [OutboxOutcome.acknowledged] completes
 ///   normally; [OutboxOutcome.expired] and [OutboxOutcome.disposed] throw a
@@ -53,6 +55,27 @@ final class AdapterCallSignaling implements CallSignaling {
         _eventsController.add(event);
       }
     });
+    // Announce presence. The relay places a socket in a room only when that
+    // socket sends its FIRST frame (relay_server.dart, the `room == null`
+    // branch), so a receiver that waits silently for the offer is never in
+    // the room and the offer is never delivered to it: the initiator retries
+    // until its watchdog fires while the receiver's own watchdog gives up.
+    // Measured 2026-09-03 on the first app-to-phone journey run — both sides
+    // walked to "could not reconnect" without ever seeing the other; the E2E
+    // harness had hidden this by sending its own join frame. The action is
+    // one the peer ignores (envelope_codec.dart treats unrecognised control
+    // actions as forward-compatible no-ops). Not awaited: acknowledgement
+    // comes from the PEER, which may not have joined yet, and an unanswered
+    // join expires in the outbox like any other frame.
+    unawaited(
+      _gateway
+          .send(
+            callId: callId,
+            type: SignalType.callControl,
+            payload: {'action': 'join', 'role': role.name},
+          )
+          .catchError((Object _) => OutboxOutcome.expired),
+    );
   }
 
   @override

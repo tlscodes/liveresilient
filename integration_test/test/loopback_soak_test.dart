@@ -36,10 +36,21 @@ void main() {
       // real client produces — injects a soak-appropriate quota through the
       // config seam the server already exposes. Every other limit keeps its
       // production default, so the guard's code path is still exercised.
+      // An emptied room is deliberately kept for
+      // AbuseControlConfig.emptyRoomGrace (60 s by default, reaped by a 30 s
+      // sweep) so a peer that is mid-reconnect can still receive the buffered
+      // hangup frame — field evidence 2026-09-03. This suite asks a different
+      // question: does a teardown leave anything behind at all. So it shortens
+      // the grace and the sweep to milliseconds rather than asserting the
+      // policy away; the reap path is still the one under test.
       final server = await SignalingRelayServer.bind(
         security: security,
         port: 0,
-        abuseControls: AbuseControlConfig(maxNewCallIdsPerWindow: cycles + 10),
+        abuseControls: AbuseControlConfig(
+          maxNewCallIdsPerWindow: cycles + 10,
+          emptyRoomGrace: const Duration(milliseconds: 20),
+          sweepInterval: const Duration(milliseconds: 20),
+        ),
       );
 
       final unhandledErrors = <Object>[];

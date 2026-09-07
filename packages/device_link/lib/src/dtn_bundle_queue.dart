@@ -201,6 +201,21 @@ class DtnBundleQueue {
     _storedBytes -= bundle.sizeBytes;
   }
 
+  /// Removes the bundle with [id] after a transport outside [flush] confirmed
+  /// delivery (a stream lane's `done` line, for example). Goes through the
+  /// same removal path as [flush], so the byte accounting stays exact.
+  /// Returns false when no bundle with that id is stored.
+  bool acknowledge(String id) {
+    if (!_store.contains(id)) return false;
+    for (final b in _store.values()) {
+      if (b.id == id) {
+        _removeBundle(b);
+        return true;
+      }
+    }
+    return false;
+  }
+
   void _dropExpired(int nowMs) {
     final expired = _store
         .values()

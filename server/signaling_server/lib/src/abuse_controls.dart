@@ -47,6 +47,7 @@ class AbuseControlConfig {
     this.maxFrameBytes = 64 * 1024,
     this.idleRoomTtl = const Duration(minutes: 10),
     this.sweepInterval = const Duration(seconds: 30),
+    this.emptyRoomGrace = const Duration(seconds: 60),
   }) {
     if (messagesPerSecond <= 0) {
       throw ArgumentError.value(
@@ -99,6 +100,13 @@ class AbuseControlConfig {
     if (sweepInterval <= Duration.zero) {
       throw ArgumentError.value(sweepInterval, 'sweepInterval', 'must be > 0');
     }
+    if (emptyRoomGrace <= Duration.zero) {
+      throw ArgumentError.value(
+        emptyRoomGrace,
+        'emptyRoomGrace',
+        'must be > 0',
+      );
+    }
   }
 
   /// Sustained per-connection message rate (token-bucket refill rate).
@@ -135,6 +143,11 @@ class AbuseControlConfig {
 
   /// How often the idle-room / stale-entry sweep runs.
   final Duration sweepInterval;
+
+  /// Keeps a room's replay ring alive after its last member leaves so a
+  /// peer that rejoins within the grace still receives the frames — for
+  /// example a hangup envelope — sent while it was away.
+  final Duration emptyRoomGrace;
 }
 
 /// Aggregate, privacy-preserving counters — plain integers only, suitable
@@ -155,8 +168,13 @@ class AbuseCounters {
   /// Frames dropped for exceeding [AbuseControlConfig.maxFrameBytes].
   int oversizedFramesDropped = 0;
 
-  /// Rooms reaped by the idle-TTL sweep.
+  /// Rooms reaped by the idle-TTL sweep (had members, but no traffic).
   int idleRoomsReaped = 0;
+
+  /// Rooms reaped after sitting empty past [AbuseControlConfig.emptyRoomGrace]
+  /// (no members at all — distinct from [idleRoomsReaped], which reaps rooms
+  /// that still had a member but went quiet).
+  int emptyRoomsReaped = 0;
 }
 
 /// Verdict for a room-join attempt.

@@ -1,0 +1,3 @@
+docs/archive_flagged/
+tools/t2/txt_query_*
+tools/t2/journey_txt_query.py

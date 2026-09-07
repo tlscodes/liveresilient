@@ -218,14 +218,44 @@ jobs:
       # same row. A row without a command in it is a claim without evidence,
       # which is the failure mode this project spent the most effort on.
       - name: Ledger rows carry their verifier output
-        run: |
-          rows=$(grep -cE '^### موج|^### wave' docs/PLAN_five_tickets_v4.md || true)
-          proofs=$(grep -cE 'All tests passed|No issues found' docs/PLAN_five_tickets_v4.md || true)
-          echo "ledger rows: $rows   rows citing a command result: $proofs"
-          if [ "$rows" -gt 0 ] && [ "$proofs" -lt "$rows" ]; then
-            echo "::error::a ledger row claims a wave closed without quoting the command that proved it"
-            exit 1
-          fi
+        run: python3 tools/ledger_proof_gate.py
+
+      # The step above once lived here as two greps against a document path. When
+      # the ledger was archived into a subdirectory the greps hit a missing file,
+      # the row count became empty, the numeric comparison errored, and the step
+      # exited 0 — green while measuring nothing. It also compared a
+      # document-wide proof count against the row count, so one row quoting three
+      # results covered a neighbour quoting none. Both are fixed in the script,
+      # and this self-test is what proves the fix: the silent-green mode cannot be
+      # demonstrated by a passing CI run, only by asserting the gate is RED when
+      # its input is missing, empty, or row-less.
+      - name: Ledger gate is red when there is nothing to measure
+        run: python3 tools/test_ledger_proof_gate.py
+
+      # A prepared form block longer than the field it is pasted into is
+      # discarded silently by the browser: it keeps the opening characters and
+      # drops the rest with no warning, no error and no visual cue. Measured on
+      # this repository — the abstract was 1652 characters into a 1000-character
+      # field and the budget answer 5694 into 4000, and nothing in the document
+      # showed it. tools/test_field_length_gate.py, which pins the red cases,
+      # is picked up by the discovery step below.
+      - name: Form blocks fit their fields
+        run: python3 tools/dossier/field_length_gate.py
+
+      # Two of the suites below sign with Ed25519. The distribution package is
+      # used rather than pip: the runner's python is externally managed, and a
+      # suite that silently fails to import its dependency is coverage lost.
+      - name: Python test dependencies
+        run: sudo apt-get install -y -qq python3-cryptography
+
+      # The Dart glob above was widened after a suite sat red while CI reported
+      # green, because the glob never reached its directory. The same hole
+      # existed in the other language: sixteen test_*.py files live under
+      # tools/ and this workflow named two of them. The runner DISCOVERS them,
+      # so a suite added later cannot fall outside the gate, and it prints
+      # every suite it skips together with the reason it cannot run here.
+      - name: Python tool suites (discovered under tools/)
+        run: python3 tools/run_python_suites.py
 
       # A verification command whose output is piped into head/tail, or captured
       # only into a shell variable, destroys the evidence it just produced. That
@@ -257,6 +287,7 @@ jobs:
         run: |
           if grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|AKIA[0-9A-Z]{16}|-----BEGIN PRIVATE KEY-----|xox[bpors]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{36}|sk-[A-Za-z0-9]{20,})' \
              --include='*.dart' --include='*.yaml' --include='*.json' --include='*.md' \
+             --include='*.py' --include='*.sh' --include='*.js' --include='*.ts' \
              --exclude-dir=.git --exclude-dir=.dart_tool --exclude-dir=.backups \
              --exclude='e2e_dev_tls.dart' . ; then
             echo "::error::possible secret committed"; exit 1

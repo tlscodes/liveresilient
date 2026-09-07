@@ -188,6 +188,85 @@ void main() {
     });
   });
 
+  group('ResilientFallbackLanes · TXT query lane', () {
+    const valve = TxtQueryValve(domain: 'valve.example');
+
+    test('a valve zone alone is a lane, and it registers', () {
+      const endpoints = ResilientLaneEndpoints(txtQueryValve: valve);
+      expect(endpoints.hasAnyLane, isTrue);
+
+      final ids = ResilientFallbackLanes.buildAndRegister(fabric, endpoints);
+
+      expect(ids, [ResilientLaneIds.txtQuery]);
+      expect(fabric.snapshot.lanes.single.id, ResilientLaneIds.txtQuery);
+    });
+
+    test('it ranks behind both WAN lanes and ahead of the mesh', () {
+      final ids = ResilientFallbackLanes.registerAll(
+        fabric,
+        primaryUdp: _ScriptedLane('udp').lane,
+        webSocketRelay: _ScriptedLane('wss').lane,
+        httpLongPoll: _ScriptedLane('https').lane,
+        txtQuery: TxtQueryLane.forValve(valve),
+        localMesh: _ScriptedLane('mesh').lane,
+      );
+
+      expect(ids, [
+        ResilientLaneIds.primaryUdp,
+        ResilientLaneIds.webSocketRelay,
+        ResilientLaneIds.httpLongPoll,
+        ResilientLaneIds.txtQuery,
+        ResilientLaneIds.localMesh,
+      ]);
+    });
+
+    test('fromEnvironment carries the valve through, relay host or not', () {
+      const defaults = ResilientLaneEndpoints(txtQueryValve: valve);
+
+      expect(
+        ResilientLaneEndpoints.fromEnvironment(
+          const {},
+          defaults: defaults,
+        ).txtQueryValve,
+        same(valve),
+      );
+
+      final derived = ResilientLaneEndpoints.fromEnvironment(const {
+        ResilientLaneEndpoints.relayHostEnvVar: 'relay.example.workers.dev',
+      }, defaults: defaults);
+      expect(derived.txtQueryValve, same(valve));
+      expect(derived.relayUri, isNotNull);
+    });
+
+    test('the environment can name the valve zone on its own', () {
+      final configured = ResilientLaneEndpoints.fromEnvironment(const {
+        ResilientLaneEndpoints.valveDomainEnvVar: 'valve.example',
+      });
+
+      expect(configured.txtQueryValve?.domain, 'valve.example');
+      expect(configured.hasAnyLane, isTrue);
+    });
+
+    test('no valve zone anywhere means no lane', () {
+      final none = ResilientLaneEndpoints.fromEnvironment(const {});
+
+      expect(none.txtQueryValve, isNull);
+      expect(ResilientFallbackLanes.buildAndRegister(fabric, none), isEmpty);
+    });
+
+    test('unregisterAll removes it with the rest of the stack', () {
+      ResilientFallbackLanes.buildAndRegister(
+        fabric,
+        const ResilientLaneEndpoints(txtQueryValve: valve),
+      );
+      expect(fabric.snapshot.lanes, hasLength(1));
+
+      ResilientFallbackLanes.unregisterAll(fabric);
+
+      expect(fabric.snapshot.lanes, isEmpty);
+    });
+  });
+
   group('ResilientFallbackLanes · ultra-low bitrate survival', () {
     // Hamseda v4's warm floor is 31.8 bps — about four bytes per second,
     // one tiny frame at a time. What follows models that link: a token

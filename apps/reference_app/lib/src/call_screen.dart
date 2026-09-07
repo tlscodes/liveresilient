@@ -7,6 +7,7 @@ import 'package:call_core/call_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
+import 'live_call_controller.dart' show validateCallKey;
 import 'theme.dart';
 import 'ui/network_truth.dart';
 import 'ui/quality_gauge.dart';
@@ -84,7 +85,9 @@ class CallScreen extends StatelessWidget {
     this.audioOnly = false,
     this.privacyStatus = 'E2E media · no telemetry without opt-in',
     this.callId,
+    this.failureDetail,
     this.onCall,
+    this.onJoin,
     this.onHangUp,
     this.quality,
     this.qualitySourceLabel,
@@ -118,8 +121,19 @@ class CallScreen extends StatelessWidget {
   /// it once the call has ended.
   final String? callId;
 
+  /// What went wrong, in the words of the failure itself, shown under the
+  /// end reason on a failed call. Null when nothing more is known than the
+  /// reason. A relay that is down and a signed manifest that will not map
+  /// are both "signaling failure" on the phase axis; this is what tells them
+  /// apart on screen.
+  final String? failureDetail;
+
   /// Invoked when the user taps the call button. Null hides/disables it.
   final VoidCallback? onCall;
+
+  /// Invoked with the other side's call key when the user joins their call.
+  /// Null hides the join control.
+  final ValueChanged<String>? onJoin;
 
   /// Invoked when the user taps the hang-up button. Null hides/disables it.
   final VoidCallback? onHangUp;
@@ -199,6 +213,14 @@ class CallScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ],
+            if (phase == CallPhase.failed && failureDetail != null) ...[
+              const SizedBox(height: Spacing.s8),
+              Text(
+                failureDetail!,
+                style: theme.textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
             // Real-stats instruments: only while a call is actually running
             // AND a stats stream exists — the gauge never renders without a
             // call to measure.
@@ -233,6 +255,7 @@ class CallScreen extends StatelessWidget {
                 child: _ActionButtons(
                   isActive: _isActive,
                   onCall: onCall,
+                  onJoin: onJoin,
                   onHangUp: onHangUp,
                 ),
               ),
@@ -450,11 +473,13 @@ class _ActionButtons extends StatelessWidget {
   const _ActionButtons({
     required this.isActive,
     required this.onCall,
+    required this.onJoin,
     required this.onHangUp,
   });
 
   final bool isActive;
   final VoidCallback? onCall;
+  final ValueChanged<String>? onJoin;
   final VoidCallback? onHangUp;
 
   @override
@@ -472,16 +497,101 @@ class _ActionButtons extends StatelessWidget {
         ),
       );
     }
-    return Semantics(
-      label: 'Call',
-      button: true,
-      child: ExcludeSemantics(
-        child: FilledButton.icon(
-          onPressed: onCall,
-          icon: const Icon(Icons.call),
-          label: const Text('Call'),
+    final join = onJoin;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          label: 'Call',
+          button: true,
+          child: ExcludeSemantics(
+            child: FilledButton.icon(
+              onPressed: onCall,
+              icon: const Icon(Icons.call),
+              label: const Text('Call'),
+            ),
+          ),
         ),
+        if (join != null) ...[
+          const SizedBox(height: Spacing.s8),
+          Semantics(
+            label: 'Join with key',
+            button: true,
+            child: ExcludeSemantics(
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final key = await showDialog<String>(
+                    context: context,
+                    builder: (context) => const JoinCallDialog(),
+                  );
+                  if (key != null) join(key);
+                },
+                icon: const Icon(Icons.vpn_key_outlined),
+                label: const Text('Join with key'),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Asks for the other side's call key and returns it, validated, or null.
+///
+/// The key is the relay session id the initiator's screen shows under "Call
+/// key"; joining as the receiver with the same key is how two instances meet.
+/// The join button stays disabled until the text is a key the relay would
+/// accept, so an invalid key never reaches the controller.
+class JoinCallDialog extends StatefulWidget {
+  const JoinCallDialog({super.key});
+
+  @override
+  State<JoinCallDialog> createState() => _JoinCallDialogState();
+}
+
+class _JoinCallDialogState extends State<JoinCallDialog> {
+  final TextEditingController _key = TextEditingController();
+  String? _valid;
+
+  @override
+  void dispose() {
+    _key.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Join a call'),
+      content: TextField(
+        controller: _key,
+        autofocus: true,
+        autocorrect: false,
+        enableSuggestions: false,
+        decoration: const InputDecoration(
+          labelText: 'Call key',
+          helperText: 'The key shown on the other side\'s call screen',
+        ),
+        onChanged: (text) => setState(() => _valid = validateCallKey(text)),
+        onSubmitted: (_) {
+          final key = _valid;
+          if (key != null) Navigator.of(context).pop(key);
+        },
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _valid == null
+              ? null
+              : () => Navigator.of(context).pop(_valid),
+          child: const Text('Join'),
+        ),
+      ],
     );
   }
 }

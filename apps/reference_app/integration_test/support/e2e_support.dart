@@ -37,6 +37,8 @@ import 'package:media_webrtc/media_webrtc.dart'
         OpusWireNoCandidateFits,
         PeerConnectionStatus;
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart';
+import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart'
+    show CallLanes;
 import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:reference_app/src/media_adaptation_driver.dart';
 import 'package:signaling/signaling.dart';
@@ -117,6 +119,18 @@ List<Map<String, Object>> e2eIceServers() {
     },
   ];
 }
+
+/// The list [e2eIceServers] builds with every non-TCP entry removed, so the
+/// only way out is `turn:<host>?transport=tcp`.
+///
+/// For the whitelist profile: that filter drops every UDP port but 53, so a
+/// UDP TURN entry cannot allocate and its candidates would only spend the
+/// connect budget. Derived from [e2eIceServers] rather than written out
+/// again — one list, one place, so a credential or host change cannot drift
+/// between the two profiles.
+List<Map<String, Object>> e2eIceServersTcpOnly() => e2eIceServers()
+    .where((server) => '${server['urls']}'.contains('transport=tcp'))
+    .toList(growable: false);
 
 /// Like `devLoopbackWsConnector`, but also relaxes certificate validation for
 /// the configured E2E relay host (the Mac's bridge address). TEST-ONLY: the
@@ -556,6 +570,13 @@ class E2eCallStack {
     required String callId,
     required CallRole role,
     required MediaMode mode,
+    // Per-profile ICE overrides. Both default to the environment-derived
+    // values, so every existing caller is unchanged; the whitelist profile
+    // passes `e2eIceServersTcpOnly()` and 'relay' because that filter drops
+    // every UDP port but 53. The override enters HERE, at the one place the
+    // port is configured, instead of a second port factory.
+    List<Map<String, Object>>? iceServersOverride,
+    String? iceTransportPolicyOverride,
   }) {
     final client = SignalingClient(
       endpoint: endpoint,
@@ -586,13 +607,14 @@ class E2eCallStack {
       () async {
         final port = await FlutterWebRtcPeerConnectionPort.create(
           audio: mode == MediaMode.realAudio,
-          iceServers: e2eIceServers(),
+          iceServers: iceServersOverride ?? e2eIceServers(),
           // Gate 3c: the policy string comes from the same decision function
           // production uses, not from a shortcut. The environment flag now
           // feeds `iceProfileFor` through the manifest's own feature flags,
           // so the row exercises the production path instead of a parallel
           // one — a rig that proves a code path nobody ships proves nothing.
-          iceTransportPolicy: e2eIceTransportPolicy(),
+          iceTransportPolicy:
+              iceTransportPolicyOverride ?? e2eIceTransportPolicy(),
           opusPolicy: constrainedLink
               ? OpusSdpPolicy.forShapingState(
                   fixedTickEmitterRunning: false,
@@ -637,6 +659,12 @@ class E2eCallStack {
           await port.rollbackLocalDescription();
         }
       },
+      // The same lane table production pre-opens (call_session.dart): every
+      // lane is in the first offer, so the journey peer's chat, photo and
+      // video receivers ride the call from its first second, and the
+      // messaging/video rows' later openDataChannel calls return the same
+      // objects (memoized per id) instead of duplicating a stream.
+      preOpenChannels: CallLanes.all,
     );
     final controller = CallController(
       callId: callId,
@@ -688,6 +716,32 @@ class E2eCallStack {
     final driver = MediaAdaptationDriver(
       port: () => stack.port,
       audioCeilingBps: constrainedLink ? wireBudget.opusRateBps : null,
+      // Same mid-call loop as production (call_session.dart): the
+      // measured link re-evaluates the wire policy; a ptime change is
+      // an SDP policy update plus a renegotiation.
+      initialWireBudget: wireBudget,
+      concurrentStreams: 2,
+      onRenegotiateWirePolicy: (policy) async {
+        stack.port?.updateOpusPolicy(
+          OpusSdpPolicy.forShapingState(
+            fixedTickEmitterRunning: false,
+            maxAverageBitrateBps: policy.opusRateBps,
+            ptimeMs: policy.ptimeMs,
+          ),
+        );
+        print(
+          'e2e ${role.name} wire policy: ${policy.opusRateBps}bps@'
+          '${policy.ptimeMs}ms for ${policy.bandwidthBps}bps '
+          '@${DateTime.now().difference(stack._builtAt).inSeconds}s',
+        );
+        await controller.requestRecovery(
+          cause: CallControllerException(
+            'wire_policy_renegotiation',
+            'audio ${policy.opusRateBps} bit/s at ${policy.ptimeMs} ms '
+                'for a ${policy.bandwidthBps} bit/s link',
+          ),
+        );
+      },
     );
     stack.adaptationDriver = driver;
     driver.decisions.listen(

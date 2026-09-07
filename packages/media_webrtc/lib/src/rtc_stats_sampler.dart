@@ -67,8 +67,11 @@ typedef RtcCountersReader = Future<RawRtcCounters?> Function();
 
 /// One smoothed, per-interval sample.
 class RtcStatsSample {
-  /// Fraction of packets lost during the interval, in [0, 1].
-  final double packetLossFraction;
+  /// Fraction of packets lost during the interval, in [0, 1]; null when no
+  /// packets were expected during the interval (nothing received and
+  /// nothing lost — e.g. a silent/DTX gap or the peer sending no audio).
+  /// Loss is unknown in that case, never fabricated as a measured 0.0.
+  final double? packetLossFraction;
 
   /// EWMA-smoothed round-trip time in milliseconds.
   final int rttMs;
@@ -103,11 +106,14 @@ class RtcStatsSample {
   });
 
   @override
-  String toString() =>
-      'RtcStatsSample(loss: ${(packetLossFraction * 100).toStringAsFixed(1)}%, '
-      'rtt: ${rttMs}ms, jitter: ${jitterMs}ms, '
-      'in: ${incomingBitrateBps ~/ 1000}kbps, '
-      'out: ${outgoingBitrateBps ~/ 1000}kbps)';
+  String toString() {
+    final loss = packetLossFraction;
+    final lossStr = loss == null ? '—' : '${(loss * 100).toStringAsFixed(1)}%';
+    return 'RtcStatsSample(loss: $lossStr, '
+        'rtt: ${rttMs}ms, jitter: ${jitterMs}ms, '
+        'in: ${incomingBitrateBps ~/ 1000}kbps, '
+        'out: ${outgoingBitrateBps ~/ 1000}kbps)';
+  }
 }
 
 class RtcStatsSampler {
@@ -214,9 +220,11 @@ class RtcStatsSampler {
     // Counter resets (renegotiation) produce negative deltas: skip sample.
     if (deltaReceived < 0 || deltaLost < 0) return;
 
-    final loss = deltaExpected <= 0
-        ? 0.0
-        : (deltaLost / deltaExpected).clamp(0.0, 1.0);
+    // No packets were expected this interval (nothing received, nothing
+    // lost — e.g. a silent/DTX gap): loss is unknown, not a measured zero.
+    final double? loss = deltaExpected <= 0
+        ? null
+        : (deltaLost / deltaExpected).clamp(0.0, 1.0).toDouble();
 
     final rttSampleMs = (current.currentRoundTripTimeSeconds ?? 0) * 1000.0;
     final jitterSampleMs = current.jitterSeconds * 1000.0;

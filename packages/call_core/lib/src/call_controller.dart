@@ -681,6 +681,23 @@ final class CallController {
   bool _recoveryAttemptInFlight = false;
   bool _waitingForConnection = false;
 
+  /// PREEMPTIVE END LATCH (raised 2026-09-03, app-journey rig). Every
+  /// state mutation runs through the serial queue, so a hang-up tapped
+  /// while a recovery attempt was mid-flight waited BEHIND that attempt —
+  /// up to [mediaStartTimeout] plus two [operationTimeout] legs, measured
+  /// >30 s of "Reconnecting…" after the tap. The latch is completed
+  /// OUTSIDE the queue ([hangUp], [dispose], a [RemoteHangupEvent] as it
+  /// arrives on the wire); every await inside a recovery attempt races it
+  /// ([_untilEnd]), so the attempt yields at its next boundary and the
+  /// queued end runs at once. Completed at most once, never reset.
+  final Completer<void> _endLatch = Completer<void>();
+
+  /// True while [media.start] is awaited: a hang-up that preempts the
+  /// wait leaves the engine start running to completion, and teardown
+  /// must still stop the session it produces (else the microphone stays
+  /// open on a call that ended).
+  bool _mediaStartInFlight = false;
+
   int _sequence = 0;
   int _recoveryAttempt = 0;
   DateTime? _recoveryStartedAt;
@@ -778,6 +795,9 @@ final class CallController {
       return Future<void>.error(ArgumentError.value(reason, 'reason'));
     }
 
+    // Latched before the queue: an in-flight recovery attempt yields at
+    // its next await so this task is not held behind a 30 s media start.
+    _requestEnd();
     return _enqueue<void>(() async {
       _ensureNotDisposed();
       if (_terminal) {
@@ -869,6 +889,7 @@ final class CallController {
   /// terminal state — and safe to call more than once (subsequent calls
   /// are a no-op).
   Future<void> dispose() {
+    _requestEnd();
     return _enqueue<void>(() async {
       if (_disposed) {
         return;
@@ -924,7 +945,17 @@ final class CallController {
 
     _subscriptions.add(
       signaling.events.listen(
-        (event) => _enqueueEvent(() => _handleSignalingEvent(event)),
+        (event) {
+          // The peer's goodbye ends the call whatever the queue is doing:
+          // latch it here, before the queue, so an in-flight recovery
+          // attempt yields instead of holding it behind a 30 s media
+          // start (see _endLatch). The handler below still owns the
+          // transition, in order.
+          if (event is RemoteHangupEvent) {
+            _requestEnd();
+          }
+          _enqueueEvent(() => _handleSignalingEvent(event));
+        },
         onError: (Object error, StackTrace stackTrace) {
           final suppressed = _suppressChannelEvents;
           _enqueueEvent(
@@ -1293,8 +1324,13 @@ final class CallController {
     }
     // start() contains getUserMedia — human latency (permission prompt),
     // not compute — so it gets its own bound; see [mediaStartTimeout].
-    await _boundedBy(media.start(), 'start media session', mediaStartTimeout);
-    _mediaStarted = true;
+    _mediaStartInFlight = true;
+    try {
+      await _boundedBy(media.start(), 'start media session', mediaStartTimeout);
+      _mediaStarted = true;
+    } finally {
+      _mediaStartInFlight = false;
+    }
   }
 
   Future<void> _connectChannels() async {
@@ -1467,7 +1503,9 @@ final class CallController {
     Object cause,
     StackTrace stackTrace,
   ) async {
-    if (_terminal) {
+    // An end already queued owns the outcome: emitting one more
+    // `reconnecting` (or failing on the policy) would only race it.
+    if (_terminal || _endRequested) {
       return;
     }
 
@@ -1525,7 +1563,10 @@ final class CallController {
   }
 
   Future<void> _performRecoveryAttempt(int attempt) async {
-    if (_terminal || !_recoveryActive || attempt != _recoveryAttempt + 1) {
+    if (_terminal ||
+        _endRequested ||
+        !_recoveryActive ||
+        attempt != _recoveryAttempt + 1) {
       return;
     }
 
@@ -1599,16 +1640,20 @@ final class CallController {
     try {
       if (!progressing) {
         _recoveryHardCycleAt = clock.now();
-        await _resetChannels();
-        await _ensureMediaStarted();
-        await _connectChannels();
+        // Each leg races the end latch (_untilEnd): a hang-up or the
+        // peer's goodbye during any of them ends this attempt at once.
+        await _untilEnd(_resetChannels());
+        await _untilEnd(_ensureMediaStarted());
+        await _untilEnd(_connectChannels());
 
         if (role == CallRole.initiator) {
-          await _negotiate(iceRestart: true);
+          await _untilEnd(_negotiate(iceRestart: true));
         } else {
-          await _bounded(
-            signaling.send(const SendRestartRequestCommand()),
-            'request ICE restart',
+          await _untilEnd(
+            _bounded(
+              signaling.send(const SendRestartRequestCommand()),
+              'request ICE restart',
+            ),
           );
           // SINGLE-OWNER GENERATIONS during the initial connect (raised
           // 2026-08-09, loss60): two independent judges resetting one
@@ -1620,7 +1665,7 @@ final class CallController {
           // ANSWERS what arrives. Post-connected recoveries keep the
           // receiver-side negotiate (its rollback path is proven there).
           if (_everConnected) {
-            await _negotiate(iceRestart: true);
+            await _untilEnd(_negotiate(iceRestart: true));
           }
         }
       }
@@ -1637,6 +1682,11 @@ final class CallController {
 
       _waitingForConnection = true;
       _armRecoveryWait();
+    } on _EndRequested {
+      // An end is queued right behind this attempt: yield without
+      // scheduling another one — the end handler owns the outcome.
+      _recoveryAttemptInFlight = false;
+      _waitingForConnection = false;
     } catch (error, stackTrace) {
       _recoveryAttemptInFlight = false;
       _waitingForConnection = false;
@@ -1658,7 +1708,10 @@ final class CallController {
     _recoveryTimer = Timer(connectionTimeout, () {
       _recoveryTimer = null;
       _enqueueEvent(() async {
-        if (_terminal || !_recoveryActive || !_waitingForConnection) {
+        if (_terminal ||
+            _endRequested ||
+            !_recoveryActive ||
+            !_waitingForConnection) {
           return;
         }
         final last = _lastRemoteSignalAt;
@@ -1761,7 +1814,9 @@ final class CallController {
         () => _bounded(transport.disconnect(), 'disconnect transport'),
       );
 
-      if (_mediaStarted) {
+      // A start still in flight (preempted by the end latch) is stopped
+      // too: the adapter closes the port its factory hands back late.
+      if (_mediaStarted || _mediaStartInFlight) {
         await _bestEffort(
           () => _boundedEngine(media.stop(), 'stop media session'),
         );
@@ -1838,6 +1893,31 @@ final class CallController {
     if (!_doneCompleter.isCompleted) {
       _doneCompleter.complete(_state);
     }
+  }
+
+  /// Whether an end (local hang-up, the peer's hangup, dispose) has been
+  /// requested and is waiting its turn on the queue. See [_endLatch].
+  bool get _endRequested => _endLatch.isCompleted;
+
+  void _requestEnd() {
+    if (!_endLatch.isCompleted) {
+      _endLatch.complete();
+    }
+  }
+
+  /// Races [future] against the end latch. A recovery attempt awaiting a
+  /// slow channel operation yields the moment an end is requested instead
+  /// of holding the queue for the operation's full bound; the operation
+  /// itself keeps running and its outcome is observed (Future.any attaches
+  /// handlers to every branch), so nothing surfaces as unhandled.
+  Future<T> _untilEnd<T>(Future<T> future) {
+    if (_endLatch.isCompleted) {
+      return Future<T>.error(const _EndRequested());
+    }
+    return Future.any<T>(<Future<T>>[
+      future,
+      _endLatch.future.then<T>((_) => throw const _EndRequested()),
+    ]);
   }
 
   Future<T> _bounded<T>(Future<T> future, String operation) {
@@ -1977,4 +2057,11 @@ final class CallController {
 /// engine still fails fast.
 final class EngineTimeoutException extends TimeoutException {
   EngineTimeoutException(super.message, super.duration);
+}
+
+/// Thrown by [CallController._untilEnd] into a recovery attempt when an end
+/// was requested while it awaited a channel operation: the attempt yields
+/// and the queued end (hang-up, remote hangup, dispose) runs next.
+final class _EndRequested implements Exception {
+  const _EndRequested();
 }

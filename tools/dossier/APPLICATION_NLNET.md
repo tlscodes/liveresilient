@@ -115,12 +115,12 @@ a reviewer who knows the arithmetic will reach it in a minute.
 Acceptance: the six transport matrix rows re-run with the layer in place, and
 the measured overhead recorded in the results file.
 
-**M2 — security audit and the work to answer it, 100 h plus the audit itself.**
-The in-kind audit the programme offers is described for projects above the
-50 kEUR line and phrased as a possibility, not a guarantee, so a proposal at
-this size cannot assume it. The audit is budgeted as a scoped external review
-of the two named gaps rather than a full-codebase audit, and if a programme
-slot turns out to be available the line is not spent. Sixteen hours to hand over scope, threat model and reproducible
+**M2 — security review and the work to answer it, 100 h.** The programme's own
+guidance offers the audit in kind through Radically Open Security, first come
+first served, and says not to budget an invoice for it. So this milestone
+carries no fee: its 5,000 EUR is 100 h at 50, and the review is requested as a
+programme slot rather than paid for here. Scoped to the two named gaps rather
+than the whole codebase. Sixteen hours to hand over scope, threat model and reproducible
 builds, eight to be available during the audit, fifty-six to triage and fix,
 twelve to coordinate re-testing and publish, eight of slack. If no audit slot
 is available, a scoped external review of the two named gaps is proposed as a
@@ -149,7 +149,7 @@ as such.
 Acceptance: the bar above, met on a physical device, replacing the
 liveness-only rule in the test.
 
-**M4 — supervised pilot, 130 h and about 500 EUR.** Sixteen hours to recruit
+**M4 — supervised pilot, 130 h and about 1,700 EUR.** Sixteen hours to recruit
 and onboard six to eight testers, sixteen for distribution and signing, forty
 to build an in-app runner so the testers produce the six rows themselves rather
 than the developer producing them, twenty-six for supervised sessions,
@@ -197,8 +197,9 @@ Acceptance: the six end-to-end rows recorded on Android devices in the same
 results file, under the same profile, beside the iOS rows.
 
 Every milestone follows the pattern the repository already uses: a `verify_cmd`
-that exits zero, and no milestone reported complete without it. The four
-amounts sum exactly to the requested total.
+that exits zero, and no milestone reported complete without it. The six
+amounts sum exactly to the requested total: 8,000 + 5,000 + 7,500 + 8,200 +
+6,000 + 4,000 = 38,700, and 160 + 100 + 150 + 130 + 120 + 80 = 740 hours.
 
 ## Other funding
 
@@ -301,8 +302,12 @@ This section is for the applicant and does not go into the form.
 ```
 29 to 5,926 bytes, six features      tools/phase5/h3_results.tsv
 measured end to end on an iPhone     tools/dossier/e2e_ios_results.tsv
-4 MiB never completed at 60% loss    tools/t2/h2_results.tsv rows 266-267
-same object, 303 s, hash-verified    tools/t2/h2_results.tsv rows 268-269
+4 MiB never completed at 60% loss    tools/t2/h2_results.tsv row 264 (loss60,
+                                       ARQ lane, retx=204, 4194304B not
+                                       delivered within 790 s)
+same object, 303 s, hash-verified    tools/t2/h2_results.tsv row 268 (loss60,
+                                       coded lane, 4194304B sha-verified in
+                                       303564 ms)
 10 of 60 bundles, 40.7 s gap         tools/dossier/e2e_ios_results.tsv, ptt
 CI green, tag v0.1.0-ci-green        GitHub Actions run 33610621039
 5,000-50,000 EUR per proposal        nlnet.nl, successor programme page
@@ -320,7 +325,10 @@ above 50,000 needs a completed one   nlnet.nl, NGI Zero applicant guide
 150k per proposal, 500k lifetime     nlnet.nl, NGI Zero applicant guide
 scoring 30 / 40 / 30, floor 5.0/7    nlnet.nl, applicant guide
 calls reopened 3 Sept, due 3 Nov     nlnet.nl/funding.html
-repository public since Sept 2026    git log, first public push
+repository public since Sept 2026    first push to origin 2026-09-01, from
+                                       git reflog (local only); the date the
+                                       repository was made public is not
+                                       recorded here — confirm on GitHub
 ```
 
 No acceptance probability appears anywhere in this application, because none is

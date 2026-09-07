@@ -75,6 +75,56 @@ final class RetransmitCapDataChannelInit extends rtc.RTCDataChannelInit {
   }
 }
 
+/// The ICE candidate pair media is actually flowing over, as the standard
+/// stats describe it.
+///
+/// [localRelayProtocol] is the field that answers "did this phone speak
+/// UDP?". A `relay` candidate's own [localProtocol] is the transport of the
+/// RELAYED leg (udp for classic TURN), while `relayProtocol` is the
+/// transport between this endpoint and the TURN server — the only leg that
+/// crosses a filtered access network. [wireProtocol] prefers it for exactly
+/// that reason and falls back to [localProtocol] for non-relay pairs.
+class SelectedIcePair {
+  const SelectedIcePair({
+    this.localCandidateType,
+    this.localProtocol,
+    this.localRelayProtocol,
+    this.remoteCandidateType,
+    this.state,
+  });
+
+  /// `host` | `srflx` | `prflx` | `relay`.
+  final String? localCandidateType;
+
+  /// The local candidate's own transport (`udp` | `tcp`).
+  final String? localProtocol;
+
+  /// The transport to the TURN server (`udp` | `tcp` | `tls`), present only
+  /// on a relay candidate.
+  final String? localRelayProtocol;
+
+  final String? remoteCandidateType;
+
+  /// The pair's ICE state (`succeeded` when nominated and usable).
+  final String? state;
+
+  /// The transport this endpoint put on the wire.
+  String? get wireProtocol => localRelayProtocol ?? localProtocol;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'local_candidate_type': localCandidateType,
+    'local_protocol': localProtocol,
+    'local_relay_protocol': localRelayProtocol,
+    'remote_candidate_type': remoteCandidateType,
+    'state': state,
+  };
+
+  @override
+  String toString() =>
+      'SelectedIcePair(type=$localCandidateType, protocol=$wireProtocol, '
+      'state=$state)';
+}
+
 final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
   FlutterWebRtcPeerConnectionPort._(
     this._pc,
@@ -174,7 +224,18 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
 
   /// Opus fmtp knobs applied to every local description. Null means the stack's
   /// own defaults, which is what every existing caller gets.
-  final OpusSdpPolicy? _opusPolicy;
+  OpusSdpPolicy? _opusPolicy;
+
+  /// The Opus SDP policy in force for the NEXT local description this port
+  /// produces. Changing it does nothing by itself: the caller must
+  /// renegotiate (a fresh offer or answer) so the new receive preferences
+  /// travel to the far end's encoder — the mid-call half of the wire
+  /// budget (see MediaAdaptationDriver.onRenegotiateWirePolicy).
+  OpusSdpPolicy? get opusPolicy => _opusPolicy;
+
+  void updateOpusPolicy(OpusSdpPolicy? policy) {
+    _opusPolicy = policy;
+  }
 
   final _statusController = StreamController<PeerConnectionStatus>.broadcast();
   final _candidatesController = StreamController<IceCandidate>.broadcast();
@@ -314,6 +375,18 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
     return countersFromStats(reports);
   }
 
+  /// The selected ICE candidate pair, or null before ICE has nominated one.
+  ///
+  /// Outside the [PeerConnectionPort] contract on purpose: the pure port
+  /// exposes counters, and this is a description of the PATH those counters
+  /// came over. A filtered-network row needs it — "the audio crossed" and
+  /// "the audio crossed over a TURN relay reached by TCP" are different
+  /// claims, and only the second one proves the phone emitted no UDP.
+  Future<SelectedIcePair?> readSelectedIcePair() async {
+    _ensureOpen();
+    return selectedIcePairFromStats(await _pc.getStats());
+  }
+
   @override
   Future<MediaDataChannel> createDataChannel(DataChannelConfig config) async {
     _ensureOpen();
@@ -450,6 +523,58 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
     );
   }
 
+  /// Picks the selected `candidate-pair` out of a standard stats report and
+  /// resolves its local and remote `local-candidate`/`remote-candidate`
+  /// entries into a [SelectedIcePair].
+  ///
+  /// Same selection rule as [countersFromStats]: the transport's
+  /// `selectedCandidatePairId` when present, else the pair flagged
+  /// `selected`, or `nominated` + `succeeded`. Returns null when no pair
+  /// qualifies (ICE has not nominated yet).
+  static SelectedIcePair? selectedIcePairFromStats(
+    List<rtc.StatsReport> reports,
+  ) {
+    String? selectedPairId;
+    final candidatePairs = <String, Map<dynamic, dynamic>>{};
+    final candidates = <String, Map<dynamic, dynamic>>{};
+    Map<dynamic, dynamic>? flaggedSelectedPair;
+
+    for (final report in reports) {
+      final values = report.values;
+      switch (report.type) {
+        case 'transport':
+          final id = values['selectedCandidatePairId'];
+          if (id is String && id.isNotEmpty) selectedPairId = id;
+        case 'candidate-pair':
+          candidatePairs[report.id] = values;
+          final selected = values['selected'];
+          final nominated = values['nominated'];
+          final state = values['state'];
+          if (selected == true || (nominated == true && state == 'succeeded')) {
+            flaggedSelectedPair ??= values;
+          }
+        case 'local-candidate':
+        case 'remote-candidate':
+          candidates[report.id] = values;
+      }
+    }
+
+    final pair =
+        (selectedPairId != null ? candidatePairs[selectedPairId] : null) ??
+        flaggedSelectedPair;
+    if (pair == null) return null;
+
+    final local = candidates[_asStringOrNull(pair['localCandidateId'])];
+    final remote = candidates[_asStringOrNull(pair['remoteCandidateId'])];
+    return SelectedIcePair(
+      localCandidateType: _asStringOrNull(local?['candidateType']),
+      localProtocol: _asStringOrNull(local?['protocol']),
+      localRelayProtocol: _asStringOrNull(local?['relayProtocol']),
+      remoteCandidateType: _asStringOrNull(remote?['candidateType']),
+      state: _asStringOrNull(pair['state']),
+    );
+  }
+
   // -----------------------------------------------------------------------
   // Internals
   // -----------------------------------------------------------------------
@@ -501,6 +626,9 @@ final class FlutterWebRtcPeerConnectionPort implements PeerConnectionPort {
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
   }
+
+  static String? _asStringOrNull(dynamic value) =>
+      value is String && value.isNotEmpty ? value : null;
 
   static double? _asDoubleOrNull(dynamic value) {
     if (value is double) return value;

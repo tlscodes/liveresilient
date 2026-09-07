@@ -96,6 +96,19 @@ usage: net_shape.sh <command> [args]
   check                      report whether the interface exists and pf sees it
   shape <bw> <delay> <plr>   e.g. shape 64Kbit/s 60 0.05   ("-" leaves a field unset)
   block <proto|all>          drop traffic: udp | all
+  whitelist <spec>           load the filtered-network rule set: only the
+                             listed TCP ports and UDP 53 to the allowed host
+                             pass, TCP to the reset port on any other host is
+                             answered with a reset, everything else from the
+                             peer is dropped silently, and IPv6 is dropped
+                             entirely (the pass rules are IPv4-only).
+                             spec: peer=<ip>,allow=<ip>,tcp=<p1>+<p2>[,rst=<port>]
+                             peer and allow are IPv4 hosts (optional /1..32);
+                             a wildcard address is refused. rst defaults to 443.
+  whitelist-print <spec>     print the same rule text and exit. No sudo, no
+                             pfctl, no interface needed — this is what the unit
+                             test pins, and it comes from the same function
+                             that `whitelist` loads.
   teardown                   remove our rules and restore /etc/pf.conf
   restore                    same, usable after a hand-repair left pf altered
   status                     show current pipes and anchor rules
@@ -267,7 +280,7 @@ load_anchor() {
 }
 
 shape() {
-  local bw=$1 delay=$2 plr=$3
+  local bw=$1 delay=$2 plr=$3 scope_arg="${4:-}"
   require_iface
   local cfg=""
   [ "$bw" != "-" ] && cfg="$cfg bw $bw"
@@ -347,11 +360,31 @@ shape() {
   # 5353) and because a verification probe must travel the same road as the
   # traffic whose impairment it certifies.
   local peer="${T2_PEER:-}"
+  local shape_all="${T2_SHAPE_ALL:-0}"
+  local tcp_ports="${T2_SHAPE_TCP_PORT:-}"
+  # THE SCOPE AS AN ARGUMENT (2026-09-05). The sudoers rule that lets the
+  # harness run this script without a password strips every environment
+  # variable ("you are not allowed to set ... T2_PEER, T2_SHAPE_TCP_PORT"),
+  # so the env forms above only work when run as root directly. The fourth
+  # positional argument carries the same choice through sudo:
+  #   all                      every packet on the interface
+  #   peer=<ip>                UDP (not mDNS) and ICMP to/from that address
+  #   peer=<ip>,tcp=<p1>+<p2>  the same plus TCP on those ports
+  case "$scope_arg" in
+    '') ;;
+    all) shape_all=1 ;;
+    peer=*)
+      peer=${scope_arg#peer=}; peer=${peer%%,*}
+      case "$scope_arg" in
+        *,tcp=*) tcp_ports="{ $(printf '%s' "${scope_arg#*,tcp=}" | tr '+' ',' | sed 's/,/, /g') }" ;;
+      esac ;;
+    *) echo "unknown scope: $scope_arg" >&2; return 2 ;;
+  esac
   local rules=""
   if [ -n "${T2_SHAPE_SPEC:-}" ]; then
     rules="dummynet in  quick on $IFACE ${T2_SHAPE_SPEC} pipe 1
 dummynet out quick on $IFACE ${T2_SHAPE_SPEC} pipe 2"
-  elif [ "${T2_SHAPE_ALL:-0}" = 1 ]; then
+  elif [ "$shape_all" = 1 ]; then
     if [ -n "$peer" ]; then
       rules="dummynet in  quick on $IFACE from $peer to any pipe 1
 dummynet out quick on $IFACE from any to $peer pipe 2"
@@ -373,10 +406,10 @@ dummynet out quick on $IFACE proto icmp from any to $peer pipe 2"
     # while the debugger stays untouched. Expected consequence, not a bug:
     # under heavy-loss profiles TCP retransmission may stall signalling long
     # before media degrades.
-    if [ -n "${T2_SHAPE_TCP_PORT:-}" ]; then
+    if [ -n "$tcp_ports" ]; then
       rules="$rules
-dummynet in  quick on $IFACE proto tcp from $peer to any port ${T2_SHAPE_TCP_PORT} pipe 1
-dummynet out quick on $IFACE proto tcp from any port ${T2_SHAPE_TCP_PORT} to $peer pipe 2"
+dummynet in  quick on $IFACE proto tcp from $peer to any port ${tcp_ports} pipe 1
+dummynet out quick on $IFACE proto tcp from any port ${tcp_ports} to $peer pipe 2"
     fi
   else
     rules="dummynet in  quick on $IFACE proto udp from any to any port != 5353 pipe 1
@@ -398,6 +431,148 @@ block() {
     load_anchor "block drop quick on $IFACE all"
   fi
   echo "blocked:$what on $IFACE"
+}
+
+# ---------------------------------------------------------------------------
+# THE FILTERED-NETWORK PROFILE  (2026-09-05)
+#
+# `whitelist` is a FILTER, not an impairment: no pipes, no dummynet, nothing
+# for dnctl to flush. It states what may cross bridge100 and answers everything
+# else, so a run can show the door standing open for allowed traffic in the
+# same second the app rendezvouses through it.
+#
+# ORDER IS THE RULE. pf with `quick` takes the first match, so the four pass
+# rules come first (an allowed port keeps passing even if it is the same number
+# as the reset port), then the reset for TCP to the reset port on any other
+# host, then the silent catch-all drop that swallows QUIC on UDP 443, ICMP and
+# every other TCP port. Replies ride the state table (`keep state`); there is
+# deliberately no broad `pass out`.
+#
+# BOTH ADDRESS FAMILIES, OR THE DOOR IS NOT SHUT (2026-09-05). Every rule above
+# names an IPv4 literal, so pf compiles each one with af=AF_INET and none of
+# them can match an IPv6 packet. bridge100 carries a live IPv6 link-local and
+# the phone configures its own, so the IPv4 catch-all alone would leave that
+# family to the main ruleset, which has no default block: the phone could reach
+# any Mac listener over fe80::...%bridge100 while the row still printed "all
+# else dropped". The last rule closes the family — `inet6 from any to any`,
+# because the peer's IPv6 addresses are not knowable from the spec and nothing
+# on this bridge is allowed to use that family at all.
+#
+# The peer and allow addresses are validated (valid_addr) for the same reason
+# the ports are: they are interpolated straight into the rule text, so a value
+# like `any` or `0.0.0.0/0` would compile into a ruleset that reads as a
+# whitelist and behaves as its inverse.
+#
+# The argument is positional and comma-separated for the same reason `shape`'s
+# scope argument is: the scoped sudoers entry strips the environment, so a
+# T2_-style variable would never reach this script through sudo.
+#
+# whitelist_rules() is the SINGLE SOURCE of the rule text. `whitelist` loads
+# what it returns and `whitelist-print` prints what it returns, so the text a
+# test pins and the text pf receives cannot drift apart.
+# ---------------------------------------------------------------------------
+
+valid_port() {
+  case "${1:-}" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+# An address that reaches a pf rule must be a real IPv4 host, because the rule
+# text is built by string interpolation: a value like `any` or `0.0.0.0/0`
+# produces a syntactically valid ruleset that says the opposite of a whitelist
+# (`pass ... from $peer to any port { 4443 }` opens that port on every host,
+# and `block drop ... from any to any` drops the interface). Accepted: a dotted
+# quad with each octet 0..255, optionally followed by /1../32. Rejected: the
+# unspecified address 0.0.0.0 in any form, and a /0 prefix — both are the
+# wildcard this profile exists to exclude.
+valid_addr() {
+  local a="${1:-}" host="" plen=""
+  case "$a" in
+    *[!0-9./]*) return 1 ;;
+    */*/*) return 1 ;;
+    .*|*.|*..*) return 1 ;;
+    */*) host=${a%%/*}; plen=${a#*/}
+         case "$plen" in
+           ''|*[!0-9]*) return 1 ;;
+         esac
+         [ "${#plen}" -le 2 ] || return 1
+         [ "$plen" -ge 1 ] && [ "$plen" -le 32 ] || return 1 ;;
+    *) host=$a ;;
+  esac
+  local rest="$host" part i=0
+  while [ -n "$rest" ]; do
+    part=${rest%%.*}
+    if [ "$part" = "$rest" ]; then rest=""; else rest=${rest#*.}; fi
+    i=$((i + 1))
+    [ "$i" -le 4 ] || return 1
+    case "$part" in
+      ''|*[!0-9]*) return 1 ;;
+      0[0-9]*) return 1 ;;
+    esac
+    [ "${#part}" -le 3 ] || return 1
+    [ "$part" -le 255 ] || return 1
+  done
+  [ "$i" -eq 4 ] || return 1
+  [ "$host" != "0.0.0.0" ] || return 1
+  return 0
+}
+
+whitelist_rules() {
+  local arg="${1:-}" peer="" allow="" tcp="" rst="443"
+  local rest="$arg" kv key val
+  while [ -n "$rest" ]; do
+    kv=${rest%%,*}
+    if [ "$kv" = "$rest" ]; then rest=""; else rest=${rest#*,}; fi
+    case "$kv" in
+      *=*) key=${kv%%=*}; val=${kv#*=} ;;
+      *) echo "whitelist: not a field: '$kv'" >&2; return 2 ;;
+    esac
+    case "$key" in
+      peer) peer=$val ;;
+      allow) allow=$val ;;
+      tcp) tcp=$val ;;
+      rst) rst=$val ;;
+      *) echo "whitelist: unknown field: '$key'" >&2; return 2 ;;
+    esac
+  done
+  [ -n "$peer" ] || { echo "whitelist: missing peer=<ip>" >&2; return 2; }
+  [ -n "$allow" ] || { echo "whitelist: missing allow=<ip>" >&2; return 2; }
+  [ -n "$tcp" ] || { echo "whitelist: missing tcp=<p1>[+<p2>...]" >&2; return 2; }
+  valid_addr "$peer" || { echo "whitelist: bad peer address: '$peer' (IPv4 host, optional /1..32, not 0.0.0.0 and not a wildcard)" >&2; return 2; }
+  valid_addr "$allow" || { echo "whitelist: bad allow address: '$allow' (IPv4 host, optional /1..32, not 0.0.0.0 and not a wildcard)" >&2; return 2; }
+  valid_port "$rst" || { echo "whitelist: bad rst port: '$rst' (1..65535)" >&2; return 2; }
+  local ports="$tcp" p list=""
+  while [ -n "$ports" ]; do
+    p=${ports%%+*}
+    if [ "$p" = "$ports" ]; then ports=""; else ports=${ports#*+}; fi
+    valid_port "$p" || { echo "whitelist: bad tcp port: '$p' (1..65535)" >&2; return 2; }
+    if [ -z "$list" ]; then list="$p"; else list="$list, $p"; fi
+  done
+  printf '%s\n' \
+"pass  out quick on $IFACE proto tcp from $allow to $peer port { $list } keep state" \
+"pass  in  quick on $IFACE proto tcp from $peer to $allow port { $list } keep state" \
+"pass  out quick on $IFACE proto udp from $allow to $peer port 53 keep state" \
+"pass  in  quick on $IFACE proto udp from $peer to $allow port 53 keep state" \
+"block return-rst in quick on $IFACE proto tcp from $peer to any port $rst" \
+"block drop        in quick on $IFACE from $peer to any" \
+"block drop        in quick on $IFACE inet6 from any to any"
+}
+
+whitelist() {
+  local rules
+  rules=$(whitelist_rules "${1:-}") || exit $?
+  require_iface
+  ensure_hooks
+  load_anchor "$rules"
+  echo "whitelist: loaded on $IFACE"
+}
+
+whitelist_print() {
+  local rules
+  rules=$(whitelist_rules "${1:-}") || exit $?
+  printf '%s\n' "$rules"
 }
 
 teardown() {
@@ -425,8 +600,10 @@ case "$1" in
   setup) setup ;;
   unsetup) unsetup ;;
   check) check ;;
-  shape) [ $# -eq 4 ] || usage; shape "$2" "$3" "$4" ;;
+  shape) [ $# -eq 4 ] || [ $# -eq 5 ] || usage; shape "$2" "$3" "$4" "${5:-}" ;;
   block) [ $# -eq 2 ] || usage; block "$2" ;;
+  whitelist) [ $# -eq 2 ] || usage; whitelist "$2" ;;
+  whitelist-print) [ $# -eq 2 ] || usage; whitelist_print "$2" ;;
   teardown) teardown ;;
   restore) restore ;;
   status) status ;;
