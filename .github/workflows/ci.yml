@@ -232,6 +232,16 @@ jobs:
       - name: Ledger gate is red when there is nothing to measure
         run: python3 tools/test_ledger_proof_gate.py
 
+      # A prepared form block longer than the field it is pasted into is
+      # discarded silently by the browser: it keeps the opening characters and
+      # drops the rest with no warning, no error and no visual cue. Measured on
+      # this repository — the abstract was 1652 characters into a 1000-character
+      # field and the budget answer 5694 into 4000, and nothing in the document
+      # showed it. tools/test_field_length_gate.py, which pins the red cases,
+      # is picked up by the discovery step below.
+      - name: Form blocks fit their fields
+        run: python3 tools/dossier/field_length_gate.py
+
       # Two of the suites below sign with Ed25519. The distribution package is
       # used rather than pip: the runner's python is externally managed, and a
       # suite that silently fails to import its dependency is coverage lost.

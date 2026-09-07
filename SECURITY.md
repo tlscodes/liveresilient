@@ -65,9 +65,19 @@ every security property below as *designed and tested by the authors*, not
 
 ## Operational advice for deployers
 
-The code in this repository contains no server addresses, keys, or hostnames —
-by design. Those belong to a deployment, not to the source tree, and should be
-distributed to users through a channel you control rather than committed here.
+The code in this repository contains no keys or secrets — by design. It does
+contain default hostnames: a relay on a commercial edge platform
+(`apps/reference_app/lib/src/call_session.dart`), public STUN servers
+(`startup_manifest.dart`), and two vendors' DNS-over-HTTPS resolvers
+(`packages/adaptive_transport/lib/src/resilient/txt_query_transport.dart`).
+These are public, unauthenticated endpoints, and in the default build every call
+registers with that relay host.
+
+Replace them before deploying to users you are responsible for — the relay by
+its configured hostname, the STUN and resolver lists by their defaults. Anything
+that identifies your deployment belongs to the deployment, not to the source
+tree, and should be distributed to users through a channel you control rather
+than committed here.
 
 ## Measured claims
 

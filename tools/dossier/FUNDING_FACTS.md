@@ -36,7 +36,10 @@ amount, historic NGI0  above 50k required one or more completed smaller NGI0
                        The equivalent scale-up rule for the successor programme
                        was not published as of 2 September 2026.
 calls                  reopened 3 September 2026; deadline 3 November 2026,
-                       12:00 CEST, then the 3rd of every odd month
+                       12:00 CET (noon), then the 3rd of every odd month.
+                       Read from the form on 2026-09-07: the zone is CET, not
+                       CEST as this row said until then — an hour's difference
+                       on a noon deadline.
 notable field          a generative-AI disclosure question — answer it plainly
 hourly rate            65 EUR/h is the stated ceiling, and the FAQ warns that
                        using the ceiling reduces cost effectiveness
