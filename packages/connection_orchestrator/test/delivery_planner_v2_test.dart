@@ -163,6 +163,108 @@ void main() {
       expect(urgentPlan.explanation!.grounds, contains('1 of 2'));
       expect(urgentPlan.explanation!.grounds, contains('credibleFloor 0.20'));
     });
+
+    test('urgent traffic with no credible lane replicates over the live '
+        'lanes, never only the dead lane raw health ranked first', () {
+      // Measured on the rig (dnsvalve profile, 2026-09-13): the relay's
+      // health was 0 (filtered off), the DNS valve's 0.012; both unexplored,
+      // so the learned term was the same UCB bonus. Raw health put the dead
+      // relay first (0 − 0.05 > 0.006 − 0.15) and the old urgent fallback
+      // took only that lane.
+      final plan = planner.plan(
+        lanes: const [
+          PlannerLaneView(
+            id: 'resilient.wss',
+            healthScore: 0.0,
+            learnedScore: 0.659,
+            costRank: 1,
+          ),
+          PlannerLaneView(
+            id: 'resilient.dns-valve',
+            healthScore: 0.012,
+            learnedScore: 0.659,
+            costRank: 3,
+          ),
+        ],
+        context: ctx,
+        urgent: true,
+      );
+      expect(plan.strategy, DeliveryStrategy.replicate);
+      expect(plan.laneIds, ['resilient.dns-valve']);
+      final explanation = plan.explanation!;
+      expect(explanation.grounds, contains('0 of 2'));
+      expect(explanation.grounds, contains('1 live lane'));
+      final valve = explanation.lanes[0];
+      expect(valve.laneId, 'resilient.dns-valve');
+      expect(valve.noPath, isFalse);
+      expect(
+        valve.blendedScore,
+        closeTo(0.5 * 0.012 + 0.5 * 0.659 - 0.05 * 3, 1e-9),
+      );
+      final relay = explanation.lanes[1];
+      expect(relay.laneId, 'resilient.wss');
+      expect(relay.noPath, isTrue, reason: 'the breakdown names the rule');
+      expect(relay.blendedScore, closeTo(-1.0 - 0.05 * 1, 1e-9));
+      expect(
+        relay.blendedScore,
+        lessThan(planner.credibleFloor),
+        reason: 'a dead lane can never be credible, whatever its UCB bonus',
+      );
+    });
+
+    test('urgent traffic with no live lane at all still names the cheapest '
+        'dead lane, deterministically', () {
+      final plan = planner.plan(
+        lanes: const [
+          PlannerLaneView(
+            id: 'dear',
+            healthScore: 0.0,
+            learnedScore: 0.9,
+            costRank: 2,
+          ),
+          PlannerLaneView(
+            id: 'cheap',
+            healthScore: 0.0,
+            learnedScore: 0.1,
+            costRank: 0,
+          ),
+        ],
+        context: ctx,
+        urgent: true,
+      );
+      expect(plan.strategy, DeliveryStrategy.replicate);
+      expect(plan.laneIds, ['cheap']);
+      expect(plan.explanation!.grounds, contains('no live lane'));
+    });
+
+    test('urgent live fan-out is capped at urgentLiveFanout', () {
+      final plan = planner.plan(
+        lanes: const [
+          PlannerLaneView(
+            id: 'a',
+            healthScore: 0.1,
+            learnedScore: 0.1,
+            costRank: 0,
+          ),
+          PlannerLaneView(
+            id: 'b',
+            healthScore: 0.09,
+            learnedScore: 0.1,
+            costRank: 0,
+          ),
+          PlannerLaneView(
+            id: 'c',
+            healthScore: 0.08,
+            learnedScore: 0.1,
+            costRank: 0,
+          ),
+        ],
+        context: ctx,
+        urgent: true,
+      );
+      expect(plan.laneIds, ['a', 'b']);
+      expect(plan.explanation!.grounds, contains('2 live lane'));
+    });
   });
 
   group('LaneChoicePolicy · fallback rule and learning', () {

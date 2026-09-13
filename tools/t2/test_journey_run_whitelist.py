@@ -8,7 +8,7 @@ live (2026-09-05):
   * The reset control aimed at 192.168.2.9. That address is inside the phone's
     own 192.168.2.0/24 on bridge100 and nothing answers ARP for it, so the phone
     never put a SYN on the wire and pf's `block return-rst ... to any port 443`
-    (net_shape.sh:558) could never fire. The control returned EHOSTUNREACH on a
+    (net_shape.sh whitelist_rules, the return-rst rule) could never fire. The control returned EHOSTUNREACH on a
     perfectly filtered network AND on a completely unfiltered one: it measured
     an absent host, not the filter. The runner now aims both negative controls
     at an address whose SYN is guaranteed to reach pf, and refuses an override
@@ -26,8 +26,20 @@ The negative-path tests run the real script with a stub PATH and a stub relay
 restarter, and stop it at the fixture-script gate, so nothing here touches pf,
 sudo, the hub port, the relay port or the phone.
 
+The last two sections cover the `dnsvalve` profile, which is the same filter plus
+ONE allowed UDP port — the rig's DNS responder listens on 5300 because binding 53
+needs root. Pinned there: the filter argument is the whitelist one plus `udp=`
+and nothing else (and the whitelist profile's own argument is untouched); the job
+carries the lane's configuration; the LOADED ruleset, not the argument, is what
+must name the port; no UDP probe is claimed from this Mac, because a UDP connect
+has no refused/timeout signal to read; the responder's log is opened per run, so
+a `complete` line from an EARLIER run cannot satisfy a later row; and one
+predicate drives every filter branch, so the second profile cannot end up with a
+shaped link and an unfiltered network.
+
 USAGE  python3 tools/t2/test_journey_run_whitelist.py     -> exit 0 on PASS
 """
+import json
 import os
 import re
 import subprocess
@@ -68,8 +80,8 @@ def run(env_extra, args=("whitelist",), expect_rc=None):
     return proc
 
 
-def dry(env_extra=None, expect_rc=0):
-    return run({**(env_extra or {}), "JOURNEY_DRY": "1"}, expect_rc=expect_rc)
+def dry(env_extra=None, expect_rc=0, args=("whitelist",)):
+    return run({**(env_extra or {}), "JOURNEY_DRY": "1"}, args=args, expect_rc=expect_rc)
 
 
 def field(pattern, text, name):
@@ -224,6 +236,90 @@ check("the strict precondition is whitelist-only",
 check("the other profiles still only get a note",
       'if [ "$PROFILE" != whitelist ]; then\n  curl -sk --max-time 5' in src,
       "the soft probe for the other profiles is gone")
+
+# --- 6. the dnsvalve profile: the whitelist filter plus ONE udp port ---------
+# The responder on this rig listens on 5300, because binding 53 needs root and
+# the rig grants only the shaper. A filter that allowed UDP 53 alone would leave
+# the phone's TXT-query lane with nothing to answer it, and the row would then
+# measure an absent responder rather than a carried message.
+dv = dry(args=("dnsvalve",)).stdout
+dv_arg = field(r'shaper    sudo -n \S+ whitelist "([^"]+)"', dv, "dnsvalve shaper arg")
+wl_arg = field(r'shaper    sudo -n \S+ whitelist "([^"]+)"', out, "whitelist shaper arg")
+check("the dnsvalve filter adds the responder's udp port",
+      dv_arg.endswith(",udp=5300"), f"arg={dv_arg}")
+check("and adds nothing else: the tcp allow list is the whitelist one",
+      dv_arg == wl_arg + ",udp=5300", f"dnsvalve={dv_arg} whitelist={wl_arg}")
+check("the whitelist profile's own argument is untouched by the new key",
+      "udp=" not in wl_arg, f"arg={wl_arg}")
+
+dv_job = json.loads(field(r"job       (\{.*?\})   ", dv, "dnsvalve job JSON"))
+wl_job = json.loads(field(r"job       (\{.*?\})   ", out, "whitelist job JSON"))
+check("the whitelist job carries no dns_valve key", "dns_valve" not in wl_job,
+      f"keys={sorted(wl_job)}")
+valve = dv_job.get("dns_valve", {})
+check("the dnsvalve job carries the lane's configuration",
+      set(valve) >= {"zone", "resolvers", "chat_bytes", "select_budget_s",
+                     "carry_budget_s"},
+      f"keys={sorted(valve)}")
+check("its resolver is this Mac on the responder's port, as a list",
+      valve.get("resolvers") == ["192.168.2.1:5300"], f"resolvers={valve.get('resolvers')}")
+check("its zone is the one the responder answers for",
+      valve.get("zone") == "valve.test", f"zone={valve.get('zone')}")
+check("ICE is restricted to the relay, as under whitelist: every UDP port but "
+      "53 and the valve port is dropped, so a UDP TURN allocation cannot work",
+      valve.get("relay_only") is True, f"relay_only={valve.get('relay_only')}")
+check("the peer is asked to carry bytes, not to replace the call",
+      isinstance(valve.get("chat_bytes"), int) and valve["chat_bytes"] > 0,
+      f"chat_bytes={valve.get('chat_bytes')}")
+
+check("the dry print names the responder it will start, with host and port",
+      "txt_query_server.py" in dv and "--port 5300" in dv and "--domain valve.test" in dv,
+      dv[-400:])
+check("the dry print says the LOADED ruleset is what gets checked, not the argument",
+      "shaper status" in dv and "proto udp" in dv, dv[-400:])
+check("and states plainly that no UDP probe is made from this Mac",
+      "NOT probed" in dv, dv[-400:])
+check("the dnsvalve row template is the one the builder appends",
+      "dns_valve_chat\tdnsvalve\t" in dv and "journey_dnsvalve_rows.py" in dv,
+      dv[-400:])
+check("the whitelist profile still prints its own two row templates and no third",
+      "whitelist_door\twhitelist\t" in out and "whitelist_rendezvous\twhitelist\t" in out
+      and "dns_valve_chat" not in out, out[-400:])
+
+# A profile with no dry implementation must still say so, naming both that do.
+nodry = run({"JOURNEY_DRY": "1"}, args=("normal",), expect_rc=1)
+check("an unimplemented dry profile is refused by name",
+      "whitelist and dnsvalve" in nodry.stderr, f"stderr={nodry.stderr[-200:]!r}")
+
+# --- 7. the two run-scoping properties the row rests on ----------------------
+# Both are source properties: they cannot be observed in a dry run, and both
+# were named as ways a row could be satisfied by evidence from another run.
+check("the responder's log is opened per run, not appended across runs",
+      '>"$VALVE_LOG" 2>&1 &' in src and '>>"$LOGD/$PROFILE.valve.log"' not in src,
+      "an appended valve log lets an earlier run's `complete` line satisfy a later row")
+check("the responder is started once, after the hub is up, not inside its retry loop",
+      src.index("VALVE_PID=$!") > src.index('|| die "the hub never came up'),
+      "a second responder in the retry loop would find the port held by the first")
+check("one predicate drives every filter branch, so the second profile cannot "
+      "get a shaped link and an unfiltered network",
+      'case "$PROFILE" in whitelist|dnsvalve) FILTERED=yes ;; esac' in src
+      and 'if [ "$FILTERED" = yes ]; then' in src
+      and 'if [ "$FILTERED" != yes ]; then' in src,
+      "the FILTERED predicate is gone or a branch still keys off the profile name")
+check("the loaded ruleset, not the argument, is what must name the udp port",
+      'grep \'proto udp\' | grep -q "$VALVE_PORT"' in src,
+      "the run would trust the argument it passed to pf")
+check("the row is built by the tested script with the agreed arguments",
+      "--events \"$EVENTS\" --valve-log \"$VALVE_LOG\"" in src
+      and "--lane-id resilient.dns-valve --profile dnsvalve" in src
+      and "--tsv \"$TSV\"" in src,
+      "the row-builder invocation drifted from the agreed CLI")
+check("the row is scoped to this run in time as well as by the fresh log",
+      '--run-start-epoch "$RUN_EPOCH"' in src,
+      "without it a `complete` line from an earlier run could anchor the row")
+check("the row's budget column is the job's carry budget, not a second default",
+      '--budget-s "$VALVE_CARRY_BUDGET_S"' in src,
+      "an override of the carry budget would leave the row claiming 120 s")
 
 if FAILURES:
     print(f"FAIL {len(FAILURES)} of {CHECKS[0]} checks")

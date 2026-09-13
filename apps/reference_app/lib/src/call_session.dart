@@ -10,7 +10,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:adaptive_transport/adaptive_transport.dart' show TxtQueryValve;
+import 'package:adaptive_transport/adaptive_transport.dart'
+    show HostPort, TxtQueryValve;
 import 'package:call_core/call_core.dart';
 import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:call_signaling_adapter/call_signaling_adapter.dart';
@@ -172,6 +173,51 @@ String? _readTxtQueryValveDomain() {
   return trimmed.isEmpty ? null : trimmed;
 }
 
+/// Resolvers the valve is pinned to, or empty to discover them per device.
+///
+/// `--dart-define=DNS_VALVE_RESOLVERS=host:port,host:port` first, then the
+/// process environment. A rig build points the phone at the responder on
+/// the Mac (`192.168.2.1:5300`) so the real app's survival mode can be
+/// driven over this lane; a production build leaves it empty and the lane
+/// walks the device's own resolvers, the public ones, then DoH — a pinned
+/// address belongs to a deployment that owns it, never to a public build.
+final List<HostPort> txtQueryValveResolvers = parseValveResolvers(
+  _readTxtQueryValveResolversSpec(),
+);
+
+String _readTxtQueryValveResolversSpec() {
+  const String compiled = String.fromEnvironment('DNS_VALVE_RESOLVERS');
+  return compiled.isNotEmpty
+      ? compiled
+      : (Platform.environment['DNS_VALVE_RESOLVERS'] ?? '');
+}
+
+/// `host:port[,host:port]` → resolvers; blank → none. A bracketed IPv6
+/// literal (`[2001:db8::1]:53`) loses its brackets. A malformed entry is a
+/// configuration error and throws rather than being dropped, for the same
+/// reason ResilientLaneEndpoints.fromEnvironment throws: a silently ignored
+/// endpoint is how a build ends up aiming at nothing.
+List<HostPort> parseValveResolvers(String spec) {
+  final out = <HostPort>[];
+  for (final raw in spec.split(',')) {
+    final entry = raw.trim();
+    if (entry.isEmpty) continue;
+    final colon = entry.lastIndexOf(':');
+    final port = colon < 0 ? null : int.tryParse(entry.substring(colon + 1));
+    var host = colon < 0 ? '' : entry.substring(0, colon).trim();
+    if (host.startsWith('[') && host.endsWith(']')) {
+      host = host.substring(1, host.length - 1);
+    }
+    if (host.isEmpty || port == null || port < 1 || port > 65535) {
+      throw FormatException(
+        'DNS_VALVE_RESOLVERS entry "$entry" is not host:port',
+      );
+    }
+    out.add(HostPort(host: host, port: port));
+  }
+  return out;
+}
+
 ResilientLaneEndpoints defaultBorderRelayEndpoints({
   required String callId,
   required CallRole role,
@@ -196,7 +242,7 @@ ResilientLaneEndpoints defaultBorderRelayEndpoints({
     longPollUri: relay.longPollUri,
     txtQueryValve: valveDomain == null
         ? null
-        : TxtQueryValve(domain: valveDomain),
+        : TxtQueryValve(domain: valveDomain, resolvers: txtQueryValveResolvers),
   );
 }
 

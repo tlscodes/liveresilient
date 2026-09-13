@@ -15,9 +15,18 @@ tools/t2/net_shape.sh whitelist loaded):
                 state back. A DEFINITE answer (refused, or connected if
                 something does listen) therefore proves the allowed path
                 carries traffic in both directions under the filter.
-  blocked port  the SYN matches no pass rule; the phone's answer is swallowed
-                by `block drop in quick ... from <peer> to any`. So the
-                connect must produce NO answer at all: a timeout.
+  blocked port  the SYN matches no port-specific pass rule, so it leaves under
+                the stateless catch-all `pass out ... inet from <allow> to
+                <peer> no state` — it reaches the wire, and because that rule
+                is `quick` and stateless, no state exists for the flow in any
+                anchor. pf consults the state table before any rule, so this is
+                what decides the case: with no state to ride, the phone's answer
+                is swallowed by `block drop in quick ... inet from any to any`.
+                The connect must therefore produce NO answer at all: a timeout.
+                (A `block out` rule here would be wrong: pf would refuse the
+                packet inside ip_output, connect() would fail locally with an
+                errno, and the probe would report `error:<n>` about a packet
+                that never reached the wire.)
 
 Hence: allowed = refused|open, blocked = timeout. Any other combination means
 the filter is not doing what the row will claim, and the caller must stop.

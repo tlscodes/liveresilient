@@ -48,6 +48,11 @@ class PlannerLaneView {
 
   /// Relative battery drain (0 = negligible); penalized on low battery.
   final int energyRank;
+
+  /// Whether the lane has a working path at all. Live health is 0 exactly
+  /// when the channel itself says there is none (path degraded, or never
+  /// available); anything above 0 is a path, however thin.
+  bool get hasPath => healthScore > 0;
 }
 
 /// Every term of one lane's blended score, already weighted, so the sum
@@ -60,9 +65,15 @@ class LaneScoreBreakdown {
     required this.costPenalty,
     required this.energyPenalty,
     required this.blendedScore,
+    this.noPath = false,
   });
 
   final String laneId;
+
+  /// True when the lane had no working path: its [blendedScore] is then
+  /// [deadLaneScore], not the sum of the weighted parts below, so an
+  /// explanation never shows a dead lane's parts adding up to a live rank.
+  final bool noPath;
 
   /// Raw live health input (before the health weight is applied).
   final double healthScore;
@@ -123,6 +134,19 @@ class DeliveryPlan {
   String toString() => 'DeliveryPlan($strategy, $laneIds)';
 }
 
+/// Ranking score of a lane with no working path (live health <= 0:
+/// degraded, or never available). Such a lane ranks below EVERY lane that
+/// has a path, whatever the cost ranks say: the cost penalty orders lanes
+/// that work; it must not resurrect a dead one. Dead lanes keep their cost
+/// order among themselves so the choice stays deterministic when nothing
+/// works. One rule with two callers (the fabric's lane ranking and the
+/// planner's blended score) so the two rankings cannot disagree: on the
+/// rig (dnsvalve profile, 2026-09-13) they did, and urgent traffic was
+/// planned onto the filtered-off relay while the live DNS valve, which the
+/// fabric itself had just named best, was never tried.
+double deadLaneScore({required int costRank, required double costPenalty}) =>
+    -1.0 - costPenalty * costRank;
+
 /// Deterministic planning policy. Pure function of its inputs, so every
 /// decision is unit-testable and explainable.
 class DeliveryPlanner {
@@ -133,6 +157,7 @@ class DeliveryPlanner {
     this.raceMargin = 0.15,
     this.credibleFloor = 0.2,
     this.energyPenaltyLowBattery = 0.1,
+    this.urgentLiveFanout = 2,
   });
 
   /// Relative weight of live health vs learned context experience.
@@ -153,11 +178,21 @@ class DeliveryPlanner {
   /// so a hungry radio loses near-ties exactly when it matters.
   final double energyPenaltyLowBattery;
 
-  double blendedScore(PlannerLaneView lane, {bool lowBattery = false}) =>
-      healthWeight * lane.healthScore +
-      learnedWeight * lane.learnedScore -
-      costPenalty * lane.costRank -
-      (lowBattery ? energyPenaltyLowBattery * lane.energyRank : 0);
+  /// How many live lanes urgent traffic replicates over when none of them
+  /// is credible. Two matches the race cap: enough to survive one starved
+  /// lane, few enough that a 16 kbit/s link is not flooded by its own
+  /// copies of a few hundred signaling bytes.
+  final int urgentLiveFanout;
+
+  double blendedScore(PlannerLaneView lane, {bool lowBattery = false}) {
+    if (!lane.hasPath) {
+      return deadLaneScore(costRank: lane.costRank, costPenalty: costPenalty);
+    }
+    return healthWeight * lane.healthScore +
+        learnedWeight * lane.learnedScore -
+        costPenalty * lane.costRank -
+        (lowBattery ? energyPenaltyLowBattery * lane.energyRank : 0);
+  }
 
   /// Produces the plan for this delivery.
   ///
@@ -194,6 +229,7 @@ class DeliveryPlanner {
       for (final l in ranked)
         LaneScoreBreakdown(
           laneId: l.id,
+          noPath: !l.hasPath,
           healthScore: l.healthScore,
           learnedScore: l.learnedScore,
           costPenalty: costPenalty * l.costRank,
@@ -216,13 +252,40 @@ class DeliveryPlanner {
         for (final l in ranked)
           if (score(l) >= credibleFloor) l.id,
       ];
-      final grounds =
-          'replicate: urgent; ${credible.length} of ${ranked.length} lanes '
-          'at or above credibleFloor ${two(credibleFloor)}'
-          '${credible.isEmpty ? '; using best lane anyway' : ''}';
+      // Nothing credible does not mean nothing works. On the rig (dnsvalve
+      // profile, 2026-09-13) the only live lane was a DNS valve at 0.012,
+      // far below the floor, and the plan held just the first-ranked lane,
+      // the filtered-off relay: replicate has no failover, the plan IS the
+      // attempt set, so the payload was parked with a live path untried.
+      // Starved is not dead: urgent traffic replicates over the live lanes
+      // (capped like a race) and only when no path exists at all falls
+      // back to the cheapest dead lane, so the choice stays deterministic.
+      final live = [
+        for (final l in ranked)
+          if (l.hasPath) l.id,
+      ].take(urgentLiveFanout).toList();
+      final floor =
+          '${credible.length} of ${ranked.length} lanes '
+          'at or above credibleFloor ${two(credibleFloor)}';
+      final List<String> laneIds;
+      final String grounds;
+      if (credible.isNotEmpty) {
+        laneIds = credible;
+        grounds = 'replicate: urgent; $floor';
+      } else if (live.isNotEmpty) {
+        laneIds = live;
+        grounds =
+            'replicate: urgent; $floor; '
+            'replicating over ${live.length} live lane(s) $live';
+      } else {
+        laneIds = [ids.first];
+        grounds =
+            'replicate: urgent; $floor; '
+            'no live lane, using the cheapest dead lane anyway';
+      }
       return DeliveryPlan(
         strategy: DeliveryStrategy.replicate,
-        laneIds: credible.isEmpty ? [ids.first] : credible,
+        laneIds: laneIds,
         explanation: explain(DeliveryStrategy.replicate, grounds),
       );
     }

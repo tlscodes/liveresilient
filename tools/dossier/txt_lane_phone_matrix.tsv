@@ -1,0 +1,71 @@
+run_id	profile	bw	delay_ms	plr	case	result
+2026-09-12T22:47:15Z	clean	-	-	-	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-12T22:47:15Z	clean	-	-	-	echo	probe=true one=ok/2ms many=ok/7ms attempts=6 replies=6
+2026-09-12T22:47:15Z	clean	-	-	-	rate	policy=strict attemptsPerChunk=1 delivered=5/5 ms=34 attempts=15 replies=15 down=false
+2026-09-12T22:47:15Z	clean	-	-	-	rate	policy=retry attemptsPerChunk=3 delivered=5/5 ms=28 attempts=15 replies=15 down=false
+2026-09-12T22:47:15Z	clean	-	-	-	summary	All tests passed! elapsed=220s
+2026-09-12T23:32:02Z	normal	-	40	0.0	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-12T23:32:02Z	normal	-	40	0.0	echo	probe=true one=ok/87ms many=ok/344ms attempts=6 replies=6
+2026-09-12T23:32:02Z	normal	-	40	0.0	rate	policy=strict attemptsPerChunk=1 delivered=5/5 ms=1294 attempts=15 replies=15 down=false
+2026-09-12T23:32:02Z	normal	-	40	0.0	rate	policy=retry attemptsPerChunk=3 delivered=5/5 ms=1296 attempts=15 replies=15 down=false
+2026-09-12T23:32:02Z	normal	-	40	0.0	summary	All tests passed! elapsed=226s
+2026-09-13T00:03:40Z	latency	-	900	0.0	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T00:03:40Z	latency	-	900	0.0	echo	probe=true one=ok/1807ms many=ok/7229ms attempts=6 replies=6
+2026-09-13T00:03:40Z	latency	-	900	0.0	rate	policy=strict attemptsPerChunk=1 delivered=5/5 ms=27098 attempts=15 replies=15 down=false
+2026-09-13T00:03:40Z	latency	-	900	0.0	rate	policy=retry attemptsPerChunk=3 delivered=5/5 ms=27107 attempts=15 replies=15 down=false
+2026-09-13T00:03:40Z	latency	-	900	0.0	summary	All tests passed! elapsed=321s
+2026-09-13T00:03:40Z	loss10	-	-	0.10	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T00:03:40Z	loss10	-	-	0.10	echo	probe=true one=transient/nullms many=ok/13ms attempts=6 replies=5
+2026-09-13T00:03:40Z	loss10	-	-	0.10	rate	policy=strict attemptsPerChunk=1 delivered=3/5 ms=6052 attempts=13 replies=11 down=false
+2026-09-13T00:03:40Z	loss10	-	-	0.10	rate	policy=retry attemptsPerChunk=3 delivered=5/5 ms=350 attempts=16 replies=15 down=false
+2026-09-13T00:03:40Z	loss10	-	-	0.10	FAIL	the phone reaches the responder: probe, one chunk, many chunks
+2026-09-13T00:03:40Z	loss10	-	-	0.10	summary	Some tests failed. elapsed=187s
+2026-09-13T00:03:40Z	bandwidth	32Kbit/s	-	0.0	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T00:03:40Z	bandwidth	32Kbit/s	-	0.0	echo	probe=true one=ok/73ms many=ok/339ms attempts=6 replies=6
+2026-09-13T00:03:40Z	bandwidth	32Kbit/s	-	0.0	rate	policy=strict attemptsPerChunk=1 delivered=5/5 ms=1265 attempts=15 replies=15 down=false
+2026-09-13T00:03:40Z	bandwidth	32Kbit/s	-	0.0	rate	policy=retry attemptsPerChunk=3 delivered=5/5 ms=1263 attempts=15 replies=15 down=false
+2026-09-13T00:03:40Z	bandwidth	32Kbit/s	-	0.0	summary	All tests passed! elapsed=179s
+2026-09-13T00:03:40Z	narrow	16Kbit/s	-	0.0	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T00:03:40Z	narrow	16Kbit/s	-	0.0	echo	probe=true one=ok/142ms many=ok/621ms attempts=6 replies=6
+2026-09-13T00:03:40Z	narrow	16Kbit/s	-	0.0	rate	policy=strict attemptsPerChunk=1 delivered=5/5 ms=2419 attempts=15 replies=15 down=false
+2026-09-13T00:03:40Z	narrow	16Kbit/s	-	0.0	rate	policy=retry attemptsPerChunk=3 delivered=5/5 ms=2421 attempts=15 replies=15 down=false
+2026-09-13T00:03:40Z	narrow	16Kbit/s	-	0.0	summary	All tests passed! elapsed=184s
+2026-09-13T00:03:40Z	loss60	-	-	0.60	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T00:03:40Z	loss60	-	-	0.60	echo	probe=false one=transient/nullms many=transient/nullms attempts=3 replies=0
+2026-09-13T00:03:40Z	loss60	-	-	0.60	FAIL	the phone reaches the responder: probe, one chunk, many chunks
+2026-09-13T00:03:40Z	loss60	-	-	0.60	FAIL	the app's own construction path works on iOS: forValve with pinned resolvers (no resolv.conf on the phone)
+2026-09-13T00:03:40Z	loss60	-	-	0.60	FAIL	rotating through dead resolvers on one send is ONE failure, so a brief outage cannot declare the valve DOWN (review #5)
+2026-09-13T00:03:40Z	loss60	-	-	0.60	FAIL	delivery rate over five 100-byte sends: strict policy vs retry policy (attemptsPerChunk 1 vs 3) - did not complete
+2026-09-13T00:03:40Z	loss60	-	-	0.60	FAIL	a zone the wire layer refuses is a transient result, not a throw (review #7) - did not complete
+2026-09-13T00:03:40Z	loss60	-	-	0.60	FAIL	the phone default (public resolvers, no zone answering) fails as one charged failure and the valve stays UP - did not complete
+2026-09-13T00:03:40Z	loss60	-	-	0.60	FAIL	(tearDownAll) - did not complete
+2026-09-13T00:03:40Z	loss60	-	-	0.60	summary	Some tests failed. elapsed=210s
+2026-09-13T00:03:40Z	extreme	16Kbit/s	1000	0.15	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T00:03:40Z	extreme	16Kbit/s	1000	0.15	echo	probe=true one=ok/2146ms many=transient/nullms attempts=5 replies=4
+2026-09-13T00:03:40Z	extreme	16Kbit/s	1000	0.15	rate	policy=strict attemptsPerChunk=1 delivered=2/5 ms=28513 attempts=12 replies=9 down=false
+2026-09-13T00:03:40Z	extreme	16Kbit/s	1000	0.15	rate	policy=retry attemptsPerChunk=3 delivered=5/5 ms=43196 attempts=19 replies=15 down=false
+2026-09-13T00:03:40Z	extreme	16Kbit/s	1000	0.15	FAIL	the phone reaches the responder: probe, one chunk, many chunks
+2026-09-13T00:03:40Z	extreme	16Kbit/s	1000	0.15	FAIL	rotating through dead resolvers on one send is ONE failure, so a brief outage cannot declare the valve DOWN (review #5)
+2026-09-13T00:03:40Z	extreme	16Kbit/s	1000	0.15	summary	Some tests failed. elapsed=302s
+2026-09-13T00:54:54Z	clean	-	-	-	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T00:54:54Z	clean	-	-	-	echo	probe=true one=ok/2ms many=ok/7ms attempts=6 replies=6
+2026-09-13T00:54:54Z	clean	-	-	-	rate	policy=strict attemptsPerChunk=1 delivered=5/5 ms=37 attempts=15 replies=15 down=false
+2026-09-13T00:54:54Z	clean	-	-	-	rate	policy=retry attemptsPerChunk=24 delivered=5/5 ms=28 attempts=15 replies=15 down=false
+2026-09-13T00:54:54Z	clean	-	-	-	summary	All tests passed! elapsed=267s
+2026-09-13T00:54:54Z	loss10	-	-	0.10	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T00:54:54Z	loss10	-	-	0.10	echo	probe=true one=ok/7ms many=ok/9ms attempts=8 replies=6
+2026-09-13T00:54:54Z	loss10	-	-	0.10	rate	policy=strict attemptsPerChunk=1 delivered=1/5 ms=12059 attempts=10 replies=6 down=false
+2026-09-13T00:54:54Z	loss10	-	-	0.10	rate	policy=retry attemptsPerChunk=24 delivered=5/5 ms=45 attempts=15 replies=15 down=false
+2026-09-13T00:54:54Z	loss10	-	-	0.10	summary	All tests passed! elapsed=270s
+2026-09-13T17:15:10Z	loss60	-	-	0.60	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T17:15:10Z	loss60	-	-	0.60	echo	probe=true one=transient/nullms many=ok/19616ms attempts=46 replies=5
+2026-09-13T17:15:10Z	loss60	-	-	0.60	rate	policy=strict attemptsPerChunk=1 delivered=0/5 ms=15045 attempts=7 replies=2 down=true
+2026-09-13T17:15:10Z	loss60	-	-	0.60	rate	policy=retry attemptsPerChunk=24 delivered=5/5 ms=39024 attempts=65 replies=15 down=false
+2026-09-13T17:15:10Z	loss60	-	-	0.60	FAIL	the phone reaches the responder: probe, one chunk, many chunks
+2026-09-13T17:15:10Z	loss60	-	-	0.60	summary	Some tests failed. elapsed=431s
+2026-09-13T17:15:10Z	extreme	16Kbit/s	1000	0.15	setup	shaped=true host=192.168.2.1 port=5300 zone=valve.test
+2026-09-13T17:15:10Z	extreme	16Kbit/s	1000	0.15	echo	probe=true one=ok/2142ms many=ok/8612ms attempts=6 replies=6
+2026-09-13T17:15:10Z	extreme	16Kbit/s	1000	0.15	rate	policy=strict attemptsPerChunk=1 delivered=2/5 ms=26310 attempts=11 replies=8 down=false
+2026-09-13T17:15:10Z	extreme	16Kbit/s	1000	0.15	rate	policy=retry attemptsPerChunk=24 delivered=4/5 ms=148432 attempts=53 replies=12 down=false
+2026-09-13T17:15:10Z	extreme	16Kbit/s	1000	0.15	FAIL	rotating through dead resolvers on one send is ONE failure, so a brief outage cannot declare the valve DOWN (review #5)
+2026-09-13T17:15:10Z	extreme	16Kbit/s	1000	0.15	summary	Some tests failed. elapsed=451s

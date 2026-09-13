@@ -5,7 +5,10 @@ import 'package:test/test.dart';
 
 /// Scriptable lane: succeeds or fails on demand, counts sends.
 class _FakeChannel implements TransportChannel {
-  _FakeChannel(this.name, {this.up = true});
+  _FakeChannel(this.name, {this.up = true, ChannelHealth? health})
+    : health =
+          health ??
+          ChannelHealth(reliabilityPrior: 0.9, bandwidth: 0.8, rttMs: 40);
 
   @override
   final String name;
@@ -14,12 +17,10 @@ class _FakeChannel implements TransportChannel {
   int sends = 0;
   final sentPayloads = <List<int>>[];
 
+  /// The default is a strong link; a case may hand in the health profile of
+  /// a real lane (the DNS valve's, for one) to reproduce its ranking.
   @override
-  final ChannelHealth health = ChannelHealth(
-    reliabilityPrior: 0.9,
-    bandwidth: 0.8,
-    rttMs: 40,
-  );
+  final ChannelHealth health;
 
   @override
   Future<bool> probe() async => up;
@@ -296,6 +297,105 @@ void main() {
       expect(events.length, 3);
       expect(events.last.mode, FabricMode.live);
       expect(events.last.bestLaneId, 'net');
+    });
+
+    test('a lane with no working path never outranks one that has one, '
+        'whatever the cost ranks say', () async {
+      // Measured on the rig (dnsvalve profile, 2026-09-13): the relay
+      // lane, filtered off and degraded, ranked 0 − 0.05 = −0.05; the DNS
+      // valve, alive with its own thin health (prior 0.4, bandwidth 0.05,
+      // a 9999 ms seed), ranked 0.009 − 0.15 = −0.141. The fabric named
+      // the dead relay best while the valve carried the message.
+      final relay = _FakeChannel('relay', up: false);
+      relay.health.pathDegraded = true;
+      final valve = _FakeChannel(
+        'valve',
+        health: ChannelHealth(
+          reliabilityPrior: 0.4,
+          bandwidth: 0.05,
+          rttMs: 9999,
+        ),
+      );
+      fabric.registerLane(
+        relay,
+        const LaneProfile(
+          id: 'resilient.wss',
+          kind: LaneKind.internet,
+          costRank: 1,
+        ),
+      );
+      fabric.registerLane(
+        valve,
+        const LaneProfile(
+          id: 'resilient.dns-valve',
+          kind: LaneKind.internet,
+          costRank: 3,
+        ),
+      );
+
+      final snapshot = fabric.snapshot;
+      expect(snapshot.bestLaneId, 'resilient.dns-valve');
+      final scores = {for (final l in snapshot.lanes) l.id: l.score};
+      expect(
+        scores['resilient.wss']!,
+        lessThan(scores['resilient.dns-valve']!),
+        reason: 'a dead lane ranks below any live one',
+      );
+      expect(scores['resilient.wss']!, lessThan(-1.0));
+    });
+
+    test('urgent traffic rides the live valve, never only the dead relay '
+        'that raw health ranked first', () async {
+      // The same rig measurement one step later (2026-09-13): the snapshot
+      // named the valve best, yet deliver() parked the payload. The planner
+      // was fed raw health, ranked the dead relay first again, and an urgent
+      // plan with no credible lane held only that one lane. The valve's own
+      // counters proved it: one probe before, one probe after, no send.
+      final relay = _FakeChannel('relay', up: false);
+      relay.health.pathDegraded = true;
+      final valve = _FakeChannel(
+        'valve',
+        health: ChannelHealth(
+          reliabilityPrior: 0.4,
+          bandwidth: 0.05,
+          rttMs: 9999,
+        ),
+      );
+      fabric.registerLane(
+        relay,
+        const LaneProfile(
+          id: 'resilient.wss',
+          kind: LaneKind.internet,
+          costRank: 1,
+        ),
+      );
+      fabric.registerLane(
+        valve,
+        const LaneProfile(
+          id: 'resilient.dns-valve',
+          kind: LaneKind.internet,
+          costRank: 3,
+        ),
+      );
+
+      final outcome = await fabric.deliver(
+        [4, 2],
+        bundleId: 'sig',
+        priority: LinkMessagePriority.callSignal,
+      );
+
+      expect(outcome, DeliveryOutcome.sentLive);
+      expect(valve.sends, 1);
+      expect(
+        relay.sends,
+        0,
+        reason:
+            'a lane with no path is not in an urgent plan while a live '
+            'one exists',
+      );
+      expect(fabric.lastPlan!.laneIds, ['resilient.dns-valve']);
+      expect(fabric.lastPlan!.explanation!.grounds, contains('live lane'));
+      expect(queue.pendingCount, 0);
     });
 
     test(

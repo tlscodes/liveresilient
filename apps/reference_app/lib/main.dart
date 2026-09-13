@@ -593,6 +593,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         quality: _chartedQuality,
         qualitySourceLabel: _chartedQualityLabel,
         rung: _rung,
+        // The fabric's own snapshots: which lane the next message takes.
+        connectivity: _call.handle?.connectionFabric?.snapshots,
       ),
       RefreshIndicator(
         onRefresh: _reloadConversations,

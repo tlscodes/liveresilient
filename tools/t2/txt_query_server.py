@@ -1,22 +1,31 @@
 #!/usr/bin/env python3
 """Authoritative-style UDP/53 responder. Design §3, §4.
 
-Stateless per query except a 60 s reassembly buffer keyed by session id.
+Stateless per query except a bounded reassembly buffer keyed by session id.
 EDNS0 advertisement is 1232, never 4096. Incomplete sessions are dropped.
+
+Every table in here is filled by whoever can send a datagram, so every table
+is bounded: the reassembly table by session count and by per-source count,
+the downstream queue by the same ages a session carries, the completed list
+by a fixed maximum. A session also has a maximum AGE, not only an idle
+timeout, so a source that touches one every tick cannot hold it open forever.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import socket
 import threading
 import time
-from collections import defaultdict
+from collections import deque
 
 from txt_query_wire import (
     DOWNSTREAM_BUDGET,
     FRAME_HDR,
+    POLL_SEQ,
     RCODE_NXDOMAIN,
+    SEQ_MAX,
     WireError,
     build_dns_answer_packet,
     frame_down,
@@ -27,13 +36,34 @@ from txt_query_wire import (
 
 log = logging.getLogger("txt_query.server")
 
+# RFC 1035 section 4.1.1. The wire module does not define it because nothing
+# it builds needed a refusal before the per-source cap below.
+RCODE_REFUSED = 5
+
+
+def _now() -> float:
+    """The module's only clock reading, so a test can replace it in one place."""
+    return time.monotonic()
+
 
 class _Buf:
-    __slots__ = ("chunks", "created", "last_seen")
+    __slots__ = ("chunks", "created", "last_seen", "source")
 
-    def __init__(self) -> None:
+    def __init__(self, source: str = "") -> None:
         self.chunks: dict[int, bytes] = {}
-        self.created = time.monotonic()
+        self.created = _now()
+        self.last_seen = self.created
+        self.source = source
+
+
+class _Down:
+    """Bytes queued for one session, carrying the same two ages a session does."""
+
+    __slots__ = ("data", "created", "last_seen")
+
+    def __init__(self, data: bytes = b"") -> None:
+        self.data = data
+        self.created = _now()
         self.last_seen = self.created
 
 
@@ -46,6 +76,10 @@ class TxtQueryServer:
         session_ttl: float = 60.0,
         echo: bool = True,
         rate_bps: int | None = None,
+        max_sessions: int = 4096,
+        max_sessions_per_source: int = 64,
+        max_session_age: float = 300.0,
+        max_complete: int = 1024,
     ) -> None:
         self.domain = domain.strip(".").lower()
         self.host = host
@@ -53,19 +87,38 @@ class TxtQueryServer:
         self.session_ttl = session_ttl
         self.echo = echo
         self.rate_bps = rate_bps
+        self.max_sessions = max_sessions
+        self.max_sessions_per_source = max_sessions_per_source
+        self.max_session_age = max_session_age
+        self.max_complete = max_complete
         self._sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._sessions: dict[str, _Buf] = {}
-        self._down: dict[str, bytes] = defaultdict(bytes)
-        self._complete: list[tuple[str, bytes]] = []
+        self._per_source: dict[str, int] = {}
+        self._down: dict[str, _Down] = {}
+        self._complete: "deque[tuple[str, bytes]]" = deque(maxlen=max_complete)
         self.queries_ok = 0
         self.queries_nx = 0
+        self.queries_refused = 0
 
     def queue_down(self, session: str, payload: bytes) -> None:
         with self._lock:
-            self._down[session] += payload
+            self._queue_down_locked(session, payload)
+
+    def _queue_down_locked(self, session: str, payload: bytes) -> None:
+        entry = self._down.get(session)
+        if entry is None:
+            entry = self._down[session] = _Down()
+        entry.data += payload
+        entry.last_seen = _now()
+
+    def _take_down_locked(self, session: str) -> bytes:
+        # Drained means gone: an emptied entry used to stay in the table for
+        # the life of the process, one per session id anyone ever sent.
+        entry = self._down.pop(session, None)
+        return b"" if entry is None else entry.data
 
     
     def live_sessions(self):
@@ -93,13 +146,19 @@ class TxtQueryServer:
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=2.0)
-        if self._sock:
+        sock, thread = self._sock, self._thread
+        # Close first so a receive already blocked in the loop returns now
+        # instead of after its timeout, then join, and only then clear the
+        # attributes — clearing them first left the loop calling into None.
+        if sock is not None:
             try:
-                self._sock.close()
+                sock.close()
             except OSError:
                 pass
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=2.0)
+            if thread.is_alive():
+                log.warning("receive thread still running 2 s after stop")
         self._sock = None
         self._thread = None
 
@@ -111,10 +170,44 @@ class TxtQueryServer:
         self.stop()
 
     def _gc(self) -> None:
-        now = time.monotonic()
-        dead = [k for k, s in self._sessions.items() if now - s.last_seen > self.session_ttl]
+        now = _now()
+        dead = [
+            k
+            for k, s in self._sessions.items()
+            if now - s.last_seen > self.session_ttl
+            or now - s.created > self.max_session_age
+        ]
         for k in dead:
-            del self._sessions[k]
+            self._drop_session(k)
+        stale = [
+            k
+            for k, d in self._down.items()
+            if now - d.last_seen > self.session_ttl
+            or now - d.created > self.max_session_age
+        ]
+        for k in stale:
+            del self._down[k]
+
+    def _drop_session(self, session_id: str) -> None:
+        buf = self._sessions.pop(session_id, None)
+        if buf is None:
+            return
+        left = self._per_source.get(buf.source, 1) - 1
+        if left > 0:
+            self._per_source[buf.source] = left
+        else:
+            self._per_source.pop(buf.source, None)
+
+    def _open_session(self, session_id: str, source: str) -> _Buf | None:
+        """Allocate a buffer, or None when this source already holds its limit."""
+        if self._per_source.get(source, 0) >= self.max_sessions_per_source:
+            return None
+        if self._sessions and len(self._sessions) >= self.max_sessions:
+            oldest = min(self._sessions, key=lambda k: self._sessions[k].created)
+            self._drop_session(oldest)
+        buf = self._sessions[session_id] = _Buf(source)
+        self._per_source[source] = self._per_source.get(source, 0) + 1
+        return buf
 
     def _shape(self, nbytes: int) -> None:
         if not self.rate_bps:
@@ -122,82 +215,135 @@ class TxtQueryServer:
         time.sleep((nbytes * 8) / float(self.rate_bps))
 
     def _loop(self) -> None:
-        assert self._sock is not None
+        sock = self._sock
+        if sock is None:
+            return
         while not self._stop.is_set():
             try:
-                data, addr = self._sock.recvfrom(2048)
+                data, addr = sock.recvfrom(2048)
             except socket.timeout:
                 continue
             except OSError:
+                # stop() closes the socket under this thread on purpose.
                 if self._stop.is_set():
                     return
                 continue
             self._shape(len(data))
             try:
-                reply = self._handle(data)
+                reply = self._handle(data, addr)
             except Exception:
                 log.exception("handle")
                 continue
             if reply:
                 self._shape(len(reply))
                 try:
-                    self._sock.sendto(reply, addr)
+                    sock.sendto(reply, addr)
                 except OSError:
                     continue
 
-    def _handle(self, data: bytes) -> bytes | None:
+    def _handle(self, data: bytes, addr: tuple[str, int] | None = None) -> bytes | None:
         try:
             q = parse_dns_query_packet(data)
-        except WireError:
+        except (WireError, ValueError) as exc:
+            # A label that is not ASCII raises UnicodeDecodeError out of the
+            # name decoder — a ValueError, but not a WireError, so it used to
+            # escape this guard and print a traceback for every such datagram.
+            log.debug("unparseable query from %s: %s", addr, exc)
             return None
         try:
             parsed = parse_query_name(q.name, self.domain)
-        except WireError:
+        except (WireError, ValueError) as exc:
+            log.debug("not a valve name from %s: %s", addr, exc)
             self.queries_nx += 1
             return build_dns_answer_packet(q.txid, q.name, None, rcode=RCODE_NXDOMAIN)
 
-        down = b""
+        source = addr[0] if addr else ""
         with self._lock:
             self._gc()
-            buf = self._sessions.setdefault(parsed.session_id, _Buf())
-            buf.chunks[parsed.seq] = parsed.chunk
-            buf.last_seen = time.monotonic()
-            assembled = self._try_assemble(buf)
-            if assembled is not None:
-                self._complete.append((parsed.session_id, assembled))
-                if self.echo:
-                    self._down[parsed.session_id] += assembled
-                del self._sessions[parsed.session_id]
-            down = self._down.get(parsed.session_id, b"")
-            if down:
-                self._down[parsed.session_id] = b""
+            if parsed.seq != POLL_SEQ:
+                buf = self._sessions.get(parsed.session_id)
+                if buf is None:
+                    buf = self._open_session(parsed.session_id, source)
+                    if buf is None:
+                        self.queries_refused += 1
+                        return build_dns_answer_packet(
+                            q.txid, q.name, None, rcode=RCODE_REFUSED
+                        )
+                buf.chunks[parsed.seq] = parsed.chunk
+                buf.last_seen = _now()
+                assembled = self._try_assemble(buf)
+                if assembled is not None:
+                    self._complete.append((parsed.session_id, assembled))
+                    if self.echo:
+                        self._queue_down_locked(parsed.session_id, assembled)
+                    self._drop_session(parsed.session_id)
+            # POLL_SEQ falls through: a poll reads the queue and stores
+            # nothing, so it can neither overwrite chunk 0 nor open a session.
             self.queries_ok += 1
+            down = self._take_down_locked(parsed.session_id)
 
         if len(down) > DOWNSTREAM_BUDGET:
             leftover = down[DOWNSTREAM_BUDGET:]
             down = down[:DOWNSTREAM_BUDGET]
             with self._lock:
-                self._down[parsed.session_id] = leftover + self._down.get(parsed.session_id, b"")
+                rest = self._take_down_locked(parsed.session_id)
+                self._down[parsed.session_id] = _Down(leftover + rest)
         return build_dns_answer_packet(q.txid, q.name, frame_down(down))
 
     def _try_assemble(self, buf: _Buf) -> bytes | None:
-        if 0 not in buf.chunks or len(buf.chunks[0]) < FRAME_HDR:
+        head = buf.chunks.get(0)
+        if head is None or len(head) < FRAME_HDR:
             return None
-        expected = int.from_bytes(buf.chunks[0][:FRAME_HDR], "big")
-        need = FRAME_HDR + expected
-        max_seq = max(buf.chunks)
-        parts = []
-        for i in range(max_seq + 1):
-            if i not in buf.chunks:
+        need = FRAME_HDR + int.from_bytes(head[:FRAME_HDR], "big")
+        # Assemble from the PREFIX, and stop at `need`. Requiring every seq up
+        # to max(chunks) let one spoofed high-seq chunk stall a session whose
+        # own chunks had all arrived; chunks past `need` are not this payload.
+        parts: list[bytes] = []
+        have = 0
+        for i in range(SEQ_MAX + 1):
+            if have >= need:
+                break
+            chunk = buf.chunks.get(i)
+            if chunk is None:
                 return None
-            parts.append(buf.chunks[i])
-        framed = b"".join(parts)
-        if len(framed) < need:
+            parts.append(chunk)
+            have += len(chunk)
+        if have < need:
             return None
         try:
-            return unframe_up(framed[:need])
+            return unframe_up(b"".join(parts)[:need])
         except WireError:
             return None
+
+
+def complete_line(session: str, payload: bytes) -> str:
+    """The one line that says THIS responder assembled THESE bytes.
+
+    Both fields are printed because both are matched: the session id ties the
+    line to one message from one sender, the digest ties it to the payload the
+    sender says it sent. A digest on its own would be satisfied by a line from
+    an earlier run of the same fixture, which is not evidence of this run.
+    """
+    return "complete session=%s bytes=%d sha256=%s" % (
+        session,
+        len(payload),
+        hashlib.sha256(payload).hexdigest(),
+    )
+
+
+def drain_complete(srv: TxtQueryServer) -> int:
+    """Log every payload assembled since the last call; return how many.
+
+    `take_complete()` empties the mailbox as it reads it, so one payload can
+    never be logged twice — two lines for one message would read downstream as
+    two carriages. Until this loop existed nothing drained that mailbox, so an
+    assembled payload left no trace anywhere.
+    """
+    drained = 0
+    for session, payload in srv.take_complete():
+        log.info("%s", complete_line(session, payload))
+        drained += 1
+    return drained
 
 
 def main() -> None:
@@ -208,13 +354,20 @@ def main() -> None:
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=53)
     args = p.parse_args()
+    # Without a handler every log.info in this module reaches nothing. That —
+    # not a silent responder — is why the rig's valve log was empty, and it is
+    # why neither the bind line nor a completion could be used as evidence.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     srv = TxtQueryServer(args.domain, host=args.host, port=args.port, echo=False)
     srv.start()
     try:
         while True:
-            time.sleep(3600)
+            drain_complete(srv)
+            time.sleep(0.5)
     except KeyboardInterrupt:
         srv.stop()
+        # A payload assembled in the last half second is still evidence.
+        drain_complete(srv)
 
 
 if __name__ == "__main__":

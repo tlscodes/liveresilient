@@ -36,10 +36,14 @@ enum DeliveryOutcome {
 }
 
 class _Lane {
-  _Lane(this.channel, this.profile);
+  _Lane(this.channel, this.profile, {required this.costPenalty});
 
   final TransportChannel channel;
   final LaneProfile profile;
+
+  /// The planner's per-cost-rank penalty, shared so this ranking and the
+  /// planner's blended score subtract the same thing.
+  final double costPenalty;
 
   /// Additive ranking bias seeded from long-term place memory
   /// (positive = this lane is expected to be good HERE).
@@ -49,8 +53,26 @@ class _Lane {
   /// per cost rank, plus the place-forecast bias, so a cheap lane wins a
   /// near-tie and arriving somewhere familiar pre-ranks lanes before a
   /// single byte is sent.
-  double score() =>
-      channel.health.score() - profile.costRank * 0.05 + forecastBias;
+  double score() {
+    final health = channel.health.score();
+    // A lane with no working path (health 0: degraded, or never available)
+    // ranks below every lane that has one, whatever the cost ranks say. The
+    // cost penalty orders lanes that work; it must not resurrect a dead one.
+    // Measured on the rig (dnsvalve profile, 2026-09-13): with the relay
+    // filtered off, the dead relay lane sat at 0 − 0.05 = −0.05 while the
+    // live DNS valve sat at 0.044 − 0.15 = −0.106, so the fabric kept naming
+    // a lane that could carry nothing as best, and the valve that had
+    // carried the message (responder log) was never selected. Dead lanes
+    // keep their cost order among themselves, so the choice stays
+    // deterministic when nothing works.
+    if (health <= 0) {
+      return deadLaneScore(
+        costRank: profile.costRank,
+        costPenalty: costPenalty,
+      );
+    }
+    return health - profile.costRank * costPenalty + forecastBias;
+  }
 }
 
 /// The "mother" layer: registers lanes, delivers live-first with
@@ -128,7 +150,11 @@ class ConnectionFabric {
     if (_lanes.containsKey(profile.id)) {
       throw ArgumentError.value(profile.id, 'profile.id', 'lane id in use');
     }
-    _lanes[profile.id] = _Lane(channel, profile);
+    _lanes[profile.id] = _Lane(
+      channel,
+      profile,
+      costPenalty: _planner.costPenalty,
+    );
     _publish();
   }
 

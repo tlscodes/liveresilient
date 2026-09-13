@@ -154,4 +154,126 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  // --- the dnsvalve profile's job wiring (2026-09-13) ---
+  //
+  // The peer's call path builds an E2eCallStack, which constructs no
+  // ConnectionFabric, so this build's DNS_VALVE_* defines carry no lane on
+  // their own: the `dns_valve` map is what makes the peer register one. A
+  // peer that discards the map produces no `lane` event at all, and the Mac
+  // then reports a branch that never ran — after a rig hour. These pin the
+  // parse so that failure lands here instead.
+
+  const dnsValveJobJson =
+      '{"run":"r2","key":"k2","hold_s":700,"profile":"dnsvalve",'
+      '"dns_valve":{"zone":"valve.example","resolvers":["192.168.2.1:5300"],'
+      '"chat_bytes":64,"select_budget_s":90,"carry_budget_s":150,'
+      '"relay_only":true}}';
+
+  test('a job without dns_valve parses exactly as before', () {
+    final job = JourneyJob.tryParse(
+      '{"run":"r1","key":"k1","hold_s":400,"profile":"normal"}',
+    )!;
+    expect(job.run, 'r1');
+    expect(job.key, 'k1');
+    expect(job.holdS, 400);
+    expect(job.dnsValve, isNull, reason: 'no fabric branch is armed');
+    expect(job.whitelist, isNull);
+    expect(job.blackout, isNull);
+  });
+
+  test('the dnsvalve job the runner posts reaches the peer intact', () {
+    final job = JourneyJob.tryParse(dnsValveJobJson)!;
+    expect(job.run, 'r2');
+    expect(job.key, 'k2');
+    expect(job.holdS, 700);
+    expect(job.blackout, isNull, reason: 'the call is placed, not replaced');
+    expect(job.whitelist, isNull);
+    expect(job.dnsValve, isNotNull, reason: 'the map must not be discarded');
+
+    final config = DnsValveConfig.parse(job.dnsValve!);
+    expect(config.zone, 'valve.example');
+    expect(config.resolvers.length, 1);
+    expect(config.resolvers.single.host, '192.168.2.1');
+    expect(config.resolvers.single.port, 5300);
+    expect(config.chatBytes, 64);
+    expect(config.selectBudget, const Duration(seconds: 90));
+    expect(config.carryBudget, const Duration(seconds: 150));
+    expect(config.relayOnly, isTrue, reason: 'ICE is forced relay-only');
+    expect(config.totalBudget, const Duration(seconds: 240));
+    expect(config.toJson()['resolvers'], <String>['192.168.2.1:5300']);
+  });
+
+  test('a dns_valve value that is not a map is ignored, never a crash', () {
+    final job = JourneyJob.tryParse(
+      '{"run":"r1","key":"k1","hold_s":400,"dns_valve":"yes"}',
+    )!;
+    expect(job.dnsValve, isNull);
+  });
+
+  test('dns_valve defaults fill in, and relay_only stays off', () {
+    final config = DnsValveConfig.parse(const <String, Object?>{
+      'zone': 'valve.example',
+    });
+    expect(config.resolvers, isEmpty, reason: 'the device walks its own');
+    expect(config.chatBytes, 64);
+    expect(config.selectBudget, const Duration(seconds: 120));
+    expect(config.carryBudget, const Duration(seconds: 120));
+    expect(config.relayOnly, isFalse);
+  });
+
+  test('a dns_valve map that cannot produce a row is rejected at arm time', () {
+    // No zone: the lane has nothing to query.
+    expect(
+      () => DnsValveConfig.parse(const <String, Object?>{'chat_bytes': 64}),
+      throwsA(isA<FormatException>()),
+    );
+    // A message longer than the lane's own limit is refused as transient by
+    // the valve, so the fabric would carry it on a WAN lane and the row
+    // would read `carried_without_selection` for a config reason.
+    expect(
+      () => DnsValveConfig.parse(const <String, Object?>{
+        'zone': 'valve.example',
+        'chat_bytes': 5000,
+      }),
+      throwsA(isA<FormatException>()),
+    );
+    // A resolver that is not host:port is a runner bug, never dropped.
+    expect(
+      () => DnsValveConfig.parse(const <String, Object?>{
+        'zone': 'valve.example',
+        'resolvers': <String>['192.168.2.1'],
+      }),
+      throwsA(isA<FormatException>()),
+    );
+    for (final field in const ['chat_bytes', 'select_budget_s']) {
+      expect(
+        () => DnsValveConfig.parse(<String, Object?>{
+          'zone': 'valve.example',
+          field: 0,
+        }),
+        throwsA(isA<FormatException>()),
+        reason: field,
+      );
+    }
+  });
+
+  test(
+    'the carried payload is exactly chat_bytes and derived from the run',
+    () {
+      final first = dnsValvePayload('r2', 64);
+      expect(first.length, 64);
+      expect(
+        dnsValvePayload('r2', 64),
+        first,
+        reason: 'the Mac recomputes it from the run id it handed out',
+      );
+      expect(
+        dnsValvePayload('r3', 64),
+        isNot(first),
+        reason: 'a stale run cannot satisfy another run sha256',
+      );
+      expect(dnsValvePayload('r2', 1).length, 1);
+    },
+  );
 }

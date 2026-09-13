@@ -99,12 +99,20 @@ usage: net_shape.sh <command> [args]
   whitelist <spec>           load the filtered-network rule set: only the
                              listed TCP ports and UDP 53 to the allowed host
                              pass, TCP to the reset port on any other host is
-                             answered with a reset, everything else from the
-                             peer is dropped silently, and IPv6 is dropped
-                             entirely (the pass rules are IPv4-only).
-                             spec: peer=<ip>,allow=<ip>,tcp=<p1>+<p2>[,rst=<port>]
+                             answered with a reset, every other inbound IPv4
+                             packet is dropped silently, everything else the Mac
+                             sends the peer leaves STATELESSLY (so the anchor
+                             decides outbound too and nothing downstream can
+                             create a state), IPv6 is dropped in both directions
+                             (the pass rules are IPv4-only), and states that
+                             existed before the load are killed.
+                             spec: peer=<ip>,allow=<ip>,tcp=<p1>+<p2>[,rst=<port>][,udp=<port>]
                              peer and allow are IPv4 hosts (optional /1..32);
                              a wildcard address is refused. rst defaults to 443.
+                             udp=<port> adds ONE more UDP port to the allowed
+                             host (both directions). UDP 53 passes either way,
+                             with or without this key; omitting udp= leaves the
+                             rule text exactly as it was before the key existed.
   whitelist-print <spec>     print the same rule text and exit. No sudo, no
                              pfctl, no interface needed — this is what the unit
                              test pins, and it comes from the same function
@@ -441,12 +449,23 @@ block() {
 # else, so a run can show the door standing open for allowed traffic in the
 # same second the app rendezvouses through it.
 #
-# ORDER IS THE RULE. pf with `quick` takes the first match, so the four pass
-# rules come first (an allowed port keeps passing even if it is the same number
-# as the reset port), then the reset for TCP to the reset port on any other
-# host, then the silent catch-all drop that swallows QUIC on UDP 443, ICMP and
-# every other TCP port. Replies ride the state table (`keep state`); there is
-# deliberately no broad `pass out`.
+# ORDER IS THE RULE. pf with `quick` takes the first match, so the four
+# stateful pass rules come first (an allowed port keeps passing even if it is
+# the same number as the reset port), then the stateless catch-all pass toward
+# the peer, then the reset for TCP to the reset port on any other host, then
+# the silent inbound catch-all drop that swallows QUIC on UDP 443, ICMP and
+# every other TCP port, then both inet6 drops. An allowed flow's replies ride
+# the state table (`keep state`); the stateless pass creates no state, so a
+# blocked flow's answer has nothing to ride and meets the inbound drop. That
+# pass is what keeps the anchor self-contained — see the comment on that rule
+# for what pf did without it, and why a drop there was the wrong decision.
+#
+# STATES OUTLIVE RULES. `pfctl -f` on the anchor replaces rule text and touches
+# no state entry, and a state is consulted before any rule — so a connection
+# established before the load keeps crossing a filter that would now refuse it
+# (measured 2026-09-13: an ESTABLISHED NAT state for the phone survived the
+# load while the reset rule showed Packets 0). `whitelist` therefore kills the
+# peer's states right after loading; see kill_peer_states().
 #
 # BOTH ADDRESS FAMILIES, OR THE DOOR IS NOT SHUT (2026-09-05). Every rule above
 # names an IPv4 literal, so pf compiles each one with af=AF_INET and none of
@@ -454,9 +473,12 @@ block() {
 # the phone configures its own, so the IPv4 catch-all alone would leave that
 # family to the main ruleset, which has no default block: the phone could reach
 # any Mac listener over fe80::...%bridge100 while the row still printed "all
-# else dropped". The last rule closes the family — `inet6 from any to any`,
-# because the peer's IPv6 addresses are not knowable from the spec and nothing
-# on this bridge is allowed to use that family at all.
+# else dropped". The last two rules close the family in both directions — an
+# outbound `inet6 all` drop and an inbound `inet6 from any to any` — because
+# the peer's IPv6 addresses are not knowable from the spec, nothing on this
+# bridge is allowed to use that family at all, and an undecided outbound v6
+# packet state-creates in the Internet Sharing anchor exactly as an undecided
+# IPv4 one did (measured 2026-09-13).
 #
 # The peer and allow addresses are validated (valid_addr) for the same reason
 # the ports are: they are interpolated straight into the rule text, so a value
@@ -520,7 +542,7 @@ valid_addr() {
 }
 
 whitelist_rules() {
-  local arg="${1:-}" peer="" allow="" tcp="" rst="443"
+  local arg="${1:-}" peer="" allow="" tcp="" rst="443" udp=""
   local rest="$arg" kv key val
   while [ -n "$rest" ]; do
     kv=${rest%%,*}
@@ -534,6 +556,10 @@ whitelist_rules() {
       allow) allow=$val ;;
       tcp) tcp=$val ;;
       rst) rst=$val ;;
+      # One extra UDP port to the allowed host. The rig's authoritative DNS
+      # responder cannot bind 53 without root, so a filter that only ever
+      # allowed 53 left its lane with nothing to answer it.
+      udp) udp=$val ;;
       *) echo "whitelist: unknown field: '$key'" >&2; return 2 ;;
     esac
   done
@@ -543,6 +569,7 @@ whitelist_rules() {
   valid_addr "$peer" || { echo "whitelist: bad peer address: '$peer' (IPv4 host, optional /1..32, not 0.0.0.0 and not a wildcard)" >&2; return 2; }
   valid_addr "$allow" || { echo "whitelist: bad allow address: '$allow' (IPv4 host, optional /1..32, not 0.0.0.0 and not a wildcard)" >&2; return 2; }
   valid_port "$rst" || { echo "whitelist: bad rst port: '$rst' (1..65535)" >&2; return 2; }
+  [ -z "$udp" ] || valid_port "$udp" || { echo "whitelist: bad udp port: '$udp' (1..65535)" >&2; return 2; }
   local ports="$tcp" p list=""
   while [ -n "$ports" ]; do
     p=${ports%%+*}
@@ -550,23 +577,111 @@ whitelist_rules() {
     valid_port "$p" || { echo "whitelist: bad tcp port: '$p' (1..65535)" >&2; return 2; }
     if [ -z "$list" ]; then list="$p"; else list="$list, $p"; fi
   done
+  # Printed in four statements, ONE order: every stateful pass rule, then the
+  # stateless catch-all pass toward the peer, then the reset, then the inbound
+  # IPv4 catch-all drop, then both inet6 drops. Order is the rule under `quick`
+  # — a stateful pass that landed after the stateless one would never be
+  # reached, and its flow would lose the state its reply rides on. The optional
+  # udp= pass sits with the other stateful passes.
   printf '%s\n' \
 "pass  out quick on $IFACE proto tcp from $allow to $peer port { $list } keep state" \
 "pass  in  quick on $IFACE proto tcp from $peer to $allow port { $list } keep state" \
 "pass  out quick on $IFACE proto udp from $allow to $peer port 53 keep state" \
-"pass  in  quick on $IFACE proto udp from $peer to $allow port 53 keep state" \
+"pass  in  quick on $IFACE proto udp from $peer to $allow port 53 keep state"
+  if [ -n "$udp" ]; then
+    printf '%s\n' \
+"pass  out quick on $IFACE proto udp from $allow to $peer port $udp keep state" \
+"pass  in  quick on $IFACE proto udp from $peer to $allow port $udp keep state"
+  fi
+  # THE ANCHOR MUST DECIDE OUTBOUND TOO, AND THE DECISION IS A STATELESS PASS
+  # (measured 2026-09-13). Every rule here used to be `in`, on the theory that
+  # replies ride the state table and nothing else needs saying. pf proved
+  # otherwise on the rig. pf consults the state table BEFORE any rule, so a
+  # packet that matches a state is passed with nothing evaluated; and a
+  # Mac-originated SYN to a port that is not on the allow list matched no rule
+  # in this anchor, so evaluation fell through to the Internet Sharing anchor
+  # that macOS loads AFTER t2harness, whose `pass on bridge100 all flags any
+  # keep state` created a state for the flow. The phone's reset then came back
+  # ON THAT STATE. The rule counters carry the signature: `pass out quick ...
+  # port = 4443` at Evaluations 154, while `block drop in quick ... from <peer>
+  # to any` sat at Evaluations 0 Packets 0, and `pfctl -ss` listed the Internet
+  # Sharing states. The door probe saw the blocked port answer `refused` in
+  # 1001 ms where the row claims a timeout, so the whitelist profile has never
+  # produced a row.
+  #
+  # The first repair was `block drop out quick ... to $peer`, and it was the
+  # wrong decision: pf refuses the packet inside ip_output, so connect() fails
+  # LOCALLY with an errno, tcp_door_probe.py maps that to `error:<n>` — still a
+  # failed verdict — and the row would be claiming a fact about the wire that
+  # never reached the wire. A STATELESS pass is the decision that matches what
+  # the row says: the SYN still leaves the Mac, `quick` is final for the other
+  # anchors and the main ruleset so nothing downstream can state-create it, and
+  # `no state` leaves the phone's reset with no state to ride — it falls to the
+  # inbound catch-all below and is dropped silently, which is the timeout the
+  # probe is written to see.
+  #
+  # It cannot affect an allowed flow: that flow's SYN matched a `keep state`
+  # pass ABOVE this line, and every later packet of it, in either direction, is
+  # passed by that state without any rule being evaluated.
+  printf '%s\n' \
+"pass  out quick on $IFACE inet from $allow to $peer no state"
+  # `flags any` on the Internet Sharing pass means even a mid-stream packet
+  # creates state there, so the inbound catch-all has to decide EVERY inbound
+  # IPv4 packet on this interface, not only the ones whose source is the peer
+  # literal — a second address on the bridge was otherwise undecided here and
+  # state-created downstream. IPv6 is closed in BOTH directions for the reason
+  # the IPv4 rules cannot close it: every rule above names an IPv4 literal, so
+  # pf compiles it af=AF_INET, and base_nat66 would state-create a
+  # Mac-originated v6 flow exactly as base_v4 did for IPv4.
+  printf '%s\n' \
 "block return-rst in quick on $IFACE proto tcp from $peer to any port $rst" \
-"block drop        in quick on $IFACE from $peer to any" \
+"block drop        in quick on $IFACE inet from any to any" \
+"block drop        out quick on $IFACE inet6 all" \
 "block drop        in quick on $IFACE inet6 from any to any"
 }
 
+# Pulls peer= back out of a spec that whitelist_rules() has already validated,
+# so the caller does not parse it twice and cannot disagree with the rule text
+# about which address the peer is.
+spec_peer() {
+  local rest="${1:-}" kv
+  while [ -n "$rest" ]; do
+    kv=${rest%%,*}
+    if [ "$kv" = "$rest" ]; then rest=""; else rest=${rest#*,}; fi
+    case "$kv" in
+      peer=*) printf '%s\n' "${kv#peer=}"; return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Loading rules does not flush states, and pf checks the state table before any
+# rule — so without this a flow established before the profile was loaded keeps
+# crossing a filter that would now refuse it, and the row's claim about what may
+# cross is false for that flow. Two kills: states whose source is the peer, and
+# states from anywhere TO the peer. pfctl exits non-zero when there is nothing
+# to kill, which is not an error here. Its message is `killed N states from ...`
+# and N is summed, so the caller prints one honest number rather than two pfctl
+# lines.
+kill_peer_states() {
+  local peer="$1" out total=0 n
+  out=$( { pfctl -k "$peer" 2>&1 || true; pfctl -k 0.0.0.0/0 -k "$peer" 2>&1 || true; } )
+  for n in $(printf '%s\n' "$out" | sed -n 's/^killed \([0-9][0-9]*\) states.*/\1/p'); do
+    total=$((total + n))
+  done
+  printf '%s\n' "$total"
+}
+
 whitelist() {
-  local rules
+  local rules peer killed
   rules=$(whitelist_rules "${1:-}") || exit $?
+  peer=$(spec_peer "${1:-}")
   require_iface
   ensure_hooks
   load_anchor "$rules"
+  killed=$(kill_peer_states "$peer")
   echo "whitelist: loaded on $IFACE"
+  echo "whitelist: killed $killed pre-existing states involving $peer"
 }
 
 whitelist_print() {
@@ -607,5 +722,20 @@ case "$1" in
   teardown) teardown ;;
   restore) restore ;;
   status) status ;;
+  # Read-only: the MAIN ruleset in evaluation order, so a rule of the host's
+  # own (Internet Sharing loads its own anchors) that passes traffic with
+  # `quick` before the harness anchor is visible instead of inferred.
+  rules) pfctl -sr 2>&1; echo "--- anchors ---"; pfctl -sA 2>&1
+         for a in $(pfctl -sA 2>/dev/null); do echo "--- anchor $a ---"; pfctl -a "$a" -sr 2>&1; done ;;
+  # Read-only: per-rule evaluation/packet counters of the harness anchor and
+  # the state table entries that involve the peer — whether a packet is
+  # passed by an existing state before any rule is consulted, and whether
+  # the block rules are evaluated at all, is read here rather than guessed.
+  counters) echo "--- t2harness rules with counters ---"; pfctl -a t2harness -vvsr 2>&1
+            echo "--- states involving ${T2_PEER:-192.168.2.2} ---"; pfctl -ss 2>&1 | grep -F "${T2_PEER:-192.168.2.2}"
+            echo "--- nested apple anchors ---"
+            for a in $(pfctl -a 'com.apple' -sA 2>/dev/null) $(pfctl -a 'com.apple.internet-sharing' -sA 2>/dev/null); do
+              echo "--- anchor $a ---"; pfctl -a "$a" -sr 2>&1
+            done ;;
   *) usage ;;
 esac

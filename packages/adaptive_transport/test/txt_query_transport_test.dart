@@ -60,6 +60,11 @@ class _FakeResponse extends Stream<List<int>> implements HttpClientResponse {
   @override
   final int statusCode;
 
+  /// -1 means "unknown", the real `HttpClientResponse`'s own default when
+  /// the server sent no `Content-Length` header.
+  @override
+  int contentLength = -1;
+
   final Stream<List<int>> _body;
 
   @override
@@ -117,6 +122,14 @@ class _FakeRequest implements HttpClientRequest {
     headersAtClose = Map<String, String>.of(recordedHeaders.values);
     closeCount += 1;
     return _answer();
+  }
+
+  /// How many times the transport aborted this request.
+  int abortCount = 0;
+
+  @override
+  void abort([Object? exception, StackTrace? stackTrace]) {
+    abortCount += 1;
   }
 
   @override
@@ -369,6 +382,65 @@ void main() {
       );
     });
 
+    test('a declared size past a DNS message\'s own limit is refused before '
+        'the body', () async {
+      // A DNS message cannot legally exceed 65535 bytes; a Content-Length
+      // past that is an endpoint (or an intercepting proxy) about to hand
+      // back far more, and there is no reason to read any of it.
+      final request = _FakeRequest(
+        () async => _FakeResponse(
+          statusCode: HttpStatus.ok,
+          body: const Stream<List<int>>.empty(),
+        )..contentLength = 5 * 1024 * 1024,
+      );
+      final client = _FakeHttpClient((uri) async => request);
+      final transport = DohQueryTransport(_endpoint, client: client);
+
+      await expectLater(
+        transport.exchange(
+          _message(0x1234),
+          0x1234,
+          const Duration(seconds: 4),
+        ),
+        throwsA(
+          isA<HttpException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('65535'), contains('5242880')),
+          ),
+        ),
+      );
+    });
+
+    test('a body that keeps sending past the size limit is cut off, declared '
+        'or not', () async {
+      // The running cap is independent of Content-Length: a header can be
+      // absent, wrong, or (with autoUncompress) describe the compressed
+      // size while the stream delivers the inflated bytes. This response
+      // declares nothing and just keeps sending.
+      final oversized = List<List<int>>.generate(
+        300,
+        (_) => List<int>.filled(256, 0x41),
+      ); // 76800 bytes, over the 65535 limit
+      final client = _answering(chunks: oversized);
+      final transport = DohQueryTransport(_endpoint, client: client);
+
+      await expectLater(
+        transport.exchange(
+          _message(0x1234),
+          0x1234,
+          const Duration(seconds: 4),
+        ),
+        throwsA(
+          isA<HttpException>().having(
+            (e) => e.message,
+            'message',
+            contains('exceeded'),
+          ),
+        ),
+      );
+    });
+
     test('a failing status outranks a body too short to hold a txid', () async {
       final client = _answering(
         chunks: <List<int>>[
@@ -604,93 +676,117 @@ void main() {
       });
     });
 
-    // DEFECT, not fixed here: the caller's `timeout` is applied three times
-    // over — once to `postUrl` (txt_query_transport.dart:160), once to
-    // `request.close()` (:165) and once to the body (:166) — so one call to
-    // `exchange` can take nearly 3x the budget its caller set, while
-    // TxtQueryTransport.exchange (:20-24) promises a TimeoutException
-    // "inside [timeout]". TxtQueryLane hands every attempt the same single
-    // `_timeout` (txt_query_lane.dart:258), so a DoH transport in that
-    // rotation can hold the lane roughly three times as long as the lane
-    // budgeted for. Uncommenting this test fails today: the recorded
-    // elapsed time is 2800ms against a 1000ms budget.
-    //
-    // test('the whole exchange fits inside the caller budget', () {
-    //   fakeAsync((async) {
-    //     const budget = Duration(seconds: 1);
-    //     const slow = Duration(milliseconds: 900);
-    //     final body = StreamController<List<int>>();
-    //     final client = _FakeHttpClient(
-    //       (uri) => Future<HttpClientRequest>.delayed(
-    //         slow,
-    //         () => _FakeRequest(
-    //           () => Future<HttpClientResponse>.delayed(
-    //             slow,
-    //             () => _FakeResponse(
-    //               statusCode: HttpStatus.ok,
-    //               body: body.stream,
-    //             ),
-    //           ),
-    //         ),
-    //       ),
-    //     );
-    //     final transport = DohQueryTransport(_endpoint, client: client);
-    //     Duration? finishedAt;
-    //     unawaited(
-    //       transport
-    //           .exchange(_message(0x1234), 0x1234, budget)
-    //           .then<void>(
-    //             (_) => finishedAt = async.elapsed,
-    //             onError: (Object _) => finishedAt = async.elapsed,
-    //           ),
-    //     );
-    //     async.elapse(const Duration(seconds: 10));
-    //     expect(finishedAt, isNotNull);
-    //     expect(finishedAt! <= budget, isTrue, reason: 'budget overrun');
-    //     unawaited(body.close());
-    //   });
-    // });
+    // Fixed 2026-09-12. Before the fix the caller's `timeout` was applied
+    // three times over — once to `postUrl`, once to `request.close()` and
+    // once to the body — so one call to `exchange` could take nearly 3x the
+    // budget its caller set, while TxtQueryTransport.exchange (:20-24)
+    // promises a TimeoutException "inside [timeout]". TxtQueryLane hands
+    // every attempt the same single `_timeout` (txt_query_lane.dart:258),
+    // so a DoH transport in that rotation could hold the lane roughly three
+    // times as long as the lane budgeted for. Measured before the fix: this
+    // case recorded an elapsed time of 2800ms against a 1000ms budget.
+    // Now every stage races one `_ExchangeDeadline` timer, so the exchange
+    // ends at the budget exactly, naming the stage it was in.
+    test('the whole exchange fits inside the caller budget', () {
+      fakeAsync((async) {
+        const budget = Duration(seconds: 1);
+        const slow = Duration(milliseconds: 900);
+        final body = StreamController<List<int>>();
+        final client = _FakeHttpClient(
+          (uri) => Future<HttpClientRequest>.delayed(
+            slow,
+            () => _FakeRequest(
+              () => Future<HttpClientResponse>.delayed(
+                slow,
+                () =>
+                    _FakeResponse(statusCode: HttpStatus.ok, body: body.stream),
+              ),
+            ),
+          ),
+        );
+        final transport = DohQueryTransport(_endpoint, client: client);
+        Duration? finishedAt;
+        Object? failure;
+        unawaited(
+          transport
+              .exchange(_message(0x1234), 0x1234, budget)
+              .then<void>(
+                (_) => finishedAt = async.elapsed,
+                onError: (Object error) {
+                  failure = error;
+                  finishedAt = async.elapsed;
+                },
+              ),
+        );
+        async.elapse(const Duration(seconds: 10));
+        expect(finishedAt, isNotNull);
+        expect(finishedAt! <= budget, isTrue, reason: 'budget overrun');
+        expect(finishedAt, budget, reason: 'the deadline is the budget');
+        // The POST opened at 900ms, so the budget ran out while waiting on
+        // `request.close()` — the response stage, and the message says so.
+        expect(
+          failure,
+          isA<TimeoutException>().having(
+            (e) => e.message,
+            'message',
+            contains('response timed out'),
+          ),
+        );
+        expect(client.posted, <Uri>[_endpoint]);
+        unawaited(body.close());
+      });
+    });
 
-    // DEFECT, not fixed here: `exchange` collects the entire body
-    // (txt_query_transport.dart:166) before it looks at `response.statusCode`
-    // (:167). A failing status whose body never ends therefore costs the
-    // whole caller budget and surfaces TimeoutException('doh:... body timed
-    // out') instead of the HttpException the status check at :168 exists to
-    // produce — and an endpoint that is refusing service is exactly the one
-    // most likely to hang its body. Uncommenting this test fails today:
-    // `failure` is still null at 1ms and is a TimeoutException at 2s.
-    //
-    // test('a failing status is reported before the body is spent', () {
-    //   fakeAsync((async) {
-    //     final body = StreamController<List<int>>();
-    //     final client = _FakeHttpClient(
-    //       (uri) async => _FakeRequest(
-    //         () async => _FakeResponse(
-    //           statusCode: HttpStatus.badGateway,
-    //           body: body.stream,
-    //         ),
-    //       ),
-    //     );
-    //     final transport = DohQueryTransport(_endpoint, client: client);
-    //     Object? failure;
-    //     unawaited(
-    //       transport
-    //           .exchange(_message(0x1234), 0x1234, const Duration(seconds: 2))
-    //           .then<void>((_) {}, onError: (Object error) => failure = error),
-    //     );
-    //
-    //     async.elapse(const Duration(milliseconds: 1));
-    //     expect(
-    //       failure,
-    //       isA<HttpException>().having(
-    //         (e) => e.message,
-    //         'message',
-    //         contains('502'),
-    //       ),
-    //     );
-    //     unawaited(body.close());
-    //   });
-    // });
+    // Fixed 2026-09-12. Before the fix `exchange` collected the entire body
+    // before it looked at `response.statusCode`, so a failing status whose
+    // body never ended cost the whole caller budget and surfaced
+    // TimeoutException('doh:... body timed out') instead of the
+    // HttpException the status check exists to produce — and an endpoint
+    // that is refusing service is exactly the one most likely to hang its
+    // body. Measured before the fix: `failure` was still null at 1ms and
+    // was a TimeoutException at 2s. Now the status is judged as soon as
+    // the headers arrive and the unwanted body is aborted, not drained.
+    test('a failing status is reported before the body is spent', () {
+      fakeAsync((async) {
+        var cancelled = false;
+        final body = StreamController<List<int>>(
+          onCancel: () {
+            cancelled = true;
+          },
+        );
+        final client = _FakeHttpClient(
+          (uri) async => _FakeRequest(
+            () async => _FakeResponse(
+              statusCode: HttpStatus.badGateway,
+              body: body.stream,
+            ),
+          ),
+        );
+        final transport = DohQueryTransport(_endpoint, client: client);
+        Object? failure;
+        unawaited(
+          transport
+              .exchange(_message(0x1234), 0x1234, const Duration(seconds: 2))
+              .then<void>((_) {}, onError: (Object error) => failure = error),
+        );
+
+        async.elapse(const Duration(milliseconds: 1));
+        expect(
+          failure,
+          isA<HttpException>().having(
+            (e) => e.message,
+            'message',
+            contains('502'),
+          ),
+        );
+        expect(cancelled, isTrue, reason: 'the refused body was not aborted');
+        // Nothing else may fire once the budget would have run out: the
+        // deadline was cancelled with the exchange, not left to time out.
+        async.elapse(const Duration(seconds: 3));
+        expect(failure, isA<HttpException>());
+        unawaited(body.close());
+      });
+    });
   });
 
   // The rotation across transports is TxtQueryLane's job, not this file's:
@@ -861,27 +957,52 @@ options ndots:2
       expect(TxtQueryResolvers.parseResolvConf('\n\n'), isEmpty);
     });
 
-    // DEFECT, not fixed here: `parseResolvConf` stores the text the file
-    // used (txt_query_transport.dart:271) and dedupes on it (:272). Measured
-    // on this SDK, `InternetAddress.address` hands back the exact string it
-    // parsed for every accepted form — '2001:0DB8:0000:0000:0000:0000:0000:
-    // 0053', '2001:DB8::53' and '192.000.002.053' all come back unchanged —
-    // so `InternetAddress.tryParse` at :269 validates but never normalises.
-    // One resolver written two legal ways therefore becomes two candidates,
-    // each costing the lane a full timeout on a network where it is dead,
-    // and `candidates()` cannot recognise such a form as a public resolver
-    // it already holds. Uncommenting this test fails today: the result has
-    // two entries, the first being the expanded literal.
-    //
-    // test('one IPv6 resolver written two ways is listed once', () {
-    //   const body =
-    //       'nameserver 2001:0DB8:0000:0000:0000:0000:0000:0053\n'
-    //       'nameserver 2001:db8::53\n';
-    //
-    //   expect(TxtQueryResolvers.parseResolvConf(body), <HostPort>[
-    //     const HostPort(host: '2001:db8::53', port: 53),
-    //   ]);
-    // });
+    // Fixed 2026-09-12. Before the fix `parseResolvConf` stored the text the
+    // file used and deduped on it. Measured on this SDK,
+    // `InternetAddress.address` hands back the exact string it parsed for
+    // every accepted form — '2001:0DB8:0000:0000:0000:0000:0000:0053',
+    // '2001:DB8::53' and '192.000.002.053' all come back unchanged — so
+    // `InternetAddress.tryParse` validates but never normalises. One
+    // resolver written two legal ways therefore became two candidates, each
+    // costing the lane a full timeout on a network where it is dead, and
+    // `candidates()` could not recognise such a form as a public resolver
+    // it already holds. Measured before the fix: the result had two
+    // entries, the first being the expanded literal. Now the entry is
+    // rebuilt from `rawAddress`, whose text is a function of the bytes
+    // alone — measured on this SDK, `InternetAddress.fromRawAddress` gives
+    // '2001:db8::53' for both IPv6 spellings and '192.0.2.53' for
+    // '192.000.002.053'.
+    test('one IPv6 resolver written two ways is listed once', () {
+      const body =
+          'nameserver 2001:0DB8:0000:0000:0000:0000:0000:0053\n'
+          'nameserver 2001:db8::53\n';
+
+      expect(TxtQueryResolvers.parseResolvConf(body), <HostPort>[
+        const HostPort(host: '2001:db8::53', port: 53),
+      ]);
+    });
+
+    test('one IPv4 resolver written two ways is listed once', () {
+      const body =
+          'nameserver 192.000.002.053\n'
+          'nameserver 192.0.2.53\n';
+
+      expect(TxtQueryResolvers.parseResolvConf(body), <HostPort>[
+        const HostPort(host: '192.0.2.53', port: 53),
+      ]);
+    });
+
+    test('a spelling of a public resolver is recognised by candidates', () {
+      final system = TxtQueryResolvers.parseResolvConf(
+        'nameserver 001.001.001.001\n',
+      );
+
+      expect(system, <HostPort>[const HostPort(host: '1.1.1.1', port: 53)]);
+      expect(
+        TxtQueryResolvers.candidates(system: system),
+        TxtQueryResolvers.publicResolvers,
+      );
+    });
 
     test('systemResolvers reads the file it is pointed at', () {
       final dir = Directory.systemTemp.createTempSync('txt_query_resolvers');

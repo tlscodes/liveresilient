@@ -31,7 +31,16 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:adaptive_transport/adaptive_transport.dart'
+    show
+        HostPort,
+        HttpLongPollLane,
+        TxtQueryLane,
+        TxtQueryValve,
+        WebSocketRelayLane;
 import 'package:call_core/call_core.dart';
+import 'package:connection_orchestrator/connection_orchestrator.dart'
+    show ConnectionFabric, ResilientFallbackLanes, ResilientLaneIds;
 import 'package:cryptography/cryptography.dart';
 import 'package:device_link/device_link.dart'
     show BundleAdmission, DtnBundle, DtnBundleQueue, LinkMessagePriority;
@@ -42,6 +51,8 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
     show SelectedIcePair;
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
+import 'package:reference_app/src/call_session.dart'
+    show defaultBorderRelayEndpoints, parseValveResolvers;
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'blackout_forwarder.dart';
@@ -84,12 +95,25 @@ class JourneyJob {
   /// of it.
   final Map<String, Object?>? whitelist;
 
+  /// Present for the dnsvalve profile: {zone, resolvers:["host:port",...],
+  /// chat_bytes, select_budget_s, carry_budget_s, relay_only} (see
+  /// [DnsValveConfig]). The peer then builds its OWN [ConnectionFabric] and
+  /// carries one message over the DNS valve lane BESIDE the normal call —
+  /// never instead of it, unlike [blackout], which replaces the call.
+  ///
+  /// The zone and resolvers come from the job, not from this build's
+  /// `DNS_VALVE_*` defines: the peer's call path never constructs a fabric,
+  /// so those defines carry no lane on their own and the rig must be able
+  /// to re-aim the valve without a reinstall.
+  final Map<String, Object?>? dnsValve;
+
   const JourneyJob({
     required this.run,
     required this.key,
     required this.holdS,
     this.blackout,
     this.whitelist,
+    this.dnsValve,
   });
 
   static JourneyJob? tryParse(String body) {
@@ -104,17 +128,129 @@ class JourneyJob {
       }
       final blackout = decoded['blackout'];
       final whitelist = decoded['whitelist'];
+      final dnsValve = decoded['dns_valve'];
       return JourneyJob(
         run: run,
         key: key,
         holdS: hold is int ? hold : 400,
         blackout: blackout is Map<String, Object?> ? blackout : null,
         whitelist: whitelist is Map<String, Object?> ? whitelist : null,
+        dnsValve: dnsValve is Map<String, Object?> ? dnsValve : null,
       );
     } on FormatException {
       return null;
     }
   }
+}
+
+/// The dnsvalve profile's job config: which zone the responder answers for,
+/// which resolvers to pin it to, how big the proof message is, and how long
+/// each of the branch's two phases may take.
+///
+/// Parsed at arm time for the same reason [BlackoutPlan] is: a job whose
+/// zone is missing, or whose message is bigger than the lane can carry,
+/// has no row to produce, and a run that discovered that only after a rig
+/// minute was spent would read like a lane failure instead of a bad job.
+class DnsValveConfig {
+  const DnsValveConfig({
+    required this.zone,
+    required this.resolvers,
+    required this.chatBytes,
+    required this.selectBudget,
+    required this.carryBudget,
+    required this.relayOnly,
+  });
+
+  /// Zone the authoritative responder answers for, e.g. `valve.example`.
+  final String zone;
+
+  /// Resolvers the valve is pinned to. Empty means "walk this device's own
+  /// candidates", which on the rig would miss the Mac's responder.
+  final List<HostPort> resolvers;
+
+  /// Size of the one deterministic payload the branch carries.
+  final int chatBytes;
+
+  /// How long the refresh loop may wait for the valve to rank first.
+  final Duration selectBudget;
+
+  /// How long the single delivery may take once the loop has settled.
+  final Duration carryBudget;
+
+  /// True when the rig's filter drops every UDP port but the valve's, so
+  /// the call must not attempt a UDP TURN allocation at all.
+  final bool relayOnly;
+
+  /// The whole branch's wall-clock budget: the two phases run in sequence.
+  Duration get totalBudget => selectBudget + carryBudget;
+
+  /// Throws [FormatException] on anything that cannot produce a row.
+  static DnsValveConfig parse(Map<String, Object?> json) {
+    final zone = (json['zone'] ?? '').toString().trim();
+    if (zone.isEmpty) {
+      throw const FormatException('dns_valve.zone is empty');
+    }
+    final raw = json['resolvers'];
+    final spec = raw is List
+        ? raw.map((entry) => '$entry').join(',')
+        : (raw ?? '').toString();
+    // Same parser the app's own build-time define uses, so a rig job and a
+    // compiled build cannot disagree about what `host:port` means.
+    final resolvers = parseValveResolvers(spec);
+    final chatBytes = _positiveInt(json['chat_bytes'], 64, 'chat_bytes');
+    if (chatBytes > TxtQueryLane.maxPayloadBytes) {
+      throw FormatException(
+        'dns_valve.chat_bytes $chatBytes exceeds the lane limit '
+        '${TxtQueryLane.maxPayloadBytes}',
+      );
+    }
+    return DnsValveConfig(
+      zone: zone,
+      resolvers: resolvers,
+      chatBytes: chatBytes,
+      selectBudget: Duration(
+        seconds: _positiveInt(json['select_budget_s'], 120, 'select_budget_s'),
+      ),
+      carryBudget: Duration(
+        seconds: _positiveInt(json['carry_budget_s'], 120, 'carry_budget_s'),
+      ),
+      relayOnly: json['relay_only'] == true,
+    );
+  }
+
+  static int _positiveInt(Object? value, int fallback, String field) {
+    if (value == null) return fallback;
+    final parsed = value is num ? value.toInt() : int.tryParse('$value');
+    if (parsed == null || parsed < 1) {
+      throw FormatException('dns_valve.$field "$value" is not a positive int');
+    }
+    return parsed;
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'zone': zone,
+    'resolvers': [for (final r in resolvers) '${r.host}:${r.port}'],
+    'chat_bytes': chatBytes,
+    'select_budget_s': selectBudget.inSeconds,
+    'carry_budget_s': carryBudget.inSeconds,
+    'relay_only': relayOnly,
+  };
+}
+
+/// The dnsvalve branch's payload: exactly [bytes] bytes, derived from
+/// [run] alone.
+///
+/// Deterministic on purpose. The Mac handed out the run id, so it can
+/// recompute these bytes and their sha256 without the phone telling it
+/// what it sent — which is what makes a matching sha256 in the responder's
+/// log evidence of carriage rather than a receipt the sender wrote itself.
+Uint8List dnsValvePayload(String run, int bytes) {
+  final header = utf8.encode('dns-valve $run ');
+  final out = Uint8List(bytes);
+  for (var i = 0; i < bytes; i++) {
+    out[i] = header[i % header.length];
+  }
+  return out;
 }
 
 class JourneyPeer {
@@ -325,8 +461,29 @@ class JourneyPeer {
       }
       _note('whitelist ${jsonEncode(whitelistConfig.toJson())}');
     }
+    // The dnsvalve profile's config is parsed at arm time for the same
+    // reason: a job whose zone or message size cannot produce a row is a
+    // runner bug, and a call that ran anyway would report a lane failure
+    // that never happened.
+    DnsValveConfig? valveConfig;
+    if (job.dnsValve != null) {
+      try {
+        valveConfig = DnsValveConfig.parse(job.dnsValve!);
+      } on FormatException catch (error) {
+        _note('dns valve job rejected: ${error.message}');
+        await _report('failed', <String, Object?>{
+          'error': 'dns_valve config: ${error.message}',
+        });
+        return;
+      }
+      _note('dns valve ${jsonEncode(valveConfig.toJson())}');
+    }
     final relay = await LoopbackRelay.start(); // remote: no in-process server
-    final relayOnly = whitelistConfig?.relayOnly ?? false;
+    // Under the dnsvalve filter every UDP port but 53 and the valve's is
+    // dropped too, so its jobs take the same relay-only path the whitelist
+    // profile does.
+    final relayOnly =
+        whitelistConfig?.relayOnly ?? valveConfig?.relayOnly ?? false;
     final stack = E2eCallStack.build(
       endpoint: relay.endpoint,
       callId: job.key,
@@ -352,6 +509,9 @@ class JourneyPeer {
     Map<String, Object?> whitelistEvidence = const <String, Object?>{};
     final lanes = _Lanes(this, stack, job.run);
     final startedAt = DateTime.now();
+    // Held, not fire-and-forget: unlike the door loop, this branch produces
+    // the row's evidence, and the hub drops anything posted after `ended`.
+    Future<void>? dnsValveTask;
     try {
       // The lanes are requested now and resolve once the controller starts
       // the media engine (openDataChannel waits for start); the receivers
@@ -362,6 +522,11 @@ class JourneyPeer {
         'relay': relay.endpoint.toString(),
         'budget_s': journeyConnectBudgetS,
       });
+      // Beside the call, never in place of it: the fabric is its own stack
+      // and nothing in the call path waits on it until `ended` is due.
+      if (valveConfig != null) {
+        dnsValveTask = _serveDnsValve(job, valveConfig);
+      }
       status.value = 'job ${job.run}: waiting for go';
       final goDeadline = DateTime.now().add(const Duration(minutes: 10));
       while (!await _goRaised(job.run)) {
@@ -420,6 +585,9 @@ class JourneyPeer {
       _note('ended phase=${done.phase.name} reason=${done.endReason?.name}');
       // The hub writes job.done on `ended`, and the runner stops waiting
       // then — a blob posted after it is lost, so every post lands first.
+      // The dnsvalve branch's events are evidence for the same reason, so
+      // it is joined here rather than left running.
+      await _joinDnsValve(dnsValveTask, job, valveConfig);
       await lanes.drainBlobs();
       await _report('ended', <String, Object?>{
         'phase': done.phase.name,
@@ -433,6 +601,7 @@ class JourneyPeer {
       _note(
         'failed error=$error last_phase=${stack.controller.state.phase.name}',
       );
+      await _joinDnsValve(dnsValveTask, job, valveConfig);
       await lanes.drainBlobs(); // same reason as before `ended`
       await _report('failed', <String, Object?>{
         'error': '$error',
@@ -531,6 +700,298 @@ class JourneyPeer {
   /// POSTed to /bundle, the Mac verifies the Ed25519 signature and records
   /// the arrival. Delivery time is whatever the link allowed — hours, not
   /// seconds — and the row reports it in hours.
+  /// The dnsvalve profile's branch: a fabric of the three fallback lanes
+  /// built BESIDE the call, refreshed until the DNS valve ranks first, then
+  /// used to carry one deterministic message over it.
+  ///
+  /// Its own fabric on purpose: the peer's call path builds an
+  /// [E2eCallStack], which constructs no [ConnectionFabric] at all, so a
+  /// build's DNS_VALVE_* defines carry no lane until something registers
+  /// one. This is that something.
+  ///
+  /// Never throws and never stays silent. Every outcome — registered,
+  /// wan_probe, selected/not_selected, lane_chat, gave_up, error — is an
+  /// event on the hub, because the Mac reads the row's FAIL reason off
+  /// these events and an absent event reads as "the branch never ran".
+  Future<void> _serveDnsValve(JourneyJob job, DnsValveConfig config) async {
+    try {
+      await _runDnsValve(job, config);
+    } on Object catch (error) {
+      _note('dns valve error=$error');
+      await _report('lane', <String, Object?>{
+        'stage': 'error',
+        'error': '$error',
+      }, run: job.run);
+    }
+  }
+
+  Future<void> _runDnsValve(JourneyJob job, DnsValveConfig config) async {
+    // Only the two WAN lanes are taken from the shared helper: its own
+    // valve is built from this build's compile-time defines, and the rig
+    // must be able to re-aim the zone and the resolvers per job, without a
+    // reinstall.
+    final endpoints = defaultBorderRelayEndpoints(
+      callId: job.key,
+      role: CallRole.initiator,
+    );
+    // failThreshold 20, not forValve's default 5: probe() is a real send,
+    // so at one refresh every 12 s the default would let five unanswered
+    // probes declare the valve DOWN — terminally — inside the 60 s window,
+    // before it had a chance to rank first.
+    final valve = TxtQueryLane.forValve(
+      TxtQueryValve(domain: config.zone, resolvers: config.resolvers),
+      failThreshold: 20,
+    );
+    final relayUri = endpoints.relayUri;
+    final longPollUri = endpoints.longPollUri;
+    final wss = relayUri == null
+        ? null
+        : WebSocketRelayLane(relayUri: relayUri);
+    final longPoll = longPollUri == null
+        ? null
+        : HttpLongPollLane(sendUri: longPollUri);
+    final fabric = ConnectionFabric(
+      fallbackQueue: DtnBundleQueue(),
+      nowMs: () => DateTime.now().millisecondsSinceEpoch,
+    );
+    try {
+      final ids = ResilientFallbackLanes.registerAll(
+        fabric,
+        webSocketRelay: wss,
+        httpLongPoll: longPoll,
+        txtQuery: valve,
+      );
+      _note('dns valve lanes=${ids.join(',')} zone=${config.zone}');
+      await _report('lane', <String, Object?>{
+        'stage': 'registered',
+        'ids': ids,
+        'zone': config.zone,
+        'resolvers': [
+          for (final resolver in config.resolvers)
+            '${resolver.host}:${resolver.port}',
+        ],
+        'best_lane_id': fabric.snapshot.bestLaneId,
+        'mode': fabric.snapshot.mode.name,
+      }, run: job.run);
+
+      await _reportWanProbe(job, relayUri?.host ?? longPollUri?.host);
+
+      final deadline = DateTime.now().add(config.totalBudget);
+      final selected = await _awaitValveSelection(job, fabric, valve, config);
+      await _carryOverValve(job, fabric, valve, config, selected, deadline);
+    } finally {
+      // dispose() closes the snapshot stream and nothing else — the fabric
+      // never touches channels it did not create, so the WSS socket and the
+      // valve's UDP socket are closed here or they outlive the job.
+      try {
+        await fabric.dispose();
+        await wss?.dispose();
+        await longPoll?.dispose();
+        await valve.dispose();
+      } on Object catch (error) {
+        _note('dns valve dispose error=$error');
+      }
+    }
+  }
+
+  /// One HTTPS GET to the border relay host, before the loop starts.
+  ///
+  /// The rig's filter only shapes bridge100, so a phone that still has
+  /// Wi-Fi or cellular can reach the WAN lanes the profile means to remove.
+  /// Without this control, a run where the valve never ranked first because
+  /// the relay was alive is indistinguishable from one where the valve was
+  /// simply down.
+  Future<void> _reportWanProbe(JourneyJob job, String? host) async {
+    var reachable = false;
+    int? status;
+    String? error;
+    if (host == null || host.isEmpty) {
+      error = 'no border relay host configured';
+    } else {
+      try {
+        final request = await _http
+            .getUrl(Uri.https(host, '/'))
+            .timeout(const Duration(seconds: 5));
+        final response = await request.close().timeout(
+          const Duration(seconds: 5),
+        );
+        status = response.statusCode;
+        await response.drain<void>();
+        reachable = true;
+      } on Object catch (failure) {
+        error = '$failure';
+      }
+    }
+    _note('dns valve wan_probe host=$host reachable=$reachable');
+    await _report('lane', <String, Object?>{
+      'stage': 'wan_probe',
+      'reachable': reachable,
+      'host': host,
+      'status': ?status,
+      'error': ?error,
+    }, run: job.run);
+  }
+
+  /// Refreshes the fabric until the valve ranks first or the select budget
+  /// runs out, then reports the ranking that decided it.
+  ///
+  /// Every 12 s, never faster: [TxtQueryLane.probe] is a real send charged
+  /// against the lane's failure window, so a tighter cadence spends the
+  /// lane's budget on the loop's own probes. The per-lane scores ride the
+  /// event so a valve that was DOWN shows up as that, rather than reading
+  /// like a lane that merely never won.
+  Future<bool> _awaitValveSelection(
+    JourneyJob job,
+    ConnectionFabric fabric,
+    TxtQueryLane valve,
+    DnsValveConfig config,
+  ) async {
+    final deadline = DateTime.now().add(config.selectBudget);
+    var refreshes = 0;
+    var selected = false;
+    while (true) {
+      await fabric.refresh();
+      refreshes++;
+      selected = fabric.snapshot.bestLaneId == ResilientLaneIds.txtQuery;
+      if (selected || !DateTime.now().isBefore(deadline)) break;
+      await Future<void>.delayed(const Duration(seconds: 12));
+    }
+    final snapshot = fabric.snapshot;
+    _note(
+      'dns valve ${selected ? 'selected' : 'not_selected'} '
+      'best=${snapshot.bestLaneId} refreshes=$refreshes',
+    );
+    await _report('lane', <String, Object?>{
+      'stage': selected ? 'selected' : 'not_selected',
+      'best_lane_id': snapshot.bestLaneId,
+      'mode': snapshot.mode.name,
+      'lanes': [
+        for (final lane in snapshot.lanes)
+          <String, Object?>{
+            'id': lane.id,
+            'eligible': lane.eligible,
+            'score': lane.score,
+          },
+      ],
+      'valve_score': valve.health.score(),
+      'valve_down': valve.isDown,
+      'valve_attempts': valve.attempts,
+      'valve_replies': valve.replies,
+      'refreshes': refreshes,
+      'select_budget_s': config.selectBudget.inSeconds,
+    }, run: job.run);
+    return selected;
+  }
+
+  /// Carries one deterministic payload and reports what attributes it.
+  ///
+  /// `best_lane_at_send` is read BEFORE the delivery: deliver() republishes
+  /// the snapshot on its way out, and two of the fabric's three strategies
+  /// put the same payload on several lanes at once, so the id read
+  /// afterwards is a post-hoc ranking and not the lane that carried the
+  /// bytes. What does attribute the message is `session_id` — the valve's
+  /// own per-message id — matched against the responder's log line, which
+  /// only TXT-lane datagrams can produce.
+  Future<void> _carryOverValve(
+    JourneyJob job,
+    ConnectionFabric fabric,
+    TxtQueryLane valve,
+    DnsValveConfig config,
+    bool selected,
+    DateTime deadline,
+  ) async {
+    final remaining = deadline.difference(DateTime.now());
+    final budget = remaining < const Duration(seconds: 1)
+        ? const Duration(seconds: 1)
+        : remaining;
+    final payload = dnsValvePayload(job.run, config.chatBytes);
+    final sha = contentSha256Hex(payload);
+    final bestAtSend = fabric.snapshot.bestLaneId;
+    try {
+      final outcome = await fabric
+          .deliver(
+            payload,
+            bundleId: '${job.run}-dns-valve',
+            priority: LinkMessagePriority.callSignal,
+          )
+          .timeout(budget);
+      _note(
+        'dns valve carried outcome=${outcome.name} '
+        'session=${valve.lastSessionId} sha256=$sha',
+      );
+      await _report('lane_chat', <String, Object?>{
+        'outcome': outcome.name,
+        'best_lane_at_send': bestAtSend,
+        'selected': selected,
+        'session_id': valve.lastSessionId,
+        'sha256': sha,
+        'bytes': payload.length,
+        'valve_down': valve.isDown,
+        'valve_attempts': valve.attempts,
+        'valve_replies': valve.replies,
+        // The plan that decided the attempt set, so the next parked
+        // payload is diagnosable from this event alone: on 2026-09-13 the
+        // valve counters had to stand in for it.
+        'plan': <String, Object?>{
+          'strategy': fabric.lastPlan?.strategy.name,
+          'lane_ids': fabric.lastPlan?.laneIds,
+          'grounds': fabric.lastPlan?.explanation?.grounds,
+        },
+      }, run: job.run);
+    } on TimeoutException {
+      _note('dns valve gave_up after ${budget.inSeconds}s');
+      await _report('lane', <String, Object?>{
+        'stage': 'gave_up',
+        'phase': 'carry',
+        'carry_budget_s': budget.inSeconds,
+        'best_lane_at_send': bestAtSend,
+        'selected': selected,
+        'session_id': valve.lastSessionId,
+        'sha256': sha,
+        'bytes': payload.length,
+        'valve_score': valve.health.score(),
+        'valve_down': valve.isDown,
+        'valve_attempts': valve.attempts,
+        'valve_replies': valve.replies,
+      }, run: job.run);
+    }
+  }
+
+  /// Joins the dnsvalve branch before `ended` is reported.
+  ///
+  /// Same reason the blobs are drained there: the hub writes job.done on
+  /// `ended` and drops whatever arrives after it, so a branch left running
+  /// past the hang-up produces no events at all and the Mac reports a
+  /// branch that never ran. The guard is the branch's own budget plus
+  /// slack — a last resort, since both phases already bound themselves —
+  /// and a guard that fires still leaves an event behind.
+  Future<void> _joinDnsValve(
+    Future<void>? task,
+    JourneyJob job,
+    DnsValveConfig? config,
+  ) async {
+    if (task == null || config == null) return;
+    final guard = config.totalBudget + const Duration(seconds: 20);
+    var expired = false;
+    try {
+      await task.timeout(
+        guard,
+        onTimeout: () {
+          expired = true;
+        },
+      );
+    } on Object catch (error) {
+      _note('dns valve join error=$error');
+    }
+    if (expired) {
+      await _report('lane', <String, Object?>{
+        'stage': 'gave_up',
+        'phase': 'join',
+        'guard_s': guard.inSeconds,
+      }, run: job.run);
+    }
+  }
+
   Future<void> _serveBlackout(JourneyJob job, Map<String, Object?> cfg) async {
     _lastRun = job.run;
     final plan = BlackoutPlan.parse(cfg);

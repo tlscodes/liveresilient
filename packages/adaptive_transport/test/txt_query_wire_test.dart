@@ -294,7 +294,10 @@ void main() {
         () => TxtQueryWire.frameDown(
           Uint8List(TxtQueryWire.downstreamBudget + 1),
         ),
-        _wireError('downstream 1151 > 1150'),
+        _wireError(
+          'downstream ${TxtQueryWire.downstreamBudget + 1} > '
+          '${TxtQueryWire.downstreamBudget}',
+        ),
       );
     });
   });
@@ -488,10 +491,14 @@ void main() {
     });
 
     test('an empty or over-long label is refused', () {
+      // An empty session id is caught by the width check, which runs before
+      // the generic label loop and names both widths.
       expect(
         () =>
             TxtQueryWire.buildQueryName(const <int>[], 0, '', _nonce, _domain),
-        _wireError('bad label ""'),
+        _wireError(
+          'session id "" is 0 chars, want ${TxtQueryWire.sessionChars}',
+        ),
       );
       final wide = 'a' * (TxtQueryWire.labelMax + 1);
       expect(
@@ -541,8 +548,9 @@ void main() {
 
     test('an empty interior label parses, though no builder emits one', () {
       // Pinned as it stands, not endorsed. buildQueryName refuses an empty
-      // label (txt_query_wire.dart:252-256); parseQueryName never checks for
-      // one, so names no builder produced parse anyway.
+      // label (txt_query_wire.dart:267-271); parseQueryName pins the width
+      // of the seq, session and nonce labels but never checks the payload
+      // label for emptiness, so a name no builder produced parses anyway.
       //
       // An empty payload label decodes to the empty chunk, which is exactly
       // what the '0' marker means (txt_query_wire.dart:23-24). Two distinct
@@ -561,47 +569,45 @@ void main() {
       expect(viaEmpty.chunk, viaMarker.chunk);
       expect(viaEmpty.name, isNot(viaMarker.name));
 
-      // An empty seq label decodes to zero, so it aliases 'AA' the same way.
+      // An empty seq label is a width violation, not sequence zero: before
+      // the pin at txt_query_wire.dart:298 it decoded to 0 and aliased 'AA'.
       expect(
-        TxtQueryWire.parseQueryName(
+        () => TxtQueryWire.parseQueryName(
           'q..$_session.$_nonce.0.tunnel.$_domain',
           _domain,
-        ).seq,
-        0,
+        ),
+        _wireError('seq label "" is 0 chars, want ${TxtQueryWire.seqChars}'),
       );
     });
 
-    // FAILING, left commented out: a defect in the source, not in this test.
-    //
     // parseQueryName pins the width of the session label (head[2]) and the
-    // nonce label (head[3]) at txt_query_wire.dart:277 but never pins the
-    // width of the seq label (head[1]), so names the builder could not have
-    // produced parse anyway: encodeSeq always emits exactly seqChars
-    // characters, yet every width decodes. Measured: 'AAB' -> 1, 'B' -> 1 and
-    // 'AB' -> 1, so three distinct labels denote sequence 1, while '' -> 0
-    // aliases 'AA'. That is the ambiguity the fixed widths on its neighbours
-    // exist to remove.
-    //
-    // test('a seq label of the wrong width is refused', () {
-    //   for (final label in <String>['AAB', 'B', '']) {
-    //     expect(
-    //       () => TxtQueryWire.parseQueryName(
-    //         'q.$label.$_session.$_nonce.0.tunnel.$_domain',
-    //         _domain,
-    //       ),
-    //       _wireError('width'),
-    //       reason: 'seq label "$label"',
-    //     );
-    //   }
-    // });
+    // nonce label (head[3]) at txt_query_wire.dart:303, and since the check
+    // at txt_query_wire.dart:298 also pins the width of the seq label
+    // (head[1]). Before that pin, names the builder could not have produced
+    // parsed anyway: encodeSeq always emits exactly seqChars characters, yet
+    // every width decoded. Measured then: 'AAB' -> 1, 'B' -> 1 and 'AB' -> 1,
+    // so three distinct labels denoted sequence 1, while '' -> 0 aliased
+    // 'AA'. That is the ambiguity the fixed widths on its neighbours exist to
+    // remove.
+    test('a seq label of the wrong width is refused', () {
+      for (final label in <String>['AAB', 'B', '']) {
+        expect(
+          () => TxtQueryWire.parseQueryName(
+            'q.$label.$_session.$_nonce.0.tunnel.$_domain',
+            _domain,
+          ),
+          _wireError('is ${label.length} chars, want ${TxtQueryWire.seqChars}'),
+          reason: 'seq label "$label"',
+        );
+      }
+    });
 
-    // FAILING, left commented out: a defect in the source, not in this test.
-    //
     // buildQueryName checks every label for emptiness and for the 63-octet
-    // ceiling (txt_query_wire.dart:252-256) but never checks the session and
-    // nonce labels against sessionChars and nonceChars, which parseQueryName
-    // requires at txt_query_wire.dart:277. The module therefore builds names
-    // its own parser refuses. Measured:
+    // ceiling (txt_query_wire.dart:267-271) and, since the checks at
+    // txt_query_wire.dart:248-257, the session and nonce labels against
+    // sessionChars and nonceChars, which parseQueryName requires at
+    // txt_query_wire.dart:303. Before those checks the module built names its
+    // own parser refused. Measured then:
     //
     //   buildQueryName([], 0, 'ABC23', '7XYZ', 'valve.example')
     //     -> 'q.AA.ABC23.7XYZ.0.tunnel.valve.example'
@@ -610,32 +616,33 @@ void main() {
     //
     // encodeQueries passes sessionId straight through, so a caller reusing an
     // id from anywhere but newSessionId - a stored session, an id from a
-    // peer, a fixture - emits a whole batch of names the far side drops, and
-    // the failure surfaces as silence rather than as an error.
-    //
-    // test('a session or nonce label of the wrong width is refused when '
-    //     'building, not only when parsing', () {
-    //   expect(
-    //     () => TxtQueryWire.buildQueryName(
-    //       const <int>[],
-    //       0,
-    //       'ABC23',
-    //       _nonce,
-    //       _domain,
-    //     ),
-    //     _wireError('width'),
-    //   );
-    //   expect(
-    //     () => TxtQueryWire.buildQueryName(
-    //       const <int>[],
-    //       0,
-    //       _session,
-    //       '7XY',
-    //       _domain,
-    //     ),
-    //     _wireError('width'),
-    //   );
-    // });
+    // peer, a fixture - emitted a whole batch of names the far side dropped,
+    // and the failure surfaced as silence rather than as an error.
+    test('a session or nonce label of the wrong width is refused when '
+        'building, not only when parsing', () {
+      expect(
+        () => TxtQueryWire.buildQueryName(
+          const <int>[],
+          0,
+          'ABC23',
+          _nonce,
+          _domain,
+        ),
+        _wireError(
+          'session id "ABC23" is 5 chars, want ${TxtQueryWire.sessionChars}',
+        ),
+      );
+      expect(
+        () => TxtQueryWire.buildQueryName(
+          const <int>[],
+          0,
+          _session,
+          '7XY',
+          _domain,
+        ),
+        _wireError('nonce "7XY" is 3 chars, want ${TxtQueryWire.nonceChars}'),
+      );
+    });
   });
 
   group('chunking into queries and reassembly', () {

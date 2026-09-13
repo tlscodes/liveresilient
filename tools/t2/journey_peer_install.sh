@@ -33,10 +33,21 @@ echo "phone     $PHONE ($BUNDLE_ID)"
 cd "$APP"
 # One hashed build dir per define set: the same defines on every install
 # keep the cache small (the 22 GB flutter_build lesson, 2026-09-03).
+# The DNS TXT-query lane rides in the peer too: the zone its responder
+# answers for, and the resolver it is pinned to — on the rig, the responder
+# tools/t2/txt_query_server.py that journey_run.sh starts on the bridge
+# address (a public build leaves DNS_VALVE_RESOLVERS empty and discovers
+# resolvers per device). Both are part of the define set, so the cache
+# stays one directory.
+VALVE_DOMAIN=${JOURNEY_VALVE_DOMAIN:-valve.test}
+VALVE_RESOLVERS=${JOURNEY_VALVE_RESOLVERS:-$SELF:5300}
+echo "dns lane  zone $VALVE_DOMAIN   resolvers ${VALVE_RESOLVERS:-<discovered>}"
 flutter build ios --profile -t integration_test/journey_peer_app.dart \
   --dart-define=E2E_RELAY_URI="wss://$SELF:$RELAY_PORT/" \
   --dart-define=JOURNEY_HUB_URL="http://$SELF:$HTTP_PORT" \
-  --dart-define=E2E_CONNECT_BUDGET_S="$BUDGET"
+  --dart-define=E2E_CONNECT_BUDGET_S="$BUDGET" \
+  --dart-define=DNS_VALVE_DOMAIN="$VALVE_DOMAIN" \
+  --dart-define=DNS_VALVE_RESOLVERS="$VALVE_RESOLVERS"
 BUNDLE="$APP/build/ios/iphoneos/Runner.app"
 [ -d "$BUNDLE" ] || { echo "ERROR: no bundle at $BUNDLE" >&2; exit 1; }
 echo "install   $BUNDLE"

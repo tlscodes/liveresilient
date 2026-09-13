@@ -23,6 +23,11 @@ SEQ_CHARS = 2
 SESSION_CHARS = 6
 NONCE_CHARS = 4
 SEQ_MAX = 1023
+# A query carrying this sequence number is a read-only poll: the server
+# answers whatever downstream bytes the session holds and stores nothing,
+# so polling can never overwrite a session's chunk 0 (review 2026-09-13,
+# txt_query_client.py:185). Same width, same alphabet — no byte change.
+POLL_SEQ = SEQ_MAX
 MARKER = "q"
 TUNNEL = "tunnel"
 QTYPE_TXT = 16
@@ -32,7 +37,27 @@ EDNS0_UDP_SIZE = 1232  # RFC 9715 / DNS Flag Day 2020 — not 4096
 RCODE_NOERROR = 0
 RCODE_NXDOMAIN = 3
 FRAME_HDR = 2
-DOWNSTREAM_BUDGET = 1150
+
+# Octets of an answer that are not the TXT rdata:
+#     12  the header
+#      4  qtype and qclass, after the question's owner name
+#     12  the answer record: a 2-octet compression pointer as its owner name
+#         (RFC 1035 section 4.1.4), then type, class, ttl and rdlength
+#     11  the OPT record
+# The question's owner name is counted apart, since its length is the
+# caller's rather than a constant: a presentation name of L characters is
+# L + 2 octets on the wire.
+ANSWER_FIXED_OCTETS = 12 + 4 + 12 + 11
+_WORST_CASE_RDATA_ROOM = EDNS0_UDP_SIZE - ANSWER_FIXED_OCTETS - (FQDN_MAX + 2)
+
+# Derived, not chosen. The rdata carries the framed payload split into
+# 255-octet strings, each paying its own length octet, so R octets of rdata
+# carry R - ceil(R / 256) framed octets; the frame header costs FRAME_HDR
+# more. Evaluated at FQDN_MAX this holds for every legal question name;
+# max_downstream_payload_for() returns the octets a shorter name earns back.
+DOWNSTREAM_BUDGET = (
+    _WORST_CASE_RDATA_ROOM - (_WORST_CASE_RDATA_ROOM + 255) // 256 - FRAME_HDR
+)
 
 
 class WireError(ValueError):
@@ -131,12 +156,24 @@ def build_query_name(chunk: bytes, seq: int, session_id: str, nonce: str, domain
         raise WireError(f"payload label {len(payload_label)} > {LABEL_MAX}")
     domain = domain.strip(".").lower()
     labels = [MARKER, encode_seq(seq), session_id, nonce, payload_label, TUNNEL, *domain.split(".")]
+    # A label is octets on the wire, not characters, and only ASCII ones: a
+    # non-ASCII domain used to pass both limits here and then raise
+    # UnicodeEncodeError out of _encode_name, which is not the error type the
+    # callers of this module catch. Refuse it here, and measure both limits in
+    # the octets the encoder will actually write.
+    octets = 0
     for lab in labels:
-        if not lab or len(lab) > LABEL_MAX:
+        try:
+            raw = lab.encode("ascii")
+        except UnicodeEncodeError as exc:
+            raise WireError(f"non-ASCII label {lab!r}") from exc
+        if not raw or len(raw) > LABEL_MAX:
             raise WireError(f"bad label {lab!r}")
+        octets += len(raw)
     name = ".".join(labels)
-    if len(name) > FQDN_MAX:
-        raise WireError(f"FQDN {len(name)} > {FQDN_MAX}")
+    total = octets + len(labels) - 1  # the separating dots
+    if total > FQDN_MAX:
+        raise WireError(f"FQDN {total} > {FQDN_MAX}")
     return name
 
 
@@ -166,6 +203,12 @@ def parse_query_name(name: str, expected_domain: str) -> ParsedQuery:
     if len(head) != 5 or head[0] != MARKER:
         raise WireError(f"bad head {head}")
     _, seq_l, session_id, nonce, payload_l = head
+    # The sequence label has a fixed width for the same reason the two beside
+    # it do: without the pin, 'aab', 'b' and 'ab' all decode to sequence 1 and
+    # '' decodes to 0, so two names can claim the same chunk of one payload and
+    # reassembly either raises a conflict or silently accepts the wrong bytes.
+    if len(seq_l) != SEQ_CHARS:
+        raise WireError(f"seq label {seq_l!r} is {len(seq_l)} chars, want {SEQ_CHARS}")
     if len(session_id) != SESSION_CHARS or len(nonce) != NONCE_CHARS:
         raise WireError("session/nonce width")
     return ParsedQuery(
@@ -202,9 +245,35 @@ def reassemble(parsed: list[ParsedQuery]) -> bytes:
     return unframe_up(b"".join(by_seq[i] for i in range(max(by_seq) + 1)))
 
 
-def frame_down(payload: bytes) -> bytes:
-    if len(payload) > DOWNSTREAM_BUDGET:
-        raise WireError(f"downstream {len(payload)} > {DOWNSTREAM_BUDGET}")
+def name_wire_length(name: str) -> int:
+    """Octets `name` occupies on the wire, the root label included."""
+    total = 1
+    for label in name.split("."):
+        if label:
+            total += 1 + len(label)
+    return total
+
+
+def max_downstream_payload_for(question_name: str) -> int:
+    """The most an answer to `question_name` may carry inside EDNS0_UDP_SIZE.
+
+    Uses the real name instead of the FQDN_MAX worst case DOWNSTREAM_BUDGET
+    assumes, which is worth several hundred octets on a short zone.
+    """
+    room = EDNS0_UDP_SIZE - ANSWER_FIXED_OCTETS - name_wire_length(question_name)
+    if room <= 0:
+        return 0
+    return max(room - (room + 255) // 256 - FRAME_HDR, 0)
+
+
+def frame_down(payload: bytes, question_name: str | None = None) -> bytes:
+    budget = (
+        DOWNSTREAM_BUDGET
+        if question_name is None
+        else max_downstream_payload_for(question_name)
+    )
+    if len(payload) > budget:
+        raise WireError(f"downstream {len(payload)} > {budget}")
     return frame_up(payload)
 
 
@@ -217,7 +286,12 @@ def _encode_name(name: str) -> bytes:
     for label in name.split("."):
         if not label:
             continue
-        raw = label.encode("ascii")
+        try:
+            raw = label.encode("ascii")
+        except UnicodeEncodeError as exc:
+            # WireError is the only exception this module raises for input it
+            # refuses; a codec error escaping here would bypass every caller.
+            raise WireError(f"non-ASCII label {label!r}") from exc
         if len(raw) > LABEL_MAX:
             raise WireError(f"label too long {label!r}")
         out.append(len(raw))
@@ -254,7 +328,16 @@ def _decode_name(buf: bytes, offset: int, depth: int = 0) -> tuple[str, int]:
         if length & 0xC0:
             raise WireError("bad label type")
         pos += 1
-        labels.append(buf[pos : pos + length].decode("ascii"))
+        # Slicing past the end used to clamp silently, so a label claiming more
+        # octets than the datagram holds produced a short name instead of an
+        # error. And a label octet >= 0x80 raised UnicodeDecodeError, which is
+        # not the exception type this module's callers catch.
+        if pos + length > len(buf):
+            raise WireError("label past end")
+        try:
+            labels.append(buf[pos : pos + length].decode("ascii"))
+        except UnicodeDecodeError as exc:
+            raise WireError("non-ASCII label") from exc
         pos += length
         if not jumped:
             end = pos
@@ -309,6 +392,8 @@ def _parse_txt_rdata(rdata: bytes) -> bytes:
     while pos < len(rdata):
         length = rdata[pos]
         pos += 1
+        if pos + length > len(rdata):
+            raise WireError("truncated TXT string")
         out += rdata[pos : pos + length]
         pos += length
     return bytes(out)
@@ -327,7 +412,12 @@ def build_dns_answer_packet(
     answer = b""
     if ancount:
         rdata = _txt_rdata(payload or b"")
-        answer = _encode_name(question_name) + struct.pack(">HHIH", QTYPE_TXT, QCLASS_IN, 0, len(rdata)) + rdata
+        # RFC 1035 section 4.1.4: the answer's owner name is a pointer back
+        # to the question at offset 12, not a second uncompressed copy. The
+        # second copy is legal but costs the whole name again, which is what
+        # pushed answers at the budget past the size the query advertised.
+        owner = b"\xc0\x0c"
+        answer = owner + struct.pack(">HHIH", QTYPE_TXT, QCLASS_IN, 0, len(rdata)) + rdata
     return header + question + answer + _opt_rr()
 
 
@@ -336,6 +426,11 @@ class ParsedDnsAnswer:
     txid: int
     rcode: int
     payload: bytes | None
+    # The question name carries the session id and nonce that a query-response
+    # binding by txid alone cannot see. Kept so a caller can compare it against
+    # the name it actually sent (RFC 5452 section 9.1), instead of trusting a
+    # 16-bit transaction id on its own. None when the answer has no question.
+    question_name: str | None = None
 
 
 def parse_dns_answer_packet(packet: bytes) -> ParsedDnsAnswer:
@@ -344,16 +439,28 @@ def parse_dns_answer_packet(packet: bytes) -> ParsedDnsAnswer:
     txid, flags, qdcount, ancount = struct.unpack(">HHHH", packet[:8])
     rcode = flags & 0x0F
     pos = 12
+    question_name: str | None = None
     for _ in range(qdcount):
-        _, pos = _decode_name(packet, pos)
+        name, pos = _decode_name(packet, pos)
+        if question_name is None:
+            question_name = name
         pos += 4
     if ancount == 0:
-        return ParsedDnsAnswer(txid, rcode, None)
+        return ParsedDnsAnswer(txid, rcode, None, question_name)
     _, pos = _decode_name(packet, pos)
     if pos + 10 > len(packet):
         raise WireError("truncated answer")
     rtype, rclass, _ttl, rdlength = struct.unpack(">HHIH", packet[pos : pos + 10])
     pos += 10
+    # Slicing a declared length the datagram does not hold used to return a
+    # short payload instead of refusing the record.
+    if pos + rdlength > len(packet):
+        raise WireError("truncated rdata")
     if rtype != QTYPE_TXT:
         raise WireError(f"expected TXT answer, got {rtype}")
-    return ParsedDnsAnswer(txid, rcode, _parse_txt_rdata(packet[pos : pos + rdlength]))
+    return ParsedDnsAnswer(
+        txid,
+        rcode,
+        _parse_txt_rdata(packet[pos : pos + rdlength]),
+        question_name,
+    )

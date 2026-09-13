@@ -47,6 +47,10 @@ class _FakeResolver implements TxtQueryTransport {
   /// Answer under a transaction id that is not the one that was asked for.
   bool corruptTxid = false;
 
+  /// Answer under a question name that is not the one that was asked for —
+  /// what an off-path spoofed or a stale, txid-colliding answer looks like.
+  bool corruptQuestionName = false;
+
   /// Answer with these bytes verbatim instead of a framed record — a
   /// resolver serving its own TXT record rather than the valve's.
   List<int>? plainTxt;
@@ -105,7 +109,9 @@ class _FakeResolver implements TxtQueryTransport {
     final plain = plainTxt;
     return TxtQueryWire.buildDnsAnswerPacket(
       corruptTxid ? question.txid ^ 0xFFFF : question.txid,
-      question.name,
+      corruptQuestionName
+          ? 'q.AA.ABC234.7XYZ.0.tunnel.$_domain'
+          : question.name,
       rcode != null ? null : (plain ?? TxtQueryWire.frameDown(carried)),
       rcode: rcode ?? TxtQueryWire.rcodeNoError,
     );
@@ -581,6 +587,21 @@ void main() {
       expect(lane.lastReply, isNull);
     });
 
+    test('an answer under the wrong question name is not an answer', () async {
+      // The right txid alone is only 16 bits of protection; the question
+      // name also carries this send's session id and nonce, which is what
+      // a spoofed or a stale, txid-colliding answer cannot reproduce.
+      final resolver = _FakeResolver('a')..corruptQuestionName = true;
+      final lane = _laneOver(<TxtQueryTransport>[resolver]);
+      addTearDown(lane.dispose);
+
+      final result = await lane.send(_payload(10));
+
+      expect(result.status, SendStatus.transient);
+      expect(result.error, isA<TxtQueryWireException>());
+      expect(lane.lastReply, isNull);
+    });
+
     test(
       'an error rcode carries nothing and counts as a path failure',
       () async {
@@ -637,6 +658,27 @@ void main() {
         // the lane to the bottom of the ranking.
         expect(lane.health.pathDegraded, isTrue);
         expect(lane.health.score(), 0.0);
+      },
+    );
+
+    test(
+      'rotating through every candidate on one send counts as one failure',
+      () async {
+        // A phone's default candidate list (forValve) is exactly
+        // failThreshold long. If every rotation counted on its own, one
+        // brief outage that fails all of them would reach the threshold
+        // from a SINGLE send() call and declare the valve DOWN forever.
+        final transports = List<TxtQueryTransport>.generate(
+          5,
+          (i) => _FakeResolver('r$i', failAt: (_) => true),
+        );
+        final lane = _laneOver(transports, failThreshold: 5);
+        addTearDown(lane.dispose);
+
+        final result = await lane.send(_payload(10));
+
+        expect(result.status, SendStatus.transient);
+        expect(lane.isDown, isFalse);
       },
     );
 
@@ -861,4 +903,355 @@ void main() {
   //   expect(await lane.probe(), isFalse);
   //   expect(resolver.asked, isEmpty);
   // });
+
+  group('retry policy (attemptsPerChunk > 1)', () {
+    TxtQueryLane retrying(
+      List<TxtQueryTransport> transports, {
+      int attemptsPerChunk = 3,
+      int failThreshold = 5,
+    }) => TxtQueryLane(
+      domain: _domain,
+      transports: transports,
+      timeout: const Duration(seconds: 30),
+      failThreshold: failThreshold,
+      failWindow: const Duration(hours: 1),
+      attemptsPerChunk: attemptsPerChunk,
+    );
+
+    test('attemptsPerChunk below 1 is refused', () {
+      expect(
+        () => retrying(<TxtQueryTransport>[
+          _FakeResolver('a'),
+        ], attemptsPerChunk: 0),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+      'a lost chunk after the first is re-sent on the same transport',
+      () async {
+        // The second exchange (chunk 1, first attempt) goes unanswered.
+        final lossy = _FakeResolver('lossy', failAt: (i) => i == 1);
+        final lane = retrying(<TxtQueryTransport>[lossy]);
+        addTearDown(lane.dispose);
+        final payload = _payload(100); // three chunks
+
+        final result = await lane.send(payload);
+
+        expect(result.status, SendStatus.ok);
+        expect(lossy.asked, hasLength(4));
+        expect(_seqs(lossy.asked), <int>[0, 1, 1, 2]);
+        expect(lossy.delivered.single, payload);
+        expect(lane.attempts, 4);
+        expect(lane.replies, 3);
+        expect(lane.currentTransport, same(lossy));
+        expect(lane.isDown, isFalse);
+        expect(lane.health.availability, 1.0);
+      },
+    );
+
+    test('the re-sent chunk carries a fresh transaction id', () async {
+      final lossy = _FakeResolver('lossy', failAt: (i) => i == 1);
+      final lane = retrying(<TxtQueryTransport>[lossy]);
+      addTearDown(lane.dispose);
+
+      await lane.send(_payload(100));
+
+      // Chance of an honest collision is 1 in 65536; a stuck id is 1 in 1.
+      expect(lossy.txids[1], isNot(lossy.txids[2]));
+    });
+
+    test('attempts are spent before rotating, and rotation continues the '
+        'session mid-way', () async {
+      // `dies` answers chunk 0 and then nothing — the shape of a resolver
+      // lost to a network switch. `spare` answers everything.
+      final dies = _FakeResolver('dies', failAt: (i) => i >= 1);
+      final spare = _FakeResolver('spare');
+      final lane = retrying(<TxtQueryTransport>[
+        dies,
+        spare,
+      ], attemptsPerChunk: 2);
+      addTearDown(lane.dispose);
+
+      final result = await lane.send(_payload(100));
+
+      expect(result.status, SendStatus.ok);
+      expect(_seqs(dies.asked), <int>[0, 1, 1]);
+      // The fakes are separate responders, so `spare` only sees the tail
+      // of the session; a real zone has one responder behind every
+      // resolver and reassembles across the switch.
+      expect(_seqs(spare.asked), <int>[1, 2]);
+      expect(lane.currentTransport, same(spare));
+      expect(lane.attempts, 5);
+      expect(lane.isDown, isFalse);
+    });
+
+    test(
+      'spent attempts with no candidate left are ONE failure per send',
+      () async {
+        final dies = _FakeResolver('dies', failAt: (i) => i >= 1);
+        final lane = retrying(<TxtQueryTransport>[dies], failThreshold: 2);
+        addTearDown(lane.dispose);
+
+        final first = await lane.send(_payload(100));
+        expect(first.status, SendStatus.transient);
+        expect(_seqs(dies.asked), <int>[0, 1, 1, 1]);
+        expect(lane.isDown, isFalse, reason: 'three attempts, one failure');
+
+        dies.asked.clear();
+        final second = await lane.send(_payload(100));
+        expect(second.status, SendStatus.unavailable);
+        expect(lane.isDown, isTrue, reason: 'the second send is the second');
+      },
+    );
+
+    test('the per-query wait follows the measured round trip once retries '
+        'are on', () async {
+      final fast = _FakeResolver('fast');
+      final lane = retrying(<TxtQueryTransport>[fast], attemptsPerChunk: 2);
+      addTearDown(lane.dispose);
+
+      await lane.send(_payload(100));
+
+      // No sample yet: the full timeout. After one instant answer the
+      // estimate is at the floor.
+      expect(fast.timeouts, <Duration>[
+        const Duration(seconds: 30),
+        const Duration(milliseconds: 300),
+        const Duration(milliseconds: 300),
+      ]);
+    });
+
+    test(
+      'an unanswered query doubles the next wait; an answer resets it',
+      () async {
+        final lossy = _FakeResolver('lossy', failAt: (i) => i == 1);
+        final lane = retrying(<TxtQueryTransport>[lossy], attemptsPerChunk: 3);
+        addTearDown(lane.dispose);
+
+        await lane.send(_payload(100));
+
+        expect(lossy.timeouts, <Duration>[
+          const Duration(seconds: 30), // chunk 0, no sample yet
+          const Duration(milliseconds: 300), // chunk 1, attempt 1: lost
+          const Duration(milliseconds: 600), // chunk 1, attempt 2: backed off
+          const Duration(milliseconds: 300), // chunk 2: answer reset it
+        ]);
+      },
+    );
+
+    test('with one attempt per chunk nothing changes: the full timeout, '
+        'no re-send', () async {
+      final lossy = _FakeResolver('lossy', failAt: (i) => i == 1);
+      final lane = _laneOver(<TxtQueryTransport>[lossy]);
+      addTearDown(lane.dispose);
+
+      final result = await lane.send(_payload(100));
+
+      expect(result.status, SendStatus.transient);
+      expect(lossy.timeouts, everyElement(const Duration(seconds: 30)));
+      expect(lossy.asked, hasLength(2));
+    });
+  });
+
+  group('TxtQueryRto', () {
+    test('waits the ceiling until it has a sample', () {
+      final rto = TxtQueryRto(ceiling: const Duration(seconds: 4));
+      expect(rto.next, const Duration(seconds: 4));
+      expect(rto.samples, 0);
+      expect(rto.smoothedRtt, isNull);
+    });
+
+    test('RFC 6298: SRTT + 4·RTTVAR, seeded from the first sample', () {
+      final rto = TxtQueryRto(ceiling: const Duration(seconds: 4));
+      rto.sample(const Duration(milliseconds: 200));
+      // srtt 200, rttvar 100 -> 600
+      expect(rto.next, const Duration(milliseconds: 600));
+      rto.sample(const Duration(milliseconds: 200));
+      // rttvar 75, srtt 200 -> 500
+      expect(rto.next, const Duration(milliseconds: 500));
+      expect(rto.samples, 2);
+      expect(rto.smoothedRtt, const Duration(milliseconds: 200));
+    });
+
+    test('is floored and capped', () {
+      final rto = TxtQueryRto(ceiling: const Duration(seconds: 4));
+      rto.sample(const Duration(milliseconds: 5));
+      expect(rto.next, const Duration(milliseconds: 300));
+      rto.sample(const Duration(seconds: 9));
+      expect(rto.next, const Duration(seconds: 4));
+    });
+
+    test('while the estimate is fresh, backoff holds at twice the estimate '
+        'and a sample clears it', () {
+      final rto = TxtQueryRto(ceiling: const Duration(seconds: 4));
+      rto.sample(const Duration(milliseconds: 100));
+      expect(rto.next, const Duration(milliseconds: 300));
+      rto.backoff();
+      expect(rto.next, const Duration(milliseconds: 600));
+      rto.backoff();
+      rto.backoff();
+      expect(
+        rto.next,
+        const Duration(milliseconds: 600),
+        reason: 'one datagram in flight cannot congest the link it measures',
+      );
+      rto.sample(const Duration(milliseconds: 100));
+      expect(rto.next, const Duration(milliseconds: 300));
+    });
+
+    test('once the estimate is stale, backoff doubles toward the ceiling so '
+        'a stepped round trip can be found again', () {
+      var now = DateTime(2026, 9, 13);
+      final rto = TxtQueryRto(
+        ceiling: const Duration(seconds: 4),
+        freshFor: const Duration(seconds: 3),
+        clock: () => now,
+      );
+      rto.sample(const Duration(milliseconds: 100));
+      expect(rto.isFresh, isTrue);
+      now = now.add(const Duration(seconds: 4));
+      expect(rto.isFresh, isFalse);
+      rto.backoff();
+      expect(rto.next, const Duration(milliseconds: 600));
+      rto.backoff();
+      expect(rto.next, const Duration(milliseconds: 1200));
+      rto.backoff();
+      rto.backoff();
+      rto.backoff();
+      expect(rto.next, const Duration(seconds: 4));
+      rto.sample(const Duration(milliseconds: 100));
+      expect(rto.next, const Duration(milliseconds: 300));
+    });
+
+    test('before any sample, backoff is already at the ceiling', () {
+      final rto = TxtQueryRto(ceiling: const Duration(seconds: 4));
+      rto.backoff();
+      expect(rto.next, const Duration(seconds: 4));
+      expect(rto.estimate, const Duration(seconds: 4));
+    });
+
+    test('a floor above the ceiling is a configuration error', () {
+      expect(
+        () => TxtQueryRto(
+          ceiling: const Duration(milliseconds: 100),
+          floor: const Duration(milliseconds: 300),
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('chunk budget and pacing', () {
+    test('the strict policy has no budget', () {
+      final lane = _laneOver(<TxtQueryTransport>[_FakeResolver('a')]);
+      expect(lane.chunkBudget, Duration.zero);
+    });
+
+    test('the budget is the responder TTL less two timeouts, shared across '
+        'the candidates, never below one timeout', () {
+      final five = TxtQueryLane(
+        domain: _domain,
+        transports: <TxtQueryTransport>[
+          for (var i = 0; i < 5; i++) _FakeResolver('r$i'),
+        ],
+        timeout: const Duration(seconds: 4),
+        attemptsPerChunk: 24,
+      );
+      addTearDown(five.dispose);
+      // (60 - 2 * 4) / 5
+      expect(five.chunkBudget, const Duration(milliseconds: 10400));
+
+      final one = TxtQueryLane(
+        domain: _domain,
+        transports: <TxtQueryTransport>[_FakeResolver('a')],
+        timeout: const Duration(seconds: 30),
+        attemptsPerChunk: 24,
+      );
+      addTearDown(one.dispose);
+      // (60 - 2 * 30) / 1 = 0 -> one timeout
+      expect(one.chunkBudget, const Duration(seconds: 30));
+    });
+
+    test('a fast negative answer is paced by the estimate, not spun', () async {
+      final refusing = _FakeResolver('refusing')..rcode = 5;
+      final lane = TxtQueryLane(
+        domain: _domain,
+        transports: <TxtQueryTransport>[refusing],
+        timeout: const Duration(milliseconds: 400),
+        attemptsPerChunk: 3,
+      );
+      addTearDown(lane.dispose);
+
+      final sw = Stopwatch()..start();
+      final result = await lane.send(_payload(10));
+      sw.stop();
+
+      expect(result.status, SendStatus.transient);
+      expect(lane.attempts, 3);
+      // Two paced gaps of the 400 ms ceiling between three instant refusals.
+      expect(
+        sw.elapsed,
+        greaterThanOrEqualTo(const Duration(milliseconds: 700)),
+      );
+      expect(
+        refusing.timeouts,
+        everyElement(const Duration(milliseconds: 400)),
+        reason:
+            'a refusal answered in a millisecond must not teach the '
+            'estimator a one-millisecond round trip',
+      );
+    });
+
+    test('a transport that never answers gets the budget in ceiling-sized '
+        'waits, then the lane rotates; nothing is paced twice', () async {
+      // The phone's shape: five candidates, 4 s timeout -> a 10.4 s
+      // budget, and a wait of the full 4 s ceiling while there is no
+      // sample. That is two attempts (4 + 4 <= 10.4, 8 + 4 > 10.4) before
+      // rotating. The fake throws its timeout at once, so any pacing
+      // would show up as wall-clock time here; there must be none.
+      final dead = _FakeResolver('dead', failAt: (_) => true);
+      final live = _FakeResolver('live');
+      final lane = TxtQueryLane(
+        domain: _domain,
+        transports: <TxtQueryTransport>[
+          dead,
+          live,
+          _FakeResolver('c'),
+          _FakeResolver('d'),
+          _FakeResolver('e'),
+        ],
+        timeout: const Duration(seconds: 4),
+        attemptsPerChunk: 24,
+      );
+      addTearDown(lane.dispose);
+
+      final sw = Stopwatch()..start();
+      final result = await lane.send(_payload(10));
+      sw.stop();
+
+      expect(result.status, SendStatus.ok);
+      expect(_seqs(dead.asked), <int>[0, 0]);
+      expect(_seqs(live.asked), <int>[0]);
+      expect(lane.currentTransport, same(live));
+      expect(sw.elapsed, lessThan(const Duration(seconds: 1)));
+    });
+
+    test('a single 30 s transport that never answers is one attempt: the '
+        'budget floor is one timeout', () async {
+      final silent = _FakeResolver('silent', failAt: (_) => true);
+      final lane = TxtQueryLane(
+        domain: _domain,
+        transports: <TxtQueryTransport>[silent],
+        timeout: const Duration(seconds: 30),
+        attemptsPerChunk: 3,
+      );
+      addTearDown(lane.dispose);
+
+      final result = await lane.send(_payload(10));
+
+      expect(result.status, SendStatus.transient);
+      expect(lane.attempts, 1);
+    });
+  });
 }

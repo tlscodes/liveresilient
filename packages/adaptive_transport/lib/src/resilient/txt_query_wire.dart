@@ -57,9 +57,33 @@ abstract final class TxtQueryWire {
   /// Upstream frames are `u16 length` + payload.
   static const int frameHeader = 2;
 
-  /// The most one answer may carry, kept under [ednsUdpSize] with room for
-  /// the question, the TXT record header and the OPT record.
-  static const int downstreamBudget = 1150;
+  /// Octets of an answer that are not the TXT rdata:
+  ///
+  ///     12  the header
+  ///      4  qtype and qclass, after the question's owner name
+  ///     12  the answer record: a 2-octet compression pointer as its owner
+  ///         name (RFC 1035 §4.1.4), then type, class, ttl and rdlength
+  ///     11  the OPT record
+  ///
+  /// The question's owner name is counted apart, since its length is the
+  /// caller's rather than a constant: a presentation name of L characters
+  /// is L + 2 octets on the wire, one length octet per label plus the root.
+  static const int _answerFixedOctets = 12 + 4 + 12 + 11;
+
+  /// The TXT rdata room the longest legal question name leaves behind.
+  static const int _worstCaseRdataRoom =
+      ednsUdpSize - _answerFixedOctets - (fqdnMax + 2);
+
+  /// The most one answer may carry when the question name is not known.
+  ///
+  /// Derived, not chosen. The rdata carries the framed payload split into
+  /// 255-octet strings, each paying its own length octet, so R octets of
+  /// rdata carry `R - ceil(R / 256)` framed octets and the frame header
+  /// costs [frameHeader] more. Evaluated at [fqdnMax] this holds for every
+  /// legal question name; [maxDownstreamPayloadFor] returns the octets a
+  /// shorter name earns back.
+  static const int downstreamBudget =
+      _worstCaseRdataRoom - (_worstCaseRdataRoom + 255) ~/ 256 - frameHeader;
 
   static const String _alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
@@ -199,12 +223,38 @@ abstract final class TxtQueryWire {
     return Uint8List.fromList(framed.sublist(frameHeader, frameHeader + want));
   }
 
+  /// Octets [name] occupies on the wire, the root label included.
+  static int _nameWireLength(String name) {
+    var total = 1; // the root label
+    for (final label in name.split('.')) {
+      if (label.isEmpty) continue;
+      total += 1 + label.length;
+    }
+    return total;
+  }
+
+  /// The most an answer to [questionName] may carry inside [ednsUdpSize].
+  ///
+  /// Uses the real name where [downstreamBudget] assumes the [fqdnMax]
+  /// worst case, which is worth several hundred octets on a short zone.
+  static int maxDownstreamPayloadFor(String questionName) {
+    final room =
+        ednsUdpSize - _answerFixedOctets - _nameWireLength(questionName);
+    if (room <= 0) return 0;
+    final payload = room - (room + 255) ~/ 256 - frameHeader;
+    return payload < 0 ? 0 : payload;
+  }
+
   /// Same framing downstream, with the answer budget enforced.
-  static Uint8List frameDown(List<int> payload) {
-    if (payload.length > downstreamBudget) {
-      throw TxtQueryWireException(
-        'downstream ${payload.length} > $downstreamBudget',
-      );
+  ///
+  /// [questionName] narrows the budget to what that name actually leaves
+  /// room for; without it the conservative [downstreamBudget] applies.
+  static Uint8List frameDown(List<int> payload, {String? questionName}) {
+    final budget = questionName == null
+        ? downstreamBudget
+        : maxDownstreamPayloadFor(questionName);
+    if (payload.length > budget) {
+      throw TxtQueryWireException('downstream ${payload.length} > $budget');
     }
     return frameUp(payload);
   }
@@ -236,6 +286,23 @@ abstract final class TxtQueryWire {
     if (payloadLabel.length > labelMax) {
       throw TxtQueryWireException(
         'payload label ${payloadLabel.length} > $labelMax',
+      );
+    }
+    // The parser refuses a session or nonce label of the wrong width, so a
+    // builder that accepted one would emit a whole batch of names the far side
+    // drops — and it would surface as silence rather than as an error. Check
+    // here, with the same widths the parser pins, so the mistake is loud at
+    // the sender. Measured before this check existed: a five-character session
+    // id built a name that parseQueryName then rejected with 'session/nonce
+    // width', and encodeQueries passes sessionId straight through.
+    if (sessionId.length != sessionChars) {
+      throw TxtQueryWireException(
+        'session id "$sessionId" is ${sessionId.length} chars, want $sessionChars',
+      );
+    }
+    if (nonce.length != nonceChars) {
+      throw TxtQueryWireException(
+        'nonce "$nonce" is ${nonce.length} chars, want $nonceChars',
       );
     }
     final zone = domain.replaceAll(RegExp(r'^\.+|\.+$'), '').toLowerCase();
@@ -273,6 +340,15 @@ abstract final class TxtQueryWire {
     final head = parts.sublist(0, parts.length - zoneLabels.length);
     if (head.length != 5 || head[0] != marker) {
       throw TxtQueryWireException('bad head $head');
+    }
+    // The sequence label has a fixed width for the same reason the two beside
+    // it do: without the pin, 'aab', 'b' and 'ab' all decode to sequence 1 and
+    // '' decodes to 0, so two names can claim the same chunk of one payload and
+    // reassembly either raises a conflict or silently accepts the wrong bytes.
+    if (head[1].length != seqChars) {
+      throw TxtQueryWireException(
+        'seq label "${head[1]}" is ${head[1].length} chars, want $seqChars',
+      );
     }
     if (head[2].length != sessionChars || head[3].length != nonceChars) {
       throw const TxtQueryWireException('session/nonce width');
@@ -508,7 +584,11 @@ abstract final class TxtQueryWire {
     packet.add(question.buffer.asUint8List());
     if (answers == 1) {
       final rdata = _txtRdata(payload!);
-      packet.add(name);
+      // RFC 1035 §4.1.4: the answer's owner name is a pointer back to the
+      // question at offset 12, not a second uncompressed copy. The copy is
+      // legal but costs the whole name again, which is what pushed answers
+      // at the budget past the size the query itself advertised.
+      packet.add(Uint8List.fromList(const <int>[0xC0, 0x0C]));
       final record = ByteData(10);
       record.setUint16(0, qtypeTxt);
       record.setUint16(2, qclassIn);
@@ -534,8 +614,15 @@ abstract final class TxtQueryWire {
     final qdcount = view.getUint16(4);
     final ancount = view.getUint16(6);
     var pos = 12;
+    // The question name carries the session id and nonce a query-response
+    // binding by txid alone cannot see. Kept so a caller can compare it
+    // against the name it actually sent, instead of trusting a 16-bit
+    // transaction id on its own.
+    String? questionName;
     for (var i = 0; i < qdcount; i++) {
-      pos = _decodeName(packet, pos).end + 4;
+      final decoded = _decodeName(packet, pos);
+      questionName ??= decoded.name;
+      pos = decoded.end + 4;
     }
     for (var i = 0; i < ancount; i++) {
       pos = _decodeName(packet, pos).end;
@@ -552,6 +639,7 @@ abstract final class TxtQueryWire {
         return ParsedDnsAnswer(
           txid: txid,
           rcode: rcode,
+          questionName: questionName,
           payload: _parseTxtRdata(
             Uint8List.sublistView(packet, pos, pos + rdlength),
           ),
@@ -559,7 +647,12 @@ abstract final class TxtQueryWire {
       }
       pos += rdlength;
     }
-    return ParsedDnsAnswer(txid: txid, rcode: rcode, payload: null);
+    return ParsedDnsAnswer(
+      txid: txid,
+      rcode: rcode,
+      questionName: questionName,
+      payload: null,
+    );
   }
 }
 
@@ -609,15 +702,20 @@ class ParsedDnsQuery {
 }
 
 /// A decoded DNS answer; [payload] is null when the answer carried no TXT
-/// record, which includes every non-zero [rcode].
+/// record, which includes every non-zero [rcode]. [questionName] is the
+/// name the answer's own question section named, so a caller can bind a
+/// response to the request it sent by more than the 16-bit [txid] alone;
+/// it is null only when the packet carried zero questions.
 class ParsedDnsAnswer {
   final int txid;
   final int rcode;
+  final String? questionName;
   final Uint8List? payload;
 
   const ParsedDnsAnswer({
     required this.txid,
     required this.rcode,
+    required this.questionName,
     required this.payload,
   });
 }

@@ -4,12 +4,15 @@
 library;
 
 import 'package:call_core/call_core.dart';
+import 'package:connection_orchestrator/connection_orchestrator.dart'
+    show ConnectivitySnapshot;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import 'live_call_controller.dart' show validateCallKey;
 import 'theme.dart';
 import 'ui/network_truth.dart';
+import 'ui/path_card.dart';
 import 'ui/quality_gauge.dart';
 import 'ui/source_chip.dart';
 
@@ -92,7 +95,14 @@ class CallScreen extends StatelessWidget {
     this.quality,
     this.qualitySourceLabel,
     this.rung,
+    this.connectivity,
   });
+
+  /// The connectivity fabric's snapshots for the active call. Non-null shows
+  /// a card naming the lane the next message takes (direct media, relay,
+  /// DNS valve, local mesh) and the fabric's mode — the one fact survival
+  /// mode used to hide. Null hides the card; the screen never guesses a path.
+  final Stream<ConnectivitySnapshot>? connectivity;
 
   /// Current lifecycle phase.
   final CallPhase phase;
@@ -231,6 +241,13 @@ class CallScreen extends StatelessWidget {
                 rung: rung,
                 sourceLabel: qualitySourceLabel,
               ),
+            ],
+            // The path card is the fabric's own report, so it renders
+            // whenever the fabric exists for an active call — with or
+            // without quality stats, which the DNS valve never has.
+            if (connectivity != null && _isActive) ...[
+              const SizedBox(height: Spacing.s12),
+              PathCard(connectivity: connectivity!),
             ],
             if (_isActive && callId != null) ...[
               const SizedBox(height: Spacing.s12),

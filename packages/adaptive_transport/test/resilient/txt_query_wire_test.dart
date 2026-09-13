@@ -19,16 +19,37 @@ const String _queryPacketHex =
     '2904d0000000000000';
 
 const String _answerPacketHex =
-    '123484000001000100000001017102414606414243323334043758595a0a33325733'
-    '3533594141450674756e6e656c0576616c7665076578616d706c6500001000010171'
-    '02414606414243323334043758595a0a3332573335335941414506'
+    // header: txid, QR + AA, qdcount 1, ancount 1, nscount 0, arcount 1
+    '123484000001000100000001'
+    // question: q.AF.ABC234.7XYZ.32W353YAAE.tunnel.valve.example
+    '017102414606414243323334043758595a0a3332573335335941414506'
     '74756e6e656c'
-    '0576616c7665076578616d706c650000100001000000000016150013706f6e672066'
-    '726f6d207468652076616c766500002904d0000000000000';
+    '0576616c7665076578616d706c6500'
+    // qtype TXT, qclass IN
+    '00100001'
+    // answer owner: the RFC 1035 §4.1.4 pointer back to the question at 12,
+    // not a second uncompressed copy of the name
+    'c00c'
+    // type TXT, class IN, ttl 0, rdlength 22
+    '00100001000000000016'
+    // rdata: one 21-octet string — the u16 frame header, then the payload
+    '150013706f6e672066726f6d207468652076616c7665'
+    // the OPT record
+    '00002904d0000000000000';
 
 const String _nxdomainPacketHex =
     '000784030001000000000001017102414106414243323334043758595a0130067475'
     '6e6e656c0576616c7665076578616d706c65000010000100002904d0000000000000';
+
+/// The FQDN ceiling, 253 characters, out of labels no longer than 63 — the
+/// only legal shape a name at that ceiling can take, since `'x' * 253` is
+/// one illegal label rather than a name.
+final String _longestLegalName = <String>[
+  'a' * 63,
+  'b' * 63,
+  'c' * 63,
+  'd' * 61,
+].join('.');
 
 final Uint8List _payload = Uint8List.fromList(
   List<int>.generate(101, (i) => i),
@@ -354,21 +375,31 @@ void main() {
         _nonce,
         _domain,
       );
-      final uncompressed = TxtQueryWire.buildDnsAnswerPacket(
+      final compressed = TxtQueryWire.buildDnsAnswerPacket(
         0x1234,
         name,
         TxtQueryWire.frameDown('compressed'.codeUnits),
       );
       final nameLength = _nameWireLength(name);
-      final compressed = <int>[
-        ...uncompressed.sublist(0, 12 + nameLength + 4),
-        0xC0, 0x0C, // pointer to offset 12
-        ...uncompressed.sublist(12 + nameLength + 4 + nameLength),
+      final ownerAt = 12 + nameLength + 4;
+      expect(compressed.sublist(ownerAt, ownerAt + 2), <int>[0xC0, 0x0C]);
+      // The second copy stays legal, so splice it back in and pin that the
+      // parser reads either owner-name form to the same payload.
+      final uncompressed = <int>[
+        ...compressed.sublist(0, ownerAt),
+        ...compressed.sublist(12, 12 + nameLength),
+        ...compressed.sublist(ownerAt + 2),
       ];
-      final parsed = TxtQueryWire.parseDnsAnswerPacket(
-        Uint8List.fromList(compressed),
-      );
-      expect(TxtQueryWire.unframeDown(parsed.payload!), 'compressed'.codeUnits);
+      for (final packet in <List<int>>[compressed, uncompressed]) {
+        final parsed = TxtQueryWire.parseDnsAnswerPacket(
+          Uint8List.fromList(packet),
+        );
+        expect(
+          TxtQueryWire.unframeDown(parsed.payload!),
+          'compressed'.codeUnits,
+          reason: 'owner name in ${packet.length} octets',
+        );
+      }
     });
 
     test('a CNAME ahead of the TXT record is skipped', () {
@@ -413,6 +444,58 @@ void main() {
       expect(
         () => TxtQueryWire.parseDnsAnswerPacket(Uint8List(4)),
         throwsA(isA<TxtQueryWireException>()),
+      );
+    });
+
+    test('an answer at the name-aware ceiling fits the size advertised', () {
+      for (final name in <String>[
+        'q.AA.ABC234.7XYZ.0.tunnel.a.co',
+        _longestLegalName,
+      ]) {
+        final ceiling = TxtQueryWire.maxDownstreamPayloadFor(name);
+        final packet = TxtQueryWire.buildDnsAnswerPacket(
+          0x2222,
+          name,
+          TxtQueryWire.frameDown(
+            List<int>.filled(ceiling, 0x41),
+            questionName: name,
+          ),
+        );
+        expect(
+          packet.length,
+          lessThanOrEqualTo(TxtQueryWire.ednsUdpSize),
+          reason: '"$name" (${name.length} chars) at $ceiling payload octets',
+        );
+        // The ceiling is the edge itself, not a loose bound: one octet more
+        // is over the size the query advertised, and frameDown refuses it.
+        expect(
+          TxtQueryWire.buildDnsAnswerPacket(
+            0x2222,
+            name,
+            TxtQueryWire.frameUp(List<int>.filled(ceiling + 1, 0x41)),
+          ).length,
+          greaterThan(TxtQueryWire.ednsUdpSize),
+          reason: '"$name" at ${ceiling + 1} payload octets',
+        );
+        expect(
+          () => TxtQueryWire.frameDown(
+            List<int>.filled(ceiling + 1, 0x41),
+            questionName: name,
+          ),
+          throwsA(isA<TxtQueryWireException>()),
+          reason: '"$name" at ${ceiling + 1} payload octets',
+        );
+      }
+    });
+
+    test('the constant is the ceiling at the longest legal name', () {
+      expect(_longestLegalName, hasLength(TxtQueryWire.fqdnMax));
+      for (final label in _longestLegalName.split('.')) {
+        expect(label.length, lessThanOrEqualTo(TxtQueryWire.labelMax));
+      }
+      expect(
+        TxtQueryWire.downstreamBudget,
+        TxtQueryWire.maxDownstreamPayloadFor(_longestLegalName),
       );
     });
   });
