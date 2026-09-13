@@ -159,6 +159,7 @@ class DnsValveConfig {
     required this.selectBudget,
     required this.carryBudget,
     required this.relayOnly,
+    this.chatText,
   });
 
   /// Zone the authoritative responder answers for, e.g. `valve.example`.
@@ -168,8 +169,17 @@ class DnsValveConfig {
   /// candidates", which on the rig would miss the Mac's responder.
   final List<HostPort> resolvers;
 
-  /// Size of the one deterministic payload the branch carries.
+  /// Size of the one payload the branch carries.
   final int chatBytes;
+
+  /// The exact bytes to carry, when the job names them (`chat_text_b64`).
+  ///
+  /// Filler derived from the run id proves carriage but says nothing about
+  /// what a person would actually send, and a message worth sending when the
+  /// ordinary path is shut is a short letter, not a pattern. The Mac holds the
+  /// file, so it can still recompute the digest the responder must log without
+  /// the phone telling it what it sent. Null keeps the derived payload.
+  final Uint8List? chatText;
 
   /// How long the refresh loop may wait for the valve to rank first.
   final Duration selectBudget;
@@ -204,6 +214,28 @@ class DnsValveConfig {
         '${TxtQueryLane.maxPayloadBytes}',
       );
     }
+    // A job that names both a text and a byte count must agree with itself:
+    // the row prints chat_bytes, and a disagreement would make the row
+    // describe a payload the phone never sent.
+    final Uint8List? chatText;
+    final rawText = json['chat_text_b64'];
+    if (rawText == null) {
+      chatText = null;
+    } else {
+      final Uint8List decoded;
+      try {
+        decoded = base64.decode('$rawText');
+      } on FormatException catch (error) {
+        throw FormatException('dns_valve.chat_text_b64 is not base64: $error');
+      }
+      if (decoded.length != chatBytes) {
+        throw FormatException(
+          'dns_valve.chat_text_b64 decodes to ${decoded.length} bytes, '
+          'but chat_bytes says $chatBytes',
+        );
+      }
+      chatText = decoded;
+    }
     return DnsValveConfig(
       zone: zone,
       resolvers: resolvers,
@@ -215,6 +247,7 @@ class DnsValveConfig {
         seconds: _positiveInt(json['carry_budget_s'], 120, 'carry_budget_s'),
       ),
       relayOnly: json['relay_only'] == true,
+      chatText: chatText,
     );
   }
 
@@ -234,6 +267,7 @@ class DnsValveConfig {
     'select_budget_s': selectBudget.inSeconds,
     'carry_budget_s': carryBudget.inSeconds,
     'relay_only': relayOnly,
+    if (chatText != null) 'chat_text_b64': base64.encode(chatText!),
   };
 }
 
@@ -904,7 +938,8 @@ class JourneyPeer {
     final budget = remaining < const Duration(seconds: 1)
         ? const Duration(seconds: 1)
         : remaining;
-    final payload = dnsValvePayload(job.run, config.chatBytes);
+    final payload =
+        config.chatText ?? dnsValvePayload(job.run, config.chatBytes);
     final sha = contentSha256Hex(payload);
     final bestAtSend = fabric.snapshot.bestLaneId;
     try {

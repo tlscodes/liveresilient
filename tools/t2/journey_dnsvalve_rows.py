@@ -278,6 +278,7 @@ def build_row(
     profile: str = PROFILE,
     budget_s: float = 120.0,
     run_start_epoch: float | None = None,
+    expect_sha256: str = '',
     input_error: str = '',
 ) -> list[str]:
     """The profile's one row: seven cells, PASS only on all four facts."""
@@ -362,6 +363,12 @@ def build_row(
     notes.append('best_lane_at_send=%s' % chat.get('best_lane_at_send', 'absent'))
     notes.append('session=%s' % chat.get('session_id', 'absent'))
     notes.append('sha256=%s' % str(chat.get('sha256', 'absent'))[:16])
+    # The caller's own digest of the file it handed out. Without it the row
+    # only proves the phone and the responder agree; with it the row proves
+    # they agree about the message the Mac actually sent.
+    if expect_sha256 and chat:
+        if str(chat.get('sha256', '')).lower() != expect_sha256.lower():
+            fails.append('sha_not_the_sent_letter')
 
     matched = (
         match_responder(lines, chat.get('session_id', ''), chat.get('sha256', ''), run_start_epoch)
@@ -448,6 +455,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument('--profile', default=PROFILE)
     parser.add_argument('--budget-s', type=float, default=120.0)
     parser.add_argument('--run-start-epoch', type=float, default=None)
+    parser.add_argument('--expect-sha256', default='')
     parser.add_argument('--tsv', default='')
     args = parser.parse_args(argv[1:])
 
@@ -466,6 +474,7 @@ def main(argv: list[str]) -> int:
         profile=args.profile,
         budget_s=args.budget_s,
         run_start_epoch=args.run_start_epoch,
+        expect_sha256=args.expect_sha256,
         input_error=unusable,
     )
     print('\t'.join(row))

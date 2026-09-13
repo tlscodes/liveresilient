@@ -127,6 +127,19 @@ VALVE_PORT=${JOURNEY_VALVE_PORT:-5300}
 VALVE_CHAT_BYTES=${JOURNEY_VALVE_CHAT_BYTES:-200}
 VALVE_SELECT_BUDGET_S=${JOURNEY_VALVE_SELECT_BUDGET_S:-60}
 VALVE_CARRY_BUDGET_S=${JOURNEY_VALVE_CARRY_BUDGET_S:-120}
+# The letter itself, when there is one: a file on THIS Mac, carried verbatim
+# instead of filler derived from the run id. Its length sets chat_bytes and its
+# digest is handed to the row builder, so the grade compares the responder's
+# logged digest against this file rather than against what the phone claimed.
+# Unset or missing file -> the derived payload, exactly as before.
+VALVE_CHAT_FILE=${JOURNEY_VALVE_CHAT_FILE:-$REPO/tools/t2/dnsvalve-chat-1k.txt}
+VALVE_CHAT_B64=""
+VALVE_CHAT_SHA=""
+if [ -s "$VALVE_CHAT_FILE" ]; then
+  VALVE_CHAT_BYTES=$(wc -c <"$VALVE_CHAT_FILE" | tr -d ' ')
+  VALVE_CHAT_B64=$(base64 <"$VALVE_CHAT_FILE" | tr -d '\n')
+  VALVE_CHAT_SHA=$(shasum -a 256 "$VALVE_CHAT_FILE" | cut -d' ' -f1)
+fi
 # ONE predicate for every filter-related branch below. whitelist and dnsvalve
 # load a pf rule set instead of a pipe, so both skip the shaper call and both
 # skip the ICMP verification (the filter drops ICMP by design). Keying those
@@ -247,9 +260,13 @@ job_json() {  # <hold_s>
   # profile's ICE restriction: under this filter every UDP port but 53 and the
   # valve port is dropped, so a UDP TURN allocation cannot succeed.
   if [ "$PROFILE" = dnsvalve ]; then
-    dv=$(printf ',"dns_valve":{"zone":"%s","resolvers":["%s:%s"],"chat_bytes":%s,"select_budget_s":%s,"carry_budget_s":%s,"relay_only":true}' \
+    dv_text=""
+    # base64 carries no quote, backslash or control character, so it needs no
+    # JSON escaping; the job stays one line, as the hub reads it.
+    [ -n "$VALVE_CHAT_B64" ] && dv_text=$(printf ',"chat_text_b64":"%s"' "$VALVE_CHAT_B64")
+    dv=$(printf ',"dns_valve":{"zone":"%s","resolvers":["%s:%s"],"chat_bytes":%s,"select_budget_s":%s,"carry_budget_s":%s,"relay_only":true%s}' \
       "$VALVE_DOMAIN" "$WL_SELF" "$VALVE_PORT" "$VALVE_CHAT_BYTES" \
-      "$VALVE_SELECT_BUDGET_S" "$VALVE_CARRY_BUDGET_S")
+      "$VALVE_SELECT_BUDGET_S" "$VALVE_CARRY_BUDGET_S" "$dv_text")
   fi
   printf '{"run":"%s","key":"%s","hold_s":%d,"profile":"%s"%s%s}\n' \
     "$RUN_ID" "$KEY" "$hold" "$PROFILE" "$wl" "$dv"
@@ -822,9 +839,15 @@ if [ "$PROFILE" = dnsvalve ]; then
   # row even if it somehow reached the file. Both are epoch seconds on this
   # Mac's clock, so they compare directly.
   dv_rc=0
+  dv_expect=""
+  # The third run-scoping guard, and the only one that does not trust the
+  # phone: the digest of the file this Mac handed out must be the digest the
+  # responder logged.
+  [ -n "$VALVE_CHAT_SHA" ] && dv_expect="--expect-sha256=$VALVE_CHAT_SHA"
   python3 "$DV_ROWS" --events "$EVENTS" --valve-log "$VALVE_LOG" \
     --lane-id resilient.dns-valve --profile dnsvalve \
     --budget-s "$VALVE_CARRY_BUDGET_S" --run-start-epoch "$RUN_EPOCH" \
+    ${dv_expect:+"$dv_expect"} \
     --tsv "$TSV" || dv_rc=$?
   case "$dv_rc" in
     0) ;;

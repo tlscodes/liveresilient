@@ -10,6 +10,8 @@
 /// whole lifetime_s (default 21600 s) before the phone reported failed.
 library;
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import '../integration_test/blackout_forwarder.dart';
@@ -256,6 +258,39 @@ void main() {
         reason: field,
       );
     }
+  });
+
+  test('a job that names the letter carries those exact bytes', () {
+    final letter = utf8.encode('call 18:30 Tehran, session UL7V62');
+    final config = DnsValveConfig.parse(<String, Object?>{
+      'zone': 'valve.test',
+      'resolvers': const ['192.168.2.1:5300'],
+      'chat_bytes': letter.length,
+      'chat_text_b64': base64.encode(letter),
+    });
+    expect(config.chatText, letter);
+    expect(config.toJson()['chat_text_b64'], base64.encode(letter));
+    // Round trip: what the job said is what a re-parse carries.
+    expect(DnsValveConfig.parse(config.toJson()).chatText, letter);
+  });
+
+  test('a letter whose length disagrees with chat_bytes has no row', () {
+    expect(
+      () => DnsValveConfig.parse(<String, Object?>{
+        'zone': 'valve.test',
+        'chat_bytes': 64,
+        'chat_text_b64': base64.encode(utf8.encode('short')),
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => DnsValveConfig.parse(const <String, Object?>{
+        'zone': 'valve.test',
+        'chat_bytes': 64,
+        'chat_text_b64': 'not base64 at all !!',
+      }),
+      throwsFormatException,
+    );
   });
 
   test(

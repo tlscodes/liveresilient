@@ -95,7 +95,8 @@ def green_events() -> list[dict]:
     ]
 
 
-def build(events=None, log=GREEN_LOG, run_start_epoch=RUN_EPOCH, budget_s=120.0):
+def build(events=None, log=GREEN_LOG, run_start_epoch=RUN_EPOCH, budget_s=120.0,
+          expect_sha256=''):
     return rows.build_row(
         green_events() if events is None else events,
         log,
@@ -103,7 +104,28 @@ def build(events=None, log=GREEN_LOG, run_start_epoch=RUN_EPOCH, budget_s=120.0)
         profile=rows.PROFILE,
         budget_s=budget_s,
         run_start_epoch=run_start_epoch,
+        expect_sha256=expect_sha256,
     )
+
+
+class ExpectedLetter(unittest.TestCase):
+    """The Mac's own digest of the file it handed out is the third witness."""
+
+    def test_the_letter_the_mac_sent_is_what_passes(self):
+        row = build(expect_sha256=SHA)
+        self.assertEqual(row[5], 'PASS')
+        self.assertNotIn('sha_not_the_sent_letter', row[6])
+
+    def test_the_digest_is_compared_case_insensitively(self):
+        self.assertEqual(build(expect_sha256=SHA.upper())[5], 'PASS')
+
+    def test_a_different_letter_fails_even_when_phone_and_responder_agree(self):
+        row = build(expect_sha256=OTHER_SHA)
+        self.assertEqual(row[5], 'FAIL')
+        self.assertIn('sha_not_the_sent_letter', row[6])
+
+    def test_no_expectation_keeps_the_two_witness_grade(self):
+        self.assertEqual(build(expect_sha256='')[5], 'PASS')
 
 
 def without(stage: str) -> list[dict]:
