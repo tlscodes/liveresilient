@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import re
 import socket
 import threading
 import time
@@ -331,8 +333,35 @@ def complete_line(session: str, payload: bytes) -> str:
     )
 
 
-def drain_complete(srv: TxtQueryServer) -> int:
+def letter_path(letter_dir: str, session: str) -> str:
+    """Where the assembled payload is kept for a reader, named by session.
+
+    The session id came off the wire, so it is reduced to [A-Za-z0-9_-] before
+    it becomes a file name: nothing a sender chooses can name a path outside
+    the directory.
+    """
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", session)[:64] or "session"
+    return os.path.join(letter_dir, safe + ".letter")
+
+
+def write_letter(letter_dir: str, session: str, payload: bytes) -> str:
+    """Write the payload this responder assembled, byte for byte.
+
+    The `complete` line proves the carriage to the row builder; this file is
+    for the person at the Mac, who wants to read the letter, not its digest.
+    Bytes, not text: the responder does not know the encoding, the reader does.
+    """
+    path = letter_path(letter_dir, session)
+    os.makedirs(letter_dir, exist_ok=True)
+    with open(path, "wb") as fh:
+        fh.write(payload)
+    return path
+
+
+def drain_complete(srv: TxtQueryServer, letter_dir: str | None = None) -> int:
     """Log every payload assembled since the last call; return how many.
+
+    With `letter_dir` each payload is also written there (see write_letter).
 
     `take_complete()` empties the mailbox as it reads it, so one payload can
     never be logged twice — two lines for one message would read downstream as
@@ -342,6 +371,12 @@ def drain_complete(srv: TxtQueryServer) -> int:
     drained = 0
     for session, payload in srv.take_complete():
         log.info("%s", complete_line(session, payload))
+        # A probe is an empty session the responder completes like any other
+        # (the fabric's refresh() sends one before every ranking); it is not
+        # a letter, so it leaves the log line and no file.
+        if letter_dir and payload:
+            log.info("letter session=%s written=%s", session,
+                     write_letter(letter_dir, session, payload))
         drained += 1
     return drained
 
@@ -353,6 +388,8 @@ def main() -> None:
     p.add_argument("--domain", required=True)
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=53)
+    p.add_argument("--letter-dir", default=None,
+                   help="also write each assembled payload to <dir>/<session>.letter")
     args = p.parse_args()
     # Without a handler every log.info in this module reaches nothing. That —
     # not a silent responder — is why the rig's valve log was empty, and it is
@@ -362,12 +399,12 @@ def main() -> None:
     srv.start()
     try:
         while True:
-            drain_complete(srv)
+            drain_complete(srv, args.letter_dir)
             time.sleep(0.5)
     except KeyboardInterrupt:
         srv.stop()
         # A payload assembled in the last half second is still evidence.
-        drain_complete(srv)
+        drain_complete(srv, args.letter_dir)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ import 'package:adaptive_transport/adaptive_transport.dart'
         HostPort,
         HttpLongPollLane,
         TxtQueryLane,
+        TxtQueryWire,
         TxtQueryValve,
         WebSocketRelayLane;
 import 'package:call_core/call_core.dart';
@@ -287,9 +288,64 @@ Uint8List dnsValvePayload(String run, int bytes) {
   return out;
 }
 
+/// How many TXT queries the lane needs for a payload of [payloadBytes].
+///
+/// The wire frames the payload behind [TxtQueryWire.frameHeader] bytes and
+/// splits the frame [TxtQueryWire.rawPerLabel] bytes per label: 200 bytes
+/// are 6 round trips, 1022 are 27, the lane's 4096-byte limit is 106. The
+/// lane keeps no chunk total of its own, so the screen derives it from the
+/// exported split — the same code the sender runs — never from a copy of
+/// the constants, which would drift.
+int txtChunkCount(int payloadBytes) => TxtQueryWire.splitChunks(
+  TxtQueryWire.frameUp(Uint8List(payloadBytes)),
+).length;
+
+/// A reply older than this is not "alive": the lane's per-chunk budget is
+/// about 10 s on the phone (chunkBudget) and a pacing wait follows a fast
+/// negative, so a chunk that legally retried and rotated resolvers goes
+/// quiet for up to ~14 s while still in flight. 15 s is that, rounded.
+const Duration doorQuiet = Duration(seconds: 15);
+
+/// Queries per landed chunk above which the open door is called slow: every
+/// chunk costing more than one and a half queries means retries, not pace.
+const double doorSlowRetries = 1.5;
+
+/// One honest line for the phone screen while the letter is on the valve.
+///
+/// The words are the person's, the inputs are the lane's counters since the
+/// send began. "alive" appears only when a reply landed within [doorQuiet];
+/// a valve that last answered a minute ago is not alive, it is unknown, and
+/// the line says so. Only [down] closes the door — a low score is a weak
+/// path, not a shut one.
+String doorLine({
+  required bool down,
+  required int attempts,
+  required int landed,
+  required int total,
+  required Duration? sinceReply,
+}) {
+  final chunks = 'chunks $landed/$total';
+  if (down) return 'door closed · lane down · $chunks';
+  if (sinceReply == null) {
+    return 'door unproven · no reply yet · attempts $attempts · $chunks';
+  }
+  final ago = '${sinceReply.inSeconds}s ago';
+  if (sinceReply > doorQuiet) return 'door open? · quiet $ago · $chunks';
+  final retries = attempts / (landed < 1 ? 1 : landed);
+  final pace = retries > doorSlowRetries ? 'slow · alive' : 'alive';
+  return 'door open · $pace · $chunks · reply $ago';
+}
+
 class JourneyPeer {
   final ValueNotifier<String> status = ValueNotifier<String>('booting');
   final ValueNotifier<List<String>> events = ValueNotifier<List<String>>([]);
+
+  /// The letter as handed to the DNS valve lane, for the person holding the
+  /// phone. The event list carries digests and counters, which prove the
+  /// carriage to the Mac and say nothing to a reader; this is the text.
+  /// Empty until a job names a letter; synthetic filler is described, not
+  /// printed.
+  final ValueNotifier<String> letter = ValueNotifier<String>('');
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 3);
 
@@ -887,6 +943,9 @@ class JourneyPeer {
       await fabric.refresh();
       refreshes++;
       selected = fabric.snapshot.bestLaneId == ResilientLaneIds.txtQuery;
+      status.value =
+          'job ${job.run}: probing the door · refresh $refreshes · '
+          'best=${fabric.snapshot.bestLaneId ?? 'none'}';
       if (selected || !DateTime.now().isBefore(deadline)) break;
       await Future<void>.delayed(const Duration(seconds: 12));
     }
@@ -942,6 +1001,45 @@ class JourneyPeer {
         config.chatText ?? dnsValvePayload(job.run, config.chatBytes);
     final sha = contentSha256Hex(payload);
     final bestAtSend = fabric.snapshot.bestLaneId;
+    // The screen's view of the carriage, rewritten once a second from the
+    // lane's counters. Both counters are lane-lifetime and every refresh()
+    // in the selection loop probed, so they are baselined here; a late
+    // duplicate answer can count a chunk twice, so landed is clamped to the
+    // total. The callback never awaits and never throws past itself.
+    final attemptsAtStart = valve.attempts;
+    final repliesAtStart = valve.replies;
+    final total = txtChunkCount(payload.length);
+    var lastReplies = repliesAtStart;
+    DateTime? lastReplyAt;
+    String beat() {
+      final replies = valve.replies;
+      if (replies > lastReplies) {
+        lastReplies = replies;
+        lastReplyAt = DateTime.now();
+      }
+      final landedRaw = replies - repliesAtStart;
+      final at = lastReplyAt;
+      return doorLine(
+        down: valve.isDown,
+        attempts: valve.attempts - attemptsAtStart,
+        landed: landedRaw > total ? total : landedRaw,
+        total: total,
+        sinceReply: at == null ? null : DateTime.now().difference(at),
+      );
+    }
+
+    letter.value = config.chatText == null
+        ? '<synthetic filler, ${payload.length} B>'
+        : utf8.decode(payload, allowMalformed: true);
+    _note('letter handed to the valve: ${payload.length} B, $total chunks');
+    status.value = 'job ${job.run}: ${beat()}';
+    final heartbeat = Timer.periodic(const Duration(seconds: 1), (_) {
+      try {
+        status.value = 'job ${job.run}: ${beat()}';
+      } on Object catch (error) {
+        _note('heartbeat error=$error');
+      }
+    });
     try {
       final outcome = await fabric
           .deliver(
@@ -954,6 +1052,7 @@ class JourneyPeer {
         'dns valve carried outcome=${outcome.name} '
         'session=${valve.lastSessionId} sha256=$sha',
       );
+      status.value = 'job ${job.run}: letter ${outcome.name} · ${beat()}';
       await _report('lane_chat', <String, Object?>{
         'outcome': outcome.name,
         'best_lane_at_send': bestAtSend,
@@ -975,6 +1074,12 @@ class JourneyPeer {
       }, run: job.run);
     } on TimeoutException {
       _note('dns valve gave_up after ${budget.inSeconds}s');
+      // timeout() abandons the future, it does not cancel the send: the
+      // lane keeps working until dispose, and a frozen "alive" line would
+      // claim otherwise.
+      status.value =
+          'job ${job.run}: gave up after ${budget.inSeconds}s · ${beat()} · '
+          'lane draining until dispose';
       await _report('lane', <String, Object?>{
         'stage': 'gave_up',
         'phase': 'carry',
@@ -989,6 +1094,8 @@ class JourneyPeer {
         'valve_attempts': valve.attempts,
         'valve_replies': valve.replies,
       }, run: job.run);
+    } finally {
+      heartbeat.cancel();
     }
   }
 
@@ -1971,6 +2078,22 @@ class JourneyPeerApp extends StatelessWidget {
                 valueListenable: peer.status,
                 builder: (context, value, _) =>
                     Text(value, style: Theme.of(context).textTheme.titleLarge),
+              ),
+              const SizedBox(height: 12),
+              ValueListenableBuilder<String>(
+                valueListenable: peer.letter,
+                builder: (context, value, _) => value.isEmpty
+                    ? const SizedBox.shrink()
+                    : ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 160),
+                        child: SingleChildScrollView(
+                          child: SelectableText(
+                            value,
+                            key: const Key('journey-peer-letter'),
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ),
               ),
               const SizedBox(height: 12),
               Expanded(

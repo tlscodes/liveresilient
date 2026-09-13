@@ -232,8 +232,12 @@ FILTER_ARG="$WHITELIST_ARG"
 [ "$PROFILE" = dnsvalve ] && FILTER_ARG="$WHITELIST_ARG,udp=$VALVE_PORT"
 # The responder's argv, declared once so the dry print and the real start cannot
 # describe different processes.
+# --letter-dir: the responder also writes each assembled payload to
+# $LOGD/<session>.letter, so the letter can be shown here as it arrived, not
+# as a digest. The log dir exists before the responder starts (mkdir below).
 VALVE_ARGV=(python3 "$REPO/tools/t2/txt_query_server.py"
-            --domain "$VALVE_DOMAIN" --host "$WL_SELF" --port "$VALVE_PORT")
+            --domain "$VALVE_DOMAIN" --host "$WL_SELF" --port "$VALVE_PORT"
+            --letter-dir "$LOGD")
 TURN_ARGV=("$TURN_BIN" -c "$TURN_CONF" --listening-port="$TURN_TCP_PORT"
            --listening-ip="$WL_SELF" --no-udp --no-tls --no-dtls --log-file=stdout)
 # Stated in both rows, never hidden: the filter SHAPE is faithful, the allowed
@@ -854,6 +858,25 @@ if [ "$PROFILE" = dnsvalve ]; then
     1) echo "note: the dns-valve row is a FAIL; its note names which of the witnesses is missing (see $EVENTS and $VALVE_LOG)" ;;
     *) echo "note: the dns-valve row was built from unusable input (see $EVENTS and $VALVE_LOG)" ;;
   esac
+  # What the person at this Mac sees: the door verdict in words, with the
+  # row's own numbers, and the letter as the responder assembled it. The file
+  # is the responder's write (--letter-dir), so it is what arrived, never what
+  # the phone claimed; the digest check above already tied the two together.
+  dv_line=$(grep -E "^dns_valve_chat[[:space:]]" "$TSV" | tail -1)
+  dv_status=$(printf '%s' "$dv_line" | cut -f6)
+  dv_bytes=$(printf '%s' "$dv_line" | cut -f3)
+  dv_measured=$(printf '%s' "$dv_line" | cut -f5)
+  dv_session=$(grep -oE 'complete session=[A-Za-z0-9_-]+' "$VALVE_LOG" | tail -1 | cut -d= -f2)
+  if [ "$dv_status" = PASS ]; then
+    echo "door      open · ${dv_bytes} B carried over the DNS valve · row ${dv_measured} s · alive (session ${dv_session:-?})"
+  else
+    echo "door      closed for the letter · row ${dv_status:-absent} (see $EVENTS and $VALVE_LOG)"
+  fi
+  if [ -n "$dv_session" ] && [ -s "$LOGD/$dv_session.letter" ]; then
+    echo "letter    as the responder assembled it ($(wc -c <"$LOGD/$dv_session.letter" | tr -d ' ') B, $LOGD/$dv_session.letter):"
+    sed 's/^/          | /' "$LOGD/$dv_session.letter"
+    echo
+  fi
 fi
 echo "rows      appended to $TSV"
 echo "evidence  $EVID/$PROFILE-NN.mov  $EVID/media/$PROFILE-*  $APPLOG  $LOGD/$PROFILE.phone.jsonl  $LOGD/$PROFILE.hub.log"

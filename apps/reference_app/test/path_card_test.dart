@@ -9,9 +9,10 @@ ConnectivitySnapshot _snapshot({
   required FabricMode mode,
   String? bestLaneId,
   int pendingBundles = 0,
+  List<LaneStatus> lanes = const <LaneStatus>[],
 }) => ConnectivitySnapshot(
   mode: mode,
-  lanes: const <LaneStatus>[],
+  lanes: lanes,
   bestLaneId: bestLaneId,
   pendingBundles: pendingBundles,
   atMs: 0,
@@ -57,6 +58,76 @@ void main() {
     });
   });
 
+  group('doorLabel', () {
+    LaneStatus lane(String id, double score) =>
+        LaneStatus(id: id, eligible: true, score: score);
+
+    test('no best lane, or offline, is a closed door', () {
+      expect(
+        doorLabel(_snapshot(mode: FabricMode.storeAndForward)),
+        'door closed',
+      );
+      expect(
+        doorLabel(
+          _snapshot(mode: FabricMode.offline, bestLaneId: 'resilient.wss'),
+        ),
+        'door closed',
+      );
+    });
+
+    test(
+      'a best lane at the dead-lane floor is closed, a weak live one is slow',
+      () {
+        expect(
+          doorLabel(
+            _snapshot(
+              mode: FabricMode.degraded,
+              bestLaneId: 'resilient.wss',
+              lanes: [lane('resilient.wss', -1.05)],
+            ),
+          ),
+          'door closed',
+        );
+        // The valve that carried the letter on 2026-09-14: 0.012 − 0.15.
+        expect(
+          doorLabel(
+            _snapshot(
+              mode: FabricMode.degraded,
+              bestLaneId: 'resilient.dns-valve',
+              lanes: [
+                lane('resilient.wss', -1.05),
+                lane('resilient.dns-valve', -0.138),
+              ],
+            ),
+          ),
+          'door open · slow',
+        );
+        expect(
+          doorLabel(
+            _snapshot(
+              mode: FabricMode.live,
+              bestLaneId: 'webrtc-media',
+              lanes: [lane('webrtc-media', 0.9)],
+            ),
+          ),
+          'door open',
+        );
+      },
+    );
+
+    test(
+      'a best lane the list does not describe is open, not guessed slow',
+      () {
+        expect(
+          doorLabel(
+            _snapshot(mode: FabricMode.live, bestLaneId: 'webrtc-media'),
+          ),
+          'door open',
+        );
+      },
+    );
+  });
+
   group('PathCard', () {
     testWidgets('renders the lane and the mode from the snapshot stream', (
       tester,
@@ -84,6 +155,8 @@ void main() {
       );
       expect(find.text('Path: DNS valve'), findsOneWidget);
       expect(find.text('degraded'), findsOneWidget);
+      expect(find.byKey(const Key('path-card-door')), findsOneWidget);
+      expect(find.text('door open'), findsOneWidget);
 
       await deliver(
         _snapshot(mode: FabricMode.live, bestLaneId: 'webrtc-media'),

@@ -260,6 +260,69 @@ void main() {
     }
   });
 
+  group('the door line on the phone screen', () {
+    test('the chunk count follows the wire split, never a copied constant', () {
+      expect(txtChunkCount(0), 1);
+      // The 200-byte runs made 7 attempts: 6 chunks and the probe.
+      expect(txtChunkCount(200), 6);
+      // The 1022-byte letter: 28 attempts, 27 chunks and the probe.
+      expect(txtChunkCount(1022), 27);
+      // The lane limit, as its own doc states: 106 round trips.
+      expect(txtChunkCount(4096), 106);
+    });
+
+    test('closed, unproven, alive, slow and quiet are told apart', () {
+      expect(
+        doorLine(
+          down: true,
+          attempts: 3,
+          landed: 0,
+          total: 27,
+          sinceReply: null,
+        ),
+        'door closed · lane down · chunks 0/27',
+      );
+      final unproven = doorLine(
+        down: false,
+        attempts: 2,
+        landed: 0,
+        total: 27,
+        sinceReply: null,
+      );
+      expect(unproven, startsWith('door unproven'));
+      expect(unproven, isNot(contains('alive')));
+      expect(
+        doorLine(
+          down: false,
+          attempts: 13,
+          landed: 12,
+          total: 27,
+          sinceReply: const Duration(seconds: 3),
+        ),
+        'door open · alive · chunks 12/27 · reply 3s ago',
+      );
+      expect(
+        doorLine(
+          down: false,
+          attempts: 30,
+          landed: 12,
+          total: 27,
+          sinceReply: const Duration(seconds: 3),
+        ),
+        'door open · slow · alive · chunks 12/27 · reply 3s ago',
+      );
+      final quiet = doorLine(
+        down: false,
+        attempts: 30,
+        landed: 12,
+        total: 27,
+        sinceReply: const Duration(seconds: 20),
+      );
+      expect(quiet, 'door open? · quiet 20s ago · chunks 12/27');
+      expect(quiet, isNot(contains('alive')));
+    });
+  });
+
   test('a job that names the letter carries those exact bytes', () {
     final letter = utf8.encode('call 18:30 Tehran, session UL7V62');
     final config = DnsValveConfig.parse(<String, Object?>{

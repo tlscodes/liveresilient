@@ -341,6 +341,47 @@ def test_completion_line_is_written_by_the_idle_loop(rec: Recorder) -> None:
           mod.drain_complete(srv) == 0 and rec.records[before:] == [])
 
 
+def test_letter_is_written_where_asked(rec: Recorder) -> None:
+    """The reader's half: the assembled bytes land in --letter-dir as sent."""
+    import tempfile
+
+    srv = TxtQueryServer(DOMAIN, port=0, echo=False)
+    payload = "قرار تماس ۱۸:۳۰ به وقت تهران — session UL7V62".encode("utf-8")
+    s = sid(12)
+    for seq, chunk in enumerate(split_chunks(frame_up(payload))):
+        srv._handle(qpacket(chunk, seq, s), ("10.0.0.6", 1))
+    # The probe the fabric sends before every ranking: an empty session the
+    # responder completes like any other. On the rig it appeared beside the
+    # letter as `complete session=dp4xrl bytes=0` — a log line, not a letter.
+    probe = sid(12)
+    for seq, chunk in enumerate(split_chunks(frame_up(b""))):
+        srv._handle(qpacket(chunk, seq, probe), ("10.0.0.6", 1))
+    with tempfile.TemporaryDirectory() as d:
+        check("the drain logs the letter and the probe", mod.drain_complete(srv, d) == 2)
+        files = [f for f in os.listdir(d) if f.endswith(".letter")]
+        check("one file, named by the letter's session, none for the probe",
+              len(files) == 1, str(files))
+        with open(os.path.join(d, files[0]), "rb") as fh:
+            got = fh.read()
+        check("the letter is the payload, byte for byte", got == payload, repr(got[:40]))
+        crooked = mod.letter_path(d, "../../etc/x")
+        check("a wire-chosen session id cannot name a path outside the directory",
+              os.path.dirname(crooked) == d and ".." not in os.path.basename(crooked),
+              crooked)
+    # The default path is unchanged: no directory, no file, no "written=" line —
+    # the row builder's `complete` line stays the only thing this drain logs.
+    plain = TxtQueryServer(DOMAIN, port=0, echo=False)
+    t = sid(12)
+    for seq, chunk in enumerate(split_chunks(frame_up(payload))):
+        plain._handle(qpacket(chunk, seq, t), ("10.0.0.7", 1))
+    before = len(rec.records)
+    drained = mod.drain_complete(plain)
+    logged = [r.getMessage() for r in rec.records[before:]]
+    check("without a directory the drain logs the complete line and nothing about a file",
+          drained == 1 and len(logged) == 1 and logged[0].startswith("complete session=")
+          and "written=" not in logged[0], str(logged))
+
+
 def main() -> int:
     print("gate_txt_query_server")
     rec = Recorder()
@@ -357,6 +398,7 @@ def main() -> int:
         test_stop_joins_the_thread(rec)
         test_echo_round_trip_over_udp()
         test_completion_line_is_written_by_the_idle_loop(rec)
+        test_letter_is_written_where_asked(rec)
     finally:
         mod.log.removeHandler(rec)
     check("no traceback was logged by any check", rec.errors() == [],
