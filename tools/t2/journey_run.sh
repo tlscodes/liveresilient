@@ -918,6 +918,12 @@ if [ "$PROFILE" = dnsvalve ]; then
       sed 's/^/          | /' "$LOGD/$dv_session.letter"
       echo
       osascript -e "display notification \"$letter_b bytes, session $dv_session\" with title \"DNS-valve letter received\"" >/dev/null 2>&1 || true
+      # A notification banner fades in seconds; this stays on screen until
+      # clicked — the letter TEXT itself already printed above (and above
+      # any quoting risk an arbitrary typed letter would pose to an
+      # AppleScript string), so the dialog only names the count and session.
+      # Backgrounded (&) so a person who never clicks it never blocks the run.
+      ( osascript -e "display dialog \"A $letter_b-byte letter arrived over the DNS door, session $dv_session. The text is in this terminal, just above.\" with title \"DNS-valve letter received\" buttons {\"OK\"} default button \"OK\"" >/dev/null 2>&1 & )
     else
       # Try the one binary shape this lane actually carries: a Codec2 700C
       # voice letter (voice_note_codec.dart). Decoded via the SAME FFI path
@@ -935,6 +941,7 @@ if [ "$PROFILE" = dnsvalve ]; then
         echo "letter    voice, $letter_b B (~${dv_secs:-?}s), decoded to $dv_wav — playing now"
         afplay "$dv_wav" >/dev/null 2>&1 || echo "note: afplay failed; the wav is still at $dv_wav"
         osascript -e "display notification \"${dv_secs:-?}s, session $dv_session\" with title \"DNS-valve voice letter received\"" >/dev/null 2>&1 || true
+        ( osascript -e "display dialog \"A ${dv_secs:-?}s voice letter arrived over the DNS door and is playing now, session $dv_session.\" with title \"DNS-valve voice letter received\" buttons {\"OK\"} default button \"OK\"" >/dev/null 2>&1 & )
       else
         echo "letter    binary, $letter_b B, kept at $LOGD/$dv_session.letter"
       fi
