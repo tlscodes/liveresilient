@@ -917,8 +917,27 @@ if [ "$PROFILE" = dnsvalve ]; then
       echo "letter    as the responder assembled it, written by the $VALVE_CHAT_SOURCE ($letter_b B, $LOGD/$dv_session.letter):"
       sed 's/^/          | /' "$LOGD/$dv_session.letter"
       echo
+      osascript -e "display notification \"$letter_b bytes, session $dv_session\" with title \"DNS-valve letter received\"" >/dev/null 2>&1 || true
     else
-      echo "letter    binary, $letter_b B, kept at $LOGD/$dv_session.letter"
+      # Try the one binary shape this lane actually carries: a Codec2 700C
+      # voice letter (voice_note_codec.dart). Decoded via the SAME FFI path
+      # the phone used to encode it, not the c2dec CLI's own file format
+      # (which expects a header this wire never writes and silently
+      # mis-decodes without one). Any other binary — a photo, anything
+      # unrelated — fails unpackVoiceNote() and falls through unplayed,
+      # named for what it is, never guessed at.
+      dv_wav="$LOGD/$dv_session.wav"
+      dv_raw="$RUN/$dv_session.pcm"
+      if ( cd "$REPO/packages/hamseda_codec" && dart run tool/decode_voice_letter.dart \
+             "$LOGD/$dv_session.letter" "$dv_raw" ) >/dev/null 2>&1 \
+         && ffmpeg -v error -y -f s16le -ac 1 -ar 8000 -i "$dv_raw" "$dv_wav" >/dev/null 2>&1; then
+        dv_secs=$(afinfo "$dv_wav" 2>/dev/null | sed -nE 's/.*estimated duration: ([0-9.]+) sec.*/\1/p' | head -1)
+        echo "letter    voice, $letter_b B (~${dv_secs:-?}s), decoded to $dv_wav — playing now"
+        afplay "$dv_wav" >/dev/null 2>&1 || echo "note: afplay failed; the wav is still at $dv_wav"
+        osascript -e "display notification \"${dv_secs:-?}s, session $dv_session\" with title \"DNS-valve voice letter received\"" >/dev/null 2>&1 || true
+      else
+        echo "letter    binary, $letter_b B, kept at $LOGD/$dv_session.letter"
+      fi
     fi
   fi
 fi
