@@ -272,6 +272,20 @@ check("the peer is asked to carry bytes, not to replace the call",
       isinstance(valve.get("chat_bytes"), int) and valve["chat_bytes"] > 0,
       f"chat_bytes={valve.get('chat_bytes')}")
 
+# --- the phone as the letter's author: no text and no digest leave this Mac ---
+pv = dry(env_extra={"JOURNEY_VALVE_CHAT_SOURCE": "phone"}, args=("dnsvalve",)).stdout
+pv_job = json.loads(field(r"job       (\{.*?\})   ", pv, "phone-source job JSON"))
+pv_valve = pv_job.get("dns_valve", {})
+check("with the phone as author the job says so",
+      pv_valve.get("chat_source") == "phone", f"chat_source={pv_valve.get('chat_source')}")
+check("and carries no letter of its own, so the phone's text is the only text",
+      "chat_text_b64" not in pv_valve, f"keys={sorted(pv_valve)}")
+check("the default author is the Mac, and then the job carries no chat_source",
+      "chat_source" not in valve, f"keys={sorted(valve)}")
+bad = dry(env_extra={"JOURNEY_VALVE_CHAT_SOURCE": "pigeon"}, args=("dnsvalve",), expect_rc=1)
+check("an unknown author is refused before anything starts",
+      "must be mac or phone" in (bad.stdout + bad.stderr), (bad.stdout + bad.stderr)[-200:])
+
 check("the dry print names the responder it will start, with host and port",
       "txt_query_server.py" in dv and "--port 5300" in dv and "--domain valve.test" in dv,
       dv[-400:])

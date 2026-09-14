@@ -11,6 +11,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -321,6 +322,63 @@ void main() {
       expect(quiet, 'door open? · quiet 20s ago · chunks 12/27');
       expect(quiet, isNot(contains('alive')));
     });
+  });
+
+  group('the phone as the author', () {
+    test('chat_source phone parses, round-trips and defaults to mac', () {
+      final phone = DnsValveConfig.parse(<String, Object?>{
+        'zone': 'valve.test',
+        'resolvers': const ['192.168.2.1:5300'],
+        'chat_source': 'phone',
+      });
+      expect(phone.chatSource, 'phone');
+      expect(phone.chatText, isNull);
+      expect(DnsValveConfig.parse(phone.toJson()).chatSource, 'phone');
+      expect(
+        DnsValveConfig.parse(<String, Object?>{
+          'zone': 'valve.test',
+        }).chatSource,
+        'mac',
+      );
+    });
+
+    test('two authors for one letter, or an unknown author, has no row', () {
+      expect(
+        () => DnsValveConfig.parse(<String, Object?>{
+          'zone': 'valve.test',
+          'chat_source': 'phone',
+          'chat_bytes': 5,
+          'chat_text_b64': base64.encode(utf8.encode('hello')),
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => DnsValveConfig.parse(const <String, Object?>{
+          'zone': 'valve.test',
+          'chat_source': 'pigeon',
+        }),
+        throwsFormatException,
+      );
+    });
+
+    test('the screen shows text as text and binary as a description', () {
+      final text = Uint8List.fromList(utf8.encode('سلام از گوشی'));
+      expect(describeLetter(text, 'a' * 64), 'سلام از گوشی');
+      final binary = Uint8List.fromList(const [0xff, 0xd8, 0xff, 0xe0, 0x00]);
+      expect(
+        describeLetter(binary, 'abcdef0123456789ffff'),
+        '<binary, 5 B, sha256 abcdef0123456789>',
+      );
+    });
+
+    test(
+      'the default phone letter names its origin and fits a few queries',
+      () {
+        final letter = phoneDefaultLetter('2026-09-14T00:00:00Z');
+        expect(letter, startsWith('from the phone, run 2026-09-14T00:00:00Z'));
+        expect(txtChunkCount(utf8.encode(letter).length), lessThanOrEqualTo(3));
+      },
+    );
   });
 
   test('a job that names the letter carries those exact bytes', () {

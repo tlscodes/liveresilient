@@ -161,6 +161,7 @@ class DnsValveConfig {
     required this.carryBudget,
     required this.relayOnly,
     this.chatText,
+    this.chatSource = 'mac',
   });
 
   /// Zone the authoritative responder answers for, e.g. `valve.example`.
@@ -181,6 +182,14 @@ class DnsValveConfig {
   /// file, so it can still recompute the digest the responder must log without
   /// the phone telling it what it sent. Null keeps the derived payload.
   final Uint8List? chatText;
+
+  /// Who writes the letter: `mac` (the job carries it, or filler is derived)
+  /// or `phone` — the bytes are what the person typed on the phone screen
+  /// (`JourneyPeer.draft`), which the Mac cannot know in advance, so the row
+  /// then rests on two witnesses (the phone's digest and the responder's)
+  /// instead of three. `chat_bytes` is unused for a phone letter; the honest
+  /// length is what the lane_chat event reports.
+  final String chatSource;
 
   /// How long the refresh loop may wait for the valve to rank first.
   final Duration selectBudget;
@@ -237,6 +246,18 @@ class DnsValveConfig {
       }
       chatText = decoded;
     }
+    final chatSource = '${json['chat_source'] ?? 'mac'}';
+    if (chatSource != 'mac' && chatSource != 'phone') {
+      throw FormatException(
+        'dns_valve.chat_source "$chatSource" is neither mac nor phone',
+      );
+    }
+    // Two authors for one letter is a job that contradicts itself.
+    if (chatSource == 'phone' && chatText != null) {
+      throw const FormatException(
+        'dns_valve.chat_source is phone but chat_text_b64 names a letter',
+      );
+    }
     return DnsValveConfig(
       zone: zone,
       resolvers: resolvers,
@@ -249,6 +270,7 @@ class DnsValveConfig {
       ),
       relayOnly: json['relay_only'] == true,
       chatText: chatText,
+      chatSource: chatSource,
     );
   }
 
@@ -269,6 +291,7 @@ class DnsValveConfig {
     'carry_budget_s': carryBudget.inSeconds,
     'relay_only': relayOnly,
     if (chatText != null) 'chat_text_b64': base64.encode(chatText!),
+    'chat_source': chatSource,
   };
 }
 
@@ -299,6 +322,24 @@ Uint8List dnsValvePayload(String run, int bytes) {
 int txtChunkCount(int payloadBytes) => TxtQueryWire.splitChunks(
   TxtQueryWire.frameUp(Uint8List(payloadBytes)),
 ).length;
+
+/// The letter a phone sends when the person typed nothing: honest about its
+/// origin and its run, short enough to cost a handful of queries.
+String phoneDefaultLetter(String run) =>
+    'from the phone, run $run: the ordinary path is shut, this went out '
+    'the DNS door.';
+
+/// What the screen shows for a carried payload: the text when it IS text,
+/// a description when it is not. Strict decoding on purpose — a lenient
+/// decode would print a binary payload as garbage and a person would read
+/// that as a corrupted letter.
+String describeLetter(Uint8List payload, String sha256) {
+  try {
+    return utf8.decode(payload);
+  } on FormatException {
+    return '<binary, ${payload.length} B, sha256 ${sha256.substring(0, 16)}>';
+  }
+}
 
 /// A reply older than this is not "alive": the lane's per-chunk budget is
 /// about 10 s on the phone (chunkBudget) and a pacing wait follows a fast
@@ -346,6 +387,11 @@ class JourneyPeer {
   /// Empty until a job names a letter; synthetic filler is described, not
   /// printed.
   final ValueNotifier<String> letter = ValueNotifier<String>('');
+
+  /// What the person typed on the phone screen; carried verbatim when the
+  /// job says `chat_source: phone`. Never cleared by a job, so a draft typed
+  /// before the run is the one that goes.
+  final ValueNotifier<String> draft = ValueNotifier<String>('');
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 3);
 
@@ -997,8 +1043,34 @@ class JourneyPeer {
     final budget = remaining < const Duration(seconds: 1)
         ? const Duration(seconds: 1)
         : remaining;
-    final payload =
-        config.chatText ?? dnsValvePayload(job.run, config.chatBytes);
+    final Uint8List payload;
+    if (config.chatSource == 'phone') {
+      final text = draft.value.trim();
+      payload = Uint8List.fromList(
+        utf8.encode(text.isEmpty ? phoneDefaultLetter(job.run) : text),
+      );
+    } else {
+      payload = config.chatText ?? dnsValvePayload(job.run, config.chatBytes);
+    }
+    // Refused HERE, not by the lane's own throw: deliver() fans out, and an
+    // over-cap letter refused by the valve could still ride another lane and
+    // produce a lane_chat that reads as a carriage. Same event the branch's
+    // catch-all writes, so the row builder needs no new stage.
+    if (payload.length > TxtQueryLane.maxPayloadBytes) {
+      _note('letter refused: ${payload.length} B over the lane limit');
+      status.value =
+          'job ${job.run}: letter too long — ${payload.length} B, '
+          'the door takes ${TxtQueryLane.maxPayloadBytes}';
+      await _report('lane', <String, Object?>{
+        'stage': 'error',
+        'phase': 'carry',
+        'error': 'letter too long',
+        'bytes': payload.length,
+        'limit': TxtQueryLane.maxPayloadBytes,
+        'source': config.chatSource,
+      }, run: job.run);
+      return;
+    }
     final sha = contentSha256Hex(payload);
     final bestAtSend = fabric.snapshot.bestLaneId;
     // The screen's view of the carriage, rewritten once a second from the
@@ -1028,9 +1100,7 @@ class JourneyPeer {
       );
     }
 
-    letter.value = config.chatText == null
-        ? '<synthetic filler, ${payload.length} B>'
-        : utf8.decode(payload, allowMalformed: true);
+    letter.value = describeLetter(payload, sha);
     _note('letter handed to the valve: ${payload.length} B, $total chunks');
     status.value = 'job ${job.run}: ${beat()}';
     final heartbeat = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -1060,6 +1130,7 @@ class JourneyPeer {
         'session_id': valve.lastSessionId,
         'sha256': sha,
         'bytes': payload.length,
+        'source': config.chatSource,
         'valve_down': valve.isDown,
         'valve_attempts': valve.attempts,
         'valve_replies': valve.replies,
@@ -2094,6 +2165,19 @@ class JourneyPeerApp extends StatelessWidget {
                           ),
                         ),
                       ),
+              ),
+              const SizedBox(height: 12),
+              // Typed before the run; carried when the job says the phone
+              // writes the letter. TextField owns its controller, so a plain
+              // notifier is enough and nothing needs disposing.
+              TextField(
+                key: const Key('journey-peer-draft'),
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Letter from this phone (chat_source: phone)',
+                ),
+                onChanged: (value) => peer.draft.value = value,
               ),
               const SizedBox(height: 12),
               Expanded(

@@ -135,7 +135,12 @@ VALVE_CARRY_BUDGET_S=${JOURNEY_VALVE_CARRY_BUDGET_S:-120}
 VALVE_CHAT_FILE=${JOURNEY_VALVE_CHAT_FILE:-$REPO/tools/t2/dnsvalve-chat-1k.txt}
 VALVE_CHAT_B64=""
 VALVE_CHAT_SHA=""
-if [ -s "$VALVE_CHAT_FILE" ]; then
+# Who writes the letter: mac (the file above) or phone (what the person typed
+# on the phone screen). With the phone as author this Mac ships no text and
+# holds no digest, so the row rests on the phone's and the responder's.
+VALVE_CHAT_SOURCE=${JOURNEY_VALVE_CHAT_SOURCE:-mac}
+case "$VALVE_CHAT_SOURCE" in mac|phone) ;; *) die "JOURNEY_VALVE_CHAT_SOURCE must be mac or phone (got $VALVE_CHAT_SOURCE)" ;; esac
+if [ "$VALVE_CHAT_SOURCE" = mac ] && [ -s "$VALVE_CHAT_FILE" ]; then
   VALVE_CHAT_BYTES=$(wc -c <"$VALVE_CHAT_FILE" | tr -d ' ')
   VALVE_CHAT_B64=$(base64 <"$VALVE_CHAT_FILE" | tr -d '\n')
   VALVE_CHAT_SHA=$(shasum -a 256 "$VALVE_CHAT_FILE" | cut -d' ' -f1)
@@ -268,6 +273,7 @@ job_json() {  # <hold_s>
     # base64 carries no quote, backslash or control character, so it needs no
     # JSON escaping; the job stays one line, as the hub reads it.
     [ -n "$VALVE_CHAT_B64" ] && dv_text=$(printf ',"chat_text_b64":"%s"' "$VALVE_CHAT_B64")
+    [ "$VALVE_CHAT_SOURCE" = phone ] && dv_text=',"chat_source":"phone"'
     dv=$(printf ',"dns_valve":{"zone":"%s","resolvers":["%s:%s"],"chat_bytes":%s,"select_budget_s":%s,"carry_budget_s":%s,"relay_only":true%s}' \
       "$VALVE_DOMAIN" "$WL_SELF" "$VALVE_PORT" "$VALVE_CHAT_BYTES" \
       "$VALVE_SELECT_BUDGET_S" "$VALVE_CARRY_BUDGET_S" "$dv_text")
@@ -873,9 +879,16 @@ if [ "$PROFILE" = dnsvalve ]; then
     echo "door      closed for the letter · row ${dv_status:-absent} (see $EVENTS and $VALVE_LOG)"
   fi
   if [ -n "$dv_session" ] && [ -s "$LOGD/$dv_session.letter" ]; then
-    echo "letter    as the responder assembled it ($(wc -c <"$LOGD/$dv_session.letter" | tr -d ' ') B, $LOGD/$dv_session.letter):"
-    sed 's/^/          | /' "$LOGD/$dv_session.letter"
-    echo
+    letter_b=$(wc -c <"$LOGD/$dv_session.letter" | tr -d ' ')
+    # iconv is a strict decoder (exit 1 on the first invalid byte); BSD `file`
+    # guesses. Only text is echoed; anything else is named and left on disk.
+    if iconv -f UTF-8 -t UTF-8 "$LOGD/$dv_session.letter" >/dev/null 2>&1; then
+      echo "letter    as the responder assembled it, written by the $VALVE_CHAT_SOURCE ($letter_b B, $LOGD/$dv_session.letter):"
+      sed 's/^/          | /' "$LOGD/$dv_session.letter"
+      echo
+    else
+      echo "letter    binary, $letter_b B, kept at $LOGD/$dv_session.letter"
+    fi
   fi
 fi
 echo "rows      appended to $TSV"
