@@ -145,6 +145,20 @@ if [ "$VALVE_CHAT_SOURCE" = mac ] && [ -s "$VALVE_CHAT_FILE" ]; then
   VALVE_CHAT_B64=$(base64 <"$VALVE_CHAT_FILE" | tr -d '\n')
   VALVE_CHAT_SHA=$(shasum -a 256 "$VALVE_CHAT_FILE" | cut -d' ' -f1)
 fi
+# How long a phone letter (chatSource=phone) waits for the person to type and
+# tap Send before the app falls back to the draft-or-default choice. 0 (the
+# default) keeps every unattended run byte-for-byte unchanged: the app reads
+# `draft` immediately, no window opens. The app itself caps this at 120 s.
+VALVE_PHONE_WAIT_S=${JOURNEY_VALVE_PHONE_WAIT_S:-0}
+case "$VALVE_PHONE_WAIT_S" in ''|*[!0-9]*) die "JOURNEY_VALVE_PHONE_WAIT_S must be a non-negative integer (got $VALVE_PHONE_WAIT_S)" ;; esac
+# Opt-in: run the dnsvalve profile exercising ONLY the DNS valve letter carry,
+# never the Mac-side live-call driver or its go/join choreography. The letter
+# carry already completes independently of that phase (measured); this mode
+# exists so an iteration on the letter alone does not pay for a call that was
+# never wanted, and does not wait on a call phase that happens to be down.
+VALVE_LETTER_ONLY=${JOURNEY_VALVE_LETTER_ONLY:-0}
+case "$VALVE_LETTER_ONLY" in 0|1) ;; *) die "JOURNEY_VALVE_LETTER_ONLY must be 0 or 1 (got $VALVE_LETTER_ONLY)" ;; esac
+[ "$VALVE_LETTER_ONLY" = 1 ] && [ "$PROFILE" != dnsvalve ] && die "JOURNEY_VALVE_LETTER_ONLY=1 applies to the dnsvalve profile only (got $PROFILE)"
 # ONE predicate for every filter-related branch below. whitelist and dnsvalve
 # load a pf rule set instead of a pipe, so both skip the shaper call and both
 # skip the ICMP verification (the filter drops ICMP by design). Keying those
@@ -273,7 +287,7 @@ job_json() {  # <hold_s>
     # base64 carries no quote, backslash or control character, so it needs no
     # JSON escaping; the job stays one line, as the hub reads it.
     [ -n "$VALVE_CHAT_B64" ] && dv_text=$(printf ',"chat_text_b64":"%s"' "$VALVE_CHAT_B64")
-    [ "$VALVE_CHAT_SOURCE" = phone ] && dv_text=',"chat_source":"phone"'
+    [ "$VALVE_CHAT_SOURCE" = phone ] && dv_text=$(printf ',"chat_source":"phone","phone_wait_s":%s' "$VALVE_PHONE_WAIT_S")
     dv=$(printf ',"dns_valve":{"zone":"%s","resolvers":["%s:%s"],"chat_bytes":%s,"select_budget_s":%s,"carry_budget_s":%s,"relay_only":true%s}' \
       "$VALVE_DOMAIN" "$WL_SELF" "$VALVE_PORT" "$VALVE_CHAT_BYTES" \
       "$VALVE_SELECT_BUDGET_S" "$VALVE_CARRY_BUDGET_S" "$dv_text")
@@ -568,8 +582,9 @@ fi
 # --- the Mac app, on its own screen (built and ready BEFORE the phone) ---
 # Keep the app awake and in front: an un-foregrounded app stalled ~25 s under
 # App Nap (2026-09-03) and both sides fell into reconnect.
-defaults write com.voicecallkit.referenceApp NSAppSleepDisabled -bool YES 2>/dev/null || true
 APPLOG="$LOGD/$PROFILE.app.log"
+if [ "$VALVE_LETTER_ONLY" != 1 ]; then
+defaults write com.voicecallkit.referenceApp NSAppSleepDisabled -bool YES 2>/dev/null || true
 ( cd "$APP" && flutter test integration_test/journey_driver_test.dart -d macos \
     --dart-define=JOURNEY_READY_FILE="$READY" --dart-define=JOURNEY_GO_FILE="$GO" \
     --dart-define=JOURNEY_RUN_DIR="$RUN" \
@@ -590,6 +605,9 @@ for _ in $(seq 1 480); do [ -f "$READY" ] && break; kill -0 "$APP_PID" 2>/dev/nu
 [ -f "$READY" ] || die "the Mac app never reported ready (flutter alive: $(kill -0 "$APP_PID" 2>/dev/null && echo yes || echo no); see $APPLOG)"
 echo "app       on screen"
 osascript -e 'tell application id "com.voicecallkit.referenceApp" to activate' >/dev/null 2>&1 || true
+else
+  echo "app       skipped (JOURNEY_VALVE_LETTER_ONLY=1): no call driver launched"
+fi
 
 # --- the phone: launch the installed peer (never reinstall), then the job ---
 # Order matters twice. The Mac app is already on screen (above), so the
@@ -632,6 +650,7 @@ peer_media=$(phone_event boot | grep -oE '"media":"[^"]+"' | cut -d'"' -f4)
 peer_blob=no; phone_event boot | grep -q '"blob":true' && peer_blob=yes
 echo "phone     stack up (media=${peer_media:-?} blob=$peer_blob), waiting for go"
 
+if [ "$VALVE_LETTER_ONLY" != 1 ]; then
 # --- record the Mac screen for the whole run, unedited, in fixed segments ---
 # `screencapture -v` writes its file ONLY when its own -V timer ends: SIGINT
 # is ignored (measured 2026-09-04: a 60 s recording interrupted at 6 s ran
@@ -828,6 +847,18 @@ for f in chat_text photo voice_note video_note; do
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$f" "$PROFILE" "${fbytes:-?}" "$FEATURE_BUDGET" "$measured" "${fstat:-FAIL}" \
     "sender_ms=${fsender:-?} peer_ms=${fpeer:-?} sha_match=${fsha:-?} media=${peer_media:-?} $fnote $shaped" >>"$TSV"
 done
+else
+  # No call driver, no go/join choreography: the DNS-valve carry began at
+  # stack_up and finishes on its own; wait on ITS witnesses, never on
+  # job.done (that only appears after the call's GO deadline, which this
+  # mode never triggers).
+  dv_wait=$((VALVE_SELECT_BUDGET_S + VALVE_CARRY_BUDGET_S + 30))
+  for _ in $(seq 1 "$dv_wait"); do [ -n "$(phone_event lane_chat)" ] && break; sleep 1; done
+  for _ in $(seq 1 10); do grep -q 'complete session=' "$VALVE_LOG" 2>/dev/null && break; sleep 0.5; done
+  cp "$EVENTS" "$LOGD/$PROFILE.phone.jsonl" 2>/dev/null || true
+  shaper teardown >/dev/null 2>&1 || true
+  echo "runs      letter-only: no call placed; phone left at its GO wait"
+fi
 # The whitelist profile's own two rows: the moment ordinary allowed traffic
 # succeeded, the moment the rendezvous completed, and the gap between them.
 # The judging lives in journey_whitelist_rows.py, which has a unit test — the

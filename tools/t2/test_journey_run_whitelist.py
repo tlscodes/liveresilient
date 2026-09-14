@@ -286,6 +286,34 @@ bad = dry(env_extra={"JOURNEY_VALVE_CHAT_SOURCE": "pigeon"}, args=("dnsvalve",),
 check("an unknown author is refused before anything starts",
       "must be mac or phone" in (bad.stdout + bad.stderr), (bad.stdout + bad.stderr)[-200:])
 
+# --- the phone's Send window: how long it waits before falling back ---------
+pw = dry(env_extra={"JOURNEY_VALVE_CHAT_SOURCE": "phone",
+                     "JOURNEY_VALVE_PHONE_WAIT_S": "45"}, args=("dnsvalve",)).stdout
+pw_job = json.loads(field(r"job       (\{.*?\})   ", pw, "phone-wait job JSON"))
+pw_valve = pw_job.get("dns_valve", {})
+check("phone_wait_s round-trips into the job",
+      pw_valve.get("phone_wait_s") == 45, f"phone_wait_s={pw_valve.get('phone_wait_s')}")
+check("left unset, phone_wait_s is zero — an unattended run opens no window",
+      pv_valve.get("phone_wait_s") == 0, f"phone_wait_s={pv_valve.get('phone_wait_s')}")
+bad_wait = dry(env_extra={"JOURNEY_VALVE_CHAT_SOURCE": "phone",
+                           "JOURNEY_VALVE_PHONE_WAIT_S": "-3"}, args=("dnsvalve",), expect_rc=1)
+check("a negative phone_wait_s is refused before anything starts",
+      "must be a non-negative integer" in (bad_wait.stdout + bad_wait.stderr),
+      (bad_wait.stdout + bad_wait.stderr)[-200:])
+
+# --- letter-only: opt-in, dnsvalve-only, never silently wrong on another profile ---
+bad_lo_profile = dry(env_extra={"JOURNEY_VALVE_LETTER_ONLY": "1"}, args=("whitelist",), expect_rc=1)
+check("JOURNEY_VALVE_LETTER_ONLY=1 on a non-dnsvalve profile is refused",
+      "applies to the dnsvalve profile only" in (bad_lo_profile.stdout + bad_lo_profile.stderr),
+      (bad_lo_profile.stdout + bad_lo_profile.stderr)[-200:])
+bad_lo_value = dry(env_extra={"JOURNEY_VALVE_LETTER_ONLY": "x"}, args=("dnsvalve",), expect_rc=1)
+check("an invalid JOURNEY_VALVE_LETTER_ONLY value is refused before anything starts",
+      "must be 0 or 1" in (bad_lo_value.stdout + bad_lo_value.stderr),
+      (bad_lo_value.stdout + bad_lo_value.stderr)[-200:])
+check("letter-only mode, opted into on dnsvalve, is not itself refused",
+      dry(env_extra={"JOURNEY_VALVE_LETTER_ONLY": "1"}, args=("dnsvalve",), expect_rc=0)
+      is not None, "JOURNEY_VALVE_LETTER_ONLY=1 with PROFILE=dnsvalve should dry-run cleanly")
+
 check("the dry print names the responder it will start, with host and port",
       "txt_query_server.py" in dv and "--port 5300" in dv and "--domain valve.test" in dv,
       dv[-400:])

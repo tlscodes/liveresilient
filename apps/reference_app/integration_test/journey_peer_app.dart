@@ -52,6 +52,7 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
     show SelectedIcePair;
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
+import 'package:reference_app/src/voice_letter_recorder.dart';
 import 'package:reference_app/src/call_session.dart'
     show defaultBorderRelayEndpoints, parseValveResolvers;
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -162,6 +163,7 @@ class DnsValveConfig {
     required this.relayOnly,
     this.chatText,
     this.chatSource = 'mac',
+    this.phoneWait = Duration.zero,
   });
 
   /// Zone the authoritative responder answers for, e.g. `valve.example`.
@@ -190,6 +192,13 @@ class DnsValveConfig {
   /// instead of three. `chat_bytes` is unused for a phone letter; the honest
   /// length is what the lane_chat event reports.
   final String chatSource;
+
+  /// How long a phone letter (`chatSource == 'phone'`) waits for the person
+  /// to type and tap Send before falling back to the draft-or-default choice.
+  /// Zero means today's behavior: read `draft` immediately, no window.
+  /// Capped at parse time (120 s) so this wait plus [selectBudget] plus
+  /// [carryBudget] can never exceed the Mac app's own 300 s connect budget.
+  final Duration phoneWait;
 
   /// How long the refresh loop may wait for the valve to rank first.
   final Duration selectBudget;
@@ -258,6 +267,14 @@ class DnsValveConfig {
         'dns_valve.chat_source is phone but chat_text_b64 names a letter',
       );
     }
+    final phoneWaitS = _nonNegativeInt(json['phone_wait_s'], 0, 'phone_wait_s');
+    if (phoneWaitS > 120) {
+      throw FormatException(
+        'dns_valve.phone_wait_s $phoneWaitS exceeds the 120 s cap (it would '
+        'eat into the select/carry budget or the Mac app\'s 300 s connect '
+        'budget)',
+      );
+    }
     return DnsValveConfig(
       zone: zone,
       resolvers: resolvers,
@@ -271,6 +288,7 @@ class DnsValveConfig {
       relayOnly: json['relay_only'] == true,
       chatText: chatText,
       chatSource: chatSource,
+      phoneWait: Duration(seconds: phoneWaitS),
     );
   }
 
@@ -279,6 +297,17 @@ class DnsValveConfig {
     final parsed = value is num ? value.toInt() : int.tryParse('$value');
     if (parsed == null || parsed < 1) {
       throw FormatException('dns_valve.$field "$value" is not a positive int');
+    }
+    return parsed;
+  }
+
+  static int _nonNegativeInt(Object? value, int fallback, String field) {
+    if (value == null) return fallback;
+    final parsed = value is num ? value.toInt() : int.tryParse('$value');
+    if (parsed == null || parsed < 0) {
+      throw FormatException(
+        'dns_valve.$field "$value" is not a non-negative int',
+      );
     }
     return parsed;
   }
@@ -292,6 +321,7 @@ class DnsValveConfig {
     'relay_only': relayOnly,
     if (chatText != null) 'chat_text_b64': base64.encode(chatText!),
     'chat_source': chatSource,
+    'phone_wait_s': phoneWait.inSeconds,
   };
 }
 
@@ -392,6 +422,56 @@ class JourneyPeer {
   /// job says `chat_source: phone`. Never cleared by a job, so a draft typed
   /// before the run is the one that goes.
   final ValueNotifier<String> draft = ValueNotifier<String>('');
+
+  /// True while a phone letter's Send window is open (chatSource=phone,
+  /// phoneWait > 0): the person has a real chance to type before the
+  /// automatic choice fires. False the rest of the time, including every
+  /// unattended run (phoneWait == Duration.zero never opens it).
+  final ValueNotifier<bool> letterWanted = ValueNotifier<bool>(false);
+  Completer<void>? _letterGate;
+
+  /// Ends the Send window early. A no-op once the gate has already
+  /// resolved (submit or timeout), so a stray double-tap cannot throw.
+  void submitLetter() {
+    final gate = _letterGate;
+    if (gate != null && !gate.isCompleted) gate.complete();
+  }
+
+  /// A voice letter recorded during the current Send window, if any.
+  /// Takes priority over `draft` when non-null; cleared once the letter
+  /// is built so a stale recording never rides the next job.
+  final ValueNotifier<VoiceLetter?> voiceLetter = ValueNotifier<VoiceLetter?>(
+    null,
+  );
+  VoiceLetterRecorder? _recorder;
+
+  /// Starts recording on the first tap, stops and encodes on the second.
+  /// Any failure (permission denied, rate guard, codec error) is caught
+  /// here and only disables voice for this window — the typed-text path
+  /// is never touched by a voice failure.
+  Future<void> toggleRecording() async {
+    final live = _recorder;
+    if (live == null) {
+      final recorder = VoiceLetterRecorder();
+      try {
+        await recorder.start();
+        _recorder = recorder;
+      } on Object catch (error) {
+        _note('voice unavailable: $error');
+      }
+      return;
+    }
+    _recorder = null;
+    try {
+      voiceLetter.value = await live.stop();
+      if (voiceLetter.value == null) {
+        _note('voice recording refused: too short or off-rate');
+      }
+    } on Object catch (error) {
+      _note('voice stop error: $error');
+    }
+  }
+
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 3);
 
@@ -912,9 +992,33 @@ class JourneyPeer {
 
       await _reportWanProbe(job, relayUri?.host ?? longPollUri?.host);
 
+      final Uint8List letterPayload;
+      final String letterKind;
+      final bool letterSubmitted;
+      if (config.chatSource == 'phone') {
+        (letterPayload, letterKind, letterSubmitted) = await _awaitPhoneLetter(
+          job,
+          config,
+        );
+      } else {
+        letterPayload =
+            config.chatText ?? dnsValvePayload(job.run, config.chatBytes);
+        letterKind = 'mac';
+        letterSubmitted = false;
+      }
       final deadline = DateTime.now().add(config.totalBudget);
       final selected = await _awaitValveSelection(job, fabric, valve, config);
-      await _carryOverValve(job, fabric, valve, config, selected, deadline);
+      await _carryOverValve(
+        job,
+        fabric,
+        valve,
+        config,
+        selected,
+        deadline,
+        letterPayload,
+        letterKind,
+        letterSubmitted,
+      );
     } finally {
       // dispose() closes the snapshot stream and nothing else — the fabric
       // never touches channels it did not create, so the WSS socket and the
@@ -1022,6 +1126,66 @@ class JourneyPeer {
     return selected;
   }
 
+  /// Waits for the phone's Send window (if the job opened one), then
+  /// returns the payload and how it was chosen. `phoneWait == Duration.zero`
+  /// returns immediately — an unattended run behaves exactly as before this
+  /// window existed. Priority once the window closes (submit or timeout):
+  /// a voice recording taken during this window, else the typed draft, else
+  /// the honest default letter.
+  Future<(Uint8List, String, bool)> _awaitPhoneLetter(
+    JourneyJob job,
+    DnsValveConfig config,
+  ) async {
+    if (config.phoneWait == Duration.zero) {
+      final text = draft.value.trim();
+      final kind = text.isEmpty ? 'default' : 'typed';
+      final bytes = text.isEmpty ? phoneDefaultLetter(job.run) : text;
+      return (Uint8List.fromList(utf8.encode(bytes)), kind, false);
+    }
+    letterWanted.value = true;
+    final gate = _letterGate = Completer<void>();
+    final started = DateTime.now();
+    final ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      final left = config.phoneWait - DateTime.now().difference(started);
+      final leftS = left.isNegative ? 0 : left.inSeconds;
+      status.value =
+          'job ${job.run}: your turn — type the letter and tap Send '
+          '(${leftS}s left)';
+    });
+    try {
+      await gate.future.timeout(config.phoneWait, onTimeout: () {});
+    } finally {
+      ticker.cancel();
+      _letterGate = null;
+      letterWanted.value = false;
+    }
+    // A Send tap mid-recording finalizes what was captured so far.
+    if (_recorder != null) await toggleRecording();
+    final submitted = gate.isCompleted;
+    final waitedMs = DateTime.now().difference(started).inMilliseconds;
+    final voice = voiceLetter.value;
+    voiceLetter.value = null;
+    final (kind, bytes) = voice != null
+        ? ('voice', voice.wire)
+        : draft.value.trim().isEmpty
+        ? (
+            'default',
+            Uint8List.fromList(utf8.encode(phoneDefaultLetter(job.run))),
+          )
+        : ('typed', Uint8List.fromList(utf8.encode(draft.value.trim())));
+    _note(
+      'phone letter window closed: kind=$kind submitted=$submitted '
+      'waited_ms=$waitedMs',
+    );
+    await _report('lane', <String, Object?>{
+      'stage': 'letter',
+      'kind': kind,
+      'submitted': submitted,
+      'waited_ms': waitedMs,
+    }, run: job.run);
+    return (bytes, kind, submitted);
+  }
+
   /// Carries one deterministic payload and reports what attributes it.
   ///
   /// `best_lane_at_send` is read BEFORE the delivery: deliver() republishes
@@ -1038,20 +1202,14 @@ class JourneyPeer {
     DnsValveConfig config,
     bool selected,
     DateTime deadline,
+    Uint8List payload,
+    String letterKind,
+    bool letterSubmitted,
   ) async {
     final remaining = deadline.difference(DateTime.now());
     final budget = remaining < const Duration(seconds: 1)
         ? const Duration(seconds: 1)
         : remaining;
-    final Uint8List payload;
-    if (config.chatSource == 'phone') {
-      final text = draft.value.trim();
-      payload = Uint8List.fromList(
-        utf8.encode(text.isEmpty ? phoneDefaultLetter(job.run) : text),
-      );
-    } else {
-      payload = config.chatText ?? dnsValvePayload(job.run, config.chatBytes);
-    }
     // Refused HERE, not by the lane's own throw: deliver() fans out, and an
     // over-cap letter refused by the valve could still ride another lane and
     // produce a lane_chat that reads as a carriage. Same event the branch's
@@ -1131,6 +1289,8 @@ class JourneyPeer {
         'sha256': sha,
         'bytes': payload.length,
         'source': config.chatSource,
+        'letter_kind': letterKind,
+        'letter_submitted': letterSubmitted,
         'valve_down': valve.isDown,
         'valve_attempts': valve.attempts,
         'valve_replies': valve.replies,
@@ -1184,7 +1344,8 @@ class JourneyPeer {
     DnsValveConfig? config,
   ) async {
     if (task == null || config == null) return;
-    final guard = config.totalBudget + const Duration(seconds: 20);
+    final guard =
+        config.totalBudget + config.phoneWait + const Duration(seconds: 20);
     var expired = false;
     try {
       await task.timeout(
@@ -2178,6 +2339,37 @@ class JourneyPeerApp extends StatelessWidget {
                   labelText: 'Letter from this phone (chat_source: phone)',
                 ),
                 onChanged: (value) => peer.draft.value = value,
+                onSubmitted: (_) => peer.submitLetter(),
+              ),
+              const SizedBox(height: 8),
+              ValueListenableBuilder<bool>(
+                valueListenable: peer.letterWanted,
+                builder: (context, wanted, _) => Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        key: const Key('journey-peer-send'),
+                        onPressed: wanted ? peer.submitLetter : null,
+                        child: const Text('Send letter'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ValueListenableBuilder<VoiceLetter?>(
+                        valueListenable: peer.voiceLetter,
+                        builder: (context, recorded, _) => OutlinedButton(
+                          key: const Key('journey-peer-record'),
+                          onPressed: wanted ? peer.toggleRecording : null,
+                          child: Text(
+                            recorded != null
+                                ? 'Recorded ${recorded.length.inSeconds}s'
+                                : 'Record (\u226430s)',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
               Expanded(

@@ -379,6 +379,60 @@ void main() {
         expect(txtChunkCount(utf8.encode(letter).length), lessThanOrEqualTo(3));
       },
     );
+
+    test('phone_wait_s defaults to zero and round-trips', () {
+      final noWait = DnsValveConfig.parse(<String, Object?>{
+        'zone': 'valve.test',
+        'chat_source': 'phone',
+      });
+      expect(noWait.phoneWait, Duration.zero);
+      final waited = DnsValveConfig.parse(<String, Object?>{
+        'zone': 'valve.test',
+        'chat_source': 'phone',
+        'phone_wait_s': 45,
+      });
+      expect(waited.phoneWait, const Duration(seconds: 45));
+      expect(
+        DnsValveConfig.parse(waited.toJson()).phoneWait,
+        const Duration(seconds: 45),
+      );
+    });
+
+    test('phone_wait_s is capped at 120 s and never negative', () {
+      expect(
+        () => DnsValveConfig.parse(<String, Object?>{
+          'zone': 'valve.test',
+          'chat_source': 'phone',
+          'phone_wait_s': 121,
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => DnsValveConfig.parse(<String, Object?>{
+          'zone': 'valve.test',
+          'chat_source': 'phone',
+          'phone_wait_s': -1,
+        }),
+        throwsFormatException,
+      );
+      // The cap itself is still legal.
+      expect(
+        DnsValveConfig.parse(<String, Object?>{
+          'zone': 'valve.test',
+          'chat_source': 'phone',
+          'phone_wait_s': 120,
+        }).phoneWait,
+        const Duration(seconds: 120),
+      );
+    });
+
+    test('submitLetter is a no-op with no window open, never throws', () {
+      final peer = JourneyPeer();
+      expect(peer.letterWanted.value, isFalse);
+      expect(peer.voiceLetter.value, isNull);
+      expect(peer.submitLetter, returnsNormally);
+      expect(peer.letterWanted.value, isFalse);
+    });
   });
 
   test('a job that names the letter carries those exact bytes', () {
