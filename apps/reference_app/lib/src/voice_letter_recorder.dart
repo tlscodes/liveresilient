@@ -37,6 +37,27 @@ class VoiceLetterUnavailable implements Exception {
   String toString() => 'VoiceLetterUnavailable($reason)';
 }
 
+/// Why a recording produced no letter. A refusal is never a crash — the
+/// caller falls back to text — but the person holding the phone is told
+/// which one it was, in those words, instead of one lumped sentence.
+enum VoiceLetterRefusal {
+  /// [VoiceLetterRecorder.stop] ran without a successful
+  /// [VoiceLetterRecorder.start]: nothing was ever captured.
+  notStarted,
+
+  /// Under one second of wall clock — a tap-tap, not a letter.
+  tooShort,
+
+  /// The microphone delivered a byte count the configured 8 kHz mono PCM16
+  /// rate cannot explain (more than 10 % off). Encoding it would produce
+  /// noise that still passes every digest witness, so it is refused.
+  offRate,
+
+  /// Teardown or encoding threw; the text is in
+  /// [VoiceLetterRecorder.stopError].
+  failed,
+}
+
 /// One successfully recorded and encoded voice letter.
 class VoiceLetter {
   const VoiceLetter({
@@ -67,21 +88,76 @@ class VoiceLetter {
   final Duration elapsed;
 }
 
+/// What a caller needs from one recording session, so the phone peer can be
+/// driven in a unit test without a microphone. [VoiceLetterRecorder] is the
+/// only implementation that touches real audio.
+abstract class VoiceRecording {
+  /// Called when the [voiceLetterMaxLength] cap stops the recording on its
+  /// own, with the letter that recording produced — never a discarded one.
+  /// `null` means the cap-stopped take was refused; [refusal] says why.
+  void Function(VoiceLetter? letter, VoiceLetterRefusal? refusal)? onCapReached;
+
+  /// Opens the microphone. Throws [VoiceLetterUnavailable] when it cannot.
+  Future<void> start();
+
+  /// Stops, encodes, and returns the letter — or null with [refusal] set.
+  /// Never throws, and every caller of a finished recording gets the same
+  /// answer as the first one.
+  Future<VoiceLetter?> stop();
+
+  /// How long the recording has run; keeps ticking until [stop], frozen
+  /// afterwards. Zero before [start].
+  Duration get elapsed;
+
+  /// Set when [stop] returned null.
+  VoiceLetterRefusal? get refusal;
+
+  /// Raw PCM bytes the microphone delivered, known once [stop] has run.
+  int get pcmBytes;
+
+  /// The error text behind [VoiceLetterRefusal.failed].
+  String? get stopError;
+}
+
 /// One recording session: `start()` then `stop()`. Not reusable — make a
 /// fresh instance per attempt.
-class VoiceLetterRecorder {
+class VoiceLetterRecorder implements VoiceRecording {
+  @override
+  void Function(VoiceLetter? letter, VoiceLetterRefusal? refusal)? onCapReached;
+
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<Uint8List>? _sub;
   final BytesBuilder _pcm = BytesBuilder(copy: false);
   DateTime? _startedAt;
+  DateTime? _endedAt;
   Timer? _capTimer;
-  Completer<void>? _stopped;
+  Completer<VoiceLetter?>? _stopped;
+  VoiceLetterRefusal? _refusal;
+  String? _stopError;
+  int _pcmBytes = 0;
+
+  @override
+  Duration get elapsed {
+    final startedAt = _startedAt;
+    if (startedAt == null) return Duration.zero;
+    return (_endedAt ?? DateTime.now()).difference(startedAt);
+  }
+
+  @override
+  VoiceLetterRefusal? get refusal => _refusal;
+
+  @override
+  int get pcmBytes => _pcmBytes;
+
+  @override
+  String? get stopError => _stopError;
 
   /// Opens the microphone and starts accumulating 8 kHz mono PCM16. Throws
   /// [VoiceLetterUnavailable] if permission is refused. Arms a 30 s timer
-  /// that calls [stop] on its own — the caller does not have to enforce the
-  /// cap itself, but MUST still await [stop] once (directly, or by letting
-  /// the timer's own call run) to release the recorder.
+  /// that calls [stop] on its own and hands the result to [onCapReached] —
+  /// the caller does not have to enforce the cap itself, and a recording
+  /// the cap closed is a finished letter, not a lost one.
+  @override
   Future<void> start() async {
     if (!await _recorder.hasPermission()) {
       throw VoiceLetterUnavailable('microphone permission not granted');
@@ -98,65 +174,106 @@ class VoiceLetterRecorder {
     );
     _startedAt = DateTime.now();
     _sub = stream.listen(_pcm.add);
-    _capTimer = Timer(voiceLetterMaxLength, () {
-      // Fire-and-forget: a caller already mid-`stop()` just sees this as a
-      // no-op via `_stopped`.
-      unawaited(stop());
+    _capTimer = Timer(voiceLetterMaxLength, () async {
+      // The cap HANDS OVER its letter. Until 2026-09-17 this call was a
+      // bare `unawaited(stop())`: every recording that ran past 30 s was
+      // encoded, dropped on the floor, and the caller's later stop() —
+      // seeing the session already closed — returned null, which the phone
+      // reported to the person as "too short". That is the whole reason no
+      // live take longer than 2.4 s has ever been carried.
+      final letter = await stop();
+      onCapReached?.call(letter, _refusal);
     });
   }
 
   /// Stops recording, encodes what was captured, and returns the letter —
-  /// or null if the capture was too short or came in at the wrong rate (a
-  /// refusal, not a crash: the caller falls back to text). Safe to call
-  /// more than once; the second call returns null immediately.
+  /// or null if the capture was too short, came in at the wrong rate, or
+  /// the teardown threw ([refusal] says which; [stopError] carries the
+  /// text). Safe to call more than once: every later call returns exactly
+  /// what the first one produced, so whoever asks last still gets the
+  /// letter.
+  @override
   Future<VoiceLetter?> stop() async {
-    if (_stopped != null) return null;
-    final done = _stopped = Completer<void>();
+    final pending = _stopped;
+    if (pending != null) return pending.future;
+    final done = _stopped = Completer<VoiceLetter?>();
+    // Wall clock is read HERE, before the teardown round-trips to the
+    // platform. Reading it after `await _recorder.stop()` charged that
+    // round-trip (tens to hundreds of ms) to the recording, inflating the
+    // expected byte count and pushing short takes out of the rate guard's
+    // 10 % band for no reason of the person's making.
+    final endedAt = _endedAt = DateTime.now();
     _capTimer?.cancel();
     _capTimer = null;
+    VoiceLetter? letter;
     try {
       await _sub?.cancel();
       _sub = null;
       await _recorder.stop();
       _recorder.dispose();
       final startedAt = _startedAt;
-      if (startedAt == null) return null;
-      final elapsed = DateTime.now().difference(startedAt);
-      final pcm = _pcm.takeBytes();
-      // Rate guard: 8 kHz * 2 bytes/sample = 16 000 B/s, expected. A plugin
-      // that silently delivered a different rate would still hand Codec2
-      // valid-looking bytes and produce noise that passes every existing
-      // witness (sha256, chunk count) — this is what catches that instead
-      // of trusting the config was honoured.
-      final expected = elapsed.inMilliseconds * 16;
-      final within = expected == 0
-          ? false
-          : (pcm.length - expected).abs() <= expected * 0.10;
-      if (elapsed < const Duration(seconds: 1) || !within) return null;
-      final codec = Codec2(codec2Mode700C);
-      try {
-        final samples = pcm.buffer.asInt16List(0, pcm.length ~/ 2);
-        final perFrame = codec.samplesPerFrame;
-        final frameCount = samples.length ~/ perFrame;
-        final frames = <Uint8List>[
-          for (var i = 0; i < frameCount; i++)
-            codec.encodeFrame(
-              samples.sublist(i * perFrame, (i + 1) * perFrame),
-            ),
-        ];
-        final wire = packVoiceNote(frames: frames, mode: VoiceNoteMode.c700);
-        return VoiceLetter(
-          wire: wire,
-          frames: frames.length,
-          length: Duration(milliseconds: frames.length * 40),
-          pcmBytes: pcm.length,
-          elapsed: elapsed,
-        );
-      } finally {
-        codec.dispose();
+      if (startedAt == null) {
+        _refusal = VoiceLetterRefusal.notStarted;
+      } else {
+        final elapsed = endedAt.difference(startedAt);
+        final pcm = _pcm.takeBytes();
+        _pcmBytes = pcm.length;
+        // Rate guard: 8 kHz * 2 bytes/sample = 16 000 B/s, expected. A
+        // plugin that silently delivered a different rate would still hand
+        // Codec2 valid-looking bytes and produce noise that passes every
+        // existing witness (sha256, chunk count) — this is what catches
+        // that instead of trusting the config was honoured.
+        final expected = elapsed.inMilliseconds * 16;
+        final within = expected == 0
+            ? false
+            : (pcm.length - expected).abs() <= expected * 0.10;
+        if (elapsed < const Duration(seconds: 1)) {
+          _refusal = VoiceLetterRefusal.tooShort;
+        } else if (!within) {
+          _refusal = VoiceLetterRefusal.offRate;
+        } else {
+          letter = _encode(pcm, elapsed);
+        }
       }
+    } on Object catch (error) {
+      // A refusal, not a crash: the caller falls back to text and the
+      // person is told what threw instead of watching a silent no-op.
+      _refusal = VoiceLetterRefusal.failed;
+      _stopError = '$error';
+      letter = null;
     } finally {
-      done.complete();
+      done.complete(letter);
+    }
+    return letter;
+  }
+
+  VoiceLetter _encode(Uint8List pcm, Duration elapsed) {
+    final codec = Codec2(codec2Mode700C);
+    try {
+      // sublistView, not buffer.asInt16List: the latter ignores the
+      // builder's offsetInBytes and would read a neighbouring chunk's bytes
+      // as audio without any of the witnesses noticing.
+      final samples = Int16List.sublistView(
+        pcm,
+        0,
+        pcm.length - pcm.length % 2,
+      );
+      final perFrame = codec.samplesPerFrame;
+      final frameCount = samples.length ~/ perFrame;
+      final frames = <Uint8List>[
+        for (var i = 0; i < frameCount; i++)
+          codec.encodeFrame(samples.sublist(i * perFrame, (i + 1) * perFrame)),
+      ];
+      final wire = packVoiceNote(frames: frames, mode: VoiceNoteMode.c700);
+      return VoiceLetter(
+        wire: wire,
+        frames: frames.length,
+        length: Duration(milliseconds: frames.length * 40),
+        pcmBytes: pcm.length,
+        elapsed: elapsed,
+      );
+    } finally {
+      codec.dispose();
     }
   }
 }

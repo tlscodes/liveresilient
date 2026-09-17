@@ -53,12 +53,19 @@ BUNDLE="$APP/build/ios/iphoneos/Runner.app"
 echo "install   $BUNDLE"
 xcrun devicectl device install app --device "$PHONE" "$BUNDLE"
 for try in 1 2 3 4 5; do
-  out=$(xcrun devicectl device process launch --terminate-existing --device "$PHONE" "$BUNDLE_ID" 2>&1)
+  # `|| true`: devicectl exits non-zero on a refused launch, and under the
+  # `set -e` at the top of this file that killed the script INSIDE the
+  # assignment — before the grep, before the retry, before the error line.
+  # A refused launch therefore printed nothing at all and, read through a
+  # pipe, even looked like a success. Measured 2026-09-17: two installs
+  # reported nothing while the phone was refusing the launch outright.
+  out=$(xcrun devicectl device process launch --terminate-existing --device "$PHONE" "$BUNDLE_ID" 2>&1) || true
   if printf '%s' "$out" | grep -q 'Launched application'; then
     echo "launched  (try $try) — answer the microphone prompt on the phone once"
     exit 0
   fi
-  echo "launch denied (try $try): $(printf '%s' "$out" | tail -1 | cut -c1-120)"
+  why=$(printf '%s' "$out" | grep -m1 'NSLocalizedFailureReason' || printf '%s' "$out" | tail -1)
+  echo "launch denied (try $try): $(printf '%s' "$why" | cut -c1-200)"
   sleep 2
 done
 echo "ERROR: the phone refused to launch $BUNDLE_ID five times (awake? trusts this Mac?)" >&2

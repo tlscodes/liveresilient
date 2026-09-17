@@ -407,6 +407,83 @@ String doorLine({
   return 'door open · $pace · $chunks · reply $ago';
 }
 
+/// The Record button's whole truth. One value, rendered by one button, so
+/// idle and recording can never look alike.
+enum VoiceRecordState {
+  /// Nothing captured yet, or the last take was refused.
+  idle,
+
+  /// The microphone is opening (a platform round-trip, and on a fresh
+  /// install a permission prompt) — taps are joined, not dropped.
+  starting,
+
+  /// Capturing. The button shows the elapsed counter against the cap.
+  recording,
+
+  /// Stopped; encoding to Codec2 700C.
+  stopping,
+
+  /// A letter is in hand, waiting for Send.
+  recorded,
+}
+
+/// Something the person holding the phone must see and dismiss by hand.
+class VoiceAlert {
+  const VoiceAlert(this.message, {this.isError = true});
+
+  final String message;
+
+  /// False for the cap notice, which reports a success.
+  final bool isError;
+}
+
+/// The plain-words reason a recording produced no letter. Each refusal says
+/// what to do differently; the old single line ("too short or off-rate")
+/// could not tell a half-second tap from a plugin delivering the wrong
+/// sample rate.
+String voiceRefusalText(VoiceRecording recorder) {
+  switch (recorder.refusal) {
+    case VoiceLetterRefusal.tooShort:
+      return 'Too short — only ${recorder.elapsed.inMilliseconds} ms was '
+          'captured. Tap Record, speak for at least a few seconds, then tap '
+          'Stop.';
+    case VoiceLetterRefusal.offRate:
+      return 'The microphone delivered ${recorder.pcmBytes} bytes for '
+          '${recorder.elapsed.inSeconds}s, not the '
+          '${recorder.elapsed.inMilliseconds * 16} expected. The recording '
+          'was refused rather than carried as noise.';
+    case VoiceLetterRefusal.failed:
+      return 'The recording failed: ${recorder.stopError}';
+    case VoiceLetterRefusal.notStarted:
+    case null:
+      return 'The recording never started — nothing was captured.';
+  }
+}
+
+/// `m:ss`, for the counter on a recording button.
+String voiceClock(Duration value) {
+  final seconds = value.inSeconds < 0 ? 0 : value.inSeconds;
+  return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+}
+
+/// What the Record button says in each state. A first-time user reads only
+/// this, so every state names itself and the live one carries its counter.
+String voiceRecordButtonLabel(VoiceRecordState state, Duration elapsed) {
+  switch (state) {
+    case VoiceRecordState.idle:
+      return 'Record (≤30s)';
+    case VoiceRecordState.starting:
+      return 'Opening microphone…';
+    case VoiceRecordState.recording:
+      return 'STOP • ${voiceClock(elapsed)} / '
+          '${voiceClock(voiceLetterMaxLength)}';
+    case VoiceRecordState.stopping:
+      return 'Encoding…';
+    case VoiceRecordState.recorded:
+      return 'Recorded ${voiceClock(elapsed)} — tap to redo';
+  }
+}
+
 class JourneyPeer {
   final ValueNotifier<String> status = ValueNotifier<String>('booting');
   final ValueNotifier<List<String>> events = ValueNotifier<List<String>>([]);
@@ -443,33 +520,152 @@ class JourneyPeer {
   final ValueNotifier<VoiceLetter?> voiceLetter = ValueNotifier<VoiceLetter?>(
     null,
   );
-  VoiceLetterRecorder? _recorder;
+
+  /// What the Record button is doing right now. The button renders this and
+  /// nothing else, so there is exactly one answer on screen to "is it
+  /// recording?" — the old button read `voiceLetter`, which is null both
+  /// before a recording and during one, so idle and recording looked
+  /// identical to the person holding the phone.
+  final ValueNotifier<VoiceRecordState> recordState =
+      ValueNotifier<VoiceRecordState>(VoiceRecordState.idle);
+
+  /// How long the live recording has run. Ticks while
+  /// [VoiceRecordState.recording], frozen at the final length afterwards.
+  final ValueNotifier<Duration> recordElapsed = ValueNotifier<Duration>(
+    Duration.zero,
+  );
+
+  /// A message the person must see and dismiss by hand: a recording that
+  /// failed or was refused, or the 30 s cap closing one on its own. The
+  /// event list below is a 40-line scrolling log of lane counters — a
+  /// failure written only there is, in practice, invisible mid-task, which
+  /// is exactly how a 120 s window was spent with nothing captured and
+  /// nothing on screen to say so.
+  final ValueNotifier<VoiceAlert?> voiceAlert = ValueNotifier<VoiceAlert?>(
+    null,
+  );
+
+  /// Clears the banner. Only a tap does this — no timeout, no next event.
+  void dismissVoiceAlert() => voiceAlert.value = null;
+
+  /// Builds the recording this peer drives. Overridden in tests, which have
+  /// no microphone; production is always [VoiceLetterRecorder].
+  @visibleForTesting
+  VoiceRecording Function() newRecording = VoiceLetterRecorder.new;
+
+  VoiceRecording? _recorder;
+  Future<void>? _transition;
+  Timer? _recordTicker;
 
   /// Starts recording on the first tap, stops and encodes on the second.
   /// Any failure (permission denied, rate guard, codec error) is caught
   /// here and only disables voice for this window — the typed-text path
   /// is never touched by a voice failure.
-  Future<void> toggleRecording() async {
+  ///
+  /// A tap that lands while a start or a stop is still in flight JOINS that
+  /// transition instead of beginning another one. It used to begin another
+  /// one: `_recorder` was assigned only after `start()` resolved, so a
+  /// second tap during the platform's microphone-open round-trip opened a
+  /// second [AudioRecorder] and orphaned the first with the microphone
+  /// held.
+  Future<void> toggleRecording() {
+    final live = _transition;
+    if (live != null) return live;
+    final work = _transition = _toggle().whenComplete(() => _transition = null);
+    return work;
+  }
+
+  Future<void> _toggle() async {
     final live = _recorder;
-    if (live == null) {
-      final recorder = VoiceLetterRecorder();
-      try {
-        await recorder.start();
-        _recorder = recorder;
-      } on Object catch (error) {
-        _note('voice unavailable: $error');
-      }
+    if (live == null) return _startRecording();
+    return _finishRecording(live);
+  }
+
+  Future<void> _startRecording() async {
+    recordState.value = VoiceRecordState.starting;
+    voiceAlert.value = null;
+    voiceLetter.value = null;
+    recordElapsed.value = Duration.zero;
+    final recorder = newRecording();
+    recorder.onCapReached = (letter, refusal) => _capReached(recorder, letter);
+    try {
+      await recorder.start();
+    } on Object catch (error) {
+      recordState.value = VoiceRecordState.idle;
+      _voiceFailed('The microphone did not open. $error');
       return;
     }
+    _recorder = recorder;
+    recordState.value = VoiceRecordState.recording;
+    _recordTicker = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => recordElapsed.value = recorder.elapsed,
+    );
+    _note('voice recording started, cap ${voiceLetterMaxLength.inSeconds}s');
+  }
+
+  Future<void> _finishRecording(VoiceRecording live) async {
+    recordState.value = VoiceRecordState.stopping;
     _recorder = null;
-    try {
-      voiceLetter.value = await live.stop();
-      if (voiceLetter.value == null) {
-        _note('voice recording refused: too short or off-rate');
-      }
-    } on Object catch (error) {
-      _note('voice stop error: $error');
+    _stopTicker();
+    _settle(live, await live.stop(), capped: false);
+  }
+
+  void _capReached(VoiceRecording recorder, VoiceLetter? letter) {
+    // A tap already finished this one; its own `stop()` returns the same
+    // letter, so there is nothing left to settle here.
+    if (!identical(_recorder, recorder)) return;
+    _recorder = null;
+    _stopTicker();
+    _settle(recorder, letter, capped: true);
+  }
+
+  void _stopTicker() {
+    _recordTicker?.cancel();
+    _recordTicker = null;
+  }
+
+  void _settle(
+    VoiceRecording recorder,
+    VoiceLetter? letter, {
+    required bool capped,
+  }) {
+    recordElapsed.value = recorder.elapsed;
+    voiceLetter.value = letter;
+    if (letter == null) {
+      recordState.value = VoiceRecordState.idle;
+      _voiceFailed(voiceRefusalText(recorder));
+      return;
     }
+    recordState.value = VoiceRecordState.recorded;
+    _note(
+      'voice recorded ${letter.length.inSeconds}s '
+      '${letter.wire.length}B frames=${letter.frames} capped=$capped',
+    );
+    if (capped) {
+      voiceAlert.value = VoiceAlert(
+        'Maximum ${voiceLetterMaxLength.inSeconds}s reached. The recording '
+        'is saved (${letter.length.inSeconds}s) — tap Send letter to carry '
+        'it.',
+        isError: false,
+      );
+    }
+  }
+
+  void _voiceFailed(String message) {
+    voiceAlert.value = VoiceAlert(message);
+    _note('voice failed: $message');
+  }
+
+  /// Finalizes a recording that is still running and waits out one already
+  /// being encoded, without ever starting a new one. The Send window calls
+  /// this before it reads [voiceLetter]: a Stop tap at the very end of the
+  /// window would otherwise still be encoding when the letter is read, and
+  /// the take would be dropped for a default letter.
+  Future<void> finalizeRecording() async {
+    final live = _transition;
+    if (live != null) await live;
+    if (_recorder != null) await toggleRecording();
   }
 
   final HttpClient _http = HttpClient()
@@ -1149,8 +1345,8 @@ class JourneyPeer {
       final left = config.phoneWait - DateTime.now().difference(started);
       final leftS = left.isNegative ? 0 : left.inSeconds;
       status.value =
-          'job ${job.run}: your turn — type the letter and tap Send '
-          '(${leftS}s left)';
+          'job ${job.run}: your turn — type the letter, or tap Record and '
+          'speak, then tap Send (${leftS}s left)';
     });
     try {
       await gate.future.timeout(config.phoneWait, onTimeout: () {});
@@ -1159,12 +1355,19 @@ class JourneyPeer {
       _letterGate = null;
       letterWanted.value = false;
     }
-    // A Send tap mid-recording finalizes what was captured so far.
-    if (_recorder != null) await toggleRecording();
+    // A Send tap mid-recording finalizes what was captured so far, and a
+    // tap that is still encoding gets to finish — the letter is read after
+    // the recording has settled, never out from under it.
+    await finalizeRecording();
     final submitted = gate.isCompleted;
     final waitedMs = DateTime.now().difference(started).inMilliseconds;
     final voice = voiceLetter.value;
     voiceLetter.value = null;
+    // The button belongs to the window that is closing: a "Recorded 0:30"
+    // left over from the letter just carried would read, in the next
+    // window, as a take that window already holds.
+    recordState.value = VoiceRecordState.idle;
+    recordElapsed.value = Duration.zero;
     final (kind, bytes) = voice != null
         ? ('voice', voice.wire)
         : draft.value.trim().isEmpty
@@ -2342,31 +2545,32 @@ class JourneyPeerApp extends StatelessWidget {
                 onSubmitted: (_) => peer.submitLetter(),
               ),
               const SizedBox(height: 8),
+              ValueListenableBuilder<VoiceAlert?>(
+                valueListenable: peer.voiceAlert,
+                builder: (context, alert, _) => alert == null
+                    ? const SizedBox.shrink()
+                    : _VoiceAlertBanner(
+                        alert: alert,
+                        onDismiss: peer.dismissVoiceAlert,
+                      ),
+              ),
               ValueListenableBuilder<bool>(
                 valueListenable: peer.letterWanted,
                 builder: (context, wanted, _) => Row(
                   children: [
                     Expanded(
-                      child: FilledButton(
-                        key: const Key('journey-peer-send'),
-                        onPressed: wanted ? peer.submitLetter : null,
-                        child: const Text('Send letter'),
+                      child: SizedBox(
+                        height: 56,
+                        child: FilledButton(
+                          key: const Key('journey-peer-send'),
+                          onPressed: wanted ? peer.submitLetter : null,
+                          child: const Text('Send letter'),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: ValueListenableBuilder<VoiceLetter?>(
-                        valueListenable: peer.voiceLetter,
-                        builder: (context, recorded, _) => OutlinedButton(
-                          key: const Key('journey-peer-record'),
-                          onPressed: wanted ? peer.toggleRecording : null,
-                          child: Text(
-                            recorded != null
-                                ? 'Recorded ${recorded.length.inSeconds}s'
-                                : 'Record (\u226430s)',
-                          ),
-                        ),
-                      ),
+                      child: _RecordButton(peer: peer, wanted: wanted),
                     ),
                   ],
                 ),
@@ -2393,6 +2597,132 @@ class JourneyPeerApp extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The one failure surface for recording. Large, coloured, in the person's
+/// hand next to the button that caused it, and gone only when they tap
+/// "Got it" — an entry in the scrolling event list below is not something a
+/// person mid-task reads.
+class _VoiceAlertBanner extends StatelessWidget {
+  const _VoiceAlertBanner({required this.alert, required this.onDismiss});
+
+  final VoiceAlert alert;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = alert.isError
+        ? const Color(0xFFB3261E)
+        : const Color(0xFF1B5E20);
+    return Container(
+      key: const Key('journey-peer-voice-alert'),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: tone,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                alert.isError ? Icons.mic_off : Icons.check_circle,
+                color: Colors.white,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  alert.message,
+                  key: const Key('journey-peer-voice-alert-text'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            child: FilledButton(
+              key: const Key('journey-peer-voice-alert-dismiss'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: tone,
+              ),
+              onPressed: onDismiss,
+              child: const Text('Got it'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Record / Stop, drawn from [JourneyPeer.recordState] alone: one look says
+/// which of the five states it is in, and the live one counts against the
+/// cap so nobody has to guess whether the microphone is open.
+class _RecordButton extends StatelessWidget {
+  const _RecordButton({required this.peer, required this.wanted});
+
+  final JourneyPeer peer;
+  final bool wanted;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<VoiceRecordState>(
+      valueListenable: peer.recordState,
+      builder: (context, state, _) => ValueListenableBuilder<Duration>(
+        valueListenable: peer.recordElapsed,
+        builder: (context, elapsed, _) {
+          final busy =
+              state == VoiceRecordState.starting ||
+              state == VoiceRecordState.stopping;
+          final live = state == VoiceRecordState.recording;
+          final done = state == VoiceRecordState.recorded;
+          return SizedBox(
+            height: 56,
+            child: FilledButton(
+              key: const Key('journey-peer-record'),
+              style: FilledButton.styleFrom(
+                backgroundColor: live
+                    ? const Color(0xFFB3261E)
+                    : done
+                    ? const Color(0xFF1B5E20)
+                    : null,
+                foregroundColor: live || done ? Colors.white : null,
+              ),
+              onPressed: wanted && !busy ? peer.toggleRecording : null,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(live ? Icons.stop_circle : Icons.mic, size: 22),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      voiceRecordButtonLabel(state, elapsed),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

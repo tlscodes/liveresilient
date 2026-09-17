@@ -10,10 +10,13 @@
 /// whole lifetime_s (default 21600 s) before the phone reported failed.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:reference_app/src/voice_letter_recorder.dart';
 
 import '../integration_test/blackout_forwarder.dart';
 import '../integration_test/journey_peer_app.dart';
@@ -486,4 +489,268 @@ void main() {
       expect(dnsValvePayload('r2', 1).length, 1);
     },
   );
+
+  group('the Record button on the phone', () {
+    VoiceLetter letterOf(Duration length) => VoiceLetter(
+      wire: Uint8List(length.inSeconds * 88),
+      frames: length.inMilliseconds ~/ 40,
+      length: length,
+      pcmBytes: length.inMilliseconds * 16,
+      elapsed: length,
+    );
+
+    test(
+      'the 30 s cap hands its letter over instead of discarding it',
+      () async {
+        // The bug that cost session 7GH7AO its whole 120 s window: the cap
+        // timer ran stop(), encoded a good letter, dropped it on the floor,
+        // and the person's later tap got null back — reported to them as
+        // "too short or off-rate".
+        final peer = JourneyPeer();
+        final recording = _FakeRecording(
+          letter: letterOf(const Duration(seconds: 30)),
+        );
+        peer.newRecording = () => recording;
+        await peer.toggleRecording();
+        expect(peer.recordState.value, VoiceRecordState.recording);
+        recording.elapsed = voiceLetterMaxLength;
+        recording.fireCap();
+        expect(
+          peer.voiceLetter.value,
+          isNotNull,
+          reason: 'the cap keeps the letter it just encoded',
+        );
+        expect(peer.voiceLetter.value!.length, const Duration(seconds: 30));
+        expect(peer.recordState.value, VoiceRecordState.recorded);
+        final alert = peer.voiceAlert.value;
+        expect(alert, isNotNull);
+        expect(
+          alert!.isError,
+          isFalse,
+          reason: 'the cap is a success, not a fault',
+        );
+        expect(alert.message, contains('Maximum 30s reached'));
+      },
+    );
+
+    test(
+      'a tap while the microphone is opening opens no second recorder',
+      () async {
+        final peer = JourneyPeer();
+        var created = 0;
+        peer.newRecording = () {
+          created++;
+          return _FakeRecording(
+            letter: letterOf(const Duration(seconds: 5)),
+            startDelay: const Duration(milliseconds: 20),
+          );
+        };
+        final first = peer.toggleRecording();
+        expect(peer.recordState.value, VoiceRecordState.starting);
+        final second = peer.toggleRecording(); // the impatient second tap
+        await Future.wait<void>([first, second]);
+        expect(
+          created,
+          1,
+          reason:
+              'the second tap joined the transition instead of starting one',
+        );
+        expect(peer.recordState.value, VoiceRecordState.recording);
+        await peer.toggleRecording(); // release the microphone and the ticker
+      },
+    );
+
+    test(
+      'a refused recording raises a banner the person must dismiss',
+      () async {
+        final peer = JourneyPeer();
+        final recording = _FakeRecording(refusal: VoiceLetterRefusal.tooShort)
+          ..elapsed = const Duration(milliseconds: 400);
+        peer.newRecording = () => recording;
+        await peer.toggleRecording(); // record
+        await peer.toggleRecording(); // stop
+        expect(peer.voiceLetter.value, isNull);
+        expect(peer.recordState.value, VoiceRecordState.idle);
+        final alert = peer.voiceAlert.value;
+        expect(alert, isNotNull);
+        expect(alert!.isError, isTrue);
+        expect(
+          alert.message,
+          contains('400 ms'),
+          reason: 'the refusal names what was captured, not a lumped sentence',
+        );
+        peer.dismissVoiceAlert();
+        expect(peer.voiceAlert.value, isNull);
+      },
+    );
+
+    test(
+      'a microphone that will not open says so where the button is',
+      () async {
+        final peer = JourneyPeer();
+        peer.newRecording = () => _FakeRecording(
+          startError: VoiceLetterUnavailable(
+            'microphone permission not granted',
+          ),
+        );
+        await peer.toggleRecording();
+        expect(peer.recordState.value, VoiceRecordState.idle);
+        expect(peer.voiceAlert.value, isNotNull);
+        expect(peer.voiceAlert.value!.isError, isTrue);
+        expect(
+          peer.voiceAlert.value!.message,
+          contains('microphone permission not granted'),
+        );
+      },
+    );
+
+    test('finalizeRecording waits out an encode already in flight', () async {
+      final peer = JourneyPeer();
+      peer.newRecording = () => _FakeRecording(
+        letter: letterOf(const Duration(seconds: 12)),
+        stopDelay: const Duration(milliseconds: 30),
+      );
+      await peer.toggleRecording();
+      unawaited(peer.toggleRecording()); // the Stop tap, still encoding
+      expect(peer.recordState.value, VoiceRecordState.stopping);
+      expect(peer.voiceLetter.value, isNull, reason: 'not encoded yet');
+      await peer.finalizeRecording();
+      expect(
+        peer.voiceLetter.value,
+        isNotNull,
+        reason: 'the window reads the letter after the encode, not during it',
+      );
+    });
+
+    test(
+      'finalizeRecording with nothing running starts no recording',
+      () async {
+        final peer = JourneyPeer();
+        var created = 0;
+        peer.newRecording = () {
+          created++;
+          return _FakeRecording();
+        };
+        await peer.finalizeRecording();
+        expect(created, 0);
+        expect(peer.recordState.value, VoiceRecordState.idle);
+      },
+    );
+
+    test('the button names every state it can be in', () {
+      expect(
+        voiceRecordButtonLabel(VoiceRecordState.idle, Duration.zero),
+        'Record (≤30s)',
+      );
+      expect(
+        voiceRecordButtonLabel(VoiceRecordState.starting, Duration.zero),
+        'Opening microphone…',
+      );
+      expect(
+        voiceRecordButtonLabel(
+          VoiceRecordState.recording,
+          const Duration(seconds: 7),
+        ),
+        'STOP • 0:07 / 0:30',
+      );
+      expect(
+        voiceRecordButtonLabel(VoiceRecordState.stopping, Duration.zero),
+        'Encoding…',
+      );
+      expect(
+        voiceRecordButtonLabel(
+          VoiceRecordState.recorded,
+          const Duration(seconds: 65),
+        ),
+        'Recorded 1:05 — tap to redo',
+      );
+      // Idle and recording used to read the same four words: the old button
+      // rendered `voiceLetter`, which is null in both states.
+      expect(
+        voiceRecordButtonLabel(VoiceRecordState.idle, Duration.zero),
+        isNot(
+          voiceRecordButtonLabel(VoiceRecordState.recording, Duration.zero),
+        ),
+      );
+    });
+
+    testWidgets('the failure is on the screen, not only in the event log', (
+      tester,
+    ) async {
+      final peer = JourneyPeer();
+      peer.newRecording = () =>
+          _FakeRecording(refusal: VoiceLetterRefusal.tooShort)
+            ..elapsed = const Duration(milliseconds: 300);
+      await tester.pumpWidget(JourneyPeerApp(peer));
+      expect(find.byKey(const Key('journey-peer-voice-alert')), findsNothing);
+      await peer.toggleRecording();
+      await peer.toggleRecording();
+      await tester.pump();
+      expect(find.byKey(const Key('journey-peer-voice-alert')), findsOneWidget);
+      // The same sentence is also in the scrolling event log below — that
+      // copy is the one nobody reads, which is why the banner exists.
+      final banner = tester.widget<Text>(
+        find.byKey(const Key('journey-peer-voice-alert-text')),
+      );
+      expect(banner.data, contains('Too short'));
+      expect(banner.style!.fontSize, 18, reason: 'legible at arm\'s length');
+      await tester.tap(
+        find.byKey(const Key('journey-peer-voice-alert-dismiss')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const Key('journey-peer-voice-alert')),
+        findsNothing,
+        reason: 'only a tap clears it — no timeout, no next event',
+      );
+    });
+  });
+}
+
+/// A recording with no microphone, so the peer's state machine can be driven
+/// in a unit test. Real capture needs a device and is not simulated here.
+class _FakeRecording implements VoiceRecording {
+  _FakeRecording({
+    this.letter,
+    this.refusal,
+    this.startError,
+    this.startDelay = Duration.zero,
+    this.stopDelay = Duration.zero,
+  });
+
+  final VoiceLetter? letter;
+  final Object? startError;
+  final Duration startDelay;
+  final Duration stopDelay;
+
+  @override
+  VoiceLetterRefusal? refusal;
+
+  @override
+  void Function(VoiceLetter? letter, VoiceLetterRefusal? refusal)? onCapReached;
+
+  @override
+  Duration elapsed = Duration.zero;
+
+  @override
+  int pcmBytes = 0;
+
+  @override
+  String? stopError;
+
+  @override
+  Future<void> start() async {
+    if (startDelay > Duration.zero) await Future<void>.delayed(startDelay);
+    final error = startError;
+    if (error != null) throw error;
+  }
+
+  @override
+  Future<VoiceLetter?> stop() async {
+    if (stopDelay > Duration.zero) await Future<void>.delayed(stopDelay);
+    return letter;
+  }
+
+  /// What the 30 s cap does now: hand the letter over, not drop it.
+  void fireCap() => onCapReached?.call(letter, refusal);
 }
