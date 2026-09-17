@@ -322,3 +322,11 @@ probed from the Mac; the phone's own events and the responder's log line, matche
 on session id and payload hash within the run window, are its witnesses. The
 lesson is recorded as one-invariant-fixed-in-one-of-two-rankings: a ranking fix
 is proven by the send counter of the lane that should carry, never by a snapshot.
+
+Switching from the local `valve.test` rig zone to a real operational domain (once
+one is actually provisioned) is one build flag, read in
+`apps/reference_app/lib/src/call_session.dart`: pass
+`--dart-define=DNS_VALVE_DOMAIN=<your-zone>` at build time (falls back to the
+`DNS_VALVE_DOMAIN` process env var, then to the local test zone) — no code
+change needed. This is the app-side switch only; it does not by itself stand up
+a public responder or an NS delegation, which is separate infrastructure work.
