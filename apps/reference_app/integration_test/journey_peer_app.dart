@@ -52,6 +52,7 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
     show SelectedIcePair;
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
+import 'package:reference_app/src/photo_letter_picker.dart';
 import 'package:reference_app/src/voice_letter_recorder.dart';
 import 'package:reference_app/src/call_session.dart'
     show defaultBorderRelayEndpoints, parseValveResolvers;
@@ -484,6 +485,88 @@ String voiceRecordButtonLabel(VoiceRecordState state, Duration elapsed) {
   }
 }
 
+/// The Photo button's whole truth, in the shape [VoiceRecordState] already
+/// proved out: one value, rendered by one button, so "nothing chosen" and
+/// "still shrinking a 4 MB screenshot" can never look alike.
+enum PhotoPickState {
+  /// Nothing chosen yet, or the last pick was refused.
+  idle,
+
+  /// The system photo picker is open, or opening.
+  picking,
+
+  /// A photo is in hand and the size ladder is running on a worker isolate.
+  shrinking,
+
+  /// A letter-sized photo is in hand, waiting for Send.
+  picked,
+}
+
+/// The plain-words reason a pick produced no letter. Each refusal says what
+/// to do differently, the same way [voiceRefusalText] does — "it didn't
+/// work" is not something a person standing in a 120 s window can act on.
+String photoRefusalText(PhotoLetterRefusal? refusal, {String? error}) {
+  switch (refusal) {
+    case PhotoLetterRefusal.cancelled:
+      return 'No photo was chosen — the picker closed without one. Tap Photo '
+          'again and choose a picture, for example a screenshot.';
+    case PhotoLetterRefusal.unreadable:
+      return 'That file could not be read as a picture. Choose a photo or a '
+          'screenshot from the library, not a document.';
+    case PhotoLetterRefusal.tooLarge:
+      return 'That picture could not be made to fit '
+          '${photoLetterSize(photoLetterMaxBytes)} — even at '
+          '${photoLetterEdges.last} px it stayed larger. Choose a simpler '
+          'picture.';
+    case PhotoLetterRefusal.failed:
+      return 'Preparing the photo failed: ${error ?? 'no reason reported'}';
+    case null:
+      return 'The photo was never prepared — nothing was chosen.';
+  }
+}
+
+/// What the Photo button says in each state. A first-time user reads only
+/// this, so every state names itself and the finished one carries the two
+/// numbers that decide whether it can ride the lane: bytes and pixels.
+String photoPickButtonLabel(PhotoPickState state, PhotoLetter? letter) {
+  switch (state) {
+    case PhotoPickState.idle:
+      return 'Photo (≤${photoLetterSize(photoLetterMaxBytes)})';
+    case PhotoPickState.picking:
+      return 'Choosing a photo…';
+    case PhotoPickState.shrinking:
+      return 'Shrinking to fit…';
+    case PhotoPickState.picked:
+      if (letter == null) return 'Photo ready — tap to redo';
+      return 'Photo ${photoLetterSize(letter.wire.length)} · '
+          '${letter.width}×${letter.height} — tap to redo';
+  }
+}
+
+/// Which of the things a person can leave in a Send window becomes the
+/// letter, and what the row calls it.
+///
+/// Pure on purpose: the ranking is the part most likely to be got wrong and
+/// the part hardest to reach through a live job, so it is decided here and
+/// tested here. A recording first — when both it and a photo are in hand the
+/// recording is always the newer act, because picking a photo clears a
+/// recording that was waiting and never the other way round. Then the photo,
+/// then the typed draft, then the run's own default letter.
+(String, Uint8List) phoneLetterChoice({
+  required VoiceLetter? voice,
+  required PhotoLetter? photo,
+  required String draft,
+  required String fallback,
+}) {
+  if (voice != null) return ('voice', voice.wire);
+  if (photo != null) return ('photo', photo.wire);
+  final typed = draft.trim();
+  if (typed.isEmpty) {
+    return ('default', Uint8List.fromList(utf8.encode(fallback)));
+  }
+  return ('typed', Uint8List.fromList(utf8.encode(typed)));
+}
+
 class JourneyPeer {
   final ValueNotifier<String> status = ValueNotifier<String>('booting');
   final ValueNotifier<List<String>> events = ValueNotifier<List<String>>([]);
@@ -666,6 +749,119 @@ class JourneyPeer {
     final live = _transition;
     if (live != null) await live;
     if (_recorder != null) await toggleRecording();
+  }
+
+  /// A photo chosen and shrunk during the current Send window, if any.
+  /// Cleared once the letter is built, so a stale picture never rides the
+  /// next job — the same contract [voiceLetter] has.
+  ///
+  /// Voice outranks it in [_awaitPhoneLetter], and that ranking is what
+  /// makes "the last thing you did is the letter" true in both orders: a
+  /// pick clears a recording that was waiting (see [_pick]), and a recording
+  /// started after a pick wins by rank. Nobody has to remember which button
+  /// they touched first.
+  final ValueNotifier<PhotoLetter?> photoLetter = ValueNotifier<PhotoLetter?>(
+    null,
+  );
+
+  /// What the Photo button is doing right now. The button renders this and
+  /// nothing else, so there is exactly one answer on screen to "is it still
+  /// working on my picture?".
+  final ValueNotifier<PhotoPickState> photoState =
+      ValueNotifier<PhotoPickState>(PhotoPickState.idle);
+
+  /// The photo half of [voiceAlert] — a pick that failed or was refused,
+  /// shown big, next to the button, until the person dismisses it by hand.
+  /// Its own notifier and not a shared one: a photo failure must not
+  /// silently overwrite a recording failure nobody has read yet.
+  final ValueNotifier<VoiceAlert?> photoAlert = ValueNotifier<VoiceAlert?>(
+    null,
+  );
+
+  /// Clears the photo banner. Only a tap does this.
+  void dismissPhotoAlert() => photoAlert.value = null;
+
+  /// Builds the pick this peer drives. Overridden in tests, which have no
+  /// photo library; production is always [GalleryPhotoSelection].
+  @visibleForTesting
+  PhotoSelection Function() newPhotoSelection = GalleryPhotoSelection.new;
+
+  Future<void>? _pickTransition;
+
+  /// Opens the photo picker, shrinks what comes back until it fits the
+  /// lane's cap, and holds it for Send.
+  ///
+  /// A tap that lands while a pick is still in flight JOINS it rather than
+  /// opening a second picker — the rule [toggleRecording] learned the hard
+  /// way with two live microphones.
+  Future<void> pickPhoto() {
+    final live = _pickTransition;
+    if (live != null) return live;
+    final work = _pickTransition = _pick().whenComplete(
+      () => _pickTransition = null,
+    );
+    return work;
+  }
+
+  Future<void> _pick() async {
+    photoState.value = PhotoPickState.picking;
+    photoAlert.value = null;
+    photoLetter.value = null;
+    // One letter, one payload. A photo replaces a recording that was waiting
+    // for Send, and the Record button visibly drops back to idle — nothing
+    // is discarded behind the person's back.
+    if (voiceLetter.value != null) {
+      voiceLetter.value = null;
+      recordState.value = VoiceRecordState.idle;
+      recordElapsed.value = Duration.zero;
+      _note('photo replaces the recording that was waiting for Send');
+    }
+    final selection = newPhotoSelection();
+    final Uint8List? source;
+    try {
+      source = await selection.pick();
+    } on Object catch (error) {
+      photoState.value = PhotoPickState.idle;
+      _photoFailed('The photo library did not open. $error');
+      return;
+    }
+    if (source == null) {
+      photoState.value = PhotoPickState.idle;
+      _photoFailed(photoRefusalText(PhotoLetterRefusal.cancelled));
+      return;
+    }
+    photoState.value = PhotoPickState.shrinking;
+    final result = await selection.shrink(source);
+    final letter = result.letter;
+    if (letter == null) {
+      photoState.value = PhotoPickState.idle;
+      _photoFailed(
+        photoRefusalText(result.refusal, error: selection.pickError),
+      );
+      return;
+    }
+    photoLetter.value = letter;
+    photoState.value = PhotoPickState.picked;
+    _note(
+      'photo chosen ${letter.wire.length}B '
+      '${letter.width}x${letter.height} q${letter.quality} '
+      'from ${letter.sourceBytes}B',
+    );
+  }
+
+  void _photoFailed(String message) {
+    photoAlert.value = VoiceAlert(message);
+    _note('photo failed: $message');
+  }
+
+  /// Waits out a pick already in flight, without ever starting one. The Send
+  /// window calls this before it reads [photoLetter] for the same reason it
+  /// calls [finalizeRecording]: a tap at the very end of the window would
+  /// otherwise still be shrinking when the letter is read, and the picture
+  /// would be dropped for a default letter.
+  Future<void> finalizePick() async {
+    final live = _pickTransition;
+    if (live != null) await live;
   }
 
   final HttpClient _http = HttpClient()
@@ -1326,8 +1522,14 @@ class JourneyPeer {
   /// returns the payload and how it was chosen. `phoneWait == Duration.zero`
   /// returns immediately — an unattended run behaves exactly as before this
   /// window existed. Priority once the window closes (submit or timeout):
-  /// a voice recording taken during this window, else the typed draft, else
-  /// the honest default letter.
+  /// a voice recording taken during this window, else a photo chosen during
+  /// it, else the typed draft, else the honest default letter.
+  ///
+  /// Voice above photo is not a judgement about which matters more: picking
+  /// a photo clears a recording that was waiting ([_pick]), so the only way
+  /// both are in hand is a recording made after a pick — and then the
+  /// recording is the newer act. Either order, the last thing the person did
+  /// is the letter that goes.
   Future<(Uint8List, String, bool)> _awaitPhoneLetter(
     JourneyJob job,
     DnsValveConfig config,
@@ -1345,8 +1547,9 @@ class JourneyPeer {
       final left = config.phoneWait - DateTime.now().difference(started);
       final leftS = left.isNegative ? 0 : left.inSeconds;
       status.value =
-          'job ${job.run}: your turn — type the letter, or tap Record and '
-          'speak, then tap Send (${leftS}s left)';
+          'job ${job.run}: your turn — type the letter, tap Record and '
+          'speak, or tap Photo and choose one, then tap Send '
+          '(${leftS}s left)';
     });
     try {
       await gate.future.timeout(config.phoneWait, onTimeout: () {});
@@ -1357,25 +1560,28 @@ class JourneyPeer {
     }
     // A Send tap mid-recording finalizes what was captured so far, and a
     // tap that is still encoding gets to finish — the letter is read after
-    // the recording has settled, never out from under it.
+    // the recording has settled, never out from under it. A pick still
+    // shrinking gets the same grace.
     await finalizeRecording();
+    await finalizePick();
     final submitted = gate.isCompleted;
     final waitedMs = DateTime.now().difference(started).inMilliseconds;
     final voice = voiceLetter.value;
+    final photo = photoLetter.value;
     voiceLetter.value = null;
-    // The button belongs to the window that is closing: a "Recorded 0:30"
-    // left over from the letter just carried would read, in the next
-    // window, as a take that window already holds.
+    photoLetter.value = null;
+    // The buttons belong to the window that is closing: a "Recorded 0:30" or
+    // a "Photo 2.1 KB" left over from the letter just carried would read, in
+    // the next window, as a take that window already holds.
     recordState.value = VoiceRecordState.idle;
     recordElapsed.value = Duration.zero;
-    final (kind, bytes) = voice != null
-        ? ('voice', voice.wire)
-        : draft.value.trim().isEmpty
-        ? (
-            'default',
-            Uint8List.fromList(utf8.encode(phoneDefaultLetter(job.run))),
-          )
-        : ('typed', Uint8List.fromList(utf8.encode(draft.value.trim())));
+    photoState.value = PhotoPickState.idle;
+    final (kind, bytes) = phoneLetterChoice(
+      voice: voice,
+      photo: photo,
+      draft: draft.value,
+      fallback: phoneDefaultLetter(job.run),
+    );
     _note(
       'phone letter window closed: kind=$kind submitted=$submitted '
       'waited_ms=$waitedMs',
@@ -2549,28 +2755,53 @@ class JourneyPeerApp extends StatelessWidget {
                 valueListenable: peer.voiceAlert,
                 builder: (context, alert, _) => alert == null
                     ? const SizedBox.shrink()
-                    : _VoiceAlertBanner(
+                    : _LetterAlertBanner(
                         alert: alert,
                         onDismiss: peer.dismissVoiceAlert,
+                        keyPrefix: 'journey-peer-voice',
+                        errorIcon: Icons.mic_off,
                       ),
               ),
+              ValueListenableBuilder<VoiceAlert?>(
+                valueListenable: peer.photoAlert,
+                builder: (context, alert, _) => alert == null
+                    ? const SizedBox.shrink()
+                    : _LetterAlertBanner(
+                        alert: alert,
+                        onDismiss: peer.dismissPhotoAlert,
+                        keyPrefix: 'journey-peer-photo',
+                        errorIcon: Icons.broken_image,
+                      ),
+              ),
+              _PhotoPreview(peer: peer),
               ValueListenableBuilder<bool>(
                 valueListenable: peer.letterWanted,
-                builder: (context, wanted, _) => Row(
+                builder: (context, wanted, _) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 56,
-                        child: FilledButton(
-                          key: const Key('journey-peer-send'),
-                          onPressed: wanted ? peer.submitLetter : null,
-                          child: const Text('Send letter'),
+                    // The two authoring buttons share a row; Send gets the
+                    // full width below them, because it is the one that ends
+                    // the window and three equal buttons made none of them
+                    // readable on a phone.
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _RecordButton(peer: peer, wanted: wanted),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _PhotoButton(peer: peer, wanted: wanted),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _RecordButton(peer: peer, wanted: wanted),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 56,
+                      child: FilledButton(
+                        key: const Key('journey-peer-send'),
+                        onPressed: wanted ? peer.submitLetter : null,
+                        child: const Text('Send letter'),
+                      ),
                     ),
                   ],
                 ),
@@ -2602,15 +2833,32 @@ class JourneyPeerApp extends StatelessWidget {
   }
 }
 
-/// The one failure surface for recording. Large, coloured, in the person's
-/// hand next to the button that caused it, and gone only when they tap
-/// "Got it" — an entry in the scrolling event list below is not something a
-/// person mid-task reads.
-class _VoiceAlertBanner extends StatelessWidget {
-  const _VoiceAlertBanner({required this.alert, required this.onDismiss});
+/// The one failure surface for authoring a letter — a recording that was
+/// refused, a photo that could not be prepared. Large, coloured, in the
+/// person's hand next to the button that caused it, and gone only when they
+/// tap "Got it": an entry in the scrolling event list below is not something
+/// a person mid-task reads.
+///
+/// One widget, two instances with their own keys and icons, so voice and
+/// photo failures can be on screen at the same time without either one
+/// silently replacing the other.
+class _LetterAlertBanner extends StatelessWidget {
+  const _LetterAlertBanner({
+    required this.alert,
+    required this.onDismiss,
+    required this.keyPrefix,
+    required this.errorIcon,
+  });
 
   final VoiceAlert alert;
   final VoidCallback onDismiss;
+
+  /// Names this banner's keys, e.g. `journey-peer-voice` →
+  /// `journey-peer-voice-alert`, `…-alert-text`, `…-alert-dismiss`.
+  final String keyPrefix;
+
+  /// Drawn when [VoiceAlert.isError]; a success uses the shared check mark.
+  final IconData errorIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -2618,7 +2866,7 @@ class _VoiceAlertBanner extends StatelessWidget {
         ? const Color(0xFFB3261E)
         : const Color(0xFF1B5E20);
     return Container(
-      key: const Key('journey-peer-voice-alert'),
+      key: Key('$keyPrefix-alert'),
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2632,7 +2880,7 @@ class _VoiceAlertBanner extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                alert.isError ? Icons.mic_off : Icons.check_circle,
+                alert.isError ? errorIcon : Icons.check_circle,
                 color: Colors.white,
                 size: 28,
               ),
@@ -2640,7 +2888,7 @@ class _VoiceAlertBanner extends StatelessWidget {
               Expanded(
                 child: Text(
                   alert.message,
-                  key: const Key('journey-peer-voice-alert-text'),
+                  key: Key('$keyPrefix-alert-text'),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -2654,7 +2902,7 @@ class _VoiceAlertBanner extends StatelessWidget {
           SizedBox(
             height: 48,
             child: FilledButton(
-              key: const Key('journey-peer-voice-alert-dismiss'),
+              key: Key('$keyPrefix-alert-dismiss'),
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: tone,
@@ -2724,6 +2972,123 @@ class _RecordButton extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Choose a photo, drawn from [JourneyPeer.photoState] alone — the same
+/// one-value rule the Record button follows, so "the picker is open" and
+/// "nothing chosen yet" cannot look alike while a 4 MB screenshot is being
+/// shrunk on a worker isolate.
+class _PhotoButton extends StatelessWidget {
+  const _PhotoButton({required this.peer, required this.wanted});
+
+  final JourneyPeer peer;
+  final bool wanted;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<PhotoPickState>(
+      valueListenable: peer.photoState,
+      builder: (context, state, _) => ValueListenableBuilder<PhotoLetter?>(
+        valueListenable: peer.photoLetter,
+        builder: (context, letter, _) {
+          final busy =
+              state == PhotoPickState.picking ||
+              state == PhotoPickState.shrinking;
+          final done = state == PhotoPickState.picked;
+          return SizedBox(
+            height: 56,
+            child: FilledButton(
+              key: const Key('journey-peer-photo'),
+              style: FilledButton.styleFrom(
+                backgroundColor: done ? const Color(0xFF1B5E20) : null,
+                foregroundColor: done ? Colors.white : null,
+              ),
+              onPressed: wanted && !busy ? peer.pickPhoto : null,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    done ? Icons.image : Icons.add_photo_alternate,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      photoPickButtonLabel(state, letter),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The picture itself, decoded from the very bytes that will ride the lane.
+///
+/// Not a re-render of the original file: a preview drawn from the source
+/// would show a sharp photo and carry a smudge, and nobody would know until
+/// it arrived on the Mac. What is on screen here is the payload.
+class _PhotoPreview extends StatelessWidget {
+  const _PhotoPreview({required this.peer});
+
+  final JourneyPeer peer;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<PhotoLetter?>(
+      valueListenable: peer.photoLetter,
+      builder: (context, letter, _) {
+        if (letter == null) return const SizedBox.shrink();
+        return Container(
+          key: const Key('journey-peer-photo-preview'),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B5E20),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.memory(
+                  letter.wire,
+                  height: 72,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'This picture goes when you tap Send.\n'
+                  '${photoLetterSize(letter.wire.length)} · '
+                  '${letter.width}×${letter.height} · quality '
+                  '${letter.quality}, from '
+                  '${photoLetterSize(letter.sourceBytes)}',
+                  key: const Key('journey-peer-photo-preview-text'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

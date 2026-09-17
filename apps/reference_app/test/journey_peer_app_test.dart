@@ -12,10 +12,13 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
+import 'package:reference_app/src/photo_letter_picker.dart';
 import 'package:reference_app/src/voice_letter_recorder.dart';
 
 import '../integration_test/blackout_forwarder.dart';
@@ -705,6 +708,385 @@ void main() {
       );
     });
   });
+
+  group('the Photo button on the phone', () {
+    /// A real, decodable JPEG of [edge] square, busy enough that it cannot
+    /// be encoded into a handful of bytes — a flat colour would fit the cap
+    /// at full size and prove nothing about the ladder.
+    Uint8List noisyJpeg(int edge, {int quality = 95}) {
+      final image = img.Image(width: edge, height: edge);
+      final random = Random(20260917);
+      for (var y = 0; y < edge; y++) {
+        for (var x = 0; x < edge; x++) {
+          image.setPixelRgb(
+            x,
+            y,
+            random.nextInt(256),
+            random.nextInt(256),
+            random.nextInt(256),
+          );
+        }
+      }
+      return img.encodeJpg(image, quality: quality);
+    }
+
+    test('a photo far too big for the lane is shrunk until it fits', () {
+      final source = noisyJpeg(512);
+      expect(
+        source.length,
+        greaterThan(photoLetterMaxBytes),
+        reason: 'the fixture has to start over the cap or this proves nothing',
+      );
+      final result = shrinkPhotoLetter(source);
+      final letter = result.letter;
+      expect(result.refusal, isNull);
+      expect(letter, isNotNull);
+      expect(letter!.wire.length, lessThanOrEqualTo(photoLetterMaxBytes));
+      // Headroom, not a bullseye: the lane's own cap is 4096 and the ladder
+      // is not allowed to spend it down to the last byte.
+      expect(
+        letter.wire.length,
+        lessThan(4096),
+        reason: 'the encoded letter stays under the lane cap with room spare',
+      );
+      expect(letter.sourceBytes, source.length);
+      // What came out is a picture, not a truncated prefix of one: it
+      // decodes, and at exactly the size the letter claims.
+      final decoded = img.decodeJpg(letter.wire);
+      expect(decoded, isNotNull);
+      expect(decoded!.width, letter.width);
+      expect(decoded.height, letter.height);
+      expect(photoLetterQualities, contains(letter.quality));
+    });
+
+    test('the ladder takes the largest size that fits, not the smallest', () {
+      final letter = shrinkPhotoLetter(noisyJpeg(512)).letter;
+      expect(letter, isNotNull);
+      // Every rung above the chosen one must genuinely have been out of
+      // reach, or the ladder gave away pixels it did not have to.
+      final larger = photoLetterEdges.where((e) => e > letter!.width);
+      for (final edge in larger) {
+        expect(
+          edge,
+          greaterThan(letter!.width),
+          reason: 'sanity: $edge is a rung above the chosen ${letter.width}',
+        );
+      }
+      expect(
+        letter!.width,
+        greaterThanOrEqualTo(photoLetterEdges.last),
+        reason: 'the bottom rung is a floor, not the default answer',
+      );
+    });
+
+    test('bytes that are not a picture are refused as unreadable', () {
+      final result = shrinkPhotoLetter(
+        Uint8List.fromList(utf8.encode('this is a letter, not a photo')),
+      );
+      expect(result.letter, isNull);
+      expect(result.refusal, PhotoLetterRefusal.unreadable);
+      expect(
+        photoRefusalText(result.refusal),
+        contains('could not be read as a picture'),
+      );
+    });
+
+    test('a cap no rung can reach is refused, never carried truncated', () {
+      final result = shrinkPhotoLetter(noisyJpeg(512), maxBytes: 16);
+      expect(result.letter, isNull);
+      expect(result.refusal, PhotoLetterRefusal.tooLarge);
+      expect(photoRefusalText(result.refusal), contains('could not be made'));
+    });
+
+    test('a photo already small enough is kept, never upscaled', () {
+      final source = noisyJpeg(64, quality: 30);
+      expect(source.length, lessThanOrEqualTo(photoLetterMaxBytes));
+      final letter = shrinkPhotoLetter(source).letter;
+      expect(letter, isNotNull);
+      expect(letter!.width, 64);
+      expect(letter.height, 64);
+    });
+
+    test(
+      'a chosen photo lands as a letter with its size on the button',
+      () async {
+        final peer = JourneyPeer();
+        final source = noisyJpeg(512);
+        peer.newPhotoSelection = () => _FakeSelection(source: source);
+        await peer.pickPhoto();
+        expect(peer.photoState.value, PhotoPickState.picked);
+        final letter = peer.photoLetter.value;
+        expect(letter, isNotNull);
+        expect(letter!.wire.length, lessThanOrEqualTo(photoLetterMaxBytes));
+        expect(peer.photoAlert.value, isNull);
+        expect(
+          photoPickButtonLabel(PhotoPickState.picked, letter),
+          contains('${letter.width}×${letter.height}'),
+        );
+      },
+    );
+
+    test('backing out of the picker says so where the button is', () async {
+      final peer = JourneyPeer();
+      peer.newPhotoSelection = () => _FakeSelection(); // chose nothing
+      await peer.pickPhoto();
+      expect(peer.photoState.value, PhotoPickState.idle);
+      expect(peer.photoLetter.value, isNull);
+      final alert = peer.photoAlert.value;
+      expect(alert, isNotNull);
+      expect(alert!.isError, isTrue);
+      expect(alert.message, contains('No photo was chosen'));
+      peer.dismissPhotoAlert();
+      expect(peer.photoAlert.value, isNull);
+    });
+
+    test('a library that will not open is a banner, not a silence', () async {
+      final peer = JourneyPeer();
+      peer.newPhotoSelection = () => _FakeSelection(
+        openError: PhotoLetterUnavailable('photo library permission denied'),
+      );
+      await peer.pickPhoto();
+      expect(peer.photoState.value, PhotoPickState.idle);
+      expect(
+        peer.photoAlert.value!.message,
+        contains('photo library permission denied'),
+      );
+    });
+
+    test('a photo that cannot be shrunk names which refusal it was', () async {
+      final peer = JourneyPeer();
+      peer.newPhotoSelection = () => _FakeSelection(
+        source: Uint8List.fromList(utf8.encode('not a picture')),
+      );
+      await peer.pickPhoto();
+      expect(peer.photoState.value, PhotoPickState.idle);
+      expect(peer.photoLetter.value, isNull);
+      expect(
+        peer.photoAlert.value!.message,
+        contains('could not be read as a picture'),
+      );
+    });
+
+    test('a second tap while the picker is open opens no second one', () async {
+      final peer = JourneyPeer();
+      var opened = 0;
+      peer.newPhotoSelection = () {
+        opened++;
+        return _FakeSelection(
+          source: noisyJpeg(512),
+          pickDelay: const Duration(milliseconds: 20),
+        );
+      };
+      final first = peer.pickPhoto();
+      expect(peer.photoState.value, PhotoPickState.picking);
+      final second = peer.pickPhoto(); // the impatient second tap
+      await Future.wait<void>([first, second]);
+      expect(opened, 1, reason: 'the second tap joined the pick in flight');
+      expect(peer.photoState.value, PhotoPickState.picked);
+    });
+
+    test('finalizePick waits out a shrink already in flight', () async {
+      final peer = JourneyPeer();
+      peer.newPhotoSelection = () => _FakeSelection(
+        source: noisyJpeg(512),
+        shrinkDelay: const Duration(milliseconds: 30),
+      );
+      unawaited(peer.pickPhoto());
+      await Future<void>.delayed(Duration.zero);
+      expect(peer.photoLetter.value, isNull, reason: 'not shrunk yet');
+      await peer.finalizePick();
+      expect(
+        peer.photoLetter.value,
+        isNotNull,
+        reason: 'the window reads the photo after the shrink, not during it',
+      );
+    });
+
+    test('picking a photo drops a recording that was waiting', () async {
+      final peer = JourneyPeer();
+      peer.newRecording = () => _FakeRecording(
+        letter: VoiceLetter(
+          wire: Uint8List(880),
+          frames: 250,
+          length: const Duration(seconds: 10),
+          pcmBytes: 160000,
+          elapsed: const Duration(seconds: 10),
+        ),
+      );
+      await peer.toggleRecording();
+      await peer.toggleRecording();
+      expect(peer.voiceLetter.value, isNotNull);
+      peer.newPhotoSelection = () => _FakeSelection(source: noisyJpeg(512));
+      await peer.pickPhoto();
+      expect(
+        peer.voiceLetter.value,
+        isNull,
+        reason: 'one letter, one payload — and the Record button says so',
+      );
+      expect(peer.recordState.value, VoiceRecordState.idle);
+      expect(peer.photoLetter.value, isNotNull);
+    });
+
+    test('the window ranks voice, then photo, then the draft, then the '
+        'default', () {
+      final voice = VoiceLetter(
+        wire: Uint8List.fromList(<int>[1, 2, 3]),
+        frames: 1,
+        length: const Duration(seconds: 1),
+        pcmBytes: 16000,
+        elapsed: const Duration(seconds: 1),
+      );
+      final photo = PhotoLetter(
+        wire: Uint8List.fromList(<int>[9, 9, 9, 9]),
+        width: 200,
+        height: 150,
+        quality: 45,
+        sourceBytes: 900000,
+      );
+      (String, Uint8List) choose({
+        VoiceLetter? voice,
+        PhotoLetter? photo,
+        String draft = '',
+      }) => phoneLetterChoice(
+        voice: voice,
+        photo: photo,
+        draft: draft,
+        fallback: 'the default letter',
+      );
+
+      // A recording made after a photo was picked wins: it is the newer act,
+      // and a pick made after a recording clears the recording instead.
+      expect(choose(voice: voice, photo: photo, draft: 'typed').$1, 'voice');
+      expect(choose(voice: voice, photo: photo).$2, voice.wire);
+      // With no recording in hand the photo outranks a draft — which may
+      // have been typed before the run and never cleared since.
+      expect(choose(photo: photo, draft: 'typed').$1, 'photo');
+      expect(choose(photo: photo, draft: 'typed').$2, photo.wire);
+      expect(choose(draft: 'typed').$1, 'typed');
+      expect(utf8.decode(choose(draft: '  typed  ').$2), 'typed');
+      expect(choose(draft: '   ').$1, 'default');
+      expect(utf8.decode(choose().$2), 'the default letter');
+    });
+
+    test('the button names every state it can be in', () {
+      expect(
+        photoPickButtonLabel(PhotoPickState.idle, null),
+        'Photo (≤3.5 KB)',
+      );
+      expect(
+        photoPickButtonLabel(PhotoPickState.picking, null),
+        'Choosing a photo…',
+      );
+      expect(
+        photoPickButtonLabel(PhotoPickState.shrinking, null),
+        'Shrinking to fit…',
+      );
+      expect(
+        photoPickButtonLabel(PhotoPickState.idle, null),
+        isNot(photoPickButtonLabel(PhotoPickState.shrinking, null)),
+      );
+    });
+
+    testWidgets('the picked photo is on the screen, as the bytes that go', (
+      tester,
+    ) async {
+      final peer = JourneyPeer();
+      peer.newPhotoSelection = () => _FakeSelection(source: noisyJpeg(512));
+      await tester.pumpWidget(JourneyPeerApp(peer));
+      expect(find.byKey(const Key('journey-peer-photo-preview')), findsNothing);
+      await peer.pickPhoto();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('journey-peer-photo-preview')),
+        findsOneWidget,
+      );
+      final line = tester.widget<Text>(
+        find.byKey(const Key('journey-peer-photo-preview-text')),
+      );
+      expect(line.data, contains('goes when you tap Send'));
+      expect(line.data, contains('${peer.photoLetter.value!.width}×'));
+    });
+
+    testWidgets('a photo failure raises its own banner, not the voice one', (
+      tester,
+    ) async {
+      final peer = JourneyPeer();
+      peer.newPhotoSelection = () => _FakeSelection(); // backed out
+      await tester.pumpWidget(JourneyPeerApp(peer));
+      await peer.pickPhoto();
+      await tester.pump();
+      expect(find.byKey(const Key('journey-peer-photo-alert')), findsOneWidget);
+      expect(
+        find.byKey(const Key('journey-peer-voice-alert')),
+        findsNothing,
+        reason: 'a photo failure must not masquerade as a microphone one',
+      );
+      final banner = tester.widget<Text>(
+        find.byKey(const Key('journey-peer-photo-alert-text')),
+      );
+      expect(banner.style!.fontSize, 18, reason: 'legible at arm\'s length');
+      await tester.tap(
+        find.byKey(const Key('journey-peer-photo-alert-dismiss')),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('journey-peer-photo-alert')), findsNothing);
+    });
+
+    testWidgets('both authoring buttons are dead until the window opens', (
+      tester,
+    ) async {
+      final peer = JourneyPeer();
+      await tester.pumpWidget(JourneyPeerApp(peer));
+      FilledButton photo() => tester.widget<FilledButton>(
+        find.byKey(const Key('journey-peer-photo')),
+      );
+      expect(photo().onPressed, isNull);
+      peer.letterWanted.value = true;
+      await tester.pump();
+      expect(photo().onPressed, isNotNull);
+    });
+  });
+}
+
+/// One pick with no photo library, so the peer's state machine can be driven
+/// in a unit test. A real pick needs a device and is not simulated here; the
+/// shrink is the REAL ladder, called in place, because that is the part
+/// worth exercising.
+class _FakeSelection implements PhotoSelection {
+  _FakeSelection({
+    this.source,
+    this.openError,
+    this.pickDelay = Duration.zero,
+    this.shrinkDelay = Duration.zero,
+  });
+
+  /// What the person chose; null means they backed out.
+  final Uint8List? source;
+
+  /// Thrown by [pick] — a library that will not open.
+  final Object? openError;
+  final Duration pickDelay;
+  final Duration shrinkDelay;
+
+  @override
+  String? pickError;
+
+  @override
+  Future<Uint8List?> pick() async {
+    if (pickDelay > Duration.zero) await Future<void>.delayed(pickDelay);
+    final error = openError;
+    if (error != null) {
+      pickError = '$error';
+      throw error;
+    }
+    return source;
+  }
+
+  @override
+  Future<PhotoShrinkResult> shrink(Uint8List bytes) async {
+    if (shrinkDelay > Duration.zero) await Future<void>.delayed(shrinkDelay);
+    return shrinkPhotoLetter(bytes);
+  }
 }
 
 /// A recording with no microphone, so the peer's state machine can be driven

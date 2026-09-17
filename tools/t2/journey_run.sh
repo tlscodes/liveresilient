@@ -925,16 +925,33 @@ if [ "$PROFILE" = dnsvalve ]; then
       # Backgrounded (&) so a person who never clicks it never blocks the run.
       ( osascript -e "display dialog \"A $letter_b-byte letter arrived over the DNS door, session $dv_session. The text is in this terminal, just above.\" with title \"DNS-valve letter received\" buttons {\"OK\"} default button \"OK\"" >/dev/null 2>&1 & )
     else
-      # Try the one binary shape this lane actually carries: a Codec2 700C
-      # voice letter (voice_note_codec.dart). Decoded via the SAME FFI path
-      # the phone used to encode it, not the c2dec CLI's own file format
-      # (which expects a header this wire never writes and silently
-      # mis-decodes without one). Any other binary — a photo, anything
-      # unrelated — fails unpackVoiceNote() and falls through unplayed,
-      # named for what it is, never guessed at.
+      # Two binary shapes ride this lane, and each is identified before it is
+      # decoded, never guessed at.
+      #
+      # A photo first: a JPEG names itself in its first three bytes (FF D8
+      # FF), which a Codec2 wire cannot produce — its first byte is a 4-bit
+      # mode id in the low nibble. Checked before the voice path so a picture
+      # from the phone is opened as a picture instead of failing
+      # unpackVoiceNote() and being reported as anonymous "binary".
+      dv_head=$(od -An -N3 -tx1 "$LOGD/$dv_session.letter" | tr -d ' \n')
       dv_wav="$LOGD/$dv_session.wav"
       dv_raw="$RUN/$dv_session.pcm"
-      if ( cd "$REPO/packages/hamseda_codec" && dart run tool/decode_voice_letter.dart \
+      if [ "$dv_head" = ffd8ff ]; then
+        # The letter file itself stays untouched as the evidence; the .jpg is
+        # a copy with an extension Preview will open.
+        dv_jpg="$LOGD/$dv_session.jpg"
+        cp "$LOGD/$dv_session.letter" "$dv_jpg"
+        dv_dim=$(sips -g pixelWidth -g pixelHeight "$dv_jpg" 2>/dev/null \
+                 | awk '/pixelWidth|pixelHeight/{print $2}' | paste -sd x -)
+        echo "letter    photo, $letter_b B (${dv_dim:-?} px), written to $dv_jpg — opening now"
+        open "$dv_jpg" >/dev/null 2>&1 || echo "note: open failed; the jpg is still at $dv_jpg"
+        osascript -e "display notification \"$letter_b bytes, ${dv_dim:-?} px, session $dv_session\" with title \"DNS-valve photo letter received\"" >/dev/null 2>&1 || true
+        ( osascript -e "display dialog \"A $letter_b-byte photo arrived over the DNS door and is open on this screen, session $dv_session.\" with title \"DNS-valve photo letter received\" buttons {\"OK\"} default button \"OK\"" >/dev/null 2>&1 & )
+      # A Codec2 700C voice letter (voice_note_codec.dart), decoded via the
+      # SAME FFI path the phone used to encode it, not the c2dec CLI's own
+      # file format (which expects a header this wire never writes and
+      # silently mis-decodes without one).
+      elif ( cd "$REPO/packages/hamseda_codec" && dart run tool/decode_voice_letter.dart \
              "$LOGD/$dv_session.letter" "$dv_raw" ) >/dev/null 2>&1 \
          && ffmpeg -v error -y -f s16le -ac 1 -ar 8000 -i "$dv_raw" "$dv_wav" >/dev/null 2>&1; then
         dv_secs=$(afinfo "$dv_wav" 2>/dev/null | sed -nE 's/.*estimated duration: ([0-9.]+) sec.*/\1/p' | head -1)
