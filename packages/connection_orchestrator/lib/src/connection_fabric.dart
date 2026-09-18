@@ -233,46 +233,13 @@ class ConnectionFabric {
   }) async {
     _checkLive();
     final byId = {for (final l in _ranked()) l.profile.id: l};
-    // Live conditions from the best lane's measured health feed the
-    // bandit context (lane x conditions). rttMs 9999 is ChannelHealth's
-    // unmeasured sentinel — passed as null, not as a real slow link.
-    final bestLane = byId.isEmpty ? null : byId.values.first;
-    final bestHealth = bestLane?.channel.health;
-    final ctx = DeliveryContext.at(
-      _nowMs(),
-      place: _place(),
-      priority: priority,
-      lossFraction: bestHealth == null
-          ? null
-          : (1 - bestHealth.availability).clamp(0.0, 1.0),
-      rttMs: bestHealth == null || bestHealth.rttMs >= 9999
-          ? null
-          : bestHealth.rttMs.toDouble(),
-    );
-    // Foresight feed: if the trend watch says the current best lane is
-    // heading down, the planner duplicates onto the runner-up in advance.
-    final bestId = byId.isEmpty ? null : byId.keys.first;
-    final bestVerdict = bestId == null
-        ? TrendVerdict.unknown
-        : trend.verdict(bestId);
-    final plan = _planner.plan(
-      lanes: [
-        for (final l in byId.values)
-          PlannerLaneView(
-            id: l.profile.id,
-            healthScore: l.channel.health.score(),
-            learnedScore: experience.ucbScore(l.profile.id, ctx),
-            costRank: l.profile.costRank,
-            energyRank: l.profile.energyRank,
-          ),
-      ],
-      context: ctx,
-      urgent: priority == LinkMessagePriority.callSignal,
-      bestLaneSliding:
-          bestVerdict == TrendVerdict.slipping ||
-          bestVerdict == TrendVerdict.failingSoon,
-      lowBattery: _lowBattery(),
-    );
+    // Same derivation _buildPlan uses internally; re-derived here (not
+    // threaded through) so ctx stays available for the _attempt calls
+    // below, which record outcomes against the same context the plan was
+    // chosen under. Pure and un-awaited on both sides, so it is
+    // guaranteed to agree with the value _buildPlan computes.
+    final ctx = _contextFor(priority);
+    final plan = _buildPlan(priority);
     lastPlan = plan;
 
     _Lane? successLane;
@@ -323,6 +290,69 @@ class ConnectionFabric {
     return admission == BundleAdmission.stored
         ? DeliveryOutcome.queuedForLater
         : DeliveryOutcome.rejected;
+  }
+
+  /// Builds and returns the delivery plan the fabric would use for
+  /// [priority] right now — current ranked lanes, learned experience, and
+  /// trend verdict — without delivering anything or mutating [lastPlan].
+  /// Side-effect-free: safe to call for a preview at any time.
+  DeliveryPlan planFor({
+    LinkMessagePriority priority = LinkMessagePriority.presence,
+  }) => _buildPlan(priority);
+
+  /// The bandit context for [priority] right now, derived from the
+  /// current best-ranked lane's live health. Re-derived (never cached) on
+  /// every call — pure, no side effects — so every caller in this class
+  /// agrees on it without sharing mutable state. rttMs 9999 is
+  /// ChannelHealth's unmeasured sentinel — passed as null, not as a real
+  /// slow link.
+  DeliveryContext _contextFor(LinkMessagePriority priority) {
+    final ranked = _ranked();
+    final bestHealth = ranked.isEmpty ? null : ranked.first.channel.health;
+    return DeliveryContext.at(
+      _nowMs(),
+      place: _place(),
+      priority: priority,
+      lossFraction: bestHealth == null
+          ? null
+          : (1 - bestHealth.availability).clamp(0.0, 1.0),
+      rttMs: bestHealth == null || bestHealth.rttMs >= 9999
+          ? null
+          : bestHealth.rttMs.toDouble(),
+    );
+  }
+
+  /// The plan-building core shared by [deliver] and [planFor]: ranks
+  /// lanes, derives the bandit context from the best lane's live health,
+  /// folds in the trend verdict, and asks the planner for a strategy.
+  /// Pure — reads current state only, no side effects.
+  DeliveryPlan _buildPlan(LinkMessagePriority priority) {
+    final byId = {for (final l in _ranked()) l.profile.id: l};
+    final ctx = _contextFor(priority);
+    // Foresight feed: if the trend watch says the current best lane is
+    // heading down, the planner duplicates onto the runner-up in advance.
+    final bestId = byId.isEmpty ? null : byId.keys.first;
+    final bestVerdict = bestId == null
+        ? TrendVerdict.unknown
+        : trend.verdict(bestId);
+    return _planner.plan(
+      lanes: [
+        for (final l in byId.values)
+          PlannerLaneView(
+            id: l.profile.id,
+            healthScore: l.channel.health.score(),
+            learnedScore: experience.ucbScore(l.profile.id, ctx),
+            costRank: l.profile.costRank,
+            energyRank: l.profile.energyRank,
+          ),
+      ],
+      context: ctx,
+      urgent: priority == LinkMessagePriority.callSignal,
+      bestLaneSliding:
+          bestVerdict == TrendVerdict.slipping ||
+          bestVerdict == TrendVerdict.failingSoon,
+      lowBattery: _lowBattery(),
+    );
   }
 
   /// Chunked transfers still in flight, re-driven automatically by every
