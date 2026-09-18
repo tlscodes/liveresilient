@@ -13,11 +13,14 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
+// Uint8List arrives with services.dart, imported here for the
+// PlatformException the iOS picker throws, so dart:typed_data is not listed.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 import 'package:reference_app/src/photo_letter_picker.dart';
 import 'package:reference_app/src/voice_letter_recorder.dart';
 
@@ -1046,6 +1049,136 @@ void main() {
       expect(photo().onPressed, isNotNull);
     });
   });
+
+  // The real refusal a phone showed, twice, on the first live pick:
+  //
+  //   PlatformException(invalid_image, Cannot load representation of type
+  //   public.heic, NSItemProviderErrorDomain, null)
+  //
+  // image_picker_ios 0.8.13+6 asks PHPicker for the asset's CURRENT
+  // representation and then loads `public.image`, which for a camera asset
+  // resolves to `public.heic` and nothing else — so an original that is not
+  // on the device is a dead end no pickImage argument can reach around.
+  // These pin the second attempt: what it returns, what it does not swallow,
+  // and that platforms without it are left exactly as they were.
+  group('a photo the plugin will not read is asked for a second way', () {
+    final heicRefusal = PlatformException(
+      code: 'invalid_image',
+      message: 'Cannot load representation of type public.heic',
+      details: 'NSItemProviderErrorDomain',
+    );
+
+    /// A real, decodable JPEG, busy enough that the ladder has to work for
+    /// its cap — the same fixture shape the Photo-button group uses, kept
+    /// local for the same reason it is there.
+    Uint8List busyJpeg(int edge) {
+      final image = img.Image(width: edge, height: edge);
+      final random = Random(20260918);
+      for (var y = 0; y < edge; y++) {
+        for (var x = 0; x < edge; x++) {
+          image.setPixelRgb(
+            x,
+            y,
+            random.nextInt(256),
+            random.nextInt(256),
+            random.nextInt(256),
+          );
+        }
+      }
+      return img.encodeJpg(image, quality: 95);
+    }
+
+    test('the compatible copy is what the letter is made from', () async {
+      final compatible = busyJpeg(512);
+      final selection = GalleryPhotoSelection(
+        picker: _RefusingPicker(heicRefusal),
+        compatiblePick: () async => compatible,
+      );
+      expect(await selection.pick(), compatible);
+      expect(selection.pickError, isNull);
+      final letter = (await selection.shrink(compatible)).letter;
+      expect(letter, isNotNull);
+      expect(letter!.wire.length, lessThanOrEqualTo(photoLetterMaxBytes));
+    });
+
+    test(
+      'backing out of the second picker is a cancel, not a failure',
+      () async {
+        final selection = GalleryPhotoSelection(
+          picker: _RefusingPicker(heicRefusal),
+          compatiblePick: () async => null,
+        );
+        expect(await selection.pick(), isNull);
+      },
+    );
+
+    test('both ways failing says so, and says what to do about it', () async {
+      final selection = GalleryPhotoSelection(
+        picker: _RefusingPicker(heicRefusal),
+        compatiblePick: () async =>
+            throw PlatformException(code: 'unreadable', message: 'no copy'),
+      );
+      await expectLater(
+        selection.pick(),
+        throwsA(
+          isA<PhotoLetterUnavailable>().having(
+            (e) => e.reason,
+            'reason',
+            allOf(
+              contains('public.heic'),
+              contains('no copy'),
+              contains('iCloud'),
+            ),
+          ),
+        ),
+      );
+      expect(selection.pickError, contains('public.heic'));
+    });
+
+    test('a platform with no second picker keeps the first refusal', () async {
+      final selection = GalleryPhotoSelection(
+        picker: _RefusingPicker(heicRefusal),
+        compatiblePick: () async => throw MissingPluginException('no handler'),
+      );
+      await expectLater(
+        selection.pick(),
+        throwsA(
+          isA<PhotoLetterUnavailable>().having(
+            (e) => e.reason,
+            'reason',
+            allOf(contains('public.heic'), isNot(contains('iCloud'))),
+          ),
+        ),
+      );
+    });
+
+    test('the channel the second picker answers on is the one the app '
+        'registers', () {
+      expect(
+        photoLetterFallbackChannel.name,
+        'com.tlscodes.reference_app/photo_letter_fallback',
+      );
+    });
+  });
+}
+
+/// An [ImagePicker] that always refuses, so the second attempt can be driven
+/// with no photo library. The plugin's own iOS code is not simulated here —
+/// only the exception it hands Dart, copied from the phone's banner.
+class _RefusingPicker extends ImagePicker {
+  _RefusingPicker(this.refusal);
+
+  final Object refusal;
+
+  @override
+  Future<XFile?> pickImage({
+    required ImageSource source,
+    double? maxWidth,
+    double? maxHeight,
+    int? imageQuality,
+    CameraDevice preferredCameraDevice = CameraDevice.rear,
+    bool requestFullMetadata = true,
+  }) async => throw refusal;
 }
 
 /// One pick with no photo library, so the peer's state machine can be driven

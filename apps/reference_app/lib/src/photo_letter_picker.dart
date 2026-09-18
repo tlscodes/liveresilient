@@ -17,8 +17,10 @@
 library;
 
 import 'dart:isolate';
-import 'dart:typed_data';
 
+// Uint8List comes with this import too, which is why dart:typed_data is not
+// listed: the file needs services.dart for the fallback picker's channel.
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
@@ -213,6 +215,41 @@ abstract class PhotoSelection {
   String? get pickError;
 }
 
+/// The app's own iOS picker, used only when `image_picker` has already
+/// refused. Must match `PhotoLetterFallbackPicker.channelName` in
+/// `ios/Runner/AppDelegate.swift`; every other platform has no handler, so
+/// the call throws [MissingPluginException] and the original refusal stands.
+const MethodChannel photoLetterFallbackChannel = MethodChannel(
+  'com.tlscodes.reference_app/photo_letter_fallback',
+);
+
+/// Opens a picker that asks the system for the most COMPATIBLE copy of the
+/// chosen photo, and returns its bytes — or null when the person backed out.
+///
+/// This is the whole of the fix for the banner a real phone showed:
+///
+///     invalid_image, Cannot load representation of type public.heic,
+///     NSItemProviderErrorDomain
+///
+/// `image_picker_ios` 0.8.13+6 asks `PHPicker` for the asset's CURRENT
+/// representation (`preferredAssetRepresentationMode = ...ModeCurrent`,
+/// `FLTImagePickerPlugin.m:104`) and then loads `public.image`
+/// (`FLTPHPickerSaveImageToPathOperation.m:92-95`). For a camera asset that
+/// pair resolves to `public.heic` and nothing else, and `NSItemProvider`
+/// fails outright when that exact representation cannot be produced on the
+/// spot — which is what an iCloud photo whose original still lives in the
+/// cloud does. Nothing passed to `pickImage` reaches that decision, and the
+/// newest published `image_picker_ios`, 0.8.13+7, changes only a dev
+/// dependency, so there is no version to move to. The app therefore asks for
+/// the compatible copy itself. See AppDelegate.swift for the other half.
+Future<Uint8List?> pickCompatiblePhotoBytes() async {
+  final bytes = await photoLetterFallbackChannel.invokeMethod<Uint8List>(
+    'pickCompatibleImage',
+    <String, Object>{'maxEdge': 1600, 'quality': 85},
+  );
+  return bytes;
+}
+
 /// The real pick: the system photo library, shrunk on a worker isolate.
 ///
 /// The library and not the camera, deliberately. A rig run has to be
@@ -224,9 +261,15 @@ class GalleryPhotoSelection implements PhotoSelection {
   GalleryPhotoSelection({
     ImagePicker? picker,
     this.shrinker = shrinkPhotoLetter,
+    this.compatiblePick = pickCompatiblePhotoBytes,
   }) : _picker = picker ?? ImagePicker();
 
   final ImagePicker _picker;
+
+  /// The second attempt, run only after [_picker] has thrown. Injectable so
+  /// the retry can be exercised in a unit test with no photo library; in
+  /// production it is always [pickCompatiblePhotoBytes].
+  final Future<Uint8List?> Function() compatiblePick;
 
   /// The shrink step, so a test can supply a fast fake. Production is
   /// [shrinkPhotoLetter], and only that one is sent to a worker isolate.
@@ -251,8 +294,12 @@ class GalleryPhotoSelection implements PhotoSelection {
         imageQuality: 85,
       );
     } on Object catch (error) {
-      _pickError = '$error';
-      throw PhotoLetterUnavailable('$error');
+      // The plugin refused. That is not the end of it: the refusal it is
+      // known to give on this phone is about WHICH copy of the photo it
+      // insisted on, not about the photo, so ask the system once more for a
+      // compatible copy before telling the person no. A picker that opens
+      // twice is worth one that never works.
+      return _pickCompatible(error);
     }
     if (file == null) return null;
     try {
@@ -260,6 +307,30 @@ class GalleryPhotoSelection implements PhotoSelection {
     } on Object catch (error) {
       _pickError = '$error';
       throw PhotoLetterUnavailable('$error');
+    }
+  }
+
+  /// The second attempt, after [_picker] threw [first].
+  ///
+  /// Returns the compatible copy's bytes, null when the person backed out of
+  /// the second picker, and throws [PhotoLetterUnavailable] when this way
+  /// fails too — carrying BOTH refusals, because the pair of them is what
+  /// says whether the photo or the plugin was the problem.
+  Future<Uint8List?> _pickCompatible(Object first) async {
+    try {
+      return await compatiblePick();
+    } on MissingPluginException {
+      // No app-owned picker on this platform — everything but iOS. The
+      // plugin's refusal is the whole answer, exactly as it was before.
+      _pickError = '$first';
+      throw PhotoLetterUnavailable('$first');
+    } on Object catch (second) {
+      _pickError = '$first / $second';
+      throw PhotoLetterUnavailable(
+        '$first. Asking for a compatible copy did not work either: $second. '
+        'If this picture still lives in iCloud, open it once in Photos so '
+        'the full copy lands on this phone, then tap Photo again.',
+      );
     }
   }
 
