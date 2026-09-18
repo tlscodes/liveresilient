@@ -52,6 +52,7 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
     show SelectedIcePair;
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
+import 'package:reference_app/src/datagram_lane_port.dart';
 import 'package:reference_app/src/photo_letter_picker.dart';
 import 'package:reference_app/src/voice_letter_recorder.dart';
 import 'package:reference_app/src/call_session.dart'
@@ -2512,6 +2513,10 @@ class _Lanes {
   final AttachmentReceiver _attachments = AttachmentReceiver();
   StagedPhotoReceiver? _photos;
   VideoNoteReceiver? _videos;
+  // Chat's second lane (fan-out on retransmit only, see LaneSetPort docs).
+  // Null when unbound (never attempted, or bind failed and chat fell back
+  // to the single negotiated channel) — close() must tolerate that.
+  DatagramLanePort? _chatDgram;
   final List<StreamSubscription<Object?>> _subs = [];
   int texts = 0;
   int attachments = 0;
@@ -2573,7 +2578,33 @@ class _Lanes {
       await _stack.media.openDataChannel(CallLanes.video),
       maxPendingFrames: 128,
     );
-    final messenger = _messenger = ReliableMessenger(chatPort, peerId: 'phone');
+    DataChannelPort effectiveChatPort = chatPort;
+    try {
+      final hubHost = Uri.parse(journeyHubUrl).host;
+      final relayHost = InternetAddress.tryParse(hubHost) != null
+          ? hubHost
+          : '127.0.0.1';
+      const dgramPort = int.fromEnvironment(
+        'E2E_DGRAM_PORT',
+        defaultValue: 3737,
+      );
+      final chatDgram = await DatagramLanePort.bind(
+        relayHost: relayHost,
+        relayPort: dgramPort,
+        roomKey: DatagramLanePort.roomKeyFromCallId('$_run#chat'),
+      );
+      _chatDgram = chatDgram;
+      effectiveChatPort = LaneSetPort([
+        chatPort,
+        chatDgram,
+      ], activeIndex: () => 0);
+    } on Object catch (error) {
+      _peer._note('chat second lane bind failed, single-lane only: $error');
+    }
+    final messenger = _messenger = ReliableMessenger(
+      effectiveChatPort,
+      peerId: 'phone',
+    );
     _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) {
       unawaited(messenger.tick());
     });
@@ -2695,6 +2726,10 @@ class _Lanes {
     await _photos?.close();
     await _videos?.close();
     await _messenger?.close();
+    // Redundant with LaneSetPort.close() closing its members when the bind
+    // succeeded, but DatagramLanePort.close() is idempotent (guards on
+    // _closed) and this also covers a null _messenger.
+    await _chatDgram?.close();
   }
 }
 
