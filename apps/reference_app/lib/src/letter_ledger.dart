@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import 'letter_queue.dart' show QueuedLetter;
 import 'ui/conversations_screen.dart' show ConversationSummary;
 import 'ui/network_truth.dart' show MessageTruthStatus;
 
@@ -61,28 +62,54 @@ class LetterLedger {
 /// The line a letter shows for itself: the text when it is text, a label
 /// for a take or a picture. Strict UTF-8 on purpose — a lenient decode
 /// would print an opaque payload as garbage and read as a corrupted letter.
-String letterPreview(LetterRecord record) {
-  switch (record.kind) {
+String letterPreview(LetterRecord record) =>
+    letterPreviewOf(record.kind, record.bytes, record.duration);
+
+/// [letterPreview] for any letter — a record or one still in the queue.
+String letterPreviewOf(String kind, Uint8List bytes, Duration? duration) {
+  switch (kind) {
     case 'voice':
-      final duration = record.duration;
       return duration == null
-          ? 'Voice letter · ${record.bytes.length} B'
+          ? 'Voice letter · ${bytes.length} B'
           : 'Voice letter · ${duration.inSeconds} s';
     case 'photo':
-      return 'Thumbnail · ${record.bytes.length} B';
+      return 'Thumbnail · ${bytes.length} B';
     default:
       try {
-        return utf8.decode(record.bytes);
+        return utf8.decode(bytes);
       } on FormatException {
-        return '<binary, ${record.bytes.length} B>';
+        return '<binary, ${bytes.length} B>';
       }
   }
 }
 
-/// The Chats row for the letters, or null when none has arrived: an empty
-/// ledger puts nothing in the list, so the row never shows before a letter
+/// The Chats row for the letters, or null when there is none: nothing
+/// arrived and nothing is parked, so the row never shows before a letter
 /// exists to open.
-ConversationSummary? letterSummary(List<LetterRecord> records) {
+///
+/// A letter still in the queue is the newer act and owns the row: its
+/// preview and its queued time, with "queued, door down" in the text and
+/// NO status badge — the sending badge is a spinner, and a letter parked
+/// for hours behind a down door is not "in flight". The courier carries it
+/// once, when the door answers again; then the newest arrived record takes
+/// the row back with the delivered badge.
+ConversationSummary? letterSummary(
+  List<LetterRecord> records, {
+  List<QueuedLetter> pending = const [],
+}) {
+  if (pending.isNotEmpty) {
+    final parked = pending.last;
+    return ConversationSummary(
+      id: letterConversationId,
+      title: letterConversationTitle,
+      lastMessage:
+          '${letterPreviewOf(parked.kind, parked.bytes, parked.duration)}'
+          ' · queued, door down',
+      lastAt: parked.queuedAt,
+      avatarSeed: 0xD00E,
+      lastIsMine: true,
+    );
+  }
   if (records.isEmpty) return null;
   final newest = records.last;
   return ConversationSummary(

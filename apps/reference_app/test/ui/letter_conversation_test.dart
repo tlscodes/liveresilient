@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_courier.dart';
 import 'package:reference_app/src/letter_ledger.dart';
+import 'package:reference_app/src/letter_queue.dart';
 import 'package:reference_app/src/ui/conversations_screen.dart';
 import 'package:reference_app/src/ui/letter_thread.dart';
 import 'package:reference_app/src/ui/network_truth.dart';
@@ -59,12 +60,25 @@ ConversationSummary loopbackRow() => ConversationSummary(
   avatarSeed: 0x5EED,
 );
 
+QueuedLetter parkedLetter(String text) => QueuedLetter(
+  id: 'letter-1',
+  bytes: Uint8List.fromList(text.codeUnits),
+  kind: 'typed',
+  queuedAt: fixedNow.subtract(const Duration(seconds: 2)),
+);
+
 /// The list the way main.dart assembles it: the letters' row first when
-/// the ledger has one, never when it is empty.
-Widget screen(List<LetterRecord> records) => MaterialApp(
+/// the ledger has one or the queue holds one, never when both are empty.
+Widget screen(
+  List<LetterRecord> records, {
+  List<QueuedLetter> pending = const [],
+}) => MaterialApp(
   theme: buildAppThemeData(Brightness.light),
   home: ConversationsScreen(
-    conversations: [?letterSummary(records), loopbackRow()],
+    conversations: [
+      ?letterSummary(records, pending: pending),
+      loopbackRow(),
+    ],
     onOpen: (_) {},
     now: () => fixedNow,
   ),
@@ -117,6 +131,46 @@ void main() {
       '<binary, 3 B>',
     );
   });
+
+  testWidgets(
+    'a letter parked behind a down door has a row: its text, queued, no spinner',
+    (tester) async {
+      await tester.pumpWidget(
+        screen(const [], pending: [parkedLetter('wait')]),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('conversation-tile-letter')), findsOne);
+      expect(find.text('Letter through the door'), findsOneWidget);
+      expect(find.text('wait · queued, door down'), findsOneWidget);
+      final summary = letterSummary(const [], pending: [parkedLetter('wait')])!;
+      expect(summary.lastIsMine, isTrue);
+      // No badge: the sending badge is a spinner, and this letter waits.
+      expect(summary.lastStatus, isNull);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(summary.lastAt, fixedNow.subtract(const Duration(seconds: 2)));
+    },
+  );
+
+  testWidgets(
+    'the parked letter owns the row over an older arrival, and yields once drained',
+    (tester) async {
+      final parked = [parkedLetter('second')];
+      final arrived = [textLetter('first')];
+      final queued = letterSummary(arrived, pending: parked)!;
+      expect(queued.lastMessage, 'second · queued, door down');
+      expect(queued.lastStatus, isNull);
+      final drained = letterSummary(arrived)!;
+      expect(drained.lastMessage, 'first');
+      expect(drained.lastStatus, MessageTruthStatus.delivered);
+      await tester.pumpWidget(screen(arrived, pending: parked));
+      await tester.pumpAndSettle();
+      expect(find.text('second · queued, door down'), findsOneWidget);
+      await tester.pumpWidget(screen(arrived));
+      await tester.pumpAndSettle();
+      expect(find.text('second · queued, door down'), findsNothing);
+      expect(find.text('first'), findsOneWidget);
+    },
+  );
 
   testWidgets('an empty ledger puts no letter row in the list', (tester) async {
     expect(letterSummary(const []), isNull);

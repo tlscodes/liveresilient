@@ -296,6 +296,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _chat.addListener(_onChanged);
     // A delivered letter is a row in the Chats list the moment it lands.
     _letterCourier.ledger.records.addListener(_onChanged);
+    _letterCourier.queue.pending.addListener(_onChanged);
     unawaited(_letterCourier.restore());
   }
 
@@ -412,6 +413,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _chat.dispose();
     unawaited(_letterComposer.disposeComposer());
     _letterCourier.ledger.records.removeListener(_onChanged);
+    _letterCourier.queue.pending.removeListener(_onChanged);
     unawaited(_letterCourier.dispose());
     final live = _liveChat;
     _liveChat = null;
@@ -481,7 +483,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         : live.entries.last;
     // The letters' row, first and only once one has arrived — the same
     // bytes the door carried, as a message and not a log line.
-    final letters = letterSummary(_letterCourier.ledger.records.value);
+    final letters = letterSummary(
+      _letterCourier.ledger.records.value,
+      pending: _letterCourier.queue.pending.value,
+    );
     return [
       ?letters,
       if (live != null)
