@@ -95,6 +95,11 @@ row 268-269   rateless lane over plain UDP  4,194,304 B hash-verified,
   abandoned twice at the time limit with the recorded rate at zero
   (`tools/t2/h2_results.tsv`, rows 266-267). That collapse is measured, not
   assumed.
+- **The emergency letter**: when the live call's paths are gone, one text, a
+  ~30 s Codec2 voice take or a thumbnail (≤4096 B) goes out through the DNS
+  TXT-query lane, is parked in a durable queue while that lane is down, and
+  lands in the app's Chats list; four explicit states, no spinner
+  (`docs/emergency-letter-record-2026-09-20.md`).
 - **Codecs**: purpose-built ultralight paths per medium — a dictionary-trained
   text codec, CBOR + Brotli for pages, AVIF for images, Codec2 for speech, and
   raw AV1 with a 12-byte header for video notes (no container: an MP4 header
@@ -112,7 +117,9 @@ server/                 signalling server and the datagram forwarder (AGPL-3.0)
 tools/phase5/           corpus, byte-budget gates, results table
 tools/t2/               link-shaping rig and the transport matrix
 tools/dossier/          evidence collection and reviewer reproduction scripts
-docs/                   architecture, threat model, engineering handbooks
+docs/                   architecture, threat model, engineering handbooks,
+                        dated session records (e.g. the emergency letter,
+                        docs/emergency-letter-record-2026-09-20.md)
 ```
 
 ## Running it

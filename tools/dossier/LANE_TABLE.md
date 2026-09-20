@@ -223,9 +223,12 @@ icmp_rtt=81.002 icmp_loss=0.0% scope=udp+icmp on bridge100, relay TCP unshaped
 (That row is line 419 of the file; the `note` column is one field on one line
 there — it is wrapped here only to fit the page.)
 
-**Which features it contains, and how many rows.** 426 data rows plus the header.
-Six application features, 70 rows each, plus six rows of a later store-and-forward
-gate:
+**Which features it contains, and how many rows.** 509 data rows plus the header
+as of 2026-09-20 (`wc -l`: 510; per-feature counts from `tail -n +2 … | cut -f1 | sort | uniq -c`). Six application features, 78 rows each, plus
+seven rows of the store-and-forward gate (`blackout_gate` 4, `blackout_message` 3)
+and 34 rows of `dns_valve_chat`, the emergency letter through the DNS TXT-query
+lane (`docs/emergency-letter-record-2026-09-20.md`). When this paragraph was
+first written the file had 426 data rows, 70 per feature:
 
 ```
 $ awk -F'\t' 'NR>1 {print $1}' tools/dossier/app_journey_results.tsv | sort | uniq -c | sort -rn

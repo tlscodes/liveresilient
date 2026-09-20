@@ -311,6 +311,10 @@ run 3        2026-09-13T22:05:13Z — dns_valve_chat PASS (row time 166.3 s from
              [resilient.dns-valve]". Evidence manifest: 139 rows, 0 mismatched.
 ```
 
+(The manifest still has 139 rows; its `app_journey_results.tsv` row was
+refreshed on 2026-09-20 after that file gained the letter rows — see
+`emergency-letter-record-2026-09-20.md`.)
+
 Gates in the same pass: connection_orchestrator 440 tests, journey peer 15,
 `test_journey_run_whitelist.py` 61 checks, `test_net_shape_whitelist.py`,
 analyzer clean on every touched file.
@@ -330,3 +334,10 @@ one is actually provisioned) is one build flag, read in
 `DNS_VALVE_DOMAIN` process env var, then to the local test zone) — no code
 change needed. This is the app-side switch only; it does not by itself stand up
 a public responder or an NS delegation, which is separate infrastructure work.
+
+Update 2026-09-20: the flag no longer only feeds the call's fabric. The
+reference app now has its own Send window over the same lane set (the
+*emergency letter*: text, ~30 s voice, thumbnail; four explicit states; a
+durable queue while the lane is down; the letter shown in Chats). What was
+built, how it was verified, and what it changes in the threat model (T28) is
+in `emergency-letter-record-2026-09-20.md`.

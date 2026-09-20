@@ -130,6 +130,10 @@ git grep for build-machine paths in tracked source   no hits
 
 ## Part 6 — the new lane arrived with no suite, and now has three
 
+(Follow-up: the lane's rig history is in `txt_query_lane_security_review_2026-09-12.md`;
+the emergency letter built on it in the reference app is in
+`emergency-letter-record-2026-09-20.md`.)
+
 `packages/adaptive_transport/lib/src/resilient/txt_query_{wire,transport,lane}.dart` — 1218
 lines moving the valve out of a helper process on loopback and into the app — were exported from
 the package with no suite of their own beyond the 29 and 21 cases that came with the source

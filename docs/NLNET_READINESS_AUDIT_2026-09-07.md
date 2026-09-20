@@ -118,7 +118,9 @@ profiles with real decoded media, 42 rows, 0 FAIL (`3a5d6b1`); three further
 constant-calibrated-on-one-network defects were found and fixed with a lesson each; the
 retransmit-timer fix moved carried utilization from 15-43 % to 86-88 % and duplicate bytes from
 81 % to 2.1 %; the TXT/DNS query lane now runs inside the app with its own suite (`6e8c95c`); and
-a signed store-and-forward queue crosses a multi-minute total cut.
+a signed store-and-forward queue crosses a multi-minute total cut. Since then
+(2026-09-20) the reference app carries an *emergency letter* over that lane with
+a durable local queue behind it (`docs/emergency-letter-record-2026-09-20.md`).
 
 That last one contradicts the framing: `NLNET_SUBMISSION_READY.md:35` says "throttled rather
 than cut", and `:198` disclaims store-and-forward — while the newest measured capability is
