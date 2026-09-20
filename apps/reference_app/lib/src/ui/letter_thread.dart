@@ -1,32 +1,102 @@
 // The letters as a thread: every delivered record, oldest first — the
 // text, a voice label, or the thumbnail itself, from the ledger's own
-// bytes. A plain list on purpose: ChatScreen speaks the messenger's
-// entries and a letter is not one of them.
+// bytes — then every letter still parked in the queue, and above them
+// the relay's and the door's state from the courier's own fabric. A plain
+// list on purpose: ChatScreen speaks the messenger's entries and a letter
+// is not one of them.
+import 'package:connection_orchestrator/connection_orchestrator.dart'
+    show ConnectivitySnapshot, ResilientLaneIds;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../letter_ledger.dart';
+import '../letter_queue.dart';
 
-/// One page over the ledger, pushed from the Chats row.
+/// One page over the ledger, the queue and the fabric's last snapshot,
+/// pushed from the Chats row. [pending] and [lanes] are optional so a host
+/// with only a ledger still gets the records.
 class LetterThreadPage extends StatelessWidget {
-  const LetterThreadPage({super.key, required this.ledger});
+  const LetterThreadPage({
+    super.key,
+    required this.ledger,
+    this.pending,
+    this.lanes,
+  });
 
   final LetterLedger ledger;
+  final ValueListenable<List<QueuedLetter>>? pending;
+  final ValueListenable<ConnectivitySnapshot?>? lanes;
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text(letterConversationTitle)),
     body: ValueListenableBuilder<List<LetterRecord>>(
       valueListenable: ledger.records,
-      builder: (context, records, _) => LetterThread(records: records),
+      builder: (context, records, _) =>
+          ValueListenableBuilder<List<QueuedLetter>>(
+            valueListenable:
+                pending ?? const _Always<List<QueuedLetter>>(<QueuedLetter>[]),
+            builder: (context, parked, _) =>
+                ValueListenableBuilder<ConnectivitySnapshot?>(
+                  valueListenable:
+                      lanes ?? const _Always<ConnectivitySnapshot?>(null),
+                  builder: (context, snapshot, _) => LetterThread(
+                    records: records,
+                    pending: parked,
+                    lanes: snapshot,
+                  ),
+                ),
+          ),
     ),
   );
 }
 
-/// The records as bubbles, ours and on the end side, newest at the bottom.
+/// A constant listenable, for the optional inputs.
+class _Always<T> implements ValueListenable<T> {
+  const _Always(this.value);
+
+  @override
+  final T value;
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
+}
+
+/// One line per lane, as the fabric last saw it: `relay −1.05 down`,
+/// `door 0.60 up`. Nothing here probes; a null snapshot says so.
+String laneStateLine(ConnectivitySnapshot? s) {
+  if (s == null) return 'Lanes not probed yet';
+  String name(String id) => switch (id) {
+    ResilientLaneIds.txtQuery => 'door',
+    'resilient.wss' => 'relay',
+    'resilient.https' => 'long-poll',
+    _ => id.replaceFirst('resilient.', ''),
+  };
+  final parts = [
+    for (final lane in s.lanes)
+      '${name(lane.id)} ${lane.score.toStringAsFixed(2)} '
+          '${lane.eligible && lane.score > 0 ? 'up' : 'down'}',
+  ];
+  final best = s.bestLaneId == null ? 'none' : name(s.bestLaneId!);
+  return '${parts.join(' · ')} · mode ${s.mode.name} · best $best';
+}
+
+/// The records as bubbles, ours and on the end side, newest at the bottom,
+/// then the parked ones, greyed, each saying it waits for the door.
 class LetterThread extends StatelessWidget {
-  const LetterThread({super.key, required this.records});
+  const LetterThread({
+    super.key,
+    required this.records,
+    this.pending = const [],
+    this.lanes,
+  });
 
   final List<LetterRecord> records;
+  final List<QueuedLetter> pending;
+  final ConnectivitySnapshot? lanes;
 
   @override
   Widget build(BuildContext context) {
@@ -34,51 +104,89 @@ class LetterThread extends StatelessWidget {
     return ListView.builder(
       key: const Key('letter-thread'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: records.length,
+      itemCount: 1 + records.length + pending.length,
       itemBuilder: (context, index) {
-        final record = records[index];
-        return Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: Container(
-            key: ValueKey('letter-bubble-$index'),
-            margin: const EdgeInsetsDirectional.only(top: 6, start: 48),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(14),
+        if (index == 0) {
+          return Padding(
+            key: const Key('letter-thread-lanes'),
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              laneStateLine(lanes),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelSmall,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (record.kind == 'photo')
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(record.bytes, fit: BoxFit.contain),
-                  ),
-                if (record.kind == 'voice')
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.mic, size: 18),
-                      const SizedBox(width: 6),
-                      Text(letterPreview(record)),
-                    ],
-                  ),
-                if (record.kind != 'photo' && record.kind != 'voice')
-                  Text(letterPreview(record)),
-                const SizedBox(height: 4),
-                Text(
-                  record.sessionId == null
-                      ? 'via ${(record.laneId ?? 'a lane').replaceFirst('resilient.', '')}'
-                      : 'through the door · session ${record.sessionId}',
-                  style: theme.textTheme.labelSmall,
-                ),
-              ],
-            ),
-          ),
+          );
+        }
+        final i = index - 1;
+        if (i < records.length) {
+          final record = records[i];
+          return _bubble(
+            theme,
+            key: ValueKey('letter-bubble-$i'),
+            color: theme.colorScheme.primaryContainer,
+            kind: record.kind,
+            bytes: record.bytes,
+            preview: letterPreview(record),
+            foot: record.sessionId == null
+                ? 'via ${(record.laneId ?? 'a lane').replaceFirst('resilient.', '')}'
+                : 'through the door · session ${record.sessionId}',
+          );
+        }
+        final parked = pending[i - records.length];
+        return _bubble(
+          theme,
+          key: ValueKey('letter-queued-${i - records.length}'),
+          color: theme.colorScheme.surfaceContainerHighest,
+          kind: parked.kind,
+          bytes: parked.bytes,
+          preview: letterPreviewOf(parked.kind, parked.bytes, parked.duration),
+          foot: 'queued, door down · goes once the door answers',
         );
       },
     );
   }
+
+  Widget _bubble(
+    ThemeData theme, {
+    required Key key,
+    required Color color,
+    required String kind,
+    required Uint8List bytes,
+    required String preview,
+    required String foot,
+  }) => Align(
+    alignment: AlignmentDirectional.centerEnd,
+    child: Container(
+      key: key,
+      margin: const EdgeInsetsDirectional.only(top: 6, start: 48),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (kind == 'photo')
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(bytes, fit: BoxFit.contain),
+            ),
+          if (kind == 'voice')
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.mic, size: 18),
+                const SizedBox(width: 6),
+                Text(preview),
+              ],
+            ),
+          if (kind != 'photo' && kind != 'voice') Text(preview),
+          const SizedBox(height: 4),
+          Text(foot, style: theme.textTheme.labelSmall),
+        ],
+      ),
+    ),
+  );
 }

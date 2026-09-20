@@ -190,6 +190,19 @@ class LetterCourier {
   /// letter; the sheet disables Send meanwhile.
   final ValueNotifier<bool> busy = ValueNotifier<bool>(false);
 
+  /// The fabric's last snapshot — relay, long-poll and door scores, the
+  /// mode, the best lane — taken after every refresh the courier already
+  /// performs (probe, select, carry, watch). Never a probe of its own:
+  /// the thread reads this, it does not touch the network.
+  final ValueNotifier<ConnectivitySnapshot?> laneSnapshot =
+      ValueNotifier<ConnectivitySnapshot?>(null);
+
+  ConnectivitySnapshot _snap(LetterLanes source) {
+    final s = source.snapshot;
+    if (!_disposed) laneSnapshot.value = s;
+    return s;
+  }
+
   LetterLanes? _lanes;
   Future<LetterLanes?>? _opening;
   Timer? _watch;
@@ -310,7 +323,7 @@ class LetterCourier {
       return;
     }
     await lanes.refresh();
-    final s = lanes.snapshot;
+    final s = _snap(lanes);
     note('probe mode=${s.mode.name} best=${s.bestLaneId} ${_scores(s)}');
     if (!_liveCallReachable(s)) {
       _set(
@@ -378,7 +391,7 @@ class LetterCourier {
     while (true) {
       await lanes.refresh();
       refreshes++;
-      s = lanes.snapshot;
+      s = _snap(lanes);
       if (_bestIsUsable(s) || !_now().isBefore(selectUntil)) break;
       await _wait(budget.refreshEvery);
     }
@@ -427,7 +440,7 @@ class LetterCourier {
     } on TimeoutException {
       _set(
         LetterState.notDelivered,
-        'gave up after ${budget.carry.inSeconds}s · ${_scores(lanes.snapshot)}',
+        'gave up after ${budget.carry.inSeconds}s · ${_scores(_snap(lanes))}',
       );
       unawaited(_settleLate(inner, lanes, letter, best, fromQueue: fromQueue));
       return LetterState.notDelivered;
@@ -589,7 +602,7 @@ class LetterCourier {
         return;
       }
       if (_disposed) return;
-      final s = lanes.snapshot;
+      final s = _snap(lanes);
       if (!_bestIsUsable(s)) return;
       final head = queue.take();
       if (head == null) return;
@@ -614,6 +627,7 @@ class LetterCourier {
     status.dispose();
     notes.dispose();
     busy.dispose();
+    laneSnapshot.dispose();
     ledger.dispose();
     queue.dispose();
   }

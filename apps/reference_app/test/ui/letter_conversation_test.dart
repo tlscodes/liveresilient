@@ -205,7 +205,78 @@ void main() {
     ledger.add(textLetter('third'));
     await tester.pumpAndSettle();
     expect(find.text('third'), findsOneWidget);
+    // No queue and no snapshot handed in: the lane line says so, no probe.
+    expect(find.text('Lanes not probed yet'), findsOneWidget);
   });
+
+  testWidgets(
+    'the thread shows a parked letter after the records, and the lanes as the fabric last saw them',
+    (tester) async {
+      final ledger = LetterLedger();
+      addTearDown(ledger.dispose);
+      ledger.add(textLetter('arrived earlier'));
+      final pending = ValueNotifier<List<QueuedLetter>>([
+        parkedLetter('still waiting'),
+      ]);
+      addTearDown(pending.dispose);
+      final lanes = ValueNotifier<ConnectivitySnapshot?>(null);
+      addTearDown(lanes.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppThemeData(Brightness.light),
+          home: LetterThreadPage(
+            ledger: ledger,
+            pending: pending,
+            lanes: lanes,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('arrived earlier'), findsOneWidget);
+      expect(find.text('still waiting'), findsOneWidget);
+      expect(find.byKey(const ValueKey('letter-bubble-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('letter-queued-0')), findsOneWidget);
+      expect(
+        find.text('queued, door down · goes once the door answers'),
+        findsOneWidget,
+      );
+      expect(find.text('Lanes not probed yet'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      // The courier's own refresh publishes a snapshot: relay down, door up.
+      lanes.value = ConnectivitySnapshot(
+        mode: FabricMode.degraded,
+        lanes: const [
+          LaneStatus(id: 'resilient.wss', eligible: true, score: -1.05),
+          LaneStatus(id: 'resilient.https', eligible: true, score: -1.10),
+          LaneStatus(
+            id: ResilientLaneIds.txtQuery,
+            eligible: true,
+            score: 0.60,
+          ),
+        ],
+        bestLaneId: ResilientLaneIds.txtQuery,
+        pendingBundles: 0,
+        atMs: fixedNow.millisecondsSinceEpoch,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'relay -1.05 down · long-poll -1.10 down · door 0.60 up · '
+          'mode degraded · best door',
+        ),
+        findsOneWidget,
+      );
+
+      // The door drains it: the queue empties, the record lands, one bubble.
+      pending.value = const [];
+      ledger.add(textLetter('still waiting'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('letter-queued-0')), findsNothing);
+      expect(find.byKey(const ValueKey('letter-bubble-1')), findsOneWidget);
+      expect(find.text('still waiting'), findsOneWidget);
+    },
+  );
 
   test(
     'the courier writes exactly one record, the same bytes, on sentLive',

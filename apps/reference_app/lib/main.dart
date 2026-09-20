@@ -572,7 +572,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (summary.id == letterConversationId) {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => LetterThreadPage(ledger: _letterCourier.ledger),
+          builder: (_) => LetterThreadPage(
+            ledger: _letterCourier.ledger,
+            pending: _letterCourier.queue.pending,
+            lanes: _letterCourier.laneSnapshot,
+          ),
         ),
       );
       return;
