@@ -97,10 +97,18 @@ Future<void> settle(Duration total) async {
   }
 }
 
+/// The text under [key]: the keyed widget itself when it is a Text, else
+/// the first Text inside it (the thread's lane line keys its Padding).
 String textOf(LiveWidgetController c, Key key) {
-  final f = find.byKey(key);
-  if (f.evaluate().isEmpty) return '<absent>';
-  return c.widget<Text>(f).data ?? '<no data>';
+  final keyed = find.byKey(key);
+  if (keyed.evaluate().isEmpty) return '<absent>';
+  final texts = find.descendant(
+    of: keyed,
+    matching: find.byType(Text),
+    matchRoot: true,
+  );
+  if (texts.evaluate().isEmpty) return '<no text>';
+  return c.widget<Text>(texts.first).data ?? '<no data>';
 }
 
 Future<void> main() async {
@@ -115,7 +123,13 @@ Future<void> main() async {
       child: app.MyApp(intelligence: intelligence),
     ),
   );
-  unawaited(_drive());
+  unawaited(
+    _drive().catchError((Object error, StackTrace stack) async {
+      await report('FAIL: $error', {
+        'stack': '$stack'.split('\n').take(6).join(' | '),
+      });
+    }),
+  );
 }
 
 Future<void> _drive() async {
