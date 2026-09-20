@@ -270,6 +270,30 @@ void main() {
     }
   });
 
+  group('the letter banner on the phone screen', () {
+    test('every state names itself, and none reads as a spinner', () {
+      final labels = {
+        for (final state in LetterState.values) state: letterStateLabel(state),
+      };
+      expect(labels.values.toSet().length, LetterState.values.length);
+      expect(labels[LetterState.liveCallUnavailable], contains('unavailable'));
+      expect(labels[LetterState.queued], contains('queued'));
+      expect(labels[LetterState.arrived], contains('arrived'));
+      expect(labels[LetterState.notDelivered], contains('not delivered'));
+      for (final label in labels.values) {
+        expect(label, isNot(contains('…')));
+      }
+    });
+
+    test('the detail rides behind the label, and an empty one is dropped', () {
+      expect(
+        '${const LetterStatus(LetterState.queued, '96 B · 1 chunks')}',
+        'Letter queued at the door · 96 B · 1 chunks',
+      );
+      expect('${const LetterStatus(LetterState.arrived)}', 'Letter arrived');
+    });
+  });
+
   group('the door line on the phone screen', () {
     test('the chunk count follows the wire split, never a copied constant', () {
       expect(txtChunkCount(0), 1);
@@ -646,7 +670,7 @@ void main() {
     test('the button names every state it can be in', () {
       expect(
         voiceRecordButtonLabel(VoiceRecordState.idle, Duration.zero),
-        'Record (≤30s)',
+        'Record voice (30 s cap)',
       );
       expect(
         voiceRecordButtonLabel(VoiceRecordState.starting, Duration.zero),
@@ -974,7 +998,7 @@ void main() {
     test('the button names every state it can be in', () {
       expect(
         photoPickButtonLabel(PhotoPickState.idle, null),
-        'Photo (≤3.5 KB)',
+        'Thumbnail (≤3.5 KB)',
       );
       expect(
         photoPickButtonLabel(PhotoPickState.picking, null),

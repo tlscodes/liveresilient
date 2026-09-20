@@ -41,7 +41,11 @@ import 'package:adaptive_transport/adaptive_transport.dart'
         WebSocketRelayLane;
 import 'package:call_core/call_core.dart';
 import 'package:connection_orchestrator/connection_orchestrator.dart'
-    show ConnectionFabric, ResilientFallbackLanes, ResilientLaneIds;
+    show
+        ConnectionFabric,
+        DeliveryOutcome,
+        ResilientFallbackLanes,
+        ResilientLaneIds;
 import 'package:cryptography/cryptography.dart';
 import 'package:device_link/device_link.dart'
     show BundleAdmission, DtnBundle, DtnBundleQueue, LinkMessagePriority;
@@ -409,6 +413,55 @@ String doorLine({
   return 'door open · $pace · $chunks · reply $ago';
 }
 
+/// Where the letter is, as the person holding the phone must read it.
+///
+/// One value, one banner, so the screen never sits on a heartbeat with no
+/// verdict: the live call is unavailable and the door is the way; the
+/// letter is queued at the door; the letter arrived; or it did not, and
+/// why. The door line keeps ticking underneath — this is the verdict.
+enum LetterState {
+  /// The WAN probe failed: no live call from here, the letter goes through
+  /// the door.
+  liveCallUnavailable,
+
+  /// Handed over (typed, recorded or picked), waiting at the door.
+  queued,
+
+  /// The door answered every chunk: the letter is on the Mac.
+  arrived,
+
+  /// The carry ended without arrival — refused, parked, timed out or
+  /// failed. Never a spinner: the detail names the reason.
+  notDelivered,
+}
+
+/// What the letter banner says for each state, before its detail.
+String letterStateLabel(LetterState state) {
+  switch (state) {
+    case LetterState.liveCallUnavailable:
+      return 'Live call unavailable — this letter goes through the door';
+    case LetterState.queued:
+      return 'Letter queued at the door';
+    case LetterState.arrived:
+      return 'Letter arrived';
+    case LetterState.notDelivered:
+      return 'Letter not delivered';
+  }
+}
+
+/// The banner's whole truth: a state and one line of detail under it.
+class LetterStatus {
+  const LetterStatus(this.state, [this.detail = '']);
+
+  final LetterState state;
+  final String detail;
+
+  @override
+  String toString() => detail.isEmpty
+      ? letterStateLabel(state)
+      : '${letterStateLabel(state)} · $detail';
+}
+
 /// The Record button's whole truth. One value, rendered by one button, so
 /// idle and recording can never look alike.
 enum VoiceRecordState {
@@ -473,7 +526,7 @@ String voiceClock(Duration value) {
 String voiceRecordButtonLabel(VoiceRecordState state, Duration elapsed) {
   switch (state) {
     case VoiceRecordState.idle:
-      return 'Record (≤30s)';
+      return 'Record voice (30 s cap)';
     case VoiceRecordState.starting:
       return 'Opening microphone…';
     case VoiceRecordState.recording:
@@ -532,14 +585,14 @@ String photoRefusalText(PhotoLetterRefusal? refusal, {String? error}) {
 String photoPickButtonLabel(PhotoPickState state, PhotoLetter? letter) {
   switch (state) {
     case PhotoPickState.idle:
-      return 'Photo (≤${photoLetterSize(photoLetterMaxBytes)})';
+      return 'Thumbnail (≤${photoLetterSize(photoLetterMaxBytes)})';
     case PhotoPickState.picking:
       return 'Choosing a photo…';
     case PhotoPickState.shrinking:
       return 'Shrinking to fit…';
     case PhotoPickState.picked:
-      if (letter == null) return 'Photo ready — tap to redo';
-      return 'Photo ${photoLetterSize(letter.wire.length)} · '
+      if (letter == null) return 'Thumbnail ready — tap to redo';
+      return 'Thumbnail ${photoLetterSize(letter.wire.length)} · '
           '${letter.width}×${letter.height} — tap to redo';
   }
 }
@@ -578,6 +631,18 @@ class JourneyPeer {
   /// Empty until a job names a letter; synthetic filler is described, not
   /// printed.
   final ValueNotifier<String> letter = ValueNotifier<String>('');
+
+  /// The letter's verdict for the person holding the phone (see
+  /// [LetterState]); null until a job names a letter and again at the next
+  /// job's start, so a verdict never outlives the letter it judged.
+  final ValueNotifier<LetterStatus?> letterStatus =
+      ValueNotifier<LetterStatus?>(null);
+
+  void _setLetter(LetterState state, [String detail = '']) {
+    final next = LetterStatus(state, detail);
+    letterStatus.value = next;
+    _note('letter state: $next');
+  }
 
   /// What the person typed on the phone screen; carried verbatim when the
   /// job says `chat_source: phone`. Never cleared by a job, so a draft typed
@@ -1047,6 +1112,9 @@ class JourneyPeer {
   }
 
   Future<void> _serve(JourneyJob job) async {
+    // A verdict belongs to the letter it judged: cleared before any job,
+    // the blackout one included, which returns before the reset below.
+    letterStatus.value = null;
     if (job.blackout != null) {
       await _serveBlackout(job, job.blackout!);
       return;
@@ -1327,6 +1395,7 @@ class JourneyPeer {
       await _runDnsValve(job, config);
     } on Object catch (error) {
       _note('dns valve error=$error');
+      _setLetter(LetterState.notDelivered, 'error: $error');
       await _report('lane', <String, Object?>{
         'stage': 'error',
         'error': '$error',
@@ -1399,6 +1468,10 @@ class JourneyPeer {
         letterKind = 'mac';
         letterSubmitted = false;
       }
+      _setLetter(
+        LetterState.queued,
+        '${letterPayload.length} B ($letterKind) · probing the door',
+      );
       final deadline = DateTime.now().add(config.totalBudget);
       final selected = await _awaitValveSelection(job, fabric, valve, config);
       await _carryOverValve(
@@ -1434,7 +1507,7 @@ class JourneyPeer {
   /// Without this control, a run where the valve never ranked first because
   /// the relay was alive is indistinguishable from one where the valve was
   /// simply down.
-  Future<void> _reportWanProbe(JourneyJob job, String? host) async {
+  Future<bool> _reportWanProbe(JourneyJob job, String? host) async {
     var reachable = false;
     int? status;
     String? error;
@@ -1463,6 +1536,17 @@ class JourneyPeer {
       'status': ?status,
       'error': ?error,
     }, run: job.run);
+    // `status` above is the probe's HTTP status, not the screen notifier:
+    // the banner is the only UI written from here.
+    if (!reachable) {
+      _setLetter(
+        LetterState.liveCallUnavailable,
+        host == null || host.isEmpty
+            ? 'no relay host in this build'
+            : 'relay $host unreachable',
+      );
+    }
+    return reachable;
   }
 
   /// Refreshes the fabric until the valve ranks first or the select budget
@@ -1626,6 +1710,11 @@ class JourneyPeer {
     // catch-all writes, so the row builder needs no new stage.
     if (payload.length > TxtQueryLane.maxPayloadBytes) {
       _note('letter refused: ${payload.length} B over the lane limit');
+      _setLetter(
+        LetterState.notDelivered,
+        'too long — ${payload.length} B, the door takes '
+        '${TxtQueryLane.maxPayloadBytes}',
+      );
       status.value =
           'job ${job.run}: letter too long — ${payload.length} B, '
           'the door takes ${TxtQueryLane.maxPayloadBytes}';
@@ -1670,6 +1759,10 @@ class JourneyPeer {
 
     letter.value = describeLetter(payload, sha);
     _note('letter handed to the valve: ${payload.length} B, $total chunks');
+    _setLetter(
+      LetterState.queued,
+      '${payload.length} B · $total chunks · at the door',
+    );
     status.value = 'job ${job.run}: ${beat()}';
     final heartbeat = Timer.periodic(const Duration(seconds: 1), (_) {
       try {
@@ -1691,6 +1784,30 @@ class JourneyPeer {
         'session=${valve.lastSessionId} sha256=$sha',
       );
       status.value = 'job ${job.run}: letter ${outcome.name} · ${beat()}';
+      // deliver() fans out, so a live carry may have gone by another lane
+      // and left the valve without a session id; the fabric is disposed
+      // right after this carry, so a parked bundle is never drained in this
+      // job and must not read as queued.
+      switch (outcome) {
+        case DeliveryOutcome.sentLive:
+          final session = valve.lastSessionId;
+          _setLetter(
+            LetterState.arrived,
+            session == null
+                ? '${payload.length} B · carried by another lane'
+                : '${payload.length} B · session $session',
+          );
+        case DeliveryOutcome.queuedForLater:
+          // Policy: live lane if one ranks, else the door, else the queue.
+          // Parked is the third state, named as such — not a failure and
+          // not a spinner.
+          _setLetter(
+            LetterState.queued,
+            '${payload.length} B · door down · parked in the queue',
+          );
+        case DeliveryOutcome.rejected:
+          _setLetter(LetterState.notDelivered, 'refused by the queue');
+      }
       await _report('lane_chat', <String, Object?>{
         'outcome': outcome.name,
         'best_lane_at_send': bestAtSend,
@@ -1715,6 +1832,10 @@ class JourneyPeer {
       }, run: job.run);
     } on TimeoutException {
       _note('dns valve gave_up after ${budget.inSeconds}s');
+      _setLetter(
+        LetterState.notDelivered,
+        'gave up after ${budget.inSeconds}s · ${beat()}',
+      );
       // timeout() abandons the future, it does not cancel the send: the
       // lane keeps working until dispose, and a frozen "alive" line would
       // claim otherwise.
@@ -2772,6 +2893,12 @@ class JourneyPeerApp extends StatelessWidget {
                       ),
               ),
               const SizedBox(height: 12),
+              ValueListenableBuilder<LetterStatus?>(
+                valueListenable: peer.letterStatus,
+                builder: (context, value, _) => value == null
+                    ? const SizedBox.shrink()
+                    : _LetterStatusBanner(status: value),
+              ),
               // Typed before the run; carried when the job says the phone
               // writes the letter. TextField owns its controller, so a plain
               // notifier is enough and nothing needs disposing.
@@ -2863,6 +2990,70 @@ class JourneyPeerApp extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The letter's verdict, large and coloured, above the field it judges.
+///
+/// Four states, four looks, so "still waiting" and "it arrived" can never
+/// be told apart by reading a counter: amber while queued, green when it
+/// arrived, red when it did not, blue-grey when the live call is out and
+/// the door is the way. Keyed so a driver can read the state, not the
+/// colour.
+class _LetterStatusBanner extends StatelessWidget {
+  const _LetterStatusBanner({required this.status});
+
+  final LetterStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (Color tone, IconData icon) = switch (status.state) {
+      LetterState.liveCallUnavailable => (
+        const Color(0xFF37474F),
+        Icons.phone_disabled,
+      ),
+      LetterState.queued => (const Color(0xFFE65100), Icons.hourglass_top),
+      LetterState.arrived => (const Color(0xFF1B5E20), Icons.check_circle),
+      LetterState.notDelivered => (const Color(0xFFB71C1C), Icons.error),
+    };
+    return Container(
+      key: Key('journey-peer-letter-state-${status.state.name}'),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: tone,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.white, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  letterStateLabel(status.state),
+                  key: const Key('journey-peer-letter-state-label'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (status.detail.isNotEmpty)
+                  Text(
+                    status.detail,
+                    key: const Key('journey-peer-letter-state-detail'),
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3107,7 +3298,8 @@ class _PhotoPreview extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'This picture goes when you tap Send.\n'
+                  'A thumbnail goes when you tap Send, not the full '
+                  'picture.\n'
                   '${photoLetterSize(letter.wire.length)} · '
                   '${letter.width}×${letter.height} · quality '
                   '${letter.quality}, from '
