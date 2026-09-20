@@ -77,8 +77,10 @@ String laneStateLine(ConnectivitySnapshot? s) {
   };
   final parts = [
     for (final lane in s.lanes)
+      // Dead = the fabric's deadLaneScore (−1.0 − penalty); a live lane
+      // with fresh health sits just under 0, e.g. the door at −0.14.
       '${name(lane.id)} ${lane.score.toStringAsFixed(2)} '
-          '${lane.eligible && lane.score > 0 ? 'up' : 'down'}',
+          '${lane.eligible && lane.score > -1.0 ? 'up' : 'down'}',
   ];
   final best = s.bestLaneId == null ? 'none' : name(s.bestLaneId!);
   return '${parts.join(' · ')} · mode ${s.mode.name} · best $best';

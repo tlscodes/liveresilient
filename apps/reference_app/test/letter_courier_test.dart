@@ -134,6 +134,28 @@ void main() {
 
   group('the durable queue behind a down door (scripted lanes, no network)', () {
     test(
+      'a door that answers but is fresh (−0.14, above the dead line) carries the letter — measured on the phone 2026-09-20',
+      () async {
+        final rig = Rig();
+        rig.lanes.doorUp = true;
+        rig.lanes.doorFresh = true;
+        final state = await rig.courier.send(
+          Uint8List.fromList('through a fresh door'.codeUnits),
+          kind: 'typed',
+        );
+        expect(
+          state,
+          LetterState.arrived,
+          reason: rig.courier.notes.value.join('\n'),
+        );
+        expect(rig.lanes.delivered, hasLength(1));
+        expect(rig.courier.queue.isEmpty, isTrue);
+        expect(rig.courier.ledger.records.value, hasLength(1));
+        await rig.courier.dispose();
+      },
+    );
+
+    test(
       'every lane negative and the door down: parked in the app queue, saved',
       () async {
         final rig = Rig();
@@ -446,6 +468,10 @@ void main() {
 class ScriptedLanes implements LetterLanes {
   bool liveUp = false;
   bool doorUp = false;
+
+  /// The door answers but has one reply's worth of health: the fabric
+  /// scores it 0.01 − 0.15 = −0.14, still above every dead lane.
+  bool doorFresh = false;
   DeliveryOutcome outcome = DeliveryOutcome.sentLive;
   final List<(String, Uint8List)> delivered = [];
   final List<String> reclaimed = [];
@@ -481,7 +507,7 @@ class ScriptedLanes implements LetterLanes {
     final door = LaneStatus(
       id: ResilientLaneIds.txtQuery,
       eligible: true,
-      score: doorUp ? 0.6 : -1.15,
+      score: doorUp ? (doorFresh ? -0.14 : 0.6) : -1.15,
     );
     // Best first, the way the fabric ranks: a live lane over the door,
     // the door over dead lanes, and dead lanes in cost order.

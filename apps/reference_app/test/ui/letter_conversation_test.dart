@@ -267,6 +267,27 @@ void main() {
         ),
         findsOneWidget,
       );
+      // A freshly answering door scores −0.14 (health 0.01 − penalty 0.15)
+      // and is up; only −1.0 and below is dead (the fabric's deadLaneScore).
+      expect(
+        laneStateLine(
+          ConnectivitySnapshot(
+            mode: FabricMode.degraded,
+            lanes: const [
+              LaneStatus(
+                id: ResilientLaneIds.txtQuery,
+                eligible: true,
+                score: -0.14,
+              ),
+              LaneStatus(id: 'resilient.wss', eligible: true, score: -1.05),
+            ],
+            bestLaneId: ResilientLaneIds.txtQuery,
+            pendingBundles: 0,
+            atMs: 0,
+          ),
+        ),
+        'door -0.14 up · relay -1.05 down · mode degraded · best door',
+      );
 
       // The door drains it: the queue empties, the record lands, one bubble.
       pending.value = const [];

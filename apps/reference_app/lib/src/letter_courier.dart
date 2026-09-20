@@ -21,6 +21,7 @@ import 'package:connection_orchestrator/connection_orchestrator.dart'
         ConnectionFabric,
         ConnectivitySnapshot,
         DeliveryOutcome,
+        LaneStatus,
         FabricMode,
         ResilientFallbackLanes,
         ResilientLaneEndpoints,
@@ -292,12 +293,25 @@ class LetterCourier {
   static String _short(String? laneId) =>
       (laneId ?? 'a lane').replaceFirst('resilient.', '');
 
-  /// A lane that works right now: eligible, ranked first, positive score.
+  /// The fabric's own line between a lane with a path and one without:
+  /// `deadLaneScore` is −1.0 minus the cost penalty, so every dead lane
+  /// scores at or below −1.0 and every lane with health > 0 scores above
+  /// it — a freshly answering door sits at 0.01 − 0.15 = −0.14. "Score > 0"
+  /// was the wrong test: measured on the phone 2026-09-20 (real app, the
+  /// responder answering every 12 s probe), the letter was parked as "door
+  /// down" for 200 s while the door was up. Same trap the fabric records
+  /// from 2026-09-13; a third ranking must not disagree with the two.
+  static const double _deadAtOrBelow = -1.0;
+
+  static bool _hasPath(LaneStatus lane) =>
+      lane.eligible && lane.score > _deadAtOrBelow;
+
+  /// A lane that works right now: eligible, ranked first, has a path.
   static bool _bestIsUsable(ConnectivitySnapshot s) {
     final best = s.bestLaneId;
     if (best == null) return false;
     for (final lane in s.lanes) {
-      if (lane.id == best) return lane.eligible && lane.score > 0;
+      if (lane.id == best) return _hasPath(lane);
     }
     return false;
   }
@@ -308,7 +322,7 @@ class LetterCourier {
     }
     for (final lane in s.lanes) {
       if (lane.id == ResilientLaneIds.txtQuery) continue;
-      if (lane.eligible && lane.score > 0) return true;
+      if (_hasPath(lane)) return true;
     }
     return false;
   }
