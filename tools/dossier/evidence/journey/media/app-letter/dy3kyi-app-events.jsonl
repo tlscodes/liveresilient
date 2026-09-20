@@ -1,0 +1,14 @@
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:12.040660Z","line":"app booted (real MyApp), run=app-letter"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:14.079257Z","line":"Chats tab open, Letter action present"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:18.142457Z","line":"sheet open · banner after probe: Live call unavailable — this letter goes through the door · dns-valve=-0.14 wss=-1.05 https=-1.10"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:18.168468Z","line":"Send tapped · 107 B","text":"from the app on the phone, 2026-09-20T22:19:18.158623Z: Letter tapped in Chats, this went out the DNS door."}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:19.194076Z","line":"verdict=arrived · Letter arrived · 107 B · through the door · session DY3KYI","verdict":"arrived","label":"Letter arrived","detail":"107 B · through the door · session DY3KYI"}
+{"event":"blob","run":"app-letter","at":"2026-09-20T22:19:19.285027Z","kind":"screenshot","id":"1-sheet-verdict","bytes":126379,"sha256":"ed449083d1ef2b9448b775bc94f7e2031c2d5788a67c677031b1602a4aceae3e"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:19.372489Z","line":"screenshot 1-sheet-verdict 126379 B http=200"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:21.397629Z","line":"Chats row: present · shows the letter text: true"}
+{"event":"blob","run":"app-letter","at":"2026-09-20T22:19:21.412892Z","kind":"screenshot","id":"2-chats-row","bytes":106370,"sha256":"99b5fb02f2367564f87e34a6998b5f15e48f1e041a77c646d39ba45011f315d5"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:21.500543Z","line":"screenshot 2-chats-row 106370 B http=200"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:23.523986Z","line":"thread: bubble present · shows the letter text: true · lanes: door -0.13 up · relay -1.05 down · long-poll -1.10 down · mode degraded · best door"}
+{"event":"blob","run":"app-letter","at":"2026-09-20T22:19:23.527217Z","kind":"screenshot","id":"3-thread","bytes":55954,"sha256":"221a37034e0003b746cf919d11e6445f660aee4a56d8ad166329732e436e5164"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:23.614870Z","line":"screenshot 3-thread 55954 B http=200"}
+{"event":"app_letter","run":"app-letter","at":"2026-09-20T22:19:23.617011Z","line":"DONE"}

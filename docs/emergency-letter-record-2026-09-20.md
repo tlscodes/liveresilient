@@ -123,16 +123,70 @@ It is bounded (`LetterQueue.maxLetters`) and cleared as letters are carried.
 At-rest encryption of that file is **not built**; the threat-model row is
 updated in the same commit as this document to say so.
 
+## The real app on the phone, 2026-09-21 — Chats → Letter → Send → row → thread
+
+Not the rig peer: `lib/main.dart`'s `MyApp`, built in profile mode from
+`integration_test/letter_autopilot_app.dart` (`9cab181`, `ffaba95`), which
+boots the app and taps through it with a live widget controller the way a
+person would, with no debugger attached (devicectl install + launch, no
+Xcode tunnel). Mac side exactly as the rig: responder on `192.168.2.1:5300`,
+the dnsvalve whitelist on bridge100. Each step is a hub event
+(`/report`), each screen a PNG of the live widget tree (`/blob`). Evidence
+in `tools/dossier/evidence/journey/media/app-letter/`:
+
+| file | what |
+|------|------|
+| `dy3kyi-app-events.jsonl` | the 14 app events of the run (boot → DONE 22:19:23Z, `wc -l`) |
+| `dy3kyi-1-sheet-verdict.png` | the sheet: banner **Letter arrived · 107 B · through the door · session DY3KYI**, the courier's raw lines under it |
+| `dy3kyi-2-chats-row.png` | Chats: row *Letter through the door* first, the letter's text, double tick |
+| `dy3kyi-3-thread.png` | the thread: lane line `door -0.13 up · relay -1.05 down · long-poll -1.10 down · mode degraded · best door`, the bubble, *through the door · session DY3KYI* |
+| `dy3kyi.letter` | the 107 B the responder assembled: `from the app on the phone, 2026-09-20T22:19:18.158623Z: Letter tapped in Chats, this went out the DNS door.` — sha256 `d4c7183c690063d7…`, the same digest the responder logged |
+| `seygmc.letter` | the previous run (22:10Z), same flow, whose thread step the autopilot itself failed to read (fixed in `ffaba95`) |
+
+Timeline of the run, from the events: sheet open with the probe's verdict
+*Live call unavailable · dns-valve=-0.14 wss=-1.05 https=-1.10* at
+22:19:18; Send; *arrived* at 22:19:19 — one second, three chunks, one
+session.
+
+### The bug the first on-device run exposed, and its fix (`e71a2d5`)
+
+The first run of the same flow (22:53Z on 2026-09-20) ended *queued · door
+down · parked in the queue* while the responder's log showed it answering
+every 12 s probe (20 `complete session … bytes=0` lines). The courier's
+"usable lane" test was `score > 0`. The fabric scores a live lane as
+health − costRank × 0.05, so a door with one reply's health (0.01) sits at
+−0.14 — and a dead lane at `deadLaneScore` = −1.0 − penalty
+(`packages/connection_orchestrator/lib/src/connection_fabric.dart:58-76`,
+which records the same trap from 2026-09-13). The courier had become a
+third ranking disagreeing with the two the fabric already reconciled.
+Liveness is now "eligible and above −1.0" in the courier and on the
+thread's lane line, pinned by `ScriptedLanes.doorFresh` (−0.14 → carried,
+one deliver, one record) and by the lane-line test. Lesson, the same one
+the repo already holds: one invariant, every ranking.
+
+### Two rig traps met on the way (no code change)
+
+- Installing a build over an app installed from another build chain made
+  iOS refuse the launch ("invalid code signature, inadequate entitlements
+  or its profile has not been explicitly trusted"); a clean
+  `devicectl device uninstall app` + install fixed it every time.
+- The first launch after an install needs the WAN for iOS's developer-app
+  verification; with the whitelist loaded it is refused. Lift the filter
+  (`net_shape.sh teardown`), launch once, reload the filter, relaunch.
+- `flutter drive` (debug attach) asked Xcode 26.3 to download the iOS 26.2
+  platform (10.47 GB); the profile-build + devicectl path needs none of it.
+
 ## What is still not in the reference app
 
-- The Chats screen is not driven on the rig: the two runs above exercise the
-  rig peer, which shares the composer, the banner and the buttons with the app;
-  the app's own screen is proven by widget tests and the analyzer only.
+- The app's Chats screen is driven by the autopilot, not by the rig's
+  `journey_run.sh`: no TSV row is written for it, the evidence is the
+  `app-letter/` directory above.
 - The banner's transitions are printed on the phone's screen and console
   (`JOURNEY_PEER letter state: …`) and are not posted to the hub, so a TSV row
   cannot prove the UI states.
-- No live typed letter was carried on 2026-09-20; the last one is line 480
-  (`7PFRIU`, 2026-09-14).
+- The typed letters of 2026-09-21 (`DY3KYI`, `SEYGMC`) were typed by the
+  autopilot into the app's own composer, not by a thumb on the keyboard;
+  the last thumb-typed one is line 480 (`7PFRIU`, 2026-09-14).
 - The thumbnail bubble has no widget test (no decodable image fixture in the
   test tree).
 - The queue's persistence on desktop lasts until process exit; adding
