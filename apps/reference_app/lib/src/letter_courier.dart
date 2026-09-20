@@ -6,8 +6,12 @@
 //
 // Policy, in this order: a live lane that ranks first carries it; when
 // every call lane scores negative the door (the valve) carries it; when
-// the door is down too the letter is parked in the queue. Every phase is
-// bounded, so the banner always ends on a verdict and never on a spinner.
+// the door is down too the letter is parked in the queue — the app's own
+// durable, bounded one, drained with exactly one deliver the first time
+// the door ranks usable again. Every phase is bounded, so the banner always ends
+// on a verdict and never on a spinner. A letter the fabric reports sent
+// live is written to the ledger as the same bytes, so the Chats list shows
+// it as a message.
 import 'dart:async';
 
 import 'package:adaptive_transport/adaptive_transport.dart'
@@ -26,6 +30,8 @@ import 'package:device_link/device_link.dart'
 import 'package:flutter/foundation.dart';
 
 import 'letter_composer.dart';
+import 'letter_ledger.dart';
+import 'letter_queue.dart';
 
 /// How long each phase may take. All finite: a letter never spins.
 class LetterCourierBudget {
@@ -43,20 +49,79 @@ class LetterCourierBudget {
   /// The carry itself, after which the banner says "gave up".
   final Duration carry;
 
-  /// Gap between refreshes in the select loop.
+  /// Gap between refreshes in the select loop, and the period of the door
+  /// watch while a letter is parked.
   final Duration refreshEvery;
+}
+
+/// What the courier needs of its lane set, behind one seam: the fabric's
+/// refresh, snapshot and deliver, the door's session id, and a way to take
+/// a bundle the fabric parked back out of its in-memory queue. Tests
+/// script one of these; the app assembles [_FabricLanes] from endpoints.
+abstract class LetterLanes {
+  Future<void> refresh();
+  ConnectivitySnapshot get snapshot;
+  Future<DeliveryOutcome> deliver(
+    Uint8List payload, {
+    required String bundleId,
+  });
+
+  /// Removes [bundleId] from the fabric's own queue after it answered
+  /// queuedForLater, so the courier's durable queue is the only holder and
+  /// a later drain cannot send the letter twice.
+  void reclaim(String bundleId);
+
+  /// True when the build names a door (a DNS TXT valve).
+  bool get hasDoor;
+
+  /// The door's last session id, when the door exists.
+  String? get doorSessionId;
+  Future<void> dispose();
 }
 
 /// The lanes one courier registered, so the valve's session id and the
 /// lane objects' dispose are reachable.
-class _Lanes {
-  _Lanes({required this.fabric, this.wss, this.longPoll, this.valve});
+class _FabricLanes implements LetterLanes {
+  _FabricLanes({
+    required this.fabric,
+    required this.queue,
+    this.wss,
+    this.longPoll,
+    this.valve,
+  });
 
   final ConnectionFabric fabric;
+  final DtnBundleQueue queue;
   final WebSocketRelayLane? wss;
   final HttpLongPollLane? longPoll;
   final TxtQueryLane? valve;
 
+  @override
+  Future<void> refresh() => fabric.refresh();
+
+  @override
+  ConnectivitySnapshot get snapshot => fabric.snapshot;
+
+  @override
+  Future<DeliveryOutcome> deliver(
+    Uint8List payload, {
+    required String bundleId,
+  }) => fabric.deliver(
+    payload,
+    bundleId: bundleId,
+    priority: LinkMessagePriority.callSignal,
+  );
+
+  @override
+  void reclaim(String bundleId) => queue.acknowledge(bundleId);
+
+  @override
+  bool get hasDoor => valve != null;
+
+  @override
+  String? get doorSessionId => valve?.lastSessionId;
+
+  @override
   Future<void> dispose() async {
     await fabric.dispose();
     await wss?.dispose();
@@ -74,7 +139,17 @@ class LetterCourier {
     this.budget = const LetterCourierBudget(),
     this.valveFailThreshold = 20,
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now;
+    LetterLedger? ledger,
+    LetterQueue? queue,
+    this._openLanes,
+    Future<void> Function(Duration)? wait,
+    Timer Function(Duration period, void Function() tick)? schedulePeriodic,
+  }) : _now = now ?? DateTime.now,
+       ledger = ledger ?? LetterLedger(),
+       queue = queue ?? LetterQueue(MemoryLetterQueueStore()),
+       _wait = wait ?? ((d) => Future<void>.delayed(d)),
+       _schedulePeriodic =
+           schedulePeriodic ?? ((d, tick) => Timer.periodic(d, (_) => tick()));
 
   /// The lane set, built the way the call builds it (call_session's
   /// `defaultBorderRelayEndpoints`), read once per fabric.
@@ -87,6 +162,20 @@ class LetterCourier {
   final int valveFailThreshold;
   final DateTime Function() _now;
 
+  /// Every letter the fabric reported sent live, as the bytes that left.
+  final LetterLedger ledger;
+
+  /// Letters parked behind a down door, drained by the watch.
+  final LetterQueue queue;
+
+  /// A test's scripted lanes; null builds the fabric from [endpoints].
+  final Future<LetterLanes?> Function()? _openLanes;
+
+  /// The select loop's pause and the watch's period, both injectable so
+  /// tests advance a clock instead of sleeping.
+  final Future<void> Function(Duration) _wait;
+  final Timer Function(Duration period, void Function() tick) _schedulePeriodic;
+
   /// The letter's verdict, null before the first act of a letter.
   final ValueNotifier<LetterStatus?> status = ValueNotifier<LetterStatus?>(
     null,
@@ -97,11 +186,14 @@ class LetterCourier {
     const [],
   );
 
-  /// True from Send until the verdict; the sheet disables Send meanwhile.
+  /// True from Send until the verdict, and while the watch drains a parked
+  /// letter; the sheet disables Send meanwhile.
   final ValueNotifier<bool> busy = ValueNotifier<bool>(false);
 
-  _Lanes? _lanes;
-  Future<_Lanes?>? _opening;
+  LetterLanes? _lanes;
+  Future<LetterLanes?>? _opening;
+  Timer? _watch;
+  var _ticking = false;
   var _disposed = false;
 
   void note(String line) {
@@ -118,16 +210,25 @@ class LetterCourier {
     note('letter state: $next');
   }
 
-  /// One fabric per courier, kept across letters so a bundle the fabric
-  /// parked can still drain when the door comes back — disposing after
-  /// each carry would drop it (the rig peer does, on purpose: its job ends).
-  Future<_Lanes?> _open() {
+  /// One fabric per courier, kept across letters so the door watch has
+  /// the same lanes the letter was scored on — disposing after each carry
+  /// would drop them (the rig peer does, on purpose: its job ends).
+  Future<LetterLanes?> _open() {
     final live = _lanes;
     if (live != null) return Future.value(live);
-    return _opening ??= _build().whenComplete(() => _opening = null);
+    return _opening ??= (_openLanes?.call() ?? _assemble())
+        .then((lanes) async {
+          if (_disposed) {
+            // Disposed while assembling: nothing may keep these lanes.
+            await lanes?.dispose();
+            return null;
+          }
+          return _lanes = lanes;
+        })
+        .whenComplete(() => _opening = null);
   }
 
-  Future<_Lanes?> _build() async {
+  Future<LetterLanes?> _assemble() async {
     final e = endpoints();
     final relayUri = e.relayUri;
     final longPollUri = e.longPollUri;
@@ -145,8 +246,9 @@ class LetterCourier {
       note('no lane configured in this build');
       return null;
     }
+    final queue = DtnBundleQueue();
     final fabric = ConnectionFabric(
-      fallbackQueue: DtnBundleQueue(),
+      fallbackQueue: queue,
       nowMs: () => _now().millisecondsSinceEpoch,
     );
     final ids = ResilientFallbackLanes.registerAll(
@@ -159,8 +261,9 @@ class LetterCourier {
       'lanes=${ids.join(',')}'
       '${valveSpec == null ? ' (no door: DNS_VALVE_DOMAIN unset)' : ' zone=${valveSpec.domain}'}',
     );
-    return _lanes = _Lanes(
+    return _FabricLanes(
       fabric: fabric,
+      queue: queue,
       wss: wss,
       longPoll: longPoll,
       valve: valve,
@@ -172,6 +275,9 @@ class LetterCourier {
       '${lane.id.replaceFirst('resilient.', '')}='
           '${lane.score.toStringAsFixed(2)}${lane.eligible ? '' : '!'}',
   ].join(' ');
+
+  static String _short(String? laneId) =>
+      (laneId ?? 'a lane').replaceFirst('resilient.', '');
 
   /// A lane that works right now: eligible, ranked first, positive score.
   static bool _bestIsUsable(ConnectivitySnapshot s) {
@@ -203,30 +309,50 @@ class LetterCourier {
       _set(LetterState.notDelivered, 'no lane configured in this build');
       return;
     }
-    await lanes.fabric.refresh();
-    final s = lanes.fabric.snapshot;
+    await lanes.refresh();
+    final s = lanes.snapshot;
     note('probe mode=${s.mode.name} best=${s.bestLaneId} ${_scores(s)}');
     if (!_liveCallReachable(s)) {
       _set(
         LetterState.liveCallUnavailable,
-        lanes.valve == null ? 'and no door in this build' : _scores(s),
+        lanes.hasDoor ? _scores(s) : 'and no door in this build',
       );
     }
   }
 
-  /// Carries [payload] to one verdict. [kind] names it for the notes
-  /// (typed / voice / photo). Returns the final state.
-  Future<LetterState> send(Uint8List payload, {required String kind}) async {
+  /// Reads the queue's store: a letter parked before a restart is waiting
+  /// again, and the watch resumes for it. The app calls this once.
+  Future<void> restore() async {
+    await queue.ensureLoaded();
+    if (_disposed || queue.isEmpty) return;
+    note('restored ${queue.length} parked letter(s)');
+    _set(LetterState.queued, 'parked in the queue · ${queue.waiting} waiting');
+    _startWatch();
+  }
+
+  /// Carries [payload] to one verdict. [kind] names it for the notes and
+  /// the ledger (typed / voice / photo); [duration] is a voice take's
+  /// encoded length, for its label in the Chats list. Returns the final
+  /// state.
+  Future<LetterState> send(
+    Uint8List payload, {
+    required String kind,
+    Duration? duration,
+  }) async {
     if (busy.value) return status.value?.state ?? LetterState.queued;
     busy.value = true;
     try {
-      return await _send(payload, kind);
+      return await _send(payload, kind, duration);
     } finally {
       busy.value = false;
     }
   }
 
-  Future<LetterState> _send(Uint8List payload, String kind) async {
+  Future<LetterState> _send(
+    Uint8List payload,
+    String kind,
+    Duration? duration,
+  ) async {
     if (payload.length > TxtQueryLane.maxPayloadBytes) {
       _set(
         LetterState.notDelivered,
@@ -240,7 +366,6 @@ class LetterCourier {
       _set(LetterState.notDelivered, 'no lane configured in this build');
       return LetterState.notDelivered;
     }
-    final fabric = lanes.fabric;
     final chunks = TxtQueryWire.splitChunks(payload).length;
     _set(LetterState.queued, '${payload.length} B ($kind) · probing the door');
 
@@ -251,74 +376,245 @@ class LetterCourier {
     var refreshes = 0;
     ConnectivitySnapshot s;
     while (true) {
-      await fabric.refresh();
+      await lanes.refresh();
       refreshes++;
-      s = fabric.snapshot;
+      s = lanes.snapshot;
       if (_bestIsUsable(s) || !_now().isBefore(selectUntil)) break;
-      await Future<void>.delayed(budget.refreshEvery);
+      await _wait(budget.refreshEvery);
     }
     if (!_liveCallReachable(s)) {
       _set(LetterState.liveCallUnavailable, _scores(s));
     }
     final best = s.bestLaneId;
     note('selected best=$best refreshes=$refreshes ${_scores(s)}');
+    final letter = QueuedLetter(
+      id: 'letter-${_now().millisecondsSinceEpoch}',
+      bytes: payload,
+      kind: kind,
+      queuedAt: _now(),
+      duration: duration,
+    );
+    if (!_bestIsUsable(s)) {
+      // Every call lane negative and the door down: nothing to carry it
+      // now. Parked here, not offered to the fabric, so the one deliver
+      // it gets is the watch's.
+      return _park(letter);
+    }
     _set(
       LetterState.queued,
-      '${payload.length} B · $chunks chunks · '
-      '${best == null ? 'no lane ranks yet' : 'via ${best.replaceFirst('resilient.', '')}'}',
+      '${payload.length} B · $chunks chunks · via ${_short(best)}',
     );
+    return _carry(lanes, letter, best, fromQueue: false);
+  }
 
-    // Carry, bounded.
+  /// One bounded deliver and its verdict. A letter from the queue leaves
+  /// it on sentLive and rejected, and waits for the next door-up on every
+  /// other ending.
+  Future<LetterState> _carry(
+    LetterLanes lanes,
+    QueuedLetter letter,
+    String? best, {
+    required bool fromQueue,
+  }) async {
+    final payload = letter.bytes;
     final DeliveryOutcome outcome;
+    // The fabric's deliver outlives a timeout (`timeout` does not cancel
+    // it), so the letter stays in flight until this future settles: no
+    // second deliver of the same bundle, no bundle held by both queues.
+    final inner = lanes.deliver(payload, bundleId: letter.id);
     try {
-      outcome = await fabric
-          .deliver(
-            payload,
-            bundleId: 'letter-${_now().millisecondsSinceEpoch}',
-            priority: LinkMessagePriority.callSignal,
-          )
-          .timeout(budget.carry);
+      outcome = await inner.timeout(budget.carry);
     } on TimeoutException {
       _set(
         LetterState.notDelivered,
-        'gave up after ${budget.carry.inSeconds}s · ${_scores(fabric.snapshot)}',
+        'gave up after ${budget.carry.inSeconds}s · ${_scores(lanes.snapshot)}',
       );
+      unawaited(_settleLate(inner, lanes, letter, best, fromQueue: fromQueue));
       return LetterState.notDelivered;
     } on Object catch (error) {
+      if (fromQueue) queue.release(letter.id);
       _set(LetterState.notDelivered, 'error: $error');
       return LetterState.notDelivered;
     }
-    final valve = lanes.valve;
-    final session = valve?.lastSessionId;
+    final session = lanes.doorSessionId;
     note('carried outcome=${outcome.name} session=$session');
     switch (outcome) {
       case DeliveryOutcome.sentLive:
+        final throughDoor = best == ResilientLaneIds.txtQuery;
+        if (fromQueue) await queue.remove(letter.id);
+        _record(letter, best, throughDoor ? session : null);
         _set(
           LetterState.arrived,
-          best == ResilientLaneIds.txtQuery && session != null
+          throughDoor && session != null
               ? '${payload.length} B · through the door · session $session'
-              : '${payload.length} B · via ${(best ?? 'a lane').replaceFirst('resilient.', '')}',
+              : '${payload.length} B · via ${_short(best)}',
         );
         return LetterState.arrived;
       case DeliveryOutcome.queuedForLater:
-        _set(
-          LetterState.queued,
-          '${payload.length} B · door down · parked in the queue',
-        );
+        // The fabric parked it in memory; the durable queue takes custody.
+        lanes.reclaim(letter.id);
+        if (fromQueue) {
+          queue.release(letter.id);
+          _set(
+            LetterState.queued,
+            '${payload.length} B · door down again · ${queue.waiting} waiting',
+          );
+        } else {
+          return _park(letter);
+        }
         return LetterState.queued;
       case DeliveryOutcome.rejected:
+        if (fromQueue) await queue.remove(letter.id);
         _set(LetterState.notDelivered, 'refused by the queue');
         return LetterState.notDelivered;
     }
   }
 
+  Future<LetterState> _park(QueuedLetter letter) async {
+    if (!await queue.enqueue(letter)) {
+      _set(
+        LetterState.notDelivered,
+        'queue full · ${queue.length} parked behind the door',
+      );
+      return LetterState.notDelivered;
+    }
+    _set(
+      LetterState.queued,
+      '${letter.bytes.length} B · door down · parked in the queue · '
+      '${queue.waiting} waiting',
+    );
+    _startWatch();
+    return LetterState.queued;
+  }
+
+  void _record(QueuedLetter letter, String? laneId, String? sessionId) {
+    ledger.add(
+      LetterRecord(
+        bytes: letter.bytes,
+        kind: letter.kind,
+        sentAt: _now(),
+        laneId: laneId,
+        sessionId: sessionId,
+        duration: letter.duration,
+      ),
+    );
+  }
+
+  /// A deliver that outran [LetterCourierBudget.carry]: the banner already
+  /// said "gave up", but the fabric is still carrying, so the letter keeps
+  /// its in-flight mark until the answer comes. sentLive is recorded as
+  /// any other; queuedForLater moves custody to the durable queue; only a
+  /// verdict (or an error) lets a queued letter be offered again.
+  Future<void> _settleLate(
+    Future<DeliveryOutcome> inner,
+    LetterLanes lanes,
+    QueuedLetter letter,
+    String? best, {
+    required bool fromQueue,
+  }) async {
+    final DeliveryOutcome late;
+    try {
+      late = await inner;
+    } on Object catch (error) {
+      if (_disposed) return;
+      note('late error for ${letter.id}: $error');
+      if (fromQueue) queue.release(letter.id);
+      return;
+    }
+    if (_disposed) return;
+    final session = lanes.doorSessionId;
+    note('late outcome=${late.name} for ${letter.id} session=$session');
+    switch (late) {
+      case DeliveryOutcome.sentLive:
+        if (fromQueue) await queue.remove(letter.id);
+        final throughDoor = best == ResilientLaneIds.txtQuery;
+        _record(letter, best, throughDoor ? session : null);
+        if (!busy.value) {
+          _set(
+            LetterState.arrived,
+            '${letter.bytes.length} B · late · '
+            '${throughDoor && session != null ? 'through the door · session $session' : 'via ${_short(best)}'}',
+          );
+        }
+      case DeliveryOutcome.queuedForLater:
+        lanes.reclaim(letter.id);
+        if (fromQueue) {
+          queue.release(letter.id);
+        } else {
+          await _park(letter);
+        }
+      case DeliveryOutcome.rejected:
+        if (fromQueue) await queue.remove(letter.id);
+    }
+  }
+
+  /// The door watch: while a letter is parked, refresh every
+  /// [LetterCourierBudget.refreshEvery] and, the first time the best lane
+  /// ranks usable, drain the head of the queue with one deliver. Stops
+  /// by itself when the queue is empty.
+  void _startWatch() {
+    if (_watch != null || _disposed) return;
+    _watch = _schedulePeriodic(budget.refreshEvery, () => unawaited(_tick()));
+  }
+
+  void _stopWatch() {
+    _watch?.cancel();
+    _watch = null;
+  }
+
+  Future<void> _tick() async {
+    if (_disposed || _ticking) return;
+    if (queue.isEmpty) {
+      _stopWatch();
+      return;
+    }
+    // A fresh Send owns the lanes; its own verdict re-arms the watch.
+    // Held from here, before the first await: the sheet's Send is disabled
+    // for the whole tick, so no letter can start a carry beside this one.
+    if (busy.value) return;
+    _ticking = true;
+    busy.value = true;
+    try {
+      final lanes = await _open();
+      if (lanes == null) {
+        _stopWatch();
+        return;
+      }
+      try {
+        await lanes.refresh();
+      } on Object catch (error) {
+        // The fabric was disposed under a tick already running; the watch
+        // is cancelled with it and nothing here may throw past the timer.
+        if (!_disposed) note('watch refresh failed: $error');
+        return;
+      }
+      if (_disposed) return;
+      final s = lanes.snapshot;
+      if (!_bestIsUsable(s)) return;
+      final head = queue.take();
+      if (head == null) return;
+      note(
+        'door up · draining ${head.id} via ${_short(s.bestLaneId)} '
+        '${_scores(s)}',
+      );
+      await _carry(lanes, head, s.bestLaneId, fromQueue: true);
+    } finally {
+      if (!_disposed) busy.value = false;
+      _ticking = false;
+      if (queue.isEmpty) _stopWatch();
+    }
+  }
+
   Future<void> dispose() async {
     _disposed = true;
+    _stopWatch();
     final lanes = _lanes;
     _lanes = null;
     await lanes?.dispose();
     status.dispose();
     notes.dispose();
     busy.dispose();
+    ledger.dispose();
+    queue.dispose();
   }
 }

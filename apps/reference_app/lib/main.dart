@@ -41,11 +41,14 @@ import 'src/join_channel_sheet.dart';
 import 'src/lane_governor.dart';
 import 'src/letter_composer.dart';
 import 'src/letter_courier.dart';
+import 'src/letter_ledger.dart';
+import 'src/letter_queue.dart';
 import 'src/startup_manifest.dart';
 import 'src/theme.dart';
 import 'src/ui/conversations_screen.dart';
 import 'src/ui/incoming_call_screen.dart';
 import 'src/ui/letter_sheet.dart';
+import 'src/ui/letter_thread.dart';
 import 'src/ui/network_truth.dart';
 import 'src/ui/settings_screen.dart';
 
@@ -204,11 +207,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // when DNS_VALVE_DOMAIN names a zone). One courier for the page's
   // life, so a parked letter can still drain when the door comes back.
   late final LetterComposer _letterComposer = LetterComposer();
+  // Its queue is a file under the app's own storage folder (Documents on
+  // a phone, the system temp dir on a desktop — no path_provider), so a
+  // letter parked behind a down door is still waiting after a restart;
+  // restore() in initState re-arms the door watch for it.
   late final LetterCourier _letterCourier = LetterCourier(
     endpoints: () => defaultBorderRelayEndpoints(
       callId: 'letter-${DateTime.now().millisecondsSinceEpoch}',
       role: CallRole.initiator,
     ),
+    queue: LetterQueue(FileLetterQueueStore(letterQueueDirectory())),
   );
 
   late final ChatDemoController _chat = ChatDemoController(
@@ -286,6 +294,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _call.addListener(_onChanged);
     _chat.addListener(_onChanged);
+    // A delivered letter is a row in the Chats list the moment it lands.
+    _letterCourier.ledger.records.addListener(_onChanged);
+    unawaited(_letterCourier.restore());
   }
 
   /// Backgrounding policy, stated rather than implied. `paused`, `inactive`
@@ -400,6 +411,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _call.dispose();
     _chat.dispose();
     unawaited(_letterComposer.disposeComposer());
+    _letterCourier.ledger.records.removeListener(_onChanged);
     unawaited(_letterCourier.dispose());
     final live = _liveChat;
     _liveChat = null;
@@ -467,7 +479,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final liveLast = live == null || live.entries.isEmpty
         ? null
         : live.entries.last;
+    // The letters' row, first and only once one has arrived — the same
+    // bytes the door carried, as a message and not a log line.
+    final letters = letterSummary(_letterCourier.ledger.records.value);
     return [
+      ?letters,
       if (live != null)
         ConversationSummary(
           id: 'live',
@@ -546,6 +562,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final live = _liveChat;
     if (summary.id == 'live' && live != null) {
       _pushThread(live, title: 'Call peer');
+      return;
+    }
+    if (summary.id == letterConversationId) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => LetterThreadPage(ledger: _letterCourier.ledger),
+        ),
+      );
       return;
     }
     if (summary.id != 'loopback') {

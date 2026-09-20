@@ -67,3 +67,14 @@ Directory Function()? buildStorageDirectory() {
   final docs = Directory('$home/Documents/voice_call_kit_intelligence');
   return () => docs..createSync(recursive: true);
 }
+
+/// Where a letter parked behind a down door waits between runs: the same
+/// OS-backed Documents home the brains use on a phone, and the same
+/// system-temp folder they fall back to elsewhere — which outlives a
+/// process restart (the case that matters), not a reboot. No plugin.
+Directory letterQueueDirectory() {
+  final base =
+      buildStorageDirectory()?.call() ??
+      Directory('${Directory.systemTemp.path}/voice_call_kit_intelligence');
+  return Directory('${base.path}/letters')..createSync(recursive: true);
+}

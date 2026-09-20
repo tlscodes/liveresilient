@@ -57,6 +57,11 @@ class _LetterSheetState extends State<LetterSheet> {
           'choose a thumbnail.';
       return;
     }
+    // The take's encoded length rides along for its label in the Chats
+    // list ("Voice letter · 12 s"), read before the buttons are cleared.
+    final duration = kind == 'voice'
+        ? composer.voiceLetter.value?.length
+        : null;
     // The buttons belong to the letter that is leaving: a "Recorded 0:12"
     // left behind would read as a take the next letter already holds.
     composer.voiceLetter.value = null;
@@ -69,7 +74,11 @@ class _LetterSheetState extends State<LetterSheet> {
       _draft.clear();
     }
     composer.note('letter chosen: $kind ${bytes.length} B');
-    await widget.courier.send(Uint8List.fromList(bytes), kind: kind);
+    await widget.courier.send(
+      Uint8List.fromList(bytes),
+      kind: kind,
+      duration: duration,
+    );
   }
 
   @override
