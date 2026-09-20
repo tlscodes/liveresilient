@@ -39,10 +39,13 @@ import 'src/intelligence/intelligence_hub.dart';
 import 'src/import_manifest_sheet.dart';
 import 'src/join_channel_sheet.dart';
 import 'src/lane_governor.dart';
+import 'src/letter_composer.dart';
+import 'src/letter_courier.dart';
 import 'src/startup_manifest.dart';
 import 'src/theme.dart';
 import 'src/ui/conversations_screen.dart';
 import 'src/ui/incoming_call_screen.dart';
+import 'src/ui/letter_sheet.dart';
 import 'src/ui/network_truth.dart';
 import 'src/ui/settings_screen.dart';
 
@@ -196,6 +199,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final LiveCallController _call = LiveCallController(
     open: widget.openSession ?? _openDevSession,
   );
+  // The letter: the same Send window the rig peer shows, carried over
+  // the fallback lanes call_session configures (the DNS door among them
+  // when DNS_VALVE_DOMAIN names a zone). One courier for the page's
+  // life, so a parked letter can still drain when the door comes back.
+  late final LetterComposer _letterComposer = LetterComposer();
+  late final LetterCourier _letterCourier = LetterCourier(
+    endpoints: () => defaultBorderRelayEndpoints(
+      callId: 'letter-${DateTime.now().millisecondsSinceEpoch}',
+      role: CallRole.initiator,
+    ),
+  );
+
   late final ChatDemoController _chat = ChatDemoController(
     attachmentPicker: widget.attachmentPicker ?? pickAttachmentFile,
     voiceNoteSource: widget.voiceNoteSource,
@@ -384,6 +399,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _quality.dispose();
     _call.dispose();
     _chat.dispose();
+    unawaited(_letterComposer.disposeComposer());
+    unawaited(_letterCourier.dispose());
     final live = _liveChat;
     _liveChat = null;
     if (identical(liveChatController.value, live)) {
@@ -510,6 +527,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted) setState(() => _conversationsLoading = false);
   }
 
+  /// The letter sheet, probed on open so it starts on a verdict (live
+  /// call out or not) instead of a blank banner.
+  void _openLetter() {
+    unawaited(_letterCourier.probe());
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) =>
+            LetterSheet(composer: _letterComposer, courier: _letterCourier),
+      ),
+    );
+  }
+
   void _openThread(ConversationSummary summary) {
     final live = _liveChat;
     if (summary.id == 'live' && live != null) {
@@ -602,6 +634,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           conversations: _conversations(),
           loading: _conversationsLoading,
           onOpen: _openThread,
+          onLetter: _openLetter,
         ),
       ),
       SettingsScreen(

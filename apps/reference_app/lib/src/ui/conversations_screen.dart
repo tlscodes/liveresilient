@@ -111,6 +111,7 @@ class ConversationsScreen extends StatefulWidget {
     this.loading = false,
     required this.onOpen,
     this.onNewChat,
+    this.onLetter,
     this.now,
   });
 
@@ -125,6 +126,11 @@ class ConversationsScreen extends StatefulWidget {
 
   /// Starts a new chat (empty-state CTA and the FAB). Null hides both.
   final VoidCallback? onNewChat;
+
+  /// Opens the letter sheet — text, a ~30 s voice take or a thumbnail
+  /// carried through the DNS door when the live call is out. Shown as
+  /// an app-bar action; null hides it.
+  final VoidCallback? onLetter;
 
   /// Clock seam so relative-time labels are testable; defaults to
   /// [DateTime.now].
@@ -206,7 +212,21 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
     final showFab = widget.conversations.isNotEmpty && widget.onNewChat != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Chats')),
+      appBar: AppBar(
+        title: const Text('Chats'),
+        actions: [
+          if (widget.onLetter != null)
+            IconButton(
+              key: const Key('conversations-letter'),
+              tooltip: 'Letter through the door',
+              icon: const Icon(Icons.outgoing_mail),
+              onPressed: () {
+                AppHaptics.selection();
+                widget.onLetter!();
+              },
+            ),
+        ],
+      ),
       body: body,
       floatingActionButton: showFab
           ? FloatingActionButton(
