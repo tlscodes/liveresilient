@@ -30,27 +30,32 @@ import 'package:record/record.dart';
 /// The cap per letter is untouched.
 const Duration voiceLetterMaxLength = Duration(minutes: 5);
 
-/// What ten letters carry (letter_parts.dart: 10 x (4096 - 29)), the
-/// budget the recorder fits its mode into (owner's cap for voice,
-/// 2026-09-21): Opus SILK VBR at the rate the budget allows (about
-/// 10 kbit/s for 30 s, wideband) down to 6 kbit/s at ~48 s, then the fixed
-/// 8 kHz ladder — Opus 6k CBR to 54 s, Codec2 3200 to 101 s, 2400 to 135 s,
-/// 1600 to 254 s, 1200 to 338 s.
-const int voiceLetterBudgetBytes = 10 * (4096 - 29);
+/// What twenty letters carry (letter_parts.dart: 20 x (4096 - 29) =
+/// 81340 B), the budget the recorder fits its mode into — the owner's
+/// rule of 2026-09-22: every extra byte buys quality, never seconds. At
+/// 30 s the ladder starts at 20 kbit/s (mode 7, SWB/FB hybrid), falls to
+/// mode 6 (SILK WB) under 15 kbit/s, then the fixed 8 kHz ladder — Opus
+/// 6k CBR, Codec2 3200 … 1200 — for long takes.
+const int voiceLetterBudgetBytes = 20 * (4096 - 29);
 
-/// 16 kHz capture since mode 6: SILK wideband keeps the 4-8 kHz where
-/// Persian fricatives live. The fixed 8 kHz modes are fed by
-/// [downsample2x].
-const int voiceLetterSampleRate = 16000;
+/// 48 kHz capture since mode 7: libopus reaches SWB/FB only when its API
+/// rate allows it (opus_encoder.c:1506-1509). Mode 6 is fed by
+/// [decimate] x3 (16 kHz), the fixed 8 kHz modes by [decimate] x6.
+const int voiceLetterSampleRate = 48000;
+
+/// Rungs at or above this go to mode 7 (hybrid is possible from 15 kbit/s,
+/// opus_encoder.c:1493); below, mode 6 at 16 kHz carries the same SILK.
+const int opusHybridFloorBitrate = 15000;
 
 /// 20 ms of capture — the gate's and the normaliser's frame.
 const int voiceLetterFrame = voiceLetterSampleRate ~/ 50;
 
 /// Bitrates to try for mode 6, highest first: what the budget allows for
 /// this length after the header and one length byte per packet, with a
-/// 7 % VBR margin, capped at 16 k (SILK WB gains little above), then 12 %
-/// steps down to 6 k. Empty (about 48 s and up): the fixed ladder takes
-/// over. 30 s -> [10000, 8800, 7700, 6800, 6000].
+/// 7 % VBR margin, capped at 24 k (hybrid gains little above for speech),
+/// then 12 % steps down to 6 k. Empty (about 96 s and up): the fixed
+/// ladder takes over. 30 s in twenty letters -> [20000, 17600, 15500,
+/// 13700, 12000, 10600, 9300, 8200, 7200, 6300, 6000].
 List<int> opusBitrateLadder(double seconds, int budgetBytes) {
   if (seconds <= 0) return const [];
   final packets = (seconds * 1000 / 60).floor();
@@ -59,7 +64,7 @@ List<int> opusBitrateLadder(double seconds, int budgetBytes) {
   final allowed = payloadBytes * 8 / seconds * 0.93;
   if (allowed < 6000) return const [];
   final ladder = <int>[];
-  var b = math.min(allowed, 16000.0);
+  var b = math.min(allowed, 24000.0);
   while (true) {
     final rung = math.max((b / 100).round() * 100, 6000);
     ladder.add(rung);
@@ -69,11 +74,18 @@ List<int> opusBitrateLadder(double seconds, int budgetBytes) {
   return ladder;
 }
 
-/// 16 kHz -> 8 kHz: a 31-tap Hamming-windowed sinc low-pass at 3.4 kHz,
-/// unity DC gain, every second sample kept. Pure Dart.
-Int16List downsample2x(Int16List x) {
-  const taps = 31, half = taps ~/ 2;
-  const fc = 3400 / 16000;
+/// [inputRate] -> inputRate / [factor]: a Hamming-windowed sinc low-pass
+/// at [cutoffHz] with 32 x factor - 1 taps, unity DC gain, every
+/// [factor]-th sample kept. Pure Dart. 48 -> 16 kHz for mode 6 (cutoff
+/// 7 kHz), 48 -> 8 kHz for the fixed modes (cutoff 3.4 kHz).
+Int16List decimate(
+  Int16List x,
+  int factor, {
+  required double cutoffHz,
+  int inputRate = voiceLetterSampleRate,
+}) {
+  final taps = 32 * factor - 1, half = taps ~/ 2;
+  final fc = cutoffHz / inputRate;
   final h = List<double>.generate(taps, (i) {
     final n = i - half;
     final sinc = n == 0
@@ -85,9 +97,9 @@ Int16List downsample2x(Int16List x) {
   for (var i = 0; i < taps; i++) {
     h[i] /= sum;
   }
-  final out = Int16List(x.length ~/ 2);
+  final out = Int16List(x.length ~/ factor);
   for (var o = 0; o < out.length; o++) {
-    final c = o * 2;
+    final c = o * factor;
     var acc = 0.0;
     for (var i = 0; i < taps; i++) {
       final k = c + i - half;
@@ -97,6 +109,10 @@ Int16List downsample2x(Int16List x) {
   }
   return out;
 }
+
+/// 16 kHz -> 8 kHz, kept for callers that already hold a 16 kHz take.
+Int16List downsample2x(Int16List x) =>
+    decimate(x, 2, cutoffHz: 3400, inputRate: 16000);
 
 /// Memoryless soft knee: identity to 0.8 FS, then a smooth curve that
 /// approaches 1.0 and never clips. Touches only the top 2 dB.
@@ -365,8 +381,10 @@ class VoiceLetterRecorder implements VoiceRecording {
         sampleRate: voiceLetterSampleRate,
         numChannels: 1,
         echoCancel: false,
-        // Apple's voice-processing noise suppression: the cheapest quality
-        // win for a close-mic codec like Codec2 (2026-09-21).
+        // record_ios 2.1.1 stores noiseSuppress and never reads it (only
+        // echoCancel toggles Apple's voice processing, autoGain the AGC):
+        // every take is the raw microphone, gated and normalised HERE on
+        // purpose — Apple's VPIO narrows and pumps (Fable 5.1, 2026-09-22).
         noiseSuppress: true,
         autoGain: false,
       ),
@@ -457,22 +475,25 @@ class VoiceLetterRecorder implements VoiceRecording {
     // builder's offsetInBytes and would read a neighbouring chunk's bytes
     // as audio without any of the witnesses noticing.
     final raw = Int16List.sublistView(pcm, 0, pcm.length - pcm.length % 2);
-    final wide = normalizeSpeech(raw, sampleRate: voiceLetterSampleRate);
-    final seconds = wide.length / voiceLetterSampleRate;
-    // 1. Mode 6 at the rate ten letters allow; a VBR average that lands
+    final full = normalizeSpeech(raw, sampleRate: voiceLetterSampleRate);
+    final seconds = full.length / voiceLetterSampleRate;
+    Int16List? wide;
+    // 1. One ladder, two modes: hybrid at 48 kHz where libopus can reach
+    //    SWB/FB (mode 7), SILK WB at 16 kHz below (mode 6); a VBR average
     //    over the budget is re-encoded one rung lower, never under 6 k.
     for (final bitrate in opusBitrateLadder(seconds, voiceLetterBudgetBytes)) {
-      final wire = _encodeWith(
-        VoiceNoteMode.opusVbr,
-        wide,
-        opusBitrate: bitrate,
-      );
+      final hybrid = bitrate >= opusHybridFloorBitrate;
+      final mode = hybrid ? VoiceNoteMode.opusHybrid : VoiceNoteMode.opusVbr;
+      final samples = hybrid
+          ? full
+          : (wide ??= decimate(full, 3, cutoffHz: 7000));
+      final wire = _encodeWith(mode, samples, opusBitrate: bitrate);
       if (wire.length <= voiceLetterBudgetBytes) {
-        return _letter(wire, VoiceNoteMode.opusVbr, pcm, elapsed);
+        return _letter(wire, mode, pcm, elapsed);
       }
     }
     // 2. The fixed 8 kHz ladder, sized ahead as before.
-    final narrow = downsample2x(wide);
+    final narrow = decimate(full, 6, cutoffHz: 3400);
     final mode = VoiceNoteMode.pick(
       Duration(milliseconds: narrow.length ~/ 8),
       voiceLetterBudgetBytes,

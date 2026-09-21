@@ -35,8 +35,8 @@ import sys
 # 2026-09-21 the phone picks the highest mode its letters carry
 # (voice_note_codec.dart VoiceNoteMode); before that everything was 700C.
 MODES = {1: ("700C", 28), 2: ("1200", 48), 3: ("1600", 64), 4: ("2400", 48), 5: ("3200", 64),
-         6: ("opusvbr", 0), 12: ("opus6k", 360)}
-OPUS_INPUT_RATE = {6: 16000, 12: 8000}   # OpusHead hint; decoders output what they are asked
+         6: ("opusvbr", 0), 7: ("opushybrid", 0), 12: ("opus6k", 360)}
+OPUS_INPUT_RATE = {6: 16000, 7: 48000, 12: 8000}   # OpusHead hint; decoders output what they are asked
 OPUS_GRANULE_PER_PACKET = 2880           # 60 ms in 48 kHz units, whatever the bandwidth
 # Reserved nibbles (voice_note_codec.dart): named in the refusal.
 RESERVED = {13: "Lyra v2 3.2k (reserved, not built)", 14: "Lyra v2 6k (reserved, not built)",

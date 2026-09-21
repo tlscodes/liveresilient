@@ -11,7 +11,7 @@ import 'voice_note_codec.dart';
 
 abstract class VoiceFrameCodec {
   /// PCM rate the codec takes and gives: 8000 for Codec2 and mode 12,
-  /// 16000 for the wideband Opus mode.
+  /// 16000 for the wideband Opus mode, 48000 for the hybrid mode.
   int get sampleRate;
 
   /// s16 samples per frame at [sampleRate].
@@ -36,6 +36,12 @@ VoiceFrameCodec voiceFrameCodecFor(
   int decoderComplexity = 0,
   int opusBitrate = 10000,
 }) {
+  if (mode == VoiceNoteMode.opusHybrid) {
+    return OpusVoice.configured(
+      OpusVoiceConfig.hybrid(opusBitrate),
+      decoderComplexity: decoderComplexity,
+    );
+  }
   if (mode == VoiceNoteMode.opusVbr) {
     return OpusVoice.configured(
       OpusVoiceConfig.vbr(opusBitrate),

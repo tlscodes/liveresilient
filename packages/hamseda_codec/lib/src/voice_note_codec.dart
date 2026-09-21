@@ -7,7 +7,8 @@ import 'dart:typed_data';
 ///       3=1600, 4=2400, 5=3200 (Codec2); 12=Opus 6k NB CBR 60 ms (45 B
 ///       frames, byte-aligned); 6=Opus SILK VBR 60 ms at 16 kHz, each
 ///       packet behind ONE length byte [u8 len][packet] (TOC inside, so
-///       NB or WB rides per packet); 13 and 14 are RESERVED for Lyra v2 3.2k /
+///       NB or WB rides per packet); 7=Opus hybrid VBR 60 ms at 48 kHz, the
+///       same [u8 len][packet] wire; 13 and 14 are RESERVED for Lyra v2 3.2k /
 ///       6k (2026-09-21, not built); 15 is reserved as the extension escape.
 ///   [1..2] frameCount, little-endian u16
 ///   [3] flags (reserved, 0)
@@ -47,7 +48,13 @@ enum VoiceNoteMode {
   /// [pick], which cannot size a variable wire ahead. Id 6, the first free
   /// nibble (owner's verdict on mode 12: 70/100; Fable 5.1's final design,
   /// 2026-09-21).
-  opusVbr(6, 0, -1, 60, sampleRate: 16000);
+  opusVbr(6, 0, -1, 60, sampleRate: 16000),
+
+  /// Opus VBR at 48 kHz PCM, bandwidth the encoder's own (SWB/FB hybrid
+  /// from 15 kbit/s, WB SILK below), 60 ms packets behind ONE length byte
+  /// exactly like [opusVbr]. The twenty-letter voice budget (2026-09-22):
+  /// the extra bytes buy bandwidth, never seconds. Id 7.
+  opusHybrid(7, 0, -1, 60, sampleRate: 48000);
 
   const VoiceNoteMode(
     this.id,
@@ -71,7 +78,7 @@ enum VoiceNoteMode {
   final int frameMs;
 
   /// PCM rate the frame codec takes and gives: 8000 for Codec2 and
-  /// mode 12, 16000 for [opusVbr].
+  /// mode 12, 16000 for [opusVbr], 48000 for [opusHybrid].
   final int sampleRate;
 
   /// True for the Opus modes; the frame codec is picked by

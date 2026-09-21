@@ -69,14 +69,51 @@ void main() {
     expect(peak, lessThanOrEqualTo((0.9 * 32767).round() + 1));
   });
 
-  test('the mode-6 bitrate ladder for 30 s in ten letters', () {
+  test('the bitrate ladder for 30 s in ten and in twenty letters', () {
     // 500 packets: 40670 - 4 - 500 = 40166 B -> 10711 bit/s x 0.93 = 9961
     // -> rounds to 10000, then 12 % steps to 6000 (Fable 5.1, 2026-09-21).
     expect(opusBitrateLadder(30, 10 * 4067), [10000, 8800, 7700, 6800, 6000]);
-    // Short takes are capped at 16 k; long takes fall to the fixed ladder.
-    expect(opusBitrateLadder(5, 10 * 4067).first, 16000);
+    // Twenty letters (the owner's rule, 2026-09-22): 81340 - 504 = 80836 B
+    // -> 21556 bit/s x 0.93 = 20047 -> 20000, the first three rungs hybrid.
+    expect(opusBitrateLadder(30, voiceLetterBudgetBytes), [
+      20000,
+      17600,
+      15500,
+      13700,
+      12000,
+      10600,
+      9300,
+      8200,
+      7200,
+      6300,
+      6000,
+    ]);
+    expect(
+      opusBitrateLadder(
+        30,
+        voiceLetterBudgetBytes,
+      ).where((b) => b >= opusHybridFloorBitrate).length,
+      3,
+    );
+    // Short takes are capped at 24 k; long takes fall to the fixed ladder.
+    expect(opusBitrateLadder(5, voiceLetterBudgetBytes).first, 24000);
     expect(opusBitrateLadder(60, 10 * 4067), isEmpty);
     expect(opusBitrateLadder(0, 10 * 4067), isEmpty);
+  });
+
+  test('decimate 48 -> 16 keeps a 1 kHz tone and drops a 10 kHz one', () {
+    final x = Int16List(48000);
+    for (var i = 0; i < x.length; i++) {
+      x[i] =
+          (6000 * sin(2 * pi * 1000 * i / 48000) +
+                  6000 * sin(2 * pi * 10000 * i / 48000))
+              .round();
+    }
+    final y = decimate(x, 3, cutoffHz: 7000);
+    expect(y, hasLength(16000));
+    // 1 kHz alone is RMS 4243; the 10 kHz half must be gone (aliased
+    // energy would push the RMS toward 6000).
+    expect(rmsOf(y, 1000, 15000), closeTo(4243, 400));
   });
 
   test('downsample2x keeps a 300 Hz tone and halves the length', () {

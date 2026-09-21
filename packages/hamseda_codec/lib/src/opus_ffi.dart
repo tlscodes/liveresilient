@@ -130,6 +130,13 @@ void _check(int rc, String what) {
 }
 
 const int _opusBandwidthWideband = 1103;
+const int _opusBandwidthFullband = 1105;
+const int _opusAuto = -1000;
+
+/// Mode 7 takes and gives 48 kHz PCM: libopus reaches SWB/FB hybrid only
+/// when its API rate allows it (opus_encoder.c:1506-1509 caps the
+/// bandwidth at what Fs can carry).
+const int opusFullSampleRate = 48000;
 
 /// One Opus tuning behind a wire mode. [cbr6kNb] is mode 12, byte-exact
 /// with c60e475. [OpusVoiceConfig.vbr] is mode 6: 16 kHz PCM both ways,
@@ -142,7 +149,26 @@ class OpusVoiceConfig {
     required this.bitrate,
     required this.bandwidth,
     required this.vbr,
+    this.autoBandwidth = false,
   });
+
+  /// Mode 7: 48 kHz, bandwidth AUTO under a FULLBAND ceiling — libopus's
+  /// own voice crossover takes WB to SWB at 13.5 kbit/s and FB at 14
+  /// (opus_encoder.c:145-150), and SILK+CELT hybrid needs 15 (:1493); a
+  /// 60 ms API frame becomes one code-3 packet of three 20 ms frames
+  /// (:1552-1560), still one length byte on the wire and still inside
+  /// the OSCE gate (SILK forced to 16 kHz, 20 ms frames, :1948). The
+  /// twenty-letter voice budget (2026-09-22): the extra bytes buy
+  /// bandwidth — the 8-20 kHz "air" Persian sibilants live in — never
+  /// seconds. Below 15 kbit/s the same packet is SILK WB (the TOC says).
+  OpusVoiceConfig.hybrid(int bitrate)
+    : this._(
+        sampleRate: opusFullSampleRate,
+        bitrate: bitrate.clamp(6000, 24000),
+        bandwidth: _opusBandwidthFullband,
+        vbr: true,
+        autoBandwidth: true,
+      );
 
   OpusVoiceConfig.vbr(int bitrate)
     : this._(
@@ -163,8 +189,14 @@ class OpusVoiceConfig {
 
   final int sampleRate;
   final int bitrate;
+
+  /// The MAX_BANDWIDTH ceiling; also the forced BANDWIDTH unless
+  /// [autoBandwidth].
   final int bandwidth;
   final bool vbr;
+
+  /// Let the encoder pick the bandwidth under [bandwidth] (mode 7).
+  final bool autoBandwidth;
 
   /// 60 ms everywhere: least side-info per second, and OSCE still runs
   /// (osce.c:933 gates on the 20 ms SILK frame; dec_API.c:196 gives a
@@ -222,7 +254,14 @@ class OpusVoice implements VoiceFrameCodec, Finalizable {
     _check(_encCtl(_enc, _opusSetVbrConstraint, 0), 'set vbr constraint');
     _check(_encCtl(_enc, _opusSetSignal, _opusSignalVoice), 'set signal');
     _check(_encCtl(_enc, _opusSetMaxBandwidth, config.bandwidth), 'set max bw');
-    _check(_encCtl(_enc, _opusSetBandwidth, config.bandwidth), 'set bw');
+    _check(
+      _encCtl(
+        _enc,
+        _opusSetBandwidth,
+        config.autoBandwidth ? _opusAuto : config.bandwidth,
+      ),
+      'set bw',
+    );
     _check(_encCtl(_enc, _opusSetComplexity, 10), 'set complexity');
     _check(_encCtl(_enc, _opusSetInbandFec, 0), 'set fec');
     _check(_encCtl(_enc, _opusSetPacketLossPerc, 0), 'set loss');
