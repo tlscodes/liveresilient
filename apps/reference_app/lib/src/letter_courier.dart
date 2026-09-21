@@ -521,13 +521,20 @@ class LetterCourier {
     }
   }
 
-  /// The parts of one letter, one deliver each, in order. The door takes
-  /// them as ordinary letters and the responder logs the whole under the
-  /// letter's id once the last one lands. A part the door will not take
-  /// parks the WHOLE letter (a later carry restarts from part one with a
-  /// fresh id; the responder drops the stale group after its deadline), so
-  /// no half-letter is ever recorded. A timed-out part is not delivered;
-  /// its late answer is not settled — the whole is what the person sent.
+  /// How many parts may be in flight at once. Three: the door answers
+  /// each chunk, so three letters interleave without starving one another
+  /// on the rig, and the receiver takes any order.
+  static const int partsInFlight = 3;
+
+  /// Retries per index before the whole letter gives up.
+  static const int partRetries = 2;
+
+  /// The parts of one letter: up to [partsInFlight] delivers at once, each
+  /// index its own attempt — a lost part (timeout, refused) is sent again
+  /// under the same index and a fresh bundle id, never the whole letter.
+  /// The door dropping (queuedForLater) parks the WHOLE letter (a later
+  /// carry restarts with a fresh id; the responder drops the stale group
+  /// after its deadline), so no half-letter is ever recorded.
   Future<LetterState> _carryParts(
     LetterLanes lanes,
     QueuedLetter letter,
@@ -537,68 +544,102 @@ class LetterCourier {
   }) async {
     final whole = letter.bytes;
     final id = parseLetterPart(parts.first)!.id;
-    for (var i = 0; i < parts.length; i++) {
+    final n = parts.length;
+    final done = List<bool>.filled(n, false);
+    final attempts = List<int>.filled(n, 0);
+    var landed = 0;
+    var doorDown = false;
+    String? fatal;
+    final inFlight = <Future<void>>{};
+
+    void progress() {
       _set(
         LetterState.queued,
-        '${whole.length} B · letter ${i + 1}/${parts.length} · '
-        '${TxtQueryWire.splitChunks(parts[i]).length} chunks · at the door',
+        '${whole.length} B · $landed/$n letters landed · '
+        '${inFlight.length} in flight',
       );
-      final DeliveryOutcome outcome;
-      final bundleId = '${letter.id}-p$i';
-      try {
-        outcome = await lanes
-            .deliver(parts[i], bundleId: bundleId)
-            .timeout(budget.carry);
-      } on TimeoutException {
-        if (fromQueue) queue.release(letter.id);
-        _set(
-          LetterState.notDelivered,
-          'letter ${i + 1}/${parts.length} gave up after '
-          '${budget.carry.inSeconds}s · ${_scores(_snap(lanes))}',
-        );
-        return LetterState.notDelivered;
-      } on Object catch (error) {
-        if (fromQueue) queue.release(letter.id);
-        _set(
-          LetterState.notDelivered,
-          'letter ${i + 1}/${parts.length} error: $error',
-        );
-        return LetterState.notDelivered;
-      }
-      note(
-        'carried letter ${i + 1}/${parts.length} outcome=${outcome.name} '
-        'session=${lanes.doorSessionId} id=${idHex(id)}',
-      );
-      switch (outcome) {
-        case DeliveryOutcome.sentLive:
+    }
+
+    Future<void> carryIndex(int i) async {
+      while (attempts[i] <= partRetries && !doorDown && fatal == null) {
+        attempts[i]++;
+        final bundleId =
+            '${letter.id}-p$i${attempts[i] > 1 ? '-r${attempts[i] - 1}' : ''}';
+        DeliveryOutcome outcome;
+        try {
+          outcome = await lanes
+              .deliver(parts[i], bundleId: bundleId)
+              .timeout(budget.carry);
+        } on TimeoutException {
+          note('letter ${i + 1}/$n gave up (try ${attempts[i]}) — again');
           continue;
-        case DeliveryOutcome.queuedForLater:
-          lanes.reclaim(bundleId);
-          if (fromQueue) {
-            queue.release(letter.id);
-            _set(
-              LetterState.queued,
-              '${whole.length} B · door down again at letter ${i + 1}/'
-              '${parts.length} · ${queue.waiting} waiting',
-            );
-            return LetterState.queued;
-          }
-          return _park(letter);
-        case DeliveryOutcome.rejected:
-          if (fromQueue) await queue.remove(letter.id);
-          _set(
-            LetterState.notDelivered,
-            'letter ${i + 1}/${parts.length} refused by the queue',
-          );
-          return LetterState.notDelivered;
+        } on Object catch (error) {
+          note('letter ${i + 1}/$n error (try ${attempts[i]}): $error');
+          continue;
+        }
+        note(
+          'carried letter ${i + 1}/$n try ${attempts[i]} '
+          'outcome=${outcome.name} session=${lanes.doorSessionId} '
+          'id=${idHex(id)}',
+        );
+        switch (outcome) {
+          case DeliveryOutcome.sentLive:
+            done[i] = true;
+            landed++;
+            return;
+          case DeliveryOutcome.queuedForLater:
+            lanes.reclaim(bundleId);
+            doorDown = true;
+            return;
+          case DeliveryOutcome.rejected:
+            continue;
+        }
       }
+      if (!done[i] && !doorDown) {
+        fatal ??=
+            'letter ${i + 1}/$n not taken after ${attempts[i]} tries · '
+            '$landed/$n landed';
+      }
+    }
+
+    var next = 0;
+    while ((next < n || inFlight.isNotEmpty) && !doorDown && fatal == null) {
+      while (next < n && inFlight.length < partsInFlight && !doorDown) {
+        final i = next++;
+        late final Future<void> f;
+        f = carryIndex(i).whenComplete(() => inFlight.remove(f));
+        inFlight.add(f);
+      }
+      if (inFlight.isEmpty) break;
+      progress();
+      await Future.any(inFlight);
+    }
+    // Parts still in flight settle on their own; nothing new is launched.
+    await Future.wait(inFlight.toList());
+
+    if (doorDown) {
+      if (fromQueue) {
+        queue.release(letter.id);
+        _set(
+          LetterState.queued,
+          '${whole.length} B · door down again at $landed/$n letters · '
+          '${queue.waiting} waiting',
+        );
+        return LetterState.queued;
+      }
+      return _park(letter);
+    }
+    if (fatal != null) {
+      if (fromQueue) queue.release(letter.id);
+      _set(LetterState.notDelivered, fatal!);
+      return LetterState.notDelivered;
     }
     if (fromQueue) await queue.remove(letter.id);
     final throughDoor = best == ResilientLaneIds.txtQuery;
     _record(letter, best, throughDoor ? idHex(id) : null);
     _set(
       LetterState.arrived,
-      '${whole.length} B · ${parts.length} letters · '
+      '${whole.length} B · $n letters, $partsInFlight at a time · '
       '${throughDoor ? 'through the door · id ${idHex(id)}' : 'via ${_short(best)}'}',
     );
     return LetterState.arrived;

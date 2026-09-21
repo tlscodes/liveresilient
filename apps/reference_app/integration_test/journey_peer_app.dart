@@ -1358,36 +1358,17 @@ class JourneyPeer extends LetterComposer {
       }
     });
     try {
-      // One deliver per part, in order; the first that is not sentLive is
-      // the letter's outcome (a later part cannot be "arrived").
-      var outcome = DeliveryOutcome.sentLive;
-      for (var i = 0; i < parts.length; i++) {
-        outcome = await fabric
-            .deliver(
-              parts[i],
-              bundleId: parts.length > 1
-                  ? '${job.run}-dns-valve-p$i'
-                  : '${job.run}-dns-valve',
-              priority: LinkMessagePriority.callSignal,
-            )
-            .timeout(budget);
-        if (parts.length > 1) {
-          _note(
-            'dns valve carried letter ${i + 1}/${parts.length} '
-            'outcome=${outcome.name} session=${valve.lastSessionId}',
-          );
-          await _report('lane', <String, Object?>{
-            'stage': 'part',
-            'index': i + 1,
-            'total': parts.length,
-            'bytes': parts[i].length,
-            'outcome': outcome.name,
-            'session_id': valve.lastSessionId,
-            'parts_id': partsId,
-          }, run: job.run);
-        }
-        if (outcome != DeliveryOutcome.sentLive) break;
-      }
+      // Up to three parts in flight at once, each index retried on its own
+      // (a lost part is sent again, never the whole letter); the first
+      // outcome that is not sentLive after the retries is the letter's.
+      final outcome = await _carryPartsWindow(
+        job,
+        fabric,
+        valve,
+        parts,
+        partsId,
+        budget,
+      );
       // The whole's session id is the parts id: the responder logs the
       // assembled letter under it, so the row builder matches as before.
       final sessionId = partsId ?? valve.lastSessionId;
@@ -1485,6 +1466,98 @@ class JourneyPeer extends LetterComposer {
     } finally {
       heartbeat.cancel();
     }
+  }
+
+  /// The parts of one letter over the fabric: up to three delivers at
+  /// once, each index its own attempt (two retries under a fresh bundle
+  /// id), a `lane` stage=part event per attempt. A part the door will not
+  /// take (queuedForLater) ends the letter with that outcome; the receiver
+  /// takes any order and drops an incomplete group after its deadline.
+  Future<DeliveryOutcome> _carryPartsWindow(
+    JourneyJob job,
+    ConnectionFabric fabric,
+    TxtQueryLane valve,
+    List<Uint8List> parts,
+    String? partsId,
+    Duration budget,
+  ) async {
+    if (parts.length == 1) {
+      return fabric
+          .deliver(
+            parts.single,
+            bundleId: '${job.run}-dns-valve',
+            priority: LinkMessagePriority.callSignal,
+          )
+          .timeout(budget);
+    }
+    const window = 3;
+    const retries = 2;
+    final n = parts.length;
+    final done = List<bool>.filled(n, false);
+    var doorOutcome = DeliveryOutcome.sentLive;
+    var stop = false;
+    final inFlight = <Future<void>>{};
+
+    Future<void> carry(int i) async {
+      for (var attempt = 1; attempt <= retries + 1 && !stop; attempt++) {
+        DeliveryOutcome outcome;
+        try {
+          outcome = await fabric
+              .deliver(
+                parts[i],
+                bundleId:
+                    '${job.run}-dns-valve-p$i${attempt > 1 ? '-r${attempt - 1}' : ''}',
+                priority: LinkMessagePriority.callSignal,
+              )
+              .timeout(budget);
+        } on TimeoutException {
+          _note('dns valve letter ${i + 1}/$n gave up (try $attempt) — again');
+          continue;
+        }
+        _note(
+          'dns valve carried letter ${i + 1}/$n try $attempt '
+          'outcome=${outcome.name} session=${valve.lastSessionId}',
+        );
+        await _report('lane', <String, Object?>{
+          'stage': 'part',
+          'index': i + 1,
+          'total': n,
+          'try': attempt,
+          'bytes': parts[i].length,
+          'outcome': outcome.name,
+          'session_id': valve.lastSessionId,
+          'parts_id': partsId,
+        }, run: job.run);
+        if (outcome == DeliveryOutcome.sentLive) {
+          done[i] = true;
+          return;
+        }
+        if (outcome == DeliveryOutcome.queuedForLater) {
+          doorOutcome = outcome;
+          stop = true;
+          return;
+        }
+        // rejected: this index again under a fresh bundle id.
+      }
+      if (!done[i] && !stop) {
+        doorOutcome = DeliveryOutcome.rejected;
+        stop = true;
+      }
+    }
+
+    var next = 0;
+    while ((next < n || inFlight.isNotEmpty) && !stop) {
+      while (next < n && inFlight.length < window && !stop) {
+        final i = next++;
+        late final Future<void> f;
+        f = carry(i).whenComplete(() => inFlight.remove(f));
+        inFlight.add(f);
+      }
+      if (inFlight.isEmpty) break;
+      await Future.any(inFlight);
+    }
+    await Future.wait(inFlight.toList());
+    return stop ? doorOutcome : DeliveryOutcome.sentLive;
   }
 
   /// Joins the dnsvalve branch before `ended` is reported.

@@ -180,6 +180,102 @@ void main() {
     );
 
     test(
+      'three parts in flight at once, any order, and a lost part is sent again under its own index only',
+      () async {
+        final rig = Rig();
+        rig.lanes.doorUp = true;
+        rig.lanes.holdAll = true;
+        final whole = Uint8List.fromList([
+          for (var i = 0; i < 40000; i++) (i * 7) & 0xFF,
+        ]);
+        final sending = rig.courier.send(whole, kind: 'photo');
+        await Future<void>.delayed(Duration.zero);
+        // Ten parts, but only three are ever in flight.
+        expect(rig.lanes.held, hasLength(3));
+        expect(rig.lanes.held.map((h) => h.$1), [
+          'letter-1789898400000-p0',
+          'letter-1789898400000-p1',
+          'letter-1789898400000-p2',
+        ]);
+        // Finish them out of order: p1 first, then p2, then p0.
+        Future<void> finish(String suffix, DeliveryOutcome outcome) async {
+          final h = rig.lanes.held.firstWhere((h) => h.$1.endsWith(suffix));
+          h.$2.complete(outcome);
+          await Future<void>.delayed(Duration.zero);
+          await Future<void>.delayed(Duration.zero);
+        }
+
+        await finish('-p1', DeliveryOutcome.sentLive);
+        expect(rig.lanes.held, hasLength(3)); // p3 took the slot
+        await finish('-p2', DeliveryOutcome.sentLive);
+        // p0 is "lost": refused — only p0 is sent again, as p0-r1.
+        await finish('-p0', DeliveryOutcome.rejected);
+        expect(
+          rig.lanes.held.map((h) => h.$1),
+          contains('letter-1789898400000-p0-r1'),
+        );
+        expect(rig.lanes.held, hasLength(3));
+        // Drain everything else in whatever order the window holds.
+        while (rig.lanes.held.isNotEmpty) {
+          await finish(
+            rig.lanes.held.last.$1.split('letter-1789898400000').last,
+            DeliveryOutcome.sentLive,
+          );
+        }
+        final state = await sending;
+        expect(
+          state,
+          LetterState.arrived,
+          reason: rig.courier.notes.value.join('\n'),
+        );
+        expect(rig.lanes.maxInFlight, 3);
+        // Eleven delivers: ten parts and one retry of p0; each index landed once.
+        expect(rig.lanes.delivered, hasLength(11));
+        final asm = LetterAssembler(
+          parseLetterPart(rig.lanes.delivered.first.$2)!.id,
+        );
+        for (final (_, bytes) in rig.lanes.delivered) {
+          asm.add(parseLetterPart(bytes)!);
+        }
+        expect(asm.assemble(), whole);
+        expect(rig.courier.ledger.records.value.single.bytes, whole);
+        expect(
+          rig.courier.status.value!.detail,
+          contains('10 letters, 3 at a time'),
+        );
+        await rig.courier.dispose();
+      },
+    );
+
+    test(
+      'a part lost three times ends the letter as not delivered, naming the index',
+      () async {
+        final rig = Rig();
+        rig.lanes.doorUp = true;
+        rig.lanes.holdAll = true;
+        final sending = rig.courier.send(Uint8List(9000), kind: 'photo');
+        await Future<void>.delayed(Duration.zero);
+        for (var tries = 0; tries < 3; tries++) {
+          final h = rig.lanes.held.firstWhere((h) => h.$1.contains('-p1'));
+          h.$2.complete(DeliveryOutcome.rejected);
+          await Future<void>.delayed(Duration.zero);
+          await Future<void>.delayed(Duration.zero);
+        }
+        for (final h in rig.lanes.held.toList()) {
+          h.$2.complete(DeliveryOutcome.sentLive);
+        }
+        final state = await sending;
+        expect(state, LetterState.notDelivered);
+        expect(
+          rig.courier.status.value!.detail,
+          contains('letter 2/3 not taken after 3 tries'),
+        );
+        expect(rig.courier.ledger.records.value, isEmpty);
+        await rig.courier.dispose();
+      },
+    );
+
+    test(
       'the door drops mid-letter: the WHOLE letter is parked, nothing half is recorded',
       () async {
         final rig = Rig();
@@ -192,7 +288,8 @@ void main() {
         final state = await rig.courier.send(whole, kind: 'photo');
         expect(state, LetterState.queued);
         expect(rig.courier.status.value!.detail, contains('parked'));
-        expect(rig.lanes.delivered, hasLength(2));
+        // All three parts were launched at once; the door said no to one.
+        expect(rig.lanes.delivered, hasLength(3));
         expect(rig.lanes.reclaimed, hasLength(1));
         expect(rig.courier.ledger.records.value, isEmpty);
         expect(rig.courier.queue.length, 1);
@@ -206,14 +303,22 @@ void main() {
       () async {
         final rig = Rig();
         rig.lanes.doorUp = true;
+        // The third part is refused on every one of its three tries; the
+        // other two land. Only that index was retried.
         rig.lanes.outcomes.addAll([
           DeliveryOutcome.sentLive,
           DeliveryOutcome.sentLive,
           DeliveryOutcome.rejected,
+          DeliveryOutcome.rejected,
+          DeliveryOutcome.rejected,
         ]);
         final state = await rig.courier.send(Uint8List(9000), kind: 'photo');
         expect(state, LetterState.notDelivered);
-        expect(rig.courier.status.value!.detail, contains('letter 3/3'));
+        expect(
+          rig.courier.status.value!.detail,
+          contains('letter 3/3 not taken after 3 tries'),
+        );
+        expect(rig.lanes.delivered, hasLength(5));
         expect(rig.courier.ledger.records.value, isEmpty);
         await rig.courier.dispose();
       },
@@ -574,6 +679,12 @@ class ScriptedLanes implements LetterLanes {
   /// test decides when — and whether — the fabric comes back.
   Completer<DeliveryOutcome>? holdDeliver;
 
+  /// When true, every deliver is parked here until the test completes it:
+  /// the list's length IS the number of parts in flight.
+  bool holdAll = false;
+  final List<(String, Completer<DeliveryOutcome>)> held = [];
+  int maxInFlight = 0;
+
   @override
   Future<void> refresh() async {
     refreshes++;
@@ -624,6 +735,14 @@ class ScriptedLanes implements LetterLanes {
     required String bundleId,
   }) async {
     delivered.add((bundleId, payload));
+    if (holdAll) {
+      final c = Completer<DeliveryOutcome>();
+      this.held.add((bundleId, c));
+      if (this.held.length > maxInFlight) maxInFlight = this.held.length;
+      return c.future.whenComplete(() {
+        this.held.removeWhere((h) => identical(h.$2, c));
+      });
+    }
     final held = holdDeliver;
     if (held != null) return held.future;
     if (outcomes.isNotEmpty) return outcomes.removeAt(0);
