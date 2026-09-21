@@ -324,7 +324,15 @@ enum VideoLetterSourceReader {
             CGAffineTransform(scaleX: CGFloat(w2) / abs(up.width), y: CGFloat(h2) / abs(up.height))),
           at: .zero)
         let instr = AVMutableVideoCompositionInstruction()
-        instr.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+        // The track's own range, not asset.duration: a lazily loaded asset
+        // answers an indefinite duration and the composition is then
+        // "invalid" (AVFoundationErrorDomain -11841, seen on the phone
+        // 2026-09-22); the instruction must cover the reader's whole range.
+        let trackRange = vt.timeRange
+        let coverEnd = max(
+          trackRange.end.seconds.isFinite ? trackRange.end.seconds : 0, secs + 1)
+        instr.timeRange = CMTimeRange(
+          start: .zero, end: CMTime(seconds: coverEnd, preferredTimescale: 600))
         instr.layerInstructions = [layer]
         comp.instructions = [instr]
         let vout = AVAssetReaderVideoCompositionOutput(
