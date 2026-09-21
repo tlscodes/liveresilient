@@ -2872,187 +2872,200 @@ class JourneyPeerApp extends StatelessWidget {
       theme: ThemeData.dark(useMaterial3: true),
       home: Scaffold(
         appBar: AppBar(title: const Text('Journey peer (phone side)')),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ValueListenableBuilder<String>(
-                valueListenable: peer.status,
-                builder: (context, value, _) =>
-                    Text(value, style: Theme.of(context).textTheme.titleLarge),
-              ),
-              const SizedBox(height: 12),
-              ValueListenableBuilder<String>(
-                valueListenable: peer.letter,
-                builder: (context, value, _) => value.isEmpty
-                    ? const SizedBox.shrink()
-                    : ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 160),
-                        child: SingleChildScrollView(
-                          child: SelectableText(
-                            value,
-                            key: const Key('journey-peer-letter'),
-                            style: Theme.of(context).textTheme.bodyMedium,
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ValueListenableBuilder<String>(
+                  valueListenable: peer.status,
+                  builder: (context, value, _) => Text(
+                    value,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ValueListenableBuilder<String>(
+                  valueListenable: peer.letter,
+                  builder: (context, value, _) => value.isEmpty
+                      ? const SizedBox.shrink()
+                      : ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 160),
+                          child: SingleChildScrollView(
+                            child: SelectableText(
+                              value,
+                              key: const Key('journey-peer-letter'),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
                           ),
                         ),
-                      ),
-              ),
-              ValueListenableBuilder<Uint8List?>(
-                valueListenable: peer.letterPhoto,
-                builder: (context, bytes, _) => bytes == null
-                    ? const SizedBox.shrink()
-                    : Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Image.memory(
-                          bytes,
-                          key: const Key('journey-peer-letter-photo'),
-                          height: 220,
-                          fit: BoxFit.contain,
-                          gaplessPlayback: true,
-                        ),
-                      ),
-              ),
-              ValueListenableBuilder<ui.Image?>(
-                valueListenable: peer.letterFrame,
-                builder: (context, image, _) => image == null
-                    ? const SizedBox.shrink()
-                    : Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: SizedBox(
-                          height: 256,
-                          child: RawImage(
-                            image: image,
-                            key: const Key('journey-peer-letter-frame'),
+                ),
+                ValueListenableBuilder<Uint8List?>(
+                  valueListenable: peer.letterPhoto,
+                  builder: (context, bytes, _) => bytes == null
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Image.memory(
+                            bytes,
+                            key: const Key('journey-peer-letter-photo'),
+                            height: 220,
                             fit: BoxFit.contain,
-                            filterQuality: FilterQuality.none,
+                            gaplessPlayback: true,
                           ),
                         ),
-                      ),
-              ),
-              const SizedBox(height: 12),
-              ValueListenableBuilder<LetterStatus?>(
-                valueListenable: peer.letterStatus,
-                builder: (context, value, _) => value == null
-                    ? const SizedBox.shrink()
-                    : LetterStatusBanner(status: value),
-              ),
-              // Typed before the run; carried when the job says the phone
-              // writes the letter. TextField owns its controller, so a plain
-              // notifier is enough and nothing needs disposing.
-              TextField(
-                key: const Key('journey-peer-draft'),
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Letter from this phone (chat_source: phone)',
                 ),
-                onChanged: (value) => peer.draft.value = value,
-                onSubmitted: (_) => peer.submitLetter(),
-              ),
-              const SizedBox(height: 8),
-              ValueListenableBuilder<VoiceAlert?>(
-                valueListenable: peer.voiceAlert,
-                builder: (context, alert, _) => alert == null
-                    ? const SizedBox.shrink()
-                    : LetterAlertBanner(
-                        alert: alert,
-                        onDismiss: peer.dismissVoiceAlert,
-                        keyPrefix: 'journey-peer-voice',
-                        errorIcon: Icons.mic_off,
-                      ),
-              ),
-              ValueListenableBuilder<VoiceAlert?>(
-                valueListenable: peer.photoAlert,
-                builder: (context, alert, _) => alert == null
-                    ? const SizedBox.shrink()
-                    : LetterAlertBanner(
-                        alert: alert,
-                        onDismiss: peer.dismissPhotoAlert,
-                        keyPrefix: 'journey-peer-photo',
-                        errorIcon: Icons.broken_image,
-                      ),
-              ),
-              LetterPhotoPreview(composer: peer),
-              ValueListenableBuilder<VideoAlert?>(
-                valueListenable: peer.videoAlert,
-                builder: (context, alert, _) => alert == null
-                    ? const SizedBox.shrink()
-                    : LetterAlertBanner(
-                        alert: alert,
-                        onDismiss: peer.dismissVideoAlert,
-                        keyPrefix: 'journey-peer-video',
-                        errorIcon: Icons.videocam_off,
-                      ),
-              ),
-              ValueListenableBuilder<bool>(
-                valueListenable: peer.letterWanted,
-                builder: (context, wanted, _) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // The two authoring buttons share a row; Send gets the
-                    // full width below them, because it is the one that ends
-                    // the window and three equal buttons made none of them
-                    // readable on a phone.
-                    Row(
-                      children: [
-                        Expanded(
-                          child: LetterRecordButton(
-                            composer: peer,
-                            enabled: wanted,
+                ValueListenableBuilder<ui.Image?>(
+                  valueListenable: peer.letterFrame,
+                  builder: (context, image, _) => image == null
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: SizedBox(
+                            height: 256,
+                            child: RawImage(
+                              image: image,
+                              key: const Key('journey-peer-letter-frame'),
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.none,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: LetterPhotoButton(
-                            composer: peer,
-                            enabled: wanted,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Three in one row (2026-09-21): a fourth row
-                        // overflowed the screen; the labels ellipsize and
-                        // the icons carry the meaning.
-                        Expanded(
-                          child: LetterVideoButton(
-                            composer: peer,
-                            enabled: wanted,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 56,
-                      child: FilledButton(
-                        key: const Key('journey-peer-send'),
-                        onPressed: wanted ? peer.submitLetter : null,
-                        child: const Text('Send letter'),
-                      ),
-                    ),
-                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ValueListenableBuilder<List<String>>(
-                  valueListenable: peer.events,
-                  builder: (context, lines, _) => ListView(
-                    reverse: true,
+                const SizedBox(height: 12),
+                ValueListenableBuilder<LetterStatus?>(
+                  valueListenable: peer.letterStatus,
+                  builder: (context, value, _) => value == null
+                      ? const SizedBox.shrink()
+                      : LetterStatusBanner(status: value),
+                ),
+                // Typed before the run; carried when the job says the phone
+                // writes the letter. TextField owns its controller, so a plain
+                // notifier is enough and nothing needs disposing.
+                // The keyboard's return key is Done and drops the keyboard
+                // (a 3-line field's return key inserts newlines, never fires
+                // onSubmitted, and the keyboard covered Send — the owner
+                // could not tap it, 2026-09-22); tapping anywhere else on
+                // the screen drops it too.
+                TextField(
+                  key: const Key('journey-peer-draft'),
+                  maxLines: 3,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Letter from this phone (chat_source: phone)',
+                  ),
+                  onChanged: (value) => peer.draft.value = value,
+                  onSubmitted: (_) =>
+                      FocusManager.instance.primaryFocus?.unfocus(),
+                ),
+                const SizedBox(height: 8),
+                ValueListenableBuilder<VoiceAlert?>(
+                  valueListenable: peer.voiceAlert,
+                  builder: (context, alert, _) => alert == null
+                      ? const SizedBox.shrink()
+                      : LetterAlertBanner(
+                          alert: alert,
+                          onDismiss: peer.dismissVoiceAlert,
+                          keyPrefix: 'journey-peer-voice',
+                          errorIcon: Icons.mic_off,
+                        ),
+                ),
+                ValueListenableBuilder<VoiceAlert?>(
+                  valueListenable: peer.photoAlert,
+                  builder: (context, alert, _) => alert == null
+                      ? const SizedBox.shrink()
+                      : LetterAlertBanner(
+                          alert: alert,
+                          onDismiss: peer.dismissPhotoAlert,
+                          keyPrefix: 'journey-peer-photo',
+                          errorIcon: Icons.broken_image,
+                        ),
+                ),
+                LetterPhotoPreview(composer: peer),
+                ValueListenableBuilder<VideoAlert?>(
+                  valueListenable: peer.videoAlert,
+                  builder: (context, alert, _) => alert == null
+                      ? const SizedBox.shrink()
+                      : LetterAlertBanner(
+                          alert: alert,
+                          onDismiss: peer.dismissVideoAlert,
+                          keyPrefix: 'journey-peer-video',
+                          errorIcon: Icons.videocam_off,
+                        ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: peer.letterWanted,
+                  builder: (context, wanted, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final line in lines.reversed)
-                        Text(
-                          line,
-                          style: const TextStyle(
-                            fontFamily: 'Menlo',
-                            fontSize: 12,
+                      // The two authoring buttons share a row; Send gets the
+                      // full width below them, because it is the one that ends
+                      // the window and three equal buttons made none of them
+                      // readable on a phone.
+                      Row(
+                        children: [
+                          Expanded(
+                            child: LetterRecordButton(
+                              composer: peer,
+                              enabled: wanted,
+                            ),
                           ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: LetterPhotoButton(
+                              composer: peer,
+                              enabled: wanted,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Three in one row (2026-09-21): a fourth row
+                          // overflowed the screen; the labels ellipsize and
+                          // the icons carry the meaning.
+                          Expanded(
+                            child: LetterVideoButton(
+                              composer: peer,
+                              enabled: wanted,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 56,
+                        child: FilledButton(
+                          key: const Key('journey-peer-send'),
+                          onPressed: wanted ? peer.submitLetter : null,
+                          child: const Text('Send letter'),
                         ),
+                      ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                Expanded(
+                  child: ValueListenableBuilder<List<String>>(
+                    valueListenable: peer.events,
+                    builder: (context, lines, _) => ListView(
+                      reverse: true,
+                      children: [
+                        for (final line in lines.reversed)
+                          Text(
+                            line,
+                            style: const TextStyle(
+                              fontFamily: 'Menlo',
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

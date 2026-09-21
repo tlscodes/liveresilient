@@ -121,19 +121,25 @@ class _LetterSheetState extends State<LetterSheet> {
                     ? const SizedBox.shrink()
                     : LetterStatusBanner(status: value),
               ),
+              // Done drops the keyboard (a 3-line field's return key
+              // inserts newlines and never submits; the keyboard covered
+              // Send on the phone, 2026-09-22), then Send letter is tapped.
               TextField(
                 key: const Key('letter-sheet-draft'),
                 controller: _draft,
                 maxLines: 3,
+                textInputAction: TextInputAction.done,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   labelText: 'Letter',
+                  helperText: 'Done drops the keyboard; then tap Send letter',
                 ),
                 onChanged: (value) {
                   composer.draft.value = value;
                   _hint.value = null;
                 },
-                onSubmitted: (_) => unawaited(_send()),
+                onSubmitted: (_) =>
+                    FocusManager.instance.primaryFocus?.unfocus(),
               ),
               const SizedBox(height: 8),
               ValueListenableBuilder<VoiceAlert?>(
