@@ -495,6 +495,14 @@ class JourneyPeer extends LetterComposer {
     final next = List<String>.of(events.value)..add(stamped);
     if (next.length > 40) next.removeRange(0, next.length - 40);
     events.value = next;
+    // Every note also goes to the hub as a `note` event, so the Mac can
+    // read what the phone did in a window without a screenshot (a video
+    // window closed twice with no trace of the take, 2026-09-22). Best
+    // effort; a hub that is down loses nothing but the line.
+    final run = _lastRun;
+    if (run != null) {
+      unawaited(_report('note', <String, Object?>{'line': line}, run: run));
+    }
   }
 
   Future<void> run() async {
