@@ -593,6 +593,18 @@ class JourneyPeer extends LetterComposer {
         _note('screenshot $id skipped: no screen');
         return;
       }
+      // toImage renders the LAST PAINTED frame. A carry that ends within the
+      // same second as the state changes (measured 2026-09-21, RU26CI: the
+      // picture still said "probing the door") has not painted yet — and a
+      // phone with its screen off paints nothing at all. Ask for a frame
+      // and wait for it, bounded; say so when none comes.
+      var painted = true;
+      WidgetsBinding.instance.scheduleFrame();
+      await WidgetsBinding.instance.endOfFrame.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => painted = false,
+      );
+      if (!painted) _note('screenshot $id: no frame painted in 3 s');
       final image = await boundary.toImage(pixelRatio: 1.5);
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) {
@@ -606,7 +618,7 @@ class JourneyPeer extends LetterComposer {
         id: id,
         bytes: png,
       );
-      _note('screenshot $id ${png.length} B posted=$ok');
+      _note('screenshot $id ${png.length} B posted=$ok painted=$painted');
     } on Object catch (error) {
       _note('screenshot $id failed: $error');
     }
