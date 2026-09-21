@@ -176,6 +176,32 @@ the repo already holds: one invariant, every ranking.
 - `flutter drive` (debug attach) asked Xcode 26.3 to download the iOS 26.2
   platform (10.47 GB); the profile-build + devicectl path needs none of it.
 
+## A Mac-authored letter seen on the phone's screen, 2026-09-21
+
+The other direction of the question — the text originates on the Mac
+(`JOURNEY_VALVE_CHAT_FILE`, 44 B, `Salam az Mac: in name az dar-e DNS
+gozasht.`), the rig peer shows it and carries it through the door, hands-free
+(`LETTER_ONLY`, `CHAT_SOURCE=mac`, window 0). The peer now posts what its
+screen shows (`dcd2094`, `12c1f79`, `5691480`): a `letter_on_screen` event
+with the on-screen letter box's exact text and digest, and a PNG of its
+whole screen taken after a painted frame, after the verdict.
+
+| session | TSV | on screen (`app-letter/`) |
+|---------|-----|---------------------------|
+| RU26CI | 44 B · 55.6 s · PASS | event text = the Mac's 44 B, sha `3c3096f1…`; picture painted one statement early ("probing the door") — the reason for `12c1f79` |
+| 4OPKUE | 44 B · 53.5 s · PASS | picture shows the text, status `letter sentLive · chunks 2/2`, banner still "queued" — the reason for `5691480` |
+| CWPVWY | 44 B · 25.0 s · PASS | picture shows the text, `letter sentLive · door open · chunks 2/2`, banner **Letter arrived · 44 B · session CWPVWY** |
+
+Files: `<session>-peer-letter-on-screen.png`, `<session>.letter`,
+`<session>-letter-on-screen.json`. The three runs' rows are the last three
+`dns_valve_chat` lines of the TSV (manifest refreshed in the same commit).
+
+Rig rule re-learned the hard way (user law): the peer is installed OVER its
+previous install and never uninstalled, so the microphone prompt is answered
+once; every `devicectl device uninstall app` wipes that grant. The one
+uninstall that was needed removed the debug remnant of a killed `flutter
+drive`; the later ones were mine and wrong.
+
 ## What is still not in the reference app
 
 - The app's Chats screen is driven by the autopilot, not by the rig's
