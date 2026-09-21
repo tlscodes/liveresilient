@@ -31,6 +31,7 @@ import 'package:device_link/device_link.dart'
 import 'package:flutter/foundation.dart';
 
 import 'letter_composer.dart';
+import 'letter_parts.dart';
 import 'letter_ledger.dart';
 import 'letter_queue.dart';
 
@@ -380,11 +381,17 @@ class LetterCourier {
     String kind,
     Duration? duration,
   ) async {
-    if (payload.length > TxtQueryLane.maxPayloadBytes) {
+    // Over the cap: up to ten letters in a row (letter_parts.dart), each
+    // under the cap, which itself is untouched. Refused before any lane is
+    // touched when even ten would not do.
+    final List<Uint8List> parts;
+    try {
+      parts = splitLetter(payload, maxPartBytes: TxtQueryLane.maxPayloadBytes);
+    } on LetterTooLong catch (e) {
       _set(
         LetterState.notDelivered,
-        'too long — ${payload.length} B, the door takes '
-        '${TxtQueryLane.maxPayloadBytes}',
+        'too long — ${payload.length} B, the door takes $letterMaxParts '
+        'letters of ${TxtQueryLane.maxPayloadBytes} (${e.limit} B)',
       );
       return LetterState.notDelivered;
     }
@@ -393,7 +400,10 @@ class LetterCourier {
       _set(LetterState.notDelivered, 'no lane configured in this build');
       return LetterState.notDelivered;
     }
-    final chunks = TxtQueryWire.splitChunks(payload).length;
+    var chunks = 0;
+    for (final p in parts) {
+      chunks += TxtQueryWire.splitChunks(p).length;
+    }
     _set(LetterState.queued, '${payload.length} B ($kind) · probing the door');
 
     // Select: refresh until some lane ranks first with a positive score.
@@ -444,6 +454,20 @@ class LetterCourier {
     required bool fromQueue,
   }) async {
     final payload = letter.bytes;
+    if (payload.length > TxtQueryLane.maxPayloadBytes) {
+      final List<Uint8List> parts;
+      try {
+        parts = splitLetter(
+          payload,
+          maxPartBytes: TxtQueryLane.maxPayloadBytes,
+        );
+      } on LetterTooLong {
+        if (fromQueue) await queue.remove(letter.id);
+        _set(LetterState.notDelivered, 'too long for $letterMaxParts letters');
+        return LetterState.notDelivered;
+      }
+      return _carryParts(lanes, letter, parts, best, fromQueue: fromQueue);
+    }
     final DeliveryOutcome outcome;
     // The fabric's deliver outlives a timeout (`timeout` does not cancel
     // it), so the letter stays in flight until this future settles: no
@@ -495,6 +519,89 @@ class LetterCourier {
         _set(LetterState.notDelivered, 'refused by the queue');
         return LetterState.notDelivered;
     }
+  }
+
+  /// The parts of one letter, one deliver each, in order. The door takes
+  /// them as ordinary letters and the responder logs the whole under the
+  /// letter's id once the last one lands. A part the door will not take
+  /// parks the WHOLE letter (a later carry restarts from part one with a
+  /// fresh id; the responder drops the stale group after its deadline), so
+  /// no half-letter is ever recorded. A timed-out part is not delivered;
+  /// its late answer is not settled — the whole is what the person sent.
+  Future<LetterState> _carryParts(
+    LetterLanes lanes,
+    QueuedLetter letter,
+    List<Uint8List> parts,
+    String? best, {
+    required bool fromQueue,
+  }) async {
+    final whole = letter.bytes;
+    final id = parseLetterPart(parts.first)!.id;
+    for (var i = 0; i < parts.length; i++) {
+      _set(
+        LetterState.queued,
+        '${whole.length} B · letter ${i + 1}/${parts.length} · '
+        '${TxtQueryWire.splitChunks(parts[i]).length} chunks · at the door',
+      );
+      final DeliveryOutcome outcome;
+      final bundleId = '${letter.id}-p$i';
+      try {
+        outcome = await lanes
+            .deliver(parts[i], bundleId: bundleId)
+            .timeout(budget.carry);
+      } on TimeoutException {
+        if (fromQueue) queue.release(letter.id);
+        _set(
+          LetterState.notDelivered,
+          'letter ${i + 1}/${parts.length} gave up after '
+          '${budget.carry.inSeconds}s · ${_scores(_snap(lanes))}',
+        );
+        return LetterState.notDelivered;
+      } on Object catch (error) {
+        if (fromQueue) queue.release(letter.id);
+        _set(
+          LetterState.notDelivered,
+          'letter ${i + 1}/${parts.length} error: $error',
+        );
+        return LetterState.notDelivered;
+      }
+      note(
+        'carried letter ${i + 1}/${parts.length} outcome=${outcome.name} '
+        'session=${lanes.doorSessionId} id=${idHex(id)}',
+      );
+      switch (outcome) {
+        case DeliveryOutcome.sentLive:
+          continue;
+        case DeliveryOutcome.queuedForLater:
+          lanes.reclaim(bundleId);
+          if (fromQueue) {
+            queue.release(letter.id);
+            _set(
+              LetterState.queued,
+              '${whole.length} B · door down again at letter ${i + 1}/'
+              '${parts.length} · ${queue.waiting} waiting',
+            );
+            return LetterState.queued;
+          }
+          return _park(letter);
+        case DeliveryOutcome.rejected:
+          if (fromQueue) await queue.remove(letter.id);
+          _set(
+            LetterState.notDelivered,
+            'letter ${i + 1}/${parts.length} refused by the queue',
+          );
+          return LetterState.notDelivered;
+      }
+    }
+    if (fromQueue) await queue.remove(letter.id);
+    final throughDoor = best == ResilientLaneIds.txtQuery;
+    _record(letter, best, throughDoor ? idHex(id) : null);
+    _set(
+      LetterState.arrived,
+      '${whole.length} B · ${parts.length} letters · '
+      '${throughDoor ? 'through the door · id ${idHex(id)}' : 'via ${_short(best)}'}',
+    );
+    return LetterState.arrived;
   }
 
   Future<LetterState> _park(QueuedLetter letter) async {

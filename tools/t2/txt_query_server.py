@@ -358,6 +358,20 @@ def write_letter(letter_dir: str, session: str, payload: bytes) -> str:
     return path
 
 
+# One collector for the responder's life: the parts of up to ten letters in a
+# row (letter_parts.py, mirrored by the app's letter_parts.dart). The cap per
+# letter is untouched; each part is an ordinary letter under it.
+_PARTS = None
+
+
+def parts_collector():
+    global _PARTS
+    if _PARTS is None:
+        from letter_parts import LetterPartsCollector
+        _PARTS = LetterPartsCollector(deadline_s=600.0)
+    return _PARTS
+
+
 def drain_complete(srv: TxtQueryServer, letter_dir: str | None = None) -> int:
     """Log every payload assembled since the last call; return how many.
 
@@ -368,7 +382,9 @@ def drain_complete(srv: TxtQueryServer, letter_dir: str | None = None) -> int:
     two carriages. Until this loop existed nothing drained that mailbox, so an
     assembled payload left no trace anywhere.
     """
+    from letter_parts import id_hex, parse_part
     drained = 0
+    col = parts_collector()
     for session, payload in srv.take_complete():
         log.info("%s", complete_line(session, payload))
         # A probe is an empty session the responder completes like any other
@@ -378,6 +394,28 @@ def drain_complete(srv: TxtQueryServer, letter_dir: str | None = None) -> int:
             log.info("letter session=%s written=%s", session,
                      write_letter(letter_dir, session, payload))
         drained += 1
+        # A part of a larger letter (letter_parts.py): keep it; once the last
+        # one lands, log the WHOLE exactly like a session — id = the letter's
+        # 8-hex id, bytes and sha256 of the whole — and write <idhex>.letter,
+        # so journey_run.sh and the row builder find it under the id the
+        # phone reports with no change of their own. A group that never
+        # completes is logged incomplete after its deadline, never raised.
+        part = parse_part(payload) if payload else None
+        if part is not None:
+            log.info("part id=%s index=%d/%d bytes=%d session=%s",
+                     id_hex(part.id), part.index + 1, part.total, len(payload), session)
+            whole = col.observe(payload)
+            if whole is not None:
+                lid, data = whole
+                log.info("%s", complete_line(id_hex(lid), data))
+                if letter_dir:
+                    log.info("letter session=%s written=%s parts=%d", id_hex(lid),
+                             write_letter(letter_dir, id_hex(lid), data), part.total)
+            elif col.failed and col.failed[-1] == part.id:
+                log.info("parts id=%s digest mismatch: dropped", id_hex(part.id))
+    for lid, got, total, missing in col.expired():
+        log.info("parts id=%s incomplete after deadline: %d/%d, missing %s",
+                 id_hex(lid), got, total, missing)
     return drained
 
 

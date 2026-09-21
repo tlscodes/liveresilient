@@ -23,6 +23,7 @@ import 'package:connection_orchestrator/connection_orchestrator.dart'
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_courier.dart';
+import 'package:reference_app/src/letter_parts.dart';
 import 'package:reference_app/src/letter_queue.dart';
 
 const fast = LetterCourierBudget(
@@ -52,12 +53,15 @@ void main() {
         endpoints: () => throw StateError('lanes must not be built'),
         budget: fast,
       );
+      // One byte over what ten letters carry; one byte over ONE letter is
+      // no longer refused — it goes as two letters (tests below).
       final state = await courier.send(
-        Uint8List(TxtQueryLane.maxPayloadBytes + 1),
+        Uint8List(letterMaxTotalBytes() + 1),
         kind: 'typed',
       );
       expect(state, LetterState.notDelivered);
       expect(courier.status.value!.detail, contains('too long'));
+      expect(courier.status.value!.detail, contains('10 letters'));
       expect(
         courier.status.value!.detail,
         contains('${TxtQueryLane.maxPayloadBytes}'),
@@ -133,6 +137,88 @@ void main() {
   );
 
   group('the durable queue behind a down door (scripted lanes, no network)', () {
+    test(
+      'a letter over the cap goes as parts in a row and lands as ONE record of the whole',
+      () async {
+        final rig = Rig();
+        rig.lanes.doorUp = true;
+        final whole = Uint8List.fromList([
+          for (var i = 0; i < 9000; i++) i & 0xFF,
+        ]);
+        final state = await rig.courier.send(whole, kind: 'photo');
+        expect(
+          state,
+          LetterState.arrived,
+          reason: rig.courier.notes.value.join('\n'),
+        );
+        // Three parts of at most 4096 B, each a parsable part of one id.
+        expect(rig.lanes.delivered, hasLength(3));
+        final ids = <int>{};
+        final asm = LetterAssembler(
+          parseLetterPart(rig.lanes.delivered.first.$2)!.id,
+        );
+        for (final (bundle, bytes) in rig.lanes.delivered) {
+          expect(bytes.length, lessThanOrEqualTo(4096));
+          expect(bundle, matches(RegExp(r'-p[0-2]$')));
+          final part = parseLetterPart(bytes)!;
+          ids.add(part.id);
+          expect(asm.add(part), isTrue);
+        }
+        expect(ids, hasLength(1));
+        expect(asm.assemble(), whole);
+        // One ledger record of the whole, under the letter's id.
+        expect(rig.courier.ledger.records.value, hasLength(1));
+        expect(rig.courier.ledger.records.value.single.bytes, whole);
+        expect(
+          rig.courier.ledger.records.value.single.sessionId,
+          idHex(ids.single),
+        );
+        expect(rig.courier.status.value!.detail, contains('3 letters'));
+        expect(rig.courier.queue.isEmpty, isTrue);
+        await rig.courier.dispose();
+      },
+    );
+
+    test(
+      'the door drops mid-letter: the WHOLE letter is parked, nothing half is recorded',
+      () async {
+        final rig = Rig();
+        rig.lanes.doorUp = true;
+        rig.lanes.outcomes.addAll([
+          DeliveryOutcome.sentLive,
+          DeliveryOutcome.queuedForLater,
+        ]);
+        final whole = Uint8List(9000);
+        final state = await rig.courier.send(whole, kind: 'photo');
+        expect(state, LetterState.queued);
+        expect(rig.courier.status.value!.detail, contains('parked'));
+        expect(rig.lanes.delivered, hasLength(2));
+        expect(rig.lanes.reclaimed, hasLength(1));
+        expect(rig.courier.ledger.records.value, isEmpty);
+        expect(rig.courier.queue.length, 1);
+        expect(rig.store.contents.single.bytes, whole);
+        await rig.courier.dispose();
+      },
+    );
+
+    test(
+      'a part refused by the queue is not delivered, and says which part',
+      () async {
+        final rig = Rig();
+        rig.lanes.doorUp = true;
+        rig.lanes.outcomes.addAll([
+          DeliveryOutcome.sentLive,
+          DeliveryOutcome.sentLive,
+          DeliveryOutcome.rejected,
+        ]);
+        final state = await rig.courier.send(Uint8List(9000), kind: 'photo');
+        expect(state, LetterState.notDelivered);
+        expect(rig.courier.status.value!.detail, contains('letter 3/3'));
+        expect(rig.courier.ledger.records.value, isEmpty);
+        await rig.courier.dispose();
+      },
+    );
+
     test(
       'a door that answers but is fresh (−0.14, above the dead line) carries the letter — measured on the phone 2026-09-20',
       () async {
@@ -473,6 +559,9 @@ class ScriptedLanes implements LetterLanes {
   /// scores it 0.01 − 0.15 = −0.14, still above every dead lane.
   bool doorFresh = false;
   DeliveryOutcome outcome = DeliveryOutcome.sentLive;
+
+  /// When set, each deliver takes the next outcome here (then [outcome]).
+  final List<DeliveryOutcome> outcomes = [];
   final List<(String, Uint8List)> delivered = [];
   final List<String> reclaimed = [];
   int refreshes = 0;
@@ -537,6 +626,7 @@ class ScriptedLanes implements LetterLanes {
     delivered.add((bundleId, payload));
     final held = holdDeliver;
     if (held != null) return held.future;
+    if (outcomes.isNotEmpty) return outcomes.removeAt(0);
     return outcome;
   }
 

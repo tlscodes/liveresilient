@@ -21,6 +21,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+import 'package:reference_app/src/letter_parts.dart';
 import 'package:reference_app/src/photo_letter_picker.dart';
 import 'package:reference_app/src/voice_letter_recorder.dart';
 
@@ -769,12 +770,18 @@ void main() {
       expect(result.refusal, isNull);
       expect(letter, isNotNull);
       expect(letter!.wire.length, lessThanOrEqualTo(photoLetterMaxBytes));
-      // Headroom, not a bullseye: the lane's own cap is 4096 and the ladder
-      // is not allowed to spend it down to the last byte.
+      // Headroom, not a bullseye: ten letters of (4096 − 29) carry 40670 B
+      // and the ladder is not allowed to spend it down to the last byte —
+      // the picture goes as up to ten letters (letter_parts.dart), the cap
+      // per letter untouched.
       expect(
         letter.wire.length,
-        lessThan(4096),
-        reason: 'the encoded letter stays under the lane cap with room spare',
+        lessThan(letterMaxTotalBytes()),
+        reason: 'the encoded letter stays under ten letters with room spare',
+      );
+      expect(
+        splitLetter(letter.wire).length,
+        lessThanOrEqualTo(letterMaxParts),
       );
       expect(letter.sourceBytes, source.length);
       // What came out is a picture, not a truncated prefix of one: it
@@ -998,7 +1005,7 @@ void main() {
     test('the button names every state it can be in', () {
       expect(
         photoPickButtonLabel(PhotoPickState.idle, null),
-        'Thumbnail (≤3.5 KB)',
+        'Photo (≤39.1 KB, ≤10 letters)',
       );
       expect(
         photoPickButtonLabel(PhotoPickState.picking, null),

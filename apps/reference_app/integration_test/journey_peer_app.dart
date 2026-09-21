@@ -60,6 +60,7 @@ import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:reference_app/src/datagram_lane_port.dart';
 import 'package:reference_app/src/letter_composer.dart';
+import 'package:reference_app/src/letter_parts.dart';
 import 'package:reference_app/src/call_session.dart'
     show defaultBorderRelayEndpoints, parseValveResolvers;
 import 'package:reference_app/src/ui/letter_widgets.dart';
@@ -1273,26 +1274,34 @@ class JourneyPeer extends LetterComposer {
     // over-cap letter refused by the valve could still ride another lane and
     // produce a lane_chat that reads as a carriage. Same event the branch's
     // catch-all writes, so the row builder needs no new stage.
-    if (payload.length > TxtQueryLane.maxPayloadBytes) {
-      _note('letter refused: ${payload.length} B over the lane limit');
+    // Over the cap: up to ten letters in a row (letter_parts.dart; the
+    // responder reassembles and logs the whole under the letter's id).
+    final List<Uint8List> parts;
+    try {
+      parts = splitLetter(payload, maxPartBytes: TxtQueryLane.maxPayloadBytes);
+    } on LetterTooLong catch (e) {
+      _note('letter refused: ${payload.length} B over $letterMaxParts letters');
       _setLetter(
         LetterState.notDelivered,
-        'too long — ${payload.length} B, the door takes '
-        '${TxtQueryLane.maxPayloadBytes}',
+        'too long — ${payload.length} B, the door takes $letterMaxParts '
+        'letters of ${TxtQueryLane.maxPayloadBytes} (${e.limit} B)',
       );
       status.value =
           'job ${job.run}: letter too long — ${payload.length} B, '
-          'the door takes ${TxtQueryLane.maxPayloadBytes}';
+          'the door takes ${e.limit}';
       await _report('lane', <String, Object?>{
         'stage': 'error',
         'phase': 'carry',
         'error': 'letter too long',
         'bytes': payload.length,
-        'limit': TxtQueryLane.maxPayloadBytes,
+        'limit': e.limit,
         'source': config.chatSource,
       }, run: job.run);
       return;
     }
+    final partsId = parts.length > 1
+        ? idHex(parseLetterPart(parts.first)!.id)
+        : null;
     final sha = contentSha256Hex(payload);
     final bestAtSend = fabric.snapshot.bestLaneId;
     // The screen's view of the carriage, rewritten once a second from the
@@ -1302,7 +1311,10 @@ class JourneyPeer extends LetterComposer {
     // total. The callback never awaits and never throws past itself.
     final attemptsAtStart = valve.attempts;
     final repliesAtStart = valve.replies;
-    final total = txtChunkCount(payload.length);
+    var total = 0;
+    for (final p in parts) {
+      total += txtChunkCount(p.length);
+    }
     var lastReplies = repliesAtStart;
     DateTime? lastReplyAt;
     String beat() {
@@ -1323,10 +1335,14 @@ class JourneyPeer extends LetterComposer {
     }
 
     letter.value = describeLetter(payload, sha);
-    _note('letter handed to the valve: ${payload.length} B, $total chunks');
+    _note(
+      'letter handed to the valve: ${payload.length} B, $total chunks'
+      '${parts.length > 1 ? ', ${parts.length} letters id=$partsId' : ''}',
+    );
     _setLetter(
       LetterState.queued,
-      '${payload.length} B · $total chunks · at the door',
+      '${payload.length} B · $total chunks · '
+      '${parts.length > 1 ? '${parts.length} letters · ' : ''}at the door',
     );
     status.value = 'job ${job.run}: ${beat()}';
     final heartbeat = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -1337,16 +1353,43 @@ class JourneyPeer extends LetterComposer {
       }
     });
     try {
-      final outcome = await fabric
-          .deliver(
-            payload,
-            bundleId: '${job.run}-dns-valve',
-            priority: LinkMessagePriority.callSignal,
-          )
-          .timeout(budget);
+      // One deliver per part, in order; the first that is not sentLive is
+      // the letter's outcome (a later part cannot be "arrived").
+      var outcome = DeliveryOutcome.sentLive;
+      for (var i = 0; i < parts.length; i++) {
+        outcome = await fabric
+            .deliver(
+              parts[i],
+              bundleId: parts.length > 1
+                  ? '${job.run}-dns-valve-p$i'
+                  : '${job.run}-dns-valve',
+              priority: LinkMessagePriority.callSignal,
+            )
+            .timeout(budget);
+        if (parts.length > 1) {
+          _note(
+            'dns valve carried letter ${i + 1}/${parts.length} '
+            'outcome=${outcome.name} session=${valve.lastSessionId}',
+          );
+          await _report('lane', <String, Object?>{
+            'stage': 'part',
+            'index': i + 1,
+            'total': parts.length,
+            'bytes': parts[i].length,
+            'outcome': outcome.name,
+            'session_id': valve.lastSessionId,
+            'parts_id': partsId,
+          }, run: job.run);
+        }
+        if (outcome != DeliveryOutcome.sentLive) break;
+      }
+      // The whole's session id is the parts id: the responder logs the
+      // assembled letter under it, so the row builder matches as before.
+      final sessionId = partsId ?? valve.lastSessionId;
       _note(
         'dns valve carried outcome=${outcome.name} '
-        'session=${valve.lastSessionId} sha256=$sha',
+        'session=$sessionId sha256=$sha'
+        '${parts.length > 1 ? ' parts=${parts.length}' : ''}',
       );
       status.value = 'job ${job.run}: letter ${outcome.name} · ${beat()}';
       // What the screen shows for this letter, and a picture of the screen:
@@ -1363,7 +1406,7 @@ class JourneyPeer extends LetterComposer {
       // job and must not read as queued.
       switch (outcome) {
         case DeliveryOutcome.sentLive:
-          final session = valve.lastSessionId;
+          final session = sessionId;
           _setLetter(
             LetterState.arrived,
             session == null
@@ -1389,9 +1432,10 @@ class JourneyPeer extends LetterComposer {
         'outcome': outcome.name,
         'best_lane_at_send': bestAtSend,
         'selected': selected,
-        'session_id': valve.lastSessionId,
+        'session_id': sessionId,
         'sha256': sha,
         'bytes': payload.length,
+        'parts': parts.length,
         'source': config.chatSource,
         'letter_kind': letterKind,
         'letter_submitted': letterSubmitted,

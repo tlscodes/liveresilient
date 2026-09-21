@@ -319,8 +319,8 @@ class LetterPhotoPreview extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'A thumbnail goes when you tap Send, not the full '
-                  'picture.\n'
+                  'A small copy goes when you tap Send, in up to ten '
+                  'letters.\n'
                   '${photoLetterSize(letter.wire.length)} · '
                   '${letter.width}×${letter.height} · quality '
                   '${letter.quality}, from '

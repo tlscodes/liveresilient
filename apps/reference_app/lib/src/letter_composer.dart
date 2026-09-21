@@ -193,14 +193,14 @@ String photoRefusalText(PhotoLetterRefusal? refusal, {String? error}) {
 String photoPickButtonLabel(PhotoPickState state, PhotoLetter? letter) {
   switch (state) {
     case PhotoPickState.idle:
-      return 'Thumbnail (≤${photoLetterSize(photoLetterMaxBytes)})';
+      return 'Photo (≤${photoLetterSize(photoLetterMaxBytes)}, ≤10 letters)';
     case PhotoPickState.picking:
       return 'Choosing a photo…';
     case PhotoPickState.shrinking:
       return 'Shrinking to fit…';
     case PhotoPickState.picked:
-      if (letter == null) return 'Thumbnail ready — tap to redo';
-      return 'Thumbnail ${photoLetterSize(letter.wire.length)} · '
+      if (letter == null) return 'Photo ready — tap to redo';
+      return 'Photo ${photoLetterSize(letter.wire.length)} · '
           '${letter.width}×${letter.height} — tap to redo';
   }
 }

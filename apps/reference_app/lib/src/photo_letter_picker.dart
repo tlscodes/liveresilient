@@ -27,11 +27,12 @@ import 'package:image_picker/image_picker.dart';
 /// The hard ceiling on an encoded photo letter, in bytes.
 ///
 /// The lane's own cap is 4096 (`TxtQueryLane.maxPayloadBytes`, enforced again
-/// by `DnsValveConfig.parse`). This is deliberately 512 bytes under it: the
-/// point of the headroom is that a letter is never refused at the wire for a
-/// handful of bytes the encoder happened to spend, and the proven Mac-side
-/// baseline (3586 B) already sits below this line.
-const int photoLetterMaxBytes = 3584;
+/// by `DnsValveConfig.parse`). Since 2026-09-21 a letter over that cap goes
+/// as up to ten letters in a row (letter_parts.dart: 10 × (4096 − 29) =
+/// 40670 B), so a picture may spend 40000 B — 670 B under that line, the
+/// same idea as the old 512 B headroom — and the ladder's largest edge (640
+/// px) is reachable for most pictures. The cap per letter is untouched.
+const int photoLetterMaxBytes = 40000;
 
 /// The long-edge ladder, largest first. The search takes the LARGEST size
 /// that can be made to fit at an acceptable quality, because a photo letter
