@@ -45,7 +45,9 @@ class _LetterSheetState extends State<LetterSheet> {
     _hint.value = null;
     await composer.finalizeRecording();
     await composer.finalizePick();
+    await composer.finalizeVideo();
     final (kind, bytes) = phoneLetterChoice(
+      video: composer.videoLetter.value,
       voice: composer.voiceLetter.value,
       photo: composer.photoLetter.value,
       draft: composer.draft.value,
@@ -66,9 +68,11 @@ class _LetterSheetState extends State<LetterSheet> {
     // left behind would read as a take the next letter already holds.
     composer.voiceLetter.value = null;
     composer.photoLetter.value = null;
+    composer.videoLetter.value = null;
     composer.recordState.value = VoiceRecordState.idle;
     composer.recordElapsed.value = Duration.zero;
     composer.photoState.value = PhotoPickState.idle;
+    composer.videoState.value = VideoRecordState.idle;
     if (kind == 'typed') {
       composer.draft.value = '';
       _draft.clear();
@@ -155,6 +159,17 @@ class _LetterSheetState extends State<LetterSheet> {
                       ),
               ),
               LetterPhotoPreview(composer: composer),
+              ValueListenableBuilder<VideoAlert?>(
+                valueListenable: composer.videoAlert,
+                builder: (context, alert, _) => alert == null
+                    ? const SizedBox.shrink()
+                    : LetterAlertBanner(
+                        alert: alert,
+                        onDismiss: composer.dismissVideoAlert,
+                        keyPrefix: 'letter-sheet-video',
+                        errorIcon: Icons.videocam_off,
+                      ),
+              ),
               ValueListenableBuilder<bool>(
                 valueListenable: courier.busy,
                 builder: (context, busy, _) => Column(
@@ -171,6 +186,16 @@ class _LetterSheetState extends State<LetterSheet> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: LetterPhotoButton(
+                            composer: composer,
+                            enabled: !busy,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Three in one row (2026-09-21): a fourth row
+                        // overflowed the screen; the labels ellipsize and
+                        // the icons carry the meaning.
+                        Expanded(
+                          child: LetterVideoButton(
                             composer: composer,
                             enabled: !busy,
                           ),

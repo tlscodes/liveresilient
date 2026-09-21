@@ -1,3 +1,4 @@
+import AVFoundation
 import Flutter
 import PhotosUI
 import UIKit
@@ -75,6 +76,10 @@ final class PhotoLetterFallbackPicker: NSObject {
   }
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    if call.method == "readVideoLetterSource" {
+      VideoLetterSourceReader.read(call, result: result)
+      return
+    }
     guard call.method == "pickCompatibleImage" else {
       result(FlutterMethodNotImplemented)
       return
@@ -269,6 +274,127 @@ extension PhotoLetterFallbackPicker: PHPickerViewControllerDelegate {
         return
       }
       self.loadData(from: provider, after: error)
+    }
+  }
+}
+
+/// The phone-authored video letter's source reader (2026-09-21): one
+/// AVAssetReader pass over a clip the system camera recorded, scaled onto
+/// the letter's frame (144x256 portrait, preferredTransform applied first
+/// so a portrait take is upright; a landscape take is squashed, never
+/// cropped), decimated to the letter's fps by presentation time, written
+/// as tightly packed I420 (limited range, the wire's BT.601 assumption) —
+/// and the audio mixed down to s16le 8 kHz mono for the Opus tail. Dart
+/// then encodes with the vendored SVT-AV1 over FFI.
+///
+/// Arguments: path, width, height, fps, seconds. Result: {frames: <i420
+/// path>, count: <frames written>, audio: <s16le path>}.
+enum VideoLetterSourceReader {
+  static func read(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let a = call.arguments as? [String: Any] ?? [:]
+    guard let path = a["path"] as? String,
+      let w = a["width"] as? Int, let h = a["height"] as? Int,
+      let fps = a["fps"] as? Int, let secs = a["seconds"] as? Double
+    else {
+      result(FlutterError(code: "args", message: "path width height fps seconds", details: nil))
+      return
+    }
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+        guard let vt = asset.tracks(withMediaType: .video).first else {
+          throw NSError(domain: "video", code: 1, userInfo: [NSLocalizedDescriptionKey: "no video track"])
+        }
+        let reader = try AVAssetReader(asset: asset)
+        reader.timeRange = CMTimeRange(start: .zero, end: CMTime(seconds: secs, preferredTimescale: 600))
+        let comp = AVMutableVideoComposition()
+        comp.renderSize = CGSize(width: w, height: h)
+        comp.frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+        let up = vt.naturalSize.applying(vt.preferredTransform)
+        let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: vt)
+        layer.setTransform(
+          vt.preferredTransform.concatenating(
+            CGAffineTransform(scaleX: CGFloat(w) / abs(up.width), y: CGFloat(h) / abs(up.height))),
+          at: .zero)
+        let instr = AVMutableVideoCompositionInstruction()
+        instr.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+        instr.layerInstructions = [layer]
+        comp.instructions = [instr]
+        let vout = AVAssetReaderVideoCompositionOutput(
+          videoTracks: [vt],
+          videoSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+          ])
+        vout.videoComposition = comp
+        vout.alwaysCopiesSampleData = false
+        reader.add(vout)
+        var aout: AVAssetReaderAudioMixOutput? = nil
+        let at = asset.tracks(withMediaType: .audio)
+        if !at.isEmpty {
+          let o = AVAssetReaderAudioMixOutput(
+            audioTracks: at,
+            audioSettings: [
+              AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 8000,
+              AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16,
+              AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false,
+              AVLinearPCMIsNonInterleaved: false,
+            ])
+          reader.add(o)
+          aout = o
+        }
+        guard reader.startReading() else {
+          throw reader.error ?? NSError(domain: "video", code: 2, userInfo: [NSLocalizedDescriptionKey: "reader did not start"])
+        }
+        let dir = FileManager.default.temporaryDirectory
+        let fURL = dir.appendingPathComponent("video_letter.i420")
+        let aURL = dir.appendingPathComponent("video_letter.s16le")
+        FileManager.default.createFile(atPath: fURL.path, contents: nil)
+        FileManager.default.createFile(atPath: aURL.path, contents: nil)
+        let fh = try FileHandle(forWritingTo: fURL)
+        let ah = try FileHandle(forWritingTo: aURL)
+        var count = 0
+        var next = 0.0
+        let maxFrames = Int(secs * Double(fps))
+        while count < maxFrames, let sb = vout.copyNextSampleBuffer() {
+          let t = CMSampleBufferGetPresentationTimeStamp(sb).seconds
+          if t + 1e-6 < next { continue }  // decimate by pts, whatever cadence came out
+          next += 1.0 / Double(fps)
+          guard let pb = CMSampleBufferGetImageBuffer(sb) else { continue }
+          CVPixelBufferLockBaseAddress(pb, .readOnly)
+          var out = Data(capacity: w * h * 3 / 2)
+          let yb = CVPixelBufferGetBaseAddressOfPlane(pb, 0)!.assumingMemoryBound(to: UInt8.self)
+          let ys = CVPixelBufferGetBytesPerRowOfPlane(pb, 0)
+          for r in 0..<h { out.append(yb + r * ys, count: w) }
+          let cb = CVPixelBufferGetBaseAddressOfPlane(pb, 1)!.assumingMemoryBound(to: UInt8.self)
+          let cs = CVPixelBufferGetBytesPerRowOfPlane(pb, 1)
+          var u = [UInt8](repeating: 0, count: w * h / 4)
+          var v = u  // NV12 -> I420
+          for r in 0..<(h / 2) {
+            for c in 0..<(w / 2) {
+              u[r * (w / 2) + c] = cb[r * cs + 2 * c]
+              v[r * (w / 2) + c] = cb[r * cs + 2 * c + 1]
+            }
+          }
+          out.append(contentsOf: u)
+          out.append(contentsOf: v)
+          CVPixelBufferUnlockBaseAddress(pb, .readOnly)
+          fh.write(out)
+          count += 1
+        }
+        while let sb = aout?.copyNextSampleBuffer(), let bb = CMSampleBufferGetDataBuffer(sb) {
+          var len = 0
+          var p: UnsafeMutablePointer<Int8>? = nil
+          CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &len, dataPointerOut: &p)
+          if let p = p { ah.write(Data(bytes: p, count: len)) }
+        }
+        try fh.close()
+        try ah.close()
+        DispatchQueue.main.async { result(["frames": fURL.path, "count": count, "audio": aURL.path]) }
+      } catch {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "read", message: "\(error)", details: nil))
+        }
+      }
     }
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../letter_composer.dart';
 import '../photo_letter_picker.dart';
+import '../video_letter_picker.dart';
 
 /// The letter's verdict, large and coloured, above the field it judges.
 ///
@@ -263,6 +264,64 @@ class LetterPhotoButton extends StatelessWidget {
                   Flexible(
                     child: Text(
                       photoPickButtonLabel(state, letter),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Record a video, drawn from [LetterComposer.videoState] alone — the same
+/// one-value rule the other two follow, so "the camera is open" and "still
+/// encoding" never look alike while SVT-AV1 bisects on a worker isolate.
+class LetterVideoButton extends StatelessWidget {
+  const LetterVideoButton({
+    super.key,
+    required this.composer,
+    required this.enabled,
+  });
+
+  final LetterComposer composer;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<VideoRecordState>(
+      valueListenable: composer.videoState,
+      builder: (context, state, _) => ValueListenableBuilder<VideoLetter?>(
+        valueListenable: composer.videoLetter,
+        builder: (context, letter, _) {
+          final busy =
+              state == VideoRecordState.capturing ||
+              state == VideoRecordState.encoding;
+          final done = state == VideoRecordState.ready;
+          return SizedBox(
+            height: 56,
+            child: FilledButton(
+              key: const Key('journey-peer-video'),
+              style: FilledButton.styleFrom(
+                backgroundColor: done ? const Color(0xFF1B5E20) : null,
+                foregroundColor: done ? Colors.white : null,
+              ),
+              onPressed: enabled && !busy ? composer.recordVideo : null,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(done ? Icons.movie : Icons.videocam, size: 22),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      videoButtonLabel(state, letter),
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 15,

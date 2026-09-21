@@ -1489,8 +1489,8 @@ class JourneyPeer extends LetterComposer {
       final leftS = left.isNegative ? 0 : left.inSeconds;
       status.value =
           'job ${job.run}: your turn — type the letter, tap Record and '
-          'speak, or tap Photo and choose one, then tap Send '
-          '(${leftS}s left)';
+          'speak, tap Photo and choose one, or tap Video and record, then '
+          'tap Send (${leftS}s left)';
     });
     try {
       await gate.future.timeout(config.phoneWait, onTimeout: () {});
@@ -1505,19 +1505,27 @@ class JourneyPeer extends LetterComposer {
     // shrinking gets the same grace.
     await finalizeRecording();
     await finalizePick();
+    // A clip still being read or bisected when the window closes gets to
+    // finish too — otherwise the typed draft would go and the row would
+    // pass as a text carry (Fable 5.1's trap, 2026-09-21).
+    await finalizeVideo();
     final submitted = gate.isCompleted;
     final waitedMs = DateTime.now().difference(started).inMilliseconds;
     final voice = voiceLetter.value;
     final photo = photoLetter.value;
+    final video = videoLetter.value;
     voiceLetter.value = null;
     photoLetter.value = null;
+    videoLetter.value = null;
     // The buttons belong to the window that is closing: a "Recorded 0:30" or
     // a "Photo 2.1 KB" left over from the letter just carried would read, in
     // the next window, as a take that window already holds.
     recordState.value = VoiceRecordState.idle;
     recordElapsed.value = Duration.zero;
     photoState.value = PhotoPickState.idle;
+    videoState.value = VideoRecordState.idle;
     final (kind, bytes) = phoneLetterChoice(
+      video: video,
       voice: voice,
       photo: photo,
       draft: draft.value,
@@ -2966,6 +2974,17 @@ class JourneyPeerApp extends StatelessWidget {
                       ),
               ),
               LetterPhotoPreview(composer: peer),
+              ValueListenableBuilder<VideoAlert?>(
+                valueListenable: peer.videoAlert,
+                builder: (context, alert, _) => alert == null
+                    ? const SizedBox.shrink()
+                    : LetterAlertBanner(
+                        alert: alert,
+                        onDismiss: peer.dismissVideoAlert,
+                        keyPrefix: 'journey-peer-video',
+                        errorIcon: Icons.videocam_off,
+                      ),
+              ),
               ValueListenableBuilder<bool>(
                 valueListenable: peer.letterWanted,
                 builder: (context, wanted, _) => Column(
@@ -2986,6 +3005,16 @@ class JourneyPeerApp extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: LetterPhotoButton(
+                            composer: peer,
+                            enabled: wanted,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Three in one row (2026-09-21): a fourth row
+                        // overflowed the screen; the labels ellipsize and
+                        // the icons carry the meaning.
+                        Expanded(
+                          child: LetterVideoButton(
                             composer: peer,
                             enabled: wanted,
                           ),

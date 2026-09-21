@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'photo_letter_picker.dart';
+import 'video_letter_picker.dart';
 import 'voice_letter_recorder.dart';
 
 /// What the screen shows for a carried payload: the text when it IS text,
@@ -91,6 +92,9 @@ enum VoiceRecordState {
 }
 
 /// Something the person holding the phone must see and dismiss by hand.
+/// The video half of [VoiceAlert].
+typedef VideoAlert = VoiceAlert;
+
 class VoiceAlert {
   const VoiceAlert(this.message, {this.isError = true});
 
@@ -209,6 +213,57 @@ String photoPickButtonLabel(PhotoPickState state, PhotoLetter? letter) {
   }
 }
 
+/// What the Video button is doing right now — one value, one button, so
+/// "the camera is open" and "still encoding pass 3 of 6" never look alike.
+enum VideoRecordState {
+  /// Nothing recorded yet, or the last take was refused.
+  idle,
+
+  /// The system camera is open, or opening.
+  capturing,
+
+  /// A clip is in hand: the Runner is reading it and SVT-AV1 is bisecting
+  /// crf on a worker isolate.
+  encoding,
+
+  /// A letter-sized video is in hand, waiting for Send.
+  ready,
+}
+
+/// The plain-words reason a take produced no letter.
+String videoRefusalText(VideoLetterRefusal? refusal, {String? error}) {
+  switch (refusal) {
+    case VideoLetterRefusal.cancelled:
+      return 'No video was recorded — the camera closed without one. Tap '
+          'Video again, record up to 30 seconds, then tap Use Video.';
+    case VideoLetterRefusal.unreadable:
+      return 'That clip could not be read: ${error ?? 'no reason reported'}';
+    case VideoLetterRefusal.tooLong:
+      return 'That clip could not be made to fit thirty letters even at the '
+          'lowest quality. Record a shorter or calmer take.';
+    case VideoLetterRefusal.failed:
+      return 'Preparing the video failed: ${error ?? 'no reason reported'}';
+    case null:
+      return 'The video was never prepared — nothing was recorded.';
+  }
+}
+
+/// What the Video button says in each state.
+String videoButtonLabel(VideoRecordState state, VideoLetter? letter) {
+  switch (state) {
+    case VideoRecordState.idle:
+      return 'Video (≤30 s)';
+    case VideoRecordState.capturing:
+      return 'Recording video…';
+    case VideoRecordState.encoding:
+      return 'Encoding video…';
+    case VideoRecordState.ready:
+      if (letter == null) return 'Video ready — tap to redo';
+      return 'Video ${videoLetterSize(letter.wire.length)} · '
+          '${letter.length.inSeconds} s · ${letter.frames} frames — tap to redo';
+  }
+}
+
 /// Which of the things a person can leave in a Send window becomes the
 /// letter, and what the row calls it.
 ///
@@ -217,13 +272,18 @@ String photoPickButtonLabel(PhotoPickState state, PhotoLetter? letter) {
 /// tested here. A recording first — when both it and a photo are in hand the
 /// recording is always the newer act, because picking a photo clears a
 /// recording that was waiting and never the other way round. Then the photo,
-/// then the typed draft, then the run's own default letter.
+/// then the typed draft, then the run's own default letter. A video
+/// outranks them all: recording one clears the others (see [recordVideo]),
+/// and a later recording or pick clears the video, so "the last thing you
+/// did is the letter" holds in every order.
 (String, Uint8List) phoneLetterChoice({
   required VoiceLetter? voice,
   required PhotoLetter? photo,
   required String draft,
   required String fallback,
+  VideoLetter? video,
 }) {
+  if (video != null) return ('video', video.wire);
   if (voice != null) return ('voice', voice.wire);
   if (photo != null) return ('photo', photo.wire);
   final typed = draft.trim();
@@ -322,6 +382,7 @@ class LetterComposer {
     voiceAlert.value = null;
     voiceLetter.value = null;
     recordElapsed.value = Duration.zero;
+    _dropVideo('recording replaces the video that was waiting for Send');
     final recorder = newRecording();
     recorder.onCapReached = (letter, refusal) => _capReached(recorder, letter);
     try {
@@ -469,6 +530,7 @@ class LetterComposer {
       recordElapsed.value = Duration.zero;
       note('photo replaces the recording that was waiting for Send');
     }
+    _dropVideo('photo replaces the video that was waiting for Send');
     final selection = newPhotoSelection();
     final Uint8List? source;
     try {
@@ -514,6 +576,119 @@ class LetterComposer {
   /// would be dropped for a default letter.
   Future<void> finalizePick() async {
     final live = _pickTransition;
+    if (live != null) await live;
+  }
+
+  /// A clip recorded and encoded during the current Send window, if any.
+  /// Cleared once the letter is built, like [voiceLetter] and [photoLetter].
+  final ValueNotifier<VideoLetter?> videoLetter = ValueNotifier<VideoLetter?>(
+    null,
+  );
+
+  /// What the Video button is doing right now.
+  final ValueNotifier<VideoRecordState> videoState =
+      ValueNotifier<VideoRecordState>(VideoRecordState.idle);
+
+  /// A take that failed or was refused, shown next to the button until
+  /// dismissed by hand; its own notifier so it never overwrites a photo or
+  /// voice failure nobody has read.
+  final ValueNotifier<VideoAlert?> videoAlert = ValueNotifier<VideoAlert?>(
+    null,
+  );
+
+  /// Clears the video banner. Only a tap does this.
+  void dismissVideoAlert() => videoAlert.value = null;
+
+  /// Builds the selection this peer drives. Overridden in tests, which have
+  /// no camera; production is always [CameraVideoSelection].
+  @visibleForTesting
+  VideoSelection Function() newVideoSelection = CameraVideoSelection.new;
+
+  Future<void>? _videoTransition;
+
+  /// Opens the camera, reads and encodes what comes back until it fits
+  /// thirty letters, and holds it for Send. A tap during a take in flight
+  /// joins it, never opens a second camera.
+  Future<void> recordVideo() {
+    final live = _videoTransition;
+    if (live != null) return live;
+    final work = _videoTransition = _video().whenComplete(
+      () => _videoTransition = null,
+    );
+    return work;
+  }
+
+  Future<void> _video() async {
+    videoState.value = VideoRecordState.capturing;
+    videoAlert.value = null;
+    videoLetter.value = null;
+    // One letter, one payload: a video replaces a recording or a photo
+    // that was waiting, and their buttons visibly drop back to idle.
+    if (voiceLetter.value != null) {
+      voiceLetter.value = null;
+      recordState.value = VoiceRecordState.idle;
+      recordElapsed.value = Duration.zero;
+      note('video replaces the recording that was waiting for Send');
+    }
+    if (photoLetter.value != null) {
+      photoLetter.value = null;
+      photoState.value = PhotoPickState.idle;
+      note('video replaces the photo that was waiting for Send');
+    }
+    final selection = newVideoSelection();
+    final String? path;
+    try {
+      path = await selection.capture();
+    } on Object catch (error) {
+      videoState.value = VideoRecordState.idle;
+      _videoFailed('The camera did not open. $error');
+      return;
+    }
+    if (path == null) {
+      videoState.value = VideoRecordState.idle;
+      _videoFailed(videoRefusalText(VideoLetterRefusal.cancelled));
+      return;
+    }
+    videoState.value = VideoRecordState.encoding;
+    note('video captured, encoding');
+    final result = await selection.build(
+      path,
+      budget: videoLetterBudgetBytes(),
+    );
+    final letter = result.letter;
+    if (letter == null) {
+      videoState.value = VideoRecordState.idle;
+      _videoFailed(videoRefusalText(result.refusal, error: selection.error));
+      return;
+    }
+    videoLetter.value = letter;
+    videoState.value = VideoRecordState.ready;
+    note(
+      'video encoded ${letter.wire.length}B ${letter.frames} frames '
+      '${letter.length.inSeconds}s crf${letter.crf} '
+      '${letter.audioPackets} opus packets in ${letter.passes} passes '
+      '${letter.encodeMs} ms',
+    );
+  }
+
+  void _videoFailed(String message) {
+    videoAlert.value = VideoAlert(message);
+    note('video failed: $message');
+  }
+
+  void _dropVideo(String why) {
+    if (videoLetter.value == null) return;
+    videoLetter.value = null;
+    videoState.value = VideoRecordState.idle;
+    note(why);
+  }
+
+  /// Waits out a take already in flight, without ever starting one — the
+  /// Send window calls this before it reads [videoLetter], because a clip
+  /// still encoding when the window closes would otherwise be dropped for
+  /// the typed draft and the row would pass as a text carry.
+  Future<void> finalizeVideo() async {
+    final live = _videoTransition;
     if (live != null) await live;
   }
 

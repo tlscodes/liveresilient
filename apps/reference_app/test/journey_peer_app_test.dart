@@ -23,6 +23,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:reference_app/src/letter_parts.dart';
 import 'package:reference_app/src/photo_letter_picker.dart';
+import 'package:reference_app/src/video_letter_picker.dart';
 import 'package:reference_app/src/voice_letter_recorder.dart';
 
 import '../integration_test/blackout_forwarder.dart';
@@ -744,6 +745,123 @@ void main() {
     });
   });
 
+  group('the Video button on the phone', () {
+    VideoLetter fakeVideo(int bytes) => VideoLetter(
+      wire: Uint8List.fromList(List<int>.filled(bytes, 7)),
+      frames: 174,
+      fps: 6,
+      crf: 41,
+      audioPackets: 483,
+      passes: 5,
+      encodeMs: 4200,
+    );
+
+    test(
+      'a recorded clip lands as a letter with its size on the button',
+      () async {
+        final peer = JourneyPeer();
+        peer.newVideoSelection = () =>
+            _FakeVideoSelection(letter: fakeVideo(100000));
+        await peer.recordVideo();
+        expect(peer.videoState.value, VideoRecordState.ready);
+        final letter = peer.videoLetter.value;
+        expect(letter, isNotNull);
+        expect(letter!.length.inSeconds, 29);
+        expect(peer.videoAlert.value, isNull);
+        expect(
+          videoButtonLabel(VideoRecordState.ready, letter),
+          contains('174 frames'),
+        );
+        expect(
+          videoButtonLabel(VideoRecordState.ready, letter),
+          contains('97.7 KB'),
+        );
+      },
+    );
+
+    test('backing out of the camera says so where the button is', () async {
+      final peer = JourneyPeer();
+      peer.newVideoSelection = () => _FakeVideoSelection(); // recorded nothing
+      await peer.recordVideo();
+      expect(peer.videoState.value, VideoRecordState.idle);
+      expect(peer.videoLetter.value, isNull);
+      expect(peer.videoAlert.value!.message, contains('No video was recorded'));
+      peer.dismissVideoAlert();
+      expect(peer.videoAlert.value, isNull);
+    });
+
+    test('a camera that will not open is a banner, not a silence', () async {
+      final peer = JourneyPeer();
+      peer.newVideoSelection = () => _FakeVideoSelection(
+        openError: VideoLetterUnavailable('camera permission denied'),
+      );
+      await peer.recordVideo();
+      expect(peer.videoState.value, VideoRecordState.idle);
+      expect(
+        peer.videoAlert.value!.message,
+        contains('camera permission denied'),
+      );
+    });
+
+    test('a clip that will not fit is a banner, not a silence', () async {
+      final peer = JourneyPeer();
+      peer.newVideoSelection = () =>
+          _FakeVideoSelection(refusal: VideoLetterRefusal.tooLong);
+      await peer.recordVideo();
+      expect(peer.videoState.value, VideoRecordState.idle);
+      expect(peer.videoAlert.value!.message, contains('thirty letters'));
+    });
+
+    test(
+      'a video outranks a waiting recording and photo, and a later photo clears it',
+      () async {
+        final peer = JourneyPeer();
+        peer.newVideoSelection = () =>
+            _FakeVideoSelection(letter: fakeVideo(500));
+        peer.newPhotoSelection = () => _FakeSelection(
+          source: img.encodeJpg(img.Image(width: 8, height: 8)),
+        );
+        await peer.pickPhoto();
+        expect(peer.photoLetter.value, isNotNull);
+        await peer.recordVideo();
+        expect(
+          peer.photoLetter.value,
+          isNull,
+          reason: 'video replaces the photo',
+        );
+        expect(peer.photoState.value, PhotoPickState.idle);
+        final (kind, _) = phoneLetterChoice(
+          video: peer.videoLetter.value,
+          voice: null,
+          photo: null,
+          draft: 'typed',
+          fallback: 'x',
+        );
+        expect(kind, 'video');
+        await peer.pickPhoto();
+        expect(
+          peer.videoLetter.value,
+          isNull,
+          reason: 'a later photo clears the video',
+        );
+        expect(peer.videoState.value, VideoRecordState.idle);
+      },
+    );
+
+    test('finalizeVideo waits out a build still in flight', () async {
+      final peer = JourneyPeer();
+      peer.newVideoSelection = () => _FakeVideoSelection(
+        letter: fakeVideo(300),
+        buildDelay: const Duration(milliseconds: 120),
+      );
+      final started = peer.recordVideo();
+      expect(peer.videoState.value, isNot(VideoRecordState.ready));
+      await peer.finalizeVideo();
+      expect(peer.videoState.value, VideoRecordState.ready);
+      await started;
+    });
+  });
+
   group('the Photo button on the phone', () {
     /// A real, decodable JPEG of [edge] square, busy enough that it cannot
     /// be encoded into a handful of bytes — a flat colour would fit the cap
@@ -1228,6 +1346,47 @@ class _RefusingPicker extends ImagePicker {
 /// in a unit test. A real pick needs a device and is not simulated here; the
 /// shrink is the REAL ladder, called in place, because that is the part
 /// worth exercising.
+class _FakeVideoSelection implements VideoSelection {
+  _FakeVideoSelection({
+    this.letter,
+    this.refusal,
+    this.openError,
+    this.buildDelay = Duration.zero,
+  });
+
+  /// The letter the build yields; null with no [refusal] means the person
+  /// backed out of the camera.
+  final VideoLetter? letter;
+  final VideoLetterRefusal? refusal;
+  final Object? openError;
+  final Duration buildDelay;
+
+  @override
+  String? error;
+
+  @override
+  Future<String?> capture() async {
+    final e = openError;
+    if (e != null) {
+      error = '$e';
+      throw e;
+    }
+    if (letter == null && refusal == null) return null;
+    return '/tmp/fake-clip.mov';
+  }
+
+  @override
+  Future<VideoBuildResult> build(String path, {required int budget}) async {
+    if (buildDelay > Duration.zero) await Future<void>.delayed(buildDelay);
+    final r = refusal;
+    if (r != null) {
+      error = 'fake $r';
+      return VideoBuildResult.refused(r);
+    }
+    return VideoBuildResult.letter(letter!);
+  }
+}
+
 class _FakeSelection implements PhotoSelection {
   _FakeSelection({
     this.source,
