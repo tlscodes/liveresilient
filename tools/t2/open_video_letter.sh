@@ -2,12 +2,16 @@
 # open_video_letter.sh — the receiver's half of a video letter on the Mac:
 # a phase-5 video-note wire (magic 'V1') as the responder assembled it ->
 # frames decoded with dav1d, audio with c2dec, muxed to one mp4 the person
-# can play. Never guesses: a wire that does not unpack or decode exits 2.
+# can play. The display path costs no bytes and is where half of "blocky,
+# 3 fps" came from (2026-09-21): motion-compensated interpolation to 24 fps
+# at the native size, then a lanczos 4x upscale and a light unsharp — not
+# the nearest-neighbour 4x of the first version. Never guesses: a wire
+# that does not unpack or decode exits 2.
 #
-# USAGE  tools/t2/open_video_letter.sh <letter.bin> <out.mp4>
-#        prints "video <seconds>s <w>x<h>@<fps> frames <n> -> <out.mp4>"
+# USAGE  tools/t2/open_video_letter.sh <letter.bin> <out.mp4> [plain]
+#        "plain" = the old path (nearest 4x, native fps), for comparison.
 set -euo pipefail
-IN=${1:?letter}; OUT=${2:?out.mp4}
+IN=${1:?letter}; OUT=${2:?out.mp4}; MODE=${3:-enhanced}
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 PACK="$REPO/tools/phase5/pack_video_note.py"
 for tool in dav1d c2dec ffmpeg python3; do
@@ -21,8 +25,13 @@ H=$(python3 -c "d=open('$IN','rb').read(); print(d[5]|d[6]<<8)")
 dav1d -i "$T/v.ivf" -o "$T/v.y4m" >/dev/null 2>&1
 FRAMES=$(dav1d -i "$T/v.ivf" -o /dev/null --muxer null 2>&1 | grep -oE 'Decoded [0-9]+/' | tail -1 | grep -oE '[0-9]+')
 c2dec 700C "$T/a.c2" "$T/a.raw" >/dev/null 2>&1
+if [ "$MODE" = plain ]; then
+  VF="scale=iw*4:ih*4:flags=neighbor"; OUTFPS=$FPS
+else
+  VF="minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,scale=iw*4:ih*4:flags=lanczos,unsharp=5:5:0.5"; OUTFPS=24
+fi
 ffmpeg -y -v error -r "$FPS" -i "$T/v.y4m" -f s16le -ar 8000 -ac 1 -i "$T/a.raw" \
-  -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 18 -vf "scale=iw*4:ih*4:flags=neighbor" \
+  -vf "$VF" -r "$OUTFPS" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 18 \
   -c:a aac -b:a 24k -shortest "$OUT"
 SECS=$(python3 -c "print(round(${FRAMES:-0}/${FPS}, 1))")
-echo "video ${SECS}s ${W}x${H}@${FPS} frames ${FRAMES:-0} -> $OUT"
+echo "video ${SECS}s ${W}x${H}@${FPS} frames ${FRAMES:-0} ($MODE) -> $OUT"

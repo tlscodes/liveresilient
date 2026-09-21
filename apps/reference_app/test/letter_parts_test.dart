@@ -98,11 +98,12 @@ void main() {
     expect(asm.assemble, throwsA(isA<LetterDigestMismatch>()));
   });
 
-  test('more than ten parts is refused before anything is sent', () {
+  test('more than the ceiling is refused before anything is sent', () {
     final tooBig = Uint8List(letterMaxTotalBytes() + 1);
     expect(() => splitLetter(tooBig), throwsA(isA<LetterTooLong>()));
     final justFits = Uint8List(letterMaxTotalBytes());
-    expect(splitLetter(justFits, id: 5), hasLength(10));
+    expect(splitLetter(justFits, id: 5), hasLength(letterMaxParts));
+    expect(letterMaxParts, 30);
   });
 
   test(

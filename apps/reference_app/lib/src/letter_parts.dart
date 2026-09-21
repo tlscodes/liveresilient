@@ -26,9 +26,11 @@ const List<int> _magic = <int>[0x4C, 0x50]; // 'L' 'P'
 const int letterPartVersion = 1;
 const int letterPartHeaderBytes = 29;
 
-/// The most parts one letter may have. Ten letters at ~25 s each on the rig
-/// is the ceiling the person can wait for.
-const int letterMaxParts = 10;
+/// The most parts one letter may have. Raised from ten to thirty on
+/// 2026-09-21 after the video measurement (three in flight, ≈3.5 s per
+/// letter on the rig: 20 letters ≈ 70 s, 30 ≈ 105 s). A photo still fits
+/// ten; a 30 s video wants twenty. The cap per letter is untouched.
+const int letterMaxParts = 30;
 
 /// The door's cap, restated here only as a default; callers pass the lane's.
 const int letterPartMaxBytes = 4096;

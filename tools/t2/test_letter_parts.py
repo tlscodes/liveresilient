@@ -86,7 +86,8 @@ class Parts(unittest.TestCase):
     def test_more_than_ten_refused(self):
         with self.assertRaises(lp.LetterTooLong):
             lp.split_letter(bytes(lp.max_total_bytes() + 1))
-        self.assertEqual(len(lp.split_letter(bytes(lp.max_total_bytes()), letter_id=5)), 10)
+        self.assertEqual(len(lp.split_letter(bytes(lp.max_total_bytes()), letter_id=5)), lp.MAX_PARTS)
+        self.assertEqual(lp.MAX_PARTS, 30)
 
     def test_not_mistaken_for_picture_or_voice(self):
         self.assertIsNone(lp.parse_part(b"\xff\xd8\xff" + bytes(64)))

@@ -27,7 +27,7 @@ from dataclasses import dataclass
 MAGIC = b"LP"
 VERSION = 1
 HEADER_BYTES = 29
-MAX_PARTS = 10
+MAX_PARTS = 30
 PART_MAX_BYTES = 4096
 
 
