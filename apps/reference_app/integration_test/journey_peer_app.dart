@@ -1357,7 +1357,6 @@ class JourneyPeer extends LetterComposer {
         'bytes': payload.length,
         'source': config.chatSource,
       }, run: job.run);
-      await _postScreenshot(job.run, 'letter-on-screen');
       // deliver() fans out, so a live carry may have gone by another lane
       // and left the valve without a session id; the fabric is disposed
       // right after this carry, so a parked bundle is never drained in this
@@ -1382,6 +1381,10 @@ class JourneyPeer extends LetterComposer {
         case DeliveryOutcome.rejected:
           _setLetter(LetterState.notDelivered, 'refused by the queue');
       }
+      // After the verdict, so the picture shows the banner the person
+      // sees at the end (4OPKUE's picture still said "queued": the
+      // capture ran one statement too early).
+      await _postScreenshot(job.run, 'letter-on-screen');
       await _report('lane_chat', <String, Object?>{
         'outcome': outcome.name,
         'best_lane_at_send': bestAtSend,
