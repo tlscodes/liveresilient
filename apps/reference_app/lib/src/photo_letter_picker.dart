@@ -179,27 +179,54 @@ PhotoShrinkResult shrinkPhotoLetter(
             height: wide ? null : edge,
             interpolation: img.Interpolation.average,
           );
+    // yuv420 chroma subsampling, not the library default yuv444: at this
+    // budget the chroma planes are worth a quarter of the bytes for a
+    // difference nobody sees on a 200-pixel letter.
+    Uint8List encodeAt(int quality) =>
+        img.encodeJpg(scaled, quality: quality, chroma: img.JpegChroma.yuv420);
+    int? fitQuality;
+    Uint8List? fit;
     for (final quality in photoLetterQualities) {
-      // yuv420 chroma subsampling, not the library default yuv444: at this
-      // budget the chroma planes are worth a quarter of the bytes for a
-      // difference nobody sees on a 200-pixel letter.
-      final encoded = img.encodeJpg(
-        scaled,
-        quality: quality,
-        chroma: img.JpegChroma.yuv420,
-      );
+      final encoded = encodeAt(quality);
       if (encoded.length <= maxBytes) {
-        return PhotoShrinkResult.letter(
-          PhotoLetter(
-            wire: encoded,
-            width: scaled.width,
-            height: scaled.height,
-            quality: quality,
-            sourceBytes: source.length,
-          ),
-        );
+        fitQuality = quality;
+        fit = encoded;
+        break;
       }
     }
+    if (fit == null || fitQuality == null) continue; // next edge
+    var best = fit;
+    var bestQuality = fitQuality;
+    // Step-1 bisect between the rung that fits and the rung above it: the
+    // ten-point ladder alone leaves budget unused (the video's step-3 crf
+    // ladder measured 8 % unspent, 2026-09-21). At most four more encodes,
+    // at the winning edge only.
+    final above = photoLetterQualities.lastWhere(
+      (q) => q > bestQuality,
+      orElse: () => bestQuality,
+    );
+    var lo = bestQuality + 1;
+    var hi = above - 1;
+    while (lo <= hi) {
+      final q = (lo + hi) ~/ 2;
+      final encoded = encodeAt(q);
+      if (encoded.length <= maxBytes) {
+        best = encoded;
+        bestQuality = q;
+        lo = q + 1;
+      } else {
+        hi = q - 1;
+      }
+    }
+    return PhotoShrinkResult.letter(
+      PhotoLetter(
+        wire: best,
+        width: scaled.width,
+        height: scaled.height,
+        quality: bestQuality,
+        sourceBytes: source.length,
+      ),
+    );
   }
   return const PhotoShrinkResult.refused(PhotoLetterRefusal.tooLarge);
 }

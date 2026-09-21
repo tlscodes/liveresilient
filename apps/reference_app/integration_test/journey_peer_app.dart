@@ -28,6 +28,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -52,6 +53,8 @@ import 'package:device_link/device_link.dart'
     show BundleAdmission, DtnBundle, DtnBundleQueue, LinkMessagePriority;
 import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:flutter/material.dart';
+import 'package:broadcast_media/src/av1_decoder.dart';
+import 'package:broadcast_media/src/video_note_codec.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hamseda_codec/src/voice_frame_codec.dart';
 import 'package:hamseda_codec/src/voice_note_codec.dart';
@@ -434,6 +437,13 @@ class JourneyPeer extends LetterComposer {
   /// printed.
   final ValueNotifier<String> letter = ValueNotifier<String>('');
 
+  /// A Mac-authored JPEG letter, decoded and painted on this screen.
+  final ValueNotifier<Uint8List?> letterPhoto = ValueNotifier<Uint8List?>(null);
+
+  /// The middle frame of a Mac-authored video letter, decoded by dav1d on
+  /// this phone and painted on this screen.
+  final ValueNotifier<ui.Image?> letterFrame = ValueNotifier<ui.Image?>(null);
+
   /// The letter's verdict for the person holding the phone (see
   /// [LetterState]); null until a job names a letter and again at the next
   /// job's start, so a verdict never outlives the letter it judged.
@@ -646,6 +656,219 @@ class JourneyPeer extends LetterComposer {
       'pcm_sha256': contentSha256Hex(bytes),
       'decode_ms': ms,
       'posted': posted,
+    }, run: run);
+  }
+
+  bool _isJpeg(Uint8List p) =>
+      p.length > 3 && p[0] == 0xFF && p[1] == 0xD8 && p[2] == 0xFF;
+
+  /// A JPEG letter is decoded here with the app's image codec, painted, and
+  /// the painted screen posted (screenshot `letter-photo`), with a
+  /// `photo_decoded` event naming width, height and the decode time and
+  /// the bytes reposted as blob `photo/letter-shown`. Never throws.
+  Future<void> _showPhotoOnPhone(
+    String run,
+    Uint8List payload,
+    String sha,
+  ) async {
+    if (!_isJpeg(payload)) return;
+    final started = DateTime.now();
+    final ui.Image image;
+    try {
+      final codec = await ui.instantiateImageCodec(payload);
+      image = (await codec.getNextFrame()).image;
+      codec.dispose();
+    } on Object catch (error) {
+      _note('photo letter did not decode on the phone: $error');
+      await _report('photo_decoded', <String, Object?>{
+        'ok': false,
+        'error': '$error',
+        'sha256': sha,
+      }, run: run);
+      return;
+    }
+    final ms = DateTime.now().difference(started).inMilliseconds;
+    letter.value =
+        '<photo ${image.width}x${image.height}, ${payload.length} B, '
+        'sha256 ${sha.substring(0, 16)}>';
+    letterPhoto.value = payload;
+    WidgetsBinding.instance.scheduleFrame();
+    await WidgetsBinding.instance.endOfFrame.timeout(
+      const Duration(seconds: 3),
+      onTimeout: () {},
+    );
+    await _postScreenshot(run, 'letter-photo');
+    final posted = await _postBlob(
+      run: run,
+      kind: 'photo',
+      id: 'letter-shown',
+      bytes: payload,
+    );
+    _note(
+      'photo letter shown on the phone: ${image.width}x${image.height} '
+      '${payload.length} B in $ms ms posted=$posted',
+    );
+    await _report('photo_decoded', <String, Object?>{
+      'ok': true,
+      'width': image.width,
+      'height': image.height,
+      'bytes': payload.length,
+      'sha256': sha,
+      'decode_ms': ms,
+      'posted': posted,
+    }, run: run);
+    image.dispose();
+  }
+
+  /// The 'V1' wire's flags low nibble (pack_video_note_v2.py MODES) as the
+  /// app's voice-note mode: the audio tail is c2enc's per-frame bytes for
+  /// Codec2, 45 B packets for Opus 6k.
+  static const Map<int, VoiceNoteMode> _videoAudioModes = {
+    0: VoiceNoteMode.c700,
+    1: VoiceNoteMode.c1200,
+    2: VoiceNoteMode.c1600,
+    3: VoiceNoteMode.c2400,
+    4: VoiceNoteMode.c3200,
+    5: VoiceNoteMode.opus6k,
+  };
+
+  /// A video letter ('V1', video_note_codec.dart) is decoded here: every
+  /// AV1 temporal unit by dav1d in an isolate (the RGBA convert for 180
+  /// frames would freeze the heartbeat), the audio tail by the app's own
+  /// frame codec; the middle frame is painted, the screen posted
+  /// (screenshot `letter-video`), the frame posted as PNG blob
+  /// `video-frame/mid` and the PCM as `voice-pcm/video-audio`, and a
+  /// `video_decoded` event carries counts, shas and times. Never throws.
+  Future<void> _decodeVideoOnPhone(
+    String run,
+    Uint8List payload,
+    String sha,
+  ) async {
+    if (payload.length < videoNoteHeaderBytes ||
+        payload[0] != videoNoteMagic0 ||
+        payload[1] != videoNoteMagic1) {
+      return;
+    }
+    final VideoNote note;
+    try {
+      note = VideoNote.decode(payload);
+    } on MalformedVideoNote catch (error) {
+      _note('not a video letter ($error)');
+      return;
+    }
+    // decode() drops the flags byte: the audio mode is read here.
+    final audioMode = _videoAudioModes[payload[11] & 0x0F];
+    final units = note.videoFrames;
+    final started = DateTime.now();
+    final (int, String, String, DecodedFrame) decoded;
+    try {
+      decoded = await Isolate.run(() {
+        final frames = decodeAv1Frames(units);
+        final m = frames[frames.length ~/ 2];
+        return (
+          frames.length,
+          contentSha256Hex(frames.first.rgba),
+          contentSha256Hex(m.rgba),
+          m,
+        );
+      });
+    } on Object catch (error) {
+      _note('video decode on the phone failed: $error');
+      await _report('video_decoded', <String, Object?>{
+        'ok': false,
+        'error': '$error',
+        'sha256': sha,
+      }, run: run);
+      return;
+    }
+    final (frameCount, firstSha, midSha, mid) = decoded;
+    final videoMs = DateTime.now().difference(started).inMilliseconds;
+    var pcm = Uint8List(0);
+    var audioFrames = 0;
+    var sampleRate = 0;
+    if (audioMode != null) {
+      final n = (audioMode.bitsPerFrame + 7) >> 3;
+      final codec = voiceFrameCodecFor(audioMode);
+      final out = BytesBuilder(copy: false);
+      try {
+        sampleRate = codec.sampleRate;
+        for (var i = 0; i + n <= note.audioBits.length; i += n) {
+          final s = codec.decodeFrame(
+            Uint8List.sublistView(note.audioBits, i, i + n),
+          );
+          out.add(s.buffer.asUint8List(s.offsetInBytes, s.lengthInBytes));
+          audioFrames++;
+        }
+      } on Object catch (error) {
+        _note('video audio decode on the phone failed: $error');
+      } finally {
+        codec.dispose();
+      }
+      pcm = out.takeBytes();
+    }
+    final ms = DateTime.now().difference(started).inMilliseconds;
+    final done = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      mid.rgba,
+      mid.width,
+      mid.height,
+      ui.PixelFormat.rgba8888,
+      done.complete,
+    );
+    final image = await done.future;
+    letterFrame.value = image;
+    letter.value =
+        '<video ${note.width}x${note.height}@${note.fps} $frameCount frames, '
+        '${audioMode?.name ?? 'no'} audio, ${payload.length} B, '
+        'sha256 ${sha.substring(0, 16)}>';
+    WidgetsBinding.instance.scheduleFrame();
+    await WidgetsBinding.instance.endOfFrame.timeout(
+      const Duration(seconds: 3),
+      onTimeout: () {},
+    );
+    await _postScreenshot(run, 'letter-video');
+    final png = await image.toByteData(format: ui.ImageByteFormat.png);
+    final framePosted =
+        png != null &&
+        await _postBlob(
+          run: run,
+          kind: 'video-frame',
+          id: 'mid',
+          bytes: png.buffer.asUint8List(),
+        );
+    final pcmPosted =
+        pcm.isNotEmpty &&
+        await _postBlob(
+          run: run,
+          kind: 'voice-pcm',
+          id: 'video-audio',
+          bytes: pcm,
+        );
+    _note(
+      'video letter decoded on the phone: ${note.width}x${note.height}@'
+      '${note.fps} $frameCount frames in $videoMs ms, audio '
+      '${audioMode?.name} $audioFrames frames ${pcm.length} B, total $ms ms',
+    );
+    await _report('video_decoded', <String, Object?>{
+      'ok': true,
+      'sha256': sha,
+      'bytes': payload.length,
+      'width': note.width,
+      'height': note.height,
+      'fps': note.fps,
+      'units': units.length,
+      'frames': frameCount,
+      'first_frame_rgba_sha256': firstSha,
+      'mid_frame_rgba_sha256': midSha,
+      'audio_mode': audioMode?.name,
+      'audio_frames': audioFrames,
+      'pcm_bytes': pcm.length,
+      'sample_rate': sampleRate,
+      'pcm_sha256': contentSha256Hex(pcm),
+      'video_decode_ms': videoMs,
+      'decode_ms': ms,
+      'frame_posted': framePosted,
+      'pcm_posted': pcmPosted,
     }, run: run);
   }
 
@@ -1401,7 +1624,12 @@ class JourneyPeer extends LetterComposer {
       );
     }
 
+    letterPhoto.value = null;
+    letterFrame.value = null;
     letter.value = describeLetter(payload, sha);
+    // A photo letter is decoded HERE with the app's image codec and painted
+    // (the row's "seen on the phone" for a photo, 2026-09-21).
+    await _showPhotoOnPhone(job.run, payload, sha);
     // A voice letter is decoded HERE, on the phone, with the same FFI codec
     // the app ships (Opus 6k for mode 12, Codec2 below), and the PCM goes
     // to the hub: the Mac-authored voice letter is thereby heard through
@@ -1445,6 +1673,10 @@ class JourneyPeer extends LetterComposer {
         '${parts.length > 1 ? ' parts=${parts.length}' : ''}',
       );
       status.value = 'job ${job.run}: letter ${outcome.name} · ${beat()}';
+      // A video letter is decoded HERE — AV1 by dav1d in an isolate, audio
+      // by the app's own frame codec — AFTER the carry, so the seconds it
+      // takes never land in the row's measured time (2026-09-21).
+      await _decodeVideoOnPhone(job.run, payload, sha);
       // What the screen shows for this letter, and a picture of the screen:
       // the row's "seen on the phone" rests on these, not on the digest.
       await _report('letter_on_screen', <String, Object?>{
@@ -2654,6 +2886,38 @@ class JourneyPeerApp extends StatelessWidget {
                             value,
                             key: const Key('journey-peer-letter'),
                             style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ),
+              ),
+              ValueListenableBuilder<Uint8List?>(
+                valueListenable: peer.letterPhoto,
+                builder: (context, bytes, _) => bytes == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Image.memory(
+                          bytes,
+                          key: const Key('journey-peer-letter-photo'),
+                          height: 220,
+                          fit: BoxFit.contain,
+                          gaplessPlayback: true,
+                        ),
+                      ),
+              ),
+              ValueListenableBuilder<ui.Image?>(
+                valueListenable: peer.letterFrame,
+                builder: (context, image, _) => image == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: SizedBox(
+                          height: 256,
+                          child: RawImage(
+                            image: image,
+                            key: const Key('journey-peer-letter-frame'),
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.none,
                           ),
                         ),
                       ),

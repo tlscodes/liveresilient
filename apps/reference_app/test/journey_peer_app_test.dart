@@ -797,7 +797,12 @@ void main() {
       expect(decoded, isNotNull);
       expect(decoded!.width, letter.width);
       expect(decoded.height, letter.height);
-      expect(photoLetterQualities, contains(letter.quality));
+      // The step-1 bisect lands between two ladder rungs (58 here), never
+      // above the top rung or under the floor.
+      expect(
+        letter.quality,
+        inInclusiveRange(photoLetterQualities.last, photoLetterQualities.first),
+      );
     });
 
     test('the ladder takes the largest size that fits, not the smallest', () {
