@@ -87,7 +87,7 @@ class Parts(unittest.TestCase):
         with self.assertRaises(lp.LetterTooLong):
             lp.split_letter(bytes(lp.max_total_bytes() + 1))
         self.assertEqual(len(lp.split_letter(bytes(lp.max_total_bytes()), letter_id=5)), lp.MAX_PARTS)
-        self.assertEqual(lp.MAX_PARTS, 30)
+        self.assertEqual(lp.MAX_PARTS, 60)
 
     def test_not_mistaken_for_picture_or_voice(self):
         self.assertIsNone(lp.parse_part(b"\xff\xd8\xff" + bytes(64)))

@@ -26,11 +26,15 @@ const List<int> _magic = <int>[0x4C, 0x50]; // 'L' 'P'
 const int letterPartVersion = 1;
 const int letterPartHeaderBytes = 29;
 
-/// The most parts one letter may have. Raised from ten to thirty on
-/// 2026-09-21 after the video measurement (three in flight, ≈3.5 s per
-/// letter on the rig: 20 letters ≈ 70 s, 30 ≈ 105 s). A photo still fits
-/// ten; a 30 s video wants twenty. The cap per letter is untouched.
-const int letterMaxParts = 30;
+/// The most parts one letter may have. Ten, then thirty (2026-09-21),
+/// then SIXTY on 2026-09-22 for the video letter: the owner spends
+/// letters on quality, never on seconds, and a talking face at 144x256
+/// was judged a thumbnail — 216x384 needs ~2.25x the bytes at the same
+/// bits per pixel. Measured 4.0 s per letter on the rig: 30 ≈ 120 s,
+/// 45 ≈ 180 s, 60 ≈ 240 s. The photo keeps its own thirty-letter budget
+/// (photo_letter_picker.dart) so a picture never becomes a four-minute
+/// letter. The cap per letter and the one-byte index/total are untouched.
+const int letterMaxParts = 60;
 
 /// The door's cap, restated here only as a default; callers pass the lane's.
 const int letterPartMaxBytes = 4096;

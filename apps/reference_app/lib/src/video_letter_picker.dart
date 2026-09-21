@@ -18,6 +18,8 @@
 library;
 
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
 
 // ignore: implementation_imports
 import 'package:broadcast_media/src/av1_encoder.dart';
@@ -26,6 +28,13 @@ import 'package:image_picker/image_picker.dart';
 
 import 'letter_parts.dart';
 import 'photo_letter_picker.dart' show photoLetterFallbackChannel;
+import 'voice_letter_recorder.dart'
+    show
+        decimate,
+        hasSpeech,
+        normalizeSpeech,
+        voiceLetterFrame,
+        voiceLetterSampleRate;
 
 /// The hard cap on one clip: thirty letters carry 30 s at 144x256@6 with
 /// Opus audio (the Mac's measured row, 121699 B of 122010).
@@ -146,9 +155,10 @@ class CameraVideoSelection implements VideoSelection {
           'height': videoLetterHeight,
           'fps': videoLetterFps,
           'seconds': videoLetterMaxLength.inMilliseconds / 1000,
-          // 16 kHz for the wideband Opus tail: an 8 kHz mix would make
-          // WB packets that carry nothing above 4 kHz (Fable's trap).
-          'audioRate': 16000,
+          // The voice letter's own capture rate: the clip's track is
+          // read at 48 kHz and gated + normalised + decimated in Dart
+          // below — the chain the owner called excellent (2026-09-22).
+          'audioRate': voiceLetterSampleRate,
         },
       );
     } on PlatformException catch (e) {
@@ -163,12 +173,13 @@ class CameraVideoSelection implements VideoSelection {
       return const VideoBuildResult.refused(VideoLetterRefusal.unreadable);
     }
     final i420 = await File(framesPath).readAsBytes();
-    final pcm = await File(audioPath).readAsBytes();
+    final raw48k = await File(audioPath).readAsBytes();
     final started = DateTime.now();
     try {
+      final pcm16k = await Isolate.run(() => videoLetterAudioChain(raw48k));
       final build = await encodeVideoLetter(
         i420: i420,
-        pcm16k: pcm,
+        pcm16k: pcm16k,
         width: videoLetterWidth,
         height: videoLetterHeight,
         fps: videoLetterFps,
@@ -203,5 +214,22 @@ class CameraVideoSelection implements VideoSelection {
   }
 }
 
-/// The budget a video letter may spend: thirty letters (letter_parts.dart).
+/// The budget a video letter may spend: every letter the parts system
+/// allows (letter_parts.dart, sixty since 2026-09-22).
 int videoLetterBudgetBytes() => letterMaxTotalBytes();
+
+/// The voice letter's chain over the clip's 48 kHz track
+/// (voice_letter_recorder.dart): the speech gate, speech RMS to -20 dBFS
+/// with non-speech at -15 dB, then decimate x3 at a 7 kHz cutoff ->
+/// s16le 16 kHz for the mode-6 tail. Tonight's raw -36 dB mix made SILK
+/// starve the 4-8 kHz band (measured -73.8 dB above 4.5 kHz, 2026-09-22).
+/// A take with no speech is passed raw, never refused: the picture is the
+/// letter. Runs on the worker isolate.
+Uint8List videoLetterAudioChain(Uint8List raw48k) {
+  final x = Int16List.sublistView(raw48k, 0, raw48k.length - raw48k.length % 2);
+  final full = hasSpeech(x, frame: voiceLetterFrame)
+      ? normalizeSpeech(x, sampleRate: voiceLetterSampleRate)
+      : x;
+  final wide = decimate(full, 3, cutoffHz: 7000);
+  return wide.buffer.asUint8List(wide.offsetInBytes, wide.lengthInBytes);
+}

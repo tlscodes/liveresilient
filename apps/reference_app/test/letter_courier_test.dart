@@ -61,7 +61,7 @@ void main() {
       );
       expect(state, LetterState.notDelivered);
       expect(courier.status.value!.detail, contains('too long'));
-      expect(courier.status.value!.detail, contains('30 letters'));
+      expect(courier.status.value!.detail, contains('$letterMaxParts letters'));
       expect(
         courier.status.value!.detail,
         contains('${TxtQueryLane.maxPayloadBytes}'),

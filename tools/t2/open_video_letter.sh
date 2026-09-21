@@ -42,19 +42,27 @@ case "$AMODE" in
     python3 "$PACK" opus-ogg "$T/a.bits" "$T/a.opus" 45 >/dev/null
     AIN=(-i "$T/a.opus") ;;
   opusvbr)
-    python3 "$PACK" opus-ogg-var "$T/a.bits" "$T/a.opus" 16000 >/dev/null
-    AIN=(-i "$T/a.opus") ;;
+    # NoLACE for the ear: the letter's own libopus at decoder complexity 7,
+    # never ffmpeg's plain decoder — the voice letter was judged this way
+    # (2026-09-22).
+    ( cd "$(dirname "$0")/../../packages/hamseda_codec" \
+      && dart run tool/decode_video_tail.dart "$T/a.bits" "$T/a.wav" 7 >/dev/null )
+    AIN=(-i "$T/a.wav") ;;
   *) echo "ERROR: unknown audio mode '$AMODE' in flags byte" >&2; exit 2 ;;
 esac
 
 if [ "$MODE" = plain ]; then
   VF="scale=iw*4:ih*4:flags=neighbor"; OUTFPS=$FPS
 else
-  VF="minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=epzs:vsbmc=1:search_param=24:scd=fdiff:scd_threshold=8:mb_size=8"
-  VF="$VF,scale=iw*4:ih*4:flags=spline"
-  VF="$VF,deband=1thr=0.012:2thr=0.012:3thr=0.012:range=14:blur=1"
-  VF="$VF,cas=0.35"
-  OUTFPS=24
+  # For a talking face (2026-09-22): denoise the crf pulse first, invent
+  # only one mid-frame (12 fps — 24 fps from 6 warped the lips), lanczos
+  # instead of the softest kernel, a firmer cas.
+  VF="hqdn3d=1.0:0.8:3.0:2.5"
+  VF="$VF,minterpolate=fps=12:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=epzs:vsbmc=1:search_param=32:scd=fdiff:scd_threshold=8:mb_size=16"
+  VF="$VF,scale=iw*4:ih*4:flags=lanczos:param0=3"
+  VF="$VF,deband=1thr=0.010:2thr=0.010:3thr=0.010:range=12:blur=1"
+  VF="$VF,cas=0.5"
+  OUTFPS=12
 fi
 ffmpeg -y -v error -r "$FPS" -i "$T/v.y4m" "${AIN[@]}" \
   -vf "$VF" -r "$OUTFPS" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 18 \

@@ -33,6 +33,9 @@ import 'package:image_picker/image_picker.dart';
 /// same idea as the old 512 B headroom. Thirty letters take ~105 s on the
 /// rig; a picture that needs fewer takes fewer. The cap per letter is
 /// untouched.
+// Deliberately NOT letterMaxTotalBytes(): letterMaxParts went to sixty for
+// the video letter (2026-09-22) and a photo must never become a four-
+// minute letter — thirty letters, 510 B under the line, stays its cap.
 const int photoLetterMaxBytes = 121500;
 
 /// The long-edge ladder, largest first. The search takes the LARGEST size

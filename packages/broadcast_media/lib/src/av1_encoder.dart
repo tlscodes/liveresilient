@@ -73,10 +73,23 @@ const Map<String, String> av1LetterParams = {
   'hierarchical-levels': '5',
 };
 
-/// The letter's frame geometry: the Mac's "30 letters, AUDIO=opus" row —
-/// 144x256 portrait at 6 fps (video_note_codec.dart's V1 wire).
-const int videoLetterWidth = 144;
-const int videoLetterHeight = 256;
+/// Knobs newer than the vendored 4.2.0's guaranteed set, or preset-gated
+/// (stronger ARF temporal filtering, loop restoration, CDEF, the deblocking
+/// filter): a rejection is skipped, never fatal, so an older library still
+/// encodes (Fable 5.1, 2026-09-22; each worth a few percent of bytes).
+const Map<String, String> av1LetterOptionalParams = {
+  'tf-strength': '3',
+  'enable-restoration': '1',
+  'enable-cdef': '1',
+  'enable-dlf': '1',
+};
+
+/// The letter's frame geometry for SIXTY letters (2026-09-22): 216x384
+/// portrait at 6 fps — 2.25x the pixels of the 144x256 the owner judged a
+/// thumbnail, at the same ~0.10 bits per pixel; the 45-letter plan is
+/// 192x336@6. Multiples of 8, and the reader's 2x render (432x768) fits.
+const int videoLetterWidth = 216;
+const int videoLetterHeight = 384;
 const int videoLetterFps = 6;
 
 /// SVT-AV1 preset for the phone: 5 since the bisect is seeded (two to
@@ -141,6 +154,13 @@ List<Uint8List> encodeAv1I420(
     }
 
     av1LetterParams.forEach(set);
+    av1LetterOptionalParams.forEach((k, v) {
+      try {
+        set(k, v);
+      } on Av1EncodeError {
+        // older library: the knob is absent, the letter is not.
+      }
+    });
     set('preset', '$preset');
     set('crf', '$crf'); // crf => rate control mode 0 + tpl, as the CLI
     if (_b.svt_av1_enc_set_parameter(h, cfg) != EbErrorType.EB_ErrorNone) {
@@ -242,11 +262,10 @@ List<Uint8List> encodeAv1I420(
 const int videoLetterAudioModeOpus = 5;
 const int videoLetterAudioModeOpusVbr = 6;
 
-/// The wideband tail's rate: the rung the voice letter proved at 30 s
-/// (WB from 9 kbit/s, opus_ffi.dart); ~38 KB per 30 s, which costs the
-/// video about 3 kbit/s (one to two crf steps) and doubles the audio
-/// band from 4 to 8 kHz (Fable 5.1, 2026-09-22).
-const int videoLetterAudioBitrate = 10000;
+/// The wideband tail's rate: the rung the voice letter proved excellent
+/// (row 83314d80, ~11.7 kbit/s measured); ~45 KB per 30 s of normalised
+/// speech, about one crf step off the video (Fable 5.1, 2026-09-22).
+const int videoLetterAudioBitrate = 12000;
 
 /// Length-prefixed Opus SILK VBR tail over s16le 16 kHz mono [pcm16k].
 Uint8List encodeVbrTail(Uint8List pcm16k, int bitrate) {

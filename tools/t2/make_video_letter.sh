@@ -73,12 +73,14 @@ VIDEO_BUDGET=$(( BUDGET - AUDIO_EST - 12 ))
 VKBPS=$(( VIDEO_BUDGET * 8 / SECS / 1000 ))
 
 # ---- shape ladder from the video bitrate actually available --------------------
-LADDER=("160 120 5" "176 132 6" "192 144 6" "224 168 6" "256 192 6")
+LADDER=("160 120 5" "176 132 6" "192 144 6" "224 168 6" "256 192 6" "336 192 6" "384 216 6")
 if   [ "$VKBPS" -lt 12 ]; then RUNG=0
 elif [ "$VKBPS" -lt 16 ]; then RUNG=1
 elif [ "$VKBPS" -lt 22 ]; then RUNG=2
 elif [ "$VKBPS" -lt 30 ]; then RUNG=3
-else                            RUNG=4; fi
+elif [ "$VKBPS" -lt 36 ]; then RUNG=4
+elif [ "$VKBPS" -lt 50 ]; then RUNG=5   # 45 letters (2026-09-22): the phone's 192x336
+else                            RUNG=6; fi   # 60 letters: the phone's 216x384
 if [ $# -ge 7 ]; then FORCED=1; W=$5; H=$6; FPS=$7; else FORCED=0; read -r W H FPS <<< "${LADDER[$RUNG]}"; fi
 
 # Keep the SOURCE's aspect (a phone video is portrait): the rung gives a
