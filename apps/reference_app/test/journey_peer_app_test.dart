@@ -241,13 +241,20 @@ void main() {
       () => DnsValveConfig.parse(const <String, Object?>{'chat_bytes': 64}),
       throwsA(isA<FormatException>()),
     );
-    // A message longer than the lane's own limit is refused as transient by
-    // the valve, so the fabric would carry it on a WAN lane and the row
-    // would read `carried_without_selection` for a config reason.
+    // A message longer than TEN letters carry is refused at arm time; one
+    // longer than a single letter goes as parts (letter_parts.dart), so
+    // 5000 B is accepted now.
     expect(
       () => DnsValveConfig.parse(const <String, Object?>{
         'zone': 'valve.example',
         'chat_bytes': 5000,
+      }),
+      returnsNormally,
+    );
+    expect(
+      () => DnsValveConfig.parse(<String, Object?>{
+        'zone': 'valve.example',
+        'chat_bytes': letterMaxTotalBytes() + 1,
       }),
       throwsA(isA<FormatException>()),
     );

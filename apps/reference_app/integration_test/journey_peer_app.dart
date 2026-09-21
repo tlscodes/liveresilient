@@ -245,10 +245,15 @@ class DnsValveConfig {
     // compiled build cannot disagree about what `host:port` means.
     final resolvers = parseValveResolvers(spec);
     final chatBytes = _positiveInt(json['chat_bytes'], 64, 'chat_bytes');
-    if (chatBytes > TxtQueryLane.maxPayloadBytes) {
+    // Up to ten letters in a row (letter_parts.dart): the gate is what ten
+    // letters carry, the cap per letter (4096) itself is untouched.
+    final letterLimit = letterMaxTotalBytes(
+      maxPartBytes: TxtQueryLane.maxPayloadBytes,
+    );
+    if (chatBytes > letterLimit) {
       throw FormatException(
-        'dns_valve.chat_bytes $chatBytes exceeds the lane limit '
-        '${TxtQueryLane.maxPayloadBytes}',
+        'dns_valve.chat_bytes $chatBytes exceeds $letterMaxParts letters of '
+        '${TxtQueryLane.maxPayloadBytes} ($letterLimit B)',
       );
     }
     // A job that names both a text and a byte count must agree with itself:
