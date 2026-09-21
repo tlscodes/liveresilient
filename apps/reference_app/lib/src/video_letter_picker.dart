@@ -138,14 +138,19 @@ class CameraVideoSelection implements VideoSelection {
   Future<VideoBuildResult> build(String path, {required int budget}) async {
     final Map<Object?, Object?>? read;
     try {
-      read = await photoLetterFallbackChannel
-          .invokeMapMethod<Object?, Object?>('readVideoLetterSource', {
-            'path': path,
-            'width': videoLetterWidth,
-            'height': videoLetterHeight,
-            'fps': videoLetterFps,
-            'seconds': videoLetterMaxLength.inMilliseconds / 1000,
-          });
+      read = await photoLetterFallbackChannel.invokeMapMethod<Object?, Object?>(
+        'readVideoLetterSource',
+        {
+          'path': path,
+          'width': videoLetterWidth,
+          'height': videoLetterHeight,
+          'fps': videoLetterFps,
+          'seconds': videoLetterMaxLength.inMilliseconds / 1000,
+          // 16 kHz for the wideband Opus tail: an 8 kHz mix would make
+          // WB packets that carry nothing above 4 kHz (Fable's trap).
+          'audioRate': 16000,
+        },
+      );
     } on PlatformException catch (e) {
       error = '${e.code}: ${e.message}';
       return const VideoBuildResult.refused(VideoLetterRefusal.unreadable);
@@ -163,7 +168,7 @@ class CameraVideoSelection implements VideoSelection {
     try {
       final build = await encodeVideoLetter(
         i420: i420,
-        pcm8k: pcm,
+        pcm16k: pcm,
         width: videoLetterWidth,
         height: videoLetterHeight,
         fps: videoLetterFps,

@@ -27,7 +27,7 @@ import zlib  # noqa: F401  (kept for parity with tooling that imports it)
 
 MAGIC = b"V1"
 HDR = 12
-MODES = {0: "700C", 1: "1200", 2: "1600", 3: "2400", 4: "3200", 5: "opus"}
+MODES = {0: "700C", 1: "1200", 2: "1600", 3: "2400", 4: "3200", 5: "opus", 6: "opusvbr"}
 MODE_IDS = {v: k for k, v in MODES.items()}
 OPUS_PKT = 45          # 6000 bit/s * 0.060 s / 8
 OPUS_FRAME_48K = 2880  # 60 ms at 48 kHz granule units
@@ -125,6 +125,54 @@ def _ogg_pages(data):
         i = p
 
 
+def opus_extract_var(in_ogg, out_pkt):
+    """Nibble 6: every Opus packet of an Ogg/Opus file behind ONE length
+    byte ([u8 len][packet], 1..255 B) — the voice letter's mode-6 packing
+    minus its header, which the phone's buildVideoLetter writes too."""
+    pkts = list(_ogg_pages(open(in_ogg, "rb").read()))
+    if not pkts or not pkts[0].startswith(b"OpusHead"):
+        raise SystemExit("not an Ogg/Opus file")
+    audio = [p for p in pkts[2:]]
+    bad = [len(p) for p in audio if not 1 <= len(p) <= 255]
+    if bad:
+        print(f"opus-extract-var: {len(bad)}/{len(audio)} packets outside 1..255 B (e.g. {bad[:5]})",
+              file=sys.stderr)
+        sys.exit(4)
+    open(out_pkt, "wb").write(b"".join(bytes([len(p)]) + p for p in audio))
+    print(len(audio), sum(len(p) for p in audio))
+
+
+def opus_ogg_var(in_pkt, out_ogg, rate=16000, preskip=312):
+    """The inverse of opus_extract_var: an Ogg/Opus file ffmpeg decodes
+    (OpusHead input rate as a hint; granule 2880 per 60 ms packet)."""
+    raw = open(in_pkt, "rb").read()
+    pkts, p = [], 0
+    while p < len(raw):
+        n = raw[p]
+        if n == 0 or p + 1 + n > len(raw):
+            print(f"opus-ogg-var: tail truncated at {p} of {len(raw)} B", file=sys.stderr)
+            break
+        pkts.append(raw[p + 1:p + 1 + n])
+        p += 1 + n
+    head = b"OpusHead" + bytes([1, 1]) + struct.pack("<HIhB", int(preskip), int(rate), 0, 0)
+    vendor = b"pack_video_note_v2"
+    tags = b"OpusTags" + struct.pack("<I", len(vendor)) + vendor + struct.pack("<I", 0)
+    serial, seq = 0x56326, 0
+    out = [_ogg_page([head], 0, serial, seq, 0x02)]
+    seq += 1
+    out.append(_ogg_page([tags], 0, serial, seq, 0))
+    seq += 1
+    granule = int(preskip)
+    for k in range(0, len(pkts), 200):
+        chunk = pkts[k:k + 200]
+        granule += OPUS_FRAME_48K * len(chunk)
+        last = k + 200 >= len(pkts)
+        out.append(_ogg_page(chunk, granule, serial, seq, 0x04 if last else 0))
+        seq += 1
+    open(out_ogg, "wb").write(b"".join(out))
+    print(len(pkts), len(raw))
+
+
 def opus_extract(in_ogg, out_pkt, pkt_bytes=OPUS_PKT):
     pkt_bytes = int(pkt_bytes)
     pkts = list(_ogg_pages(open(in_ogg, "rb").read()))
@@ -212,5 +260,9 @@ if __name__ == "__main__":
         opus_extract(*sys.argv[2:5])
     elif cmd == "opus-ogg":
         opus_ogg(*sys.argv[2:5])
+    elif cmd == "opus-extract-var":
+        opus_extract_var(*sys.argv[2:4])
+    elif cmd == "opus-ogg-var":
+        opus_ogg_var(*sys.argv[2:5])
     else:
         raise SystemExit("unknown subcommand")

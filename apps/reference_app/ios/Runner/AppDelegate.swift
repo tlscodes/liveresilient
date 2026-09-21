@@ -299,6 +299,7 @@ enum VideoLetterSourceReader {
       result(FlutterError(code: "args", message: "path width height fps seconds", details: nil))
       return
     }
+    let audioRate = (a["audioRate"] as? Int) ?? 8000
     DispatchQueue.global(qos: .userInitiated).async {
       do {
         let asset = AVURLAsset(url: URL(fileURLWithPath: path))
@@ -307,14 +308,20 @@ enum VideoLetterSourceReader {
         }
         let reader = try AVAssetReader(asset: asset)
         reader.timeRange = CMTimeRange(start: .zero, end: CMTime(seconds: secs, preferredTimescale: 600))
+        // Rendered at 2x and box-averaged to w x h below: the compositor's
+        // single-step 7.5x downscale aliased sensor noise straight into
+        // the encoder (the most expensive thing AV1 can be asked to keep);
+        // an area filter plus a temporal blend on Y is the phone's cheap
+        // stand-in for the Mac's atadenoise/hqdn3d chain (2026-09-22).
+        let w2 = w * 2, h2 = h * 2
         let comp = AVMutableVideoComposition()
-        comp.renderSize = CGSize(width: w, height: h)
+        comp.renderSize = CGSize(width: w2, height: h2)
         comp.frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
         let up = vt.naturalSize.applying(vt.preferredTransform)
         let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: vt)
         layer.setTransform(
           vt.preferredTransform.concatenating(
-            CGAffineTransform(scaleX: CGFloat(w) / abs(up.width), y: CGFloat(h) / abs(up.height))),
+            CGAffineTransform(scaleX: CGFloat(w2) / abs(up.width), y: CGFloat(h2) / abs(up.height))),
           at: .zero)
         let instr = AVMutableVideoCompositionInstruction()
         instr.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
@@ -334,7 +341,7 @@ enum VideoLetterSourceReader {
           let o = AVAssetReaderAudioMixOutput(
             audioTracks: at,
             audioSettings: [
-              AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 8000,
+              AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: audioRate,
               AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16,
               AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false,
               AVLinearPCMIsNonInterleaved: false,
@@ -354,6 +361,7 @@ enum VideoLetterSourceReader {
         let ah = try FileHandle(forWritingTo: aURL)
         var count = 0
         var next = 0.0
+        var prevY = [UInt8]()
         let maxFrames = Int(secs * Double(fps))
         while count < maxFrames, let sb = vout.copyNextSampleBuffer() {
           let t = CMSampleBufferGetPresentationTimeStamp(sb).seconds
@@ -364,15 +372,38 @@ enum VideoLetterSourceReader {
           var out = Data(capacity: w * h * 3 / 2)
           let yb = CVPixelBufferGetBaseAddressOfPlane(pb, 0)!.assumingMemoryBound(to: UInt8.self)
           let ys = CVPixelBufferGetBytesPerRowOfPlane(pb, 0)
-          for r in 0..<h { out.append(yb + r * ys, count: w) }
+          // Y: 2x2 box average, then a temporal blend with the previous
+          // frame where the pixel barely moved (|d| <= 12) — atadenoise-like.
+          var y = [UInt8](repeating: 0, count: w * h)
+          let havePrev = prevY.count == w * h
+          for r in 0..<h {
+            let r0 = 2 * r * ys, r1 = (2 * r + 1) * ys
+            for c in 0..<w {
+              let c0 = 2 * c
+              let s = Int(yb[r0 + c0]) + Int(yb[r0 + c0 + 1]) + Int(yb[r1 + c0]) + Int(yb[r1 + c0 + 1])
+              var v = (s + 2) >> 2
+              if havePrev {
+                let q = Int(prevY[r * w + c])
+                if abs(v - q) <= 12 { v = (v + q + 1) >> 1 }
+              }
+              y[r * w + c] = UInt8(v)
+            }
+          }
+          prevY = y
+          out.append(contentsOf: y)
+          // Chroma: plane 1 is w x h interleaved CbCr at 2x; 2x2 box to w/2 x h/2.
           let cb = CVPixelBufferGetBaseAddressOfPlane(pb, 1)!.assumingMemoryBound(to: UInt8.self)
           let cs = CVPixelBufferGetBytesPerRowOfPlane(pb, 1)
           var u = [UInt8](repeating: 0, count: w * h / 4)
           var v = u  // NV12 -> I420
           for r in 0..<(h / 2) {
+            let r0 = 2 * r * cs, r1 = (2 * r + 1) * cs
             for c in 0..<(w / 2) {
-              u[r * (w / 2) + c] = cb[r * cs + 2 * c]
-              v[r * (w / 2) + c] = cb[r * cs + 2 * c + 1]
+              let c0 = 4 * c
+              let su = Int(cb[r0 + c0]) + Int(cb[r0 + c0 + 2]) + Int(cb[r1 + c0]) + Int(cb[r1 + c0 + 2])
+              let sv = Int(cb[r0 + c0 + 1]) + Int(cb[r0 + c0 + 3]) + Int(cb[r1 + c0 + 1]) + Int(cb[r1 + c0 + 3])
+              u[r * (w / 2) + c] = UInt8((su + 2) >> 2)
+              v[r * (w / 2) + c] = UInt8((sv + 2) >> 2)
             }
           }
           out.append(contentsOf: u)

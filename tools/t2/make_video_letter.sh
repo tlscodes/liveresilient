@@ -4,7 +4,9 @@
 # raw audio) — the ONLY wire change is the flags byte, low nibble = audio mode.
 #
 # USAGE  make_video_letter_v2.sh <src> <seconds> <out.bin> [letters] [w h fps]
-#        env: AUDIO=700C|1200|1600|2400|3200|opus  (overrides the per-budget pick)
+#        env: AUDIO=700C|1200|1600|2400|3200|opus|opusvbr  (overrides the per-budget pick)
+#             opusvbr = Opus SILK VBR wideband 10 kbit/s at 16 kHz, one length byte
+#             per 60 ms packet (nibble 6) — the phone's own tail since 2026-09-22
 #             PRESET=3 (SVT-AV1 preset; 2 doubles the time for ~2-3 % bytes)
 #             GRAIN=6  (--film-grain level; 0 = off)
 #
@@ -58,12 +60,13 @@ done
 if [ -z "${AUDIO:-}" ]; then
   if   [ "$LETTERS" -le 10 ]; then AUDIO=1200
   elif [ "$LETTERS" -le 20 ]; then AUDIO=2400
-  else                             AUDIO=opus; fi   # v3: Opus 6k at 30 letters — SILK narrowband is far more natural than Codec2 3200 for ~2.8 kbit/s of video
+  else                             AUDIO=opusvbr; fi   # v4 (2026-09-22): Opus WB VBR 10k at 30 letters — 4 -> 8 kHz band for ~3 kbit/s of video
 fi
 case "$AUDIO" in
   700C) ABPS=700 ;; 1200) ABPS=1200 ;; 1600) ABPS=1600 ;; 2400) ABPS=2400 ;; 3200) ABPS=3200 ;;
   opus) ABPS=6000 ;;
-  *) echo "ERROR: AUDIO must be 700C|1200|1600|2400|3200|opus" >&2; exit 2 ;;
+  opusvbr) ABPS=10700 ;;   # 10 kbit/s VBR plus one length byte per packet
+  *) echo "ERROR: AUDIO must be 700C|1200|1600|2400|3200|opus|opusvbr" >&2; exit 2 ;;
 esac
 AUDIO_EST=$(( ABPS * SECS / 8 ))
 VIDEO_BUDGET=$(( BUDGET - AUDIO_EST - 12 ))
@@ -95,7 +98,13 @@ fi
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 
 # ---- audio ---------------------------------------------------------------------
-if [ "$AUDIO" = opus ]; then
+if [ "$AUDIO" = opusvbr ]; then
+  command -v ffmpeg >/dev/null
+  ffmpeg -y -v error -i "$SRC" -t "$SECS" -vn -ac 1 -ar 16000 -af "highpass=f=80,speechnorm=e=6" \
+    -c:a libopus -b:a 10k -vbr on -frame_duration 60 -application voip -compression_level 10 -fec 0 -dtx 0 -cutoff 8000 \
+    "$T/a.opus"
+  python3 "$PACK" opus-extract-var "$T/a.opus" "$T/a.bits" >/dev/null
+elif [ "$AUDIO" = opus ]; then
   command -v ffmpeg >/dev/null
   ffmpeg -y -v error -i "$SRC" -t "$SECS" -vn -ac 1 -ar 8000 -af "highpass=f=80,speechnorm=e=6" \
     -c:a libopus -b:a 6k -vbr off -frame_duration 60 -application voip -compression_level 10 -fec 0 -dtx 0 -cutoff 4000 \

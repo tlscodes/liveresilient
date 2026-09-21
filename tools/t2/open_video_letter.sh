@@ -41,6 +41,9 @@ case "$AMODE" in
   opus)
     python3 "$PACK" opus-ogg "$T/a.bits" "$T/a.opus" 45 >/dev/null
     AIN=(-i "$T/a.opus") ;;
+  opusvbr)
+    python3 "$PACK" opus-ogg-var "$T/a.bits" "$T/a.opus" 16000 >/dev/null
+    AIN=(-i "$T/a.opus") ;;
   *) echo "ERROR: unknown audio mode '$AMODE' in flags byte" >&2; exit 2 ;;
 esac
 

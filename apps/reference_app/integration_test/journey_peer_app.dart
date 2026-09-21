@@ -730,6 +730,7 @@ class JourneyPeer extends LetterComposer {
     3: VoiceNoteMode.c2400,
     4: VoiceNoteMode.c3200,
     5: VoiceNoteMode.opus6k,
+    6: VoiceNoteMode.opusVbr,
   };
 
   /// A video letter ('V1', video_note_codec.dart) is decoded here: every
@@ -787,17 +788,32 @@ class JourneyPeer extends LetterComposer {
     var audioFrames = 0;
     var sampleRate = 0;
     if (audioMode != null) {
-      final n = (audioMode.bitsPerFrame + 7) >> 3;
       final codec = voiceFrameCodecFor(audioMode);
       final out = BytesBuilder(copy: false);
       try {
         sampleRate = codec.sampleRate;
-        for (var i = 0; i + n <= note.audioBits.length; i += n) {
-          final s = codec.decodeFrame(
-            Uint8List.sublistView(note.audioBits, i, i + n),
-          );
-          out.add(s.buffer.asUint8List(s.offsetInBytes, s.lengthInBytes));
-          audioFrames++;
+        final bits = note.audioBits;
+        if (audioMode.isVariable) {
+          // [u8 len][packet] per 60 ms (nibble 6); a zero length or a
+          // short tail ends the audio, never the letter.
+          var p = 0;
+          while (p < bits.length) {
+            final n = bits[p];
+            if (n == 0 || p + 1 + n > bits.length) break;
+            final s = codec.decodeFrame(
+              Uint8List.sublistView(bits, p + 1, p + 1 + n),
+            );
+            out.add(s.buffer.asUint8List(s.offsetInBytes, s.lengthInBytes));
+            audioFrames++;
+            p += 1 + n;
+          }
+        } else {
+          final n = (audioMode.bitsPerFrame + 7) >> 3;
+          for (var i = 0; i + n <= bits.length; i += n) {
+            final s = codec.decodeFrame(Uint8List.sublistView(bits, i, i + n));
+            out.add(s.buffer.asUint8List(s.offsetInBytes, s.lengthInBytes));
+            audioFrames++;
+          }
         }
       } on Object catch (error) {
         _note('video audio decode on the phone failed: $error');

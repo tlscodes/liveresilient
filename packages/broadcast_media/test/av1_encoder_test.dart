@@ -75,14 +75,14 @@ void main() {
     'the letter builder bisects crf under the budget and stamps Opus',
     () {
       const w = videoLetterWidth, h = videoLetterHeight;
-      final pcm = Uint8List(2 * 8000 * 2); // 2 s of 8 kHz silence (s16le)
+      final pcm = Uint8List(2 * 16000 * 2); // 2 s of 16 kHz near-silence
       final r = Random(1);
       for (var i = 0; i < pcm.length; i++) {
         pcm[i] = r.nextInt(8);
       }
       final build = buildVideoLetter(
         i420: frames(12, w, h),
-        pcm8k: pcm,
+        pcm16k: pcm,
         width: w,
         height: h,
         fps: 6,
@@ -93,15 +93,24 @@ void main() {
       expect(build.wire.length, lessThanOrEqualTo(6000));
       expect(build.wire[0], 0x56);
       expect(build.wire[1], 0x31);
-      expect(build.wire[11] & 0x0F, videoLetterAudioModeOpus);
+      expect(build.wire[11] & 0x0F, videoLetterAudioModeOpusVbr);
       expect(build.audioPackets, 33); // 2 s / 60 ms
       final note = VideoNote.decode(build.wire);
-      expect(note.audioBits.length, 33 * 45);
+      expect(countVbrPackets(note.audioBits), 33);
+      // Near-silence at 10 kbit/s VBR: far under the 75 B a full packet
+      // would take, and every packet behind its own length byte.
+      expect(note.audioBits.length, lessThan(33 * 76));
+      var p = 0;
+      while (p < note.audioBits.length) {
+        expect(note.audioBits[p], inInclusiveRange(1, 255));
+        p += 1 + note.audioBits[p];
+      }
+      expect(p, note.audioBits.length);
       expect(note.fps, 6);
       expect(note.width, w);
       expect(note.height, h);
       expect(decodeAv1Frames(note.videoFrames), hasLength(12));
-      expect(build.passes, inInclusiveRange(1, 6));
+      expect(build.passes, inInclusiveRange(1, 4), reason: 'seeded bisect');
     },
     skip: hasLib ? false : 'no host libSvtAv1Enc',
   );

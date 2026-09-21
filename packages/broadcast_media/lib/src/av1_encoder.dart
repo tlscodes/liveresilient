@@ -15,14 +15,14 @@ library;
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
-// The audio tail of a video letter: mode 12 packets, 45 B per 60 ms.
+// The audio tail of a video letter: Opus SILK VBR wideband, one length
+// byte per 60 ms packet (nibble 6).
 // ignore: implementation_imports
-import 'package:hamseda_codec/src/voice_frame_codec.dart';
-// ignore: implementation_imports
-import 'package:hamseda_codec/src/voice_note_codec.dart';
+import 'package:hamseda_codec/src/opus_ffi.dart';
 
 import 'generated/svtav1_bindings.dart';
 import 'video_note_codec.dart';
@@ -79,10 +79,10 @@ const int videoLetterWidth = 144;
 const int videoLetterHeight = 256;
 const int videoLetterFps = 6;
 
-/// SVT-AV1 preset for the phone: 6 is the fastest that keeps the Mac's
-/// tools (tf, variance boost, qm) meaningful; the Mac's preset 2 would
-/// take minutes on an A13 for one bisect pass.
-const int videoLetterPreset = 6;
+/// SVT-AV1 preset for the phone: 5 since the bisect is seeded (two to
+/// three passes instead of six, 2026-09-22) — the Mac's preset 2 would
+/// take minutes on an A13 for one pass.
+const int videoLetterPreset = 5;
 
 /// Tightly packed I420 frames ([width] x [height] x 3/2 B each) ->
 /// AV1 temporal units. Synchronous and CPU-bound: call inside
@@ -235,9 +235,49 @@ List<Uint8List> encodeAv1I420(
 }
 
 /// The video wire's flags nibble for its audio tail (pack_video_note_v2.py
-/// MODES): 5 = Opus 6k CBR, 45 B packets — [VideoNote.encode] writes 0
+/// MODES): 5 = Opus 6k CBR, 45 B packets; 6 = Opus SILK VBR at 16 kHz,
+/// one length byte per 60 ms packet ([u8 len][packet] — the voice
+/// letter's mode-6 packing minus its header). [VideoNote.encode] writes 0
 /// (Codec2 700C) and never reads it, so the letter builder stamps it.
 const int videoLetterAudioModeOpus = 5;
+const int videoLetterAudioModeOpusVbr = 6;
+
+/// The wideband tail's rate: the rung the voice letter proved at 30 s
+/// (WB from 9 kbit/s, opus_ffi.dart); ~38 KB per 30 s, which costs the
+/// video about 3 kbit/s (one to two crf steps) and doubles the audio
+/// band from 4 to 8 kHz (Fable 5.1, 2026-09-22).
+const int videoLetterAudioBitrate = 10000;
+
+/// Length-prefixed Opus SILK VBR tail over s16le 16 kHz mono [pcm16k].
+Uint8List encodeVbrTail(Uint8List pcm16k, int bitrate) {
+  final codec = OpusVoice.configured(OpusVoiceConfig.vbr(bitrate));
+  final tail = BytesBuilder(copy: false);
+  try {
+    final s16 = Int16List.sublistView(
+      pcm16k,
+      0,
+      pcm16k.length - pcm16k.length % 2,
+    );
+    final n = codec.samplesPerFrame;
+    for (var i = 0; i + n <= s16.length; i += n) {
+      final p = codec.encodeFrame(s16.sublist(i, i + n));
+      tail.addByte(p.length); // 1..255, checked by encodeFrame
+      tail.add(p);
+    }
+  } finally {
+    codec.dispose();
+  }
+  return tail.takeBytes();
+}
+
+/// Packets in a length-prefixed tail.
+int countVbrPackets(Uint8List tail) {
+  var n = 0;
+  for (var p = 0; p < tail.length; p += 1 + tail[p]) {
+    n++;
+  }
+  return n;
+}
 
 /// Thrown when no crf in the bisect brings the letter under the budget.
 class VideoLetterTooLong implements Exception {
@@ -265,47 +305,35 @@ class VideoLetterBuild {
   final int passes;
 }
 
-/// Encodes the audio tail once (Opus 6k mode 12 over [pcm8k], s16le 8 kHz
-/// mono) and the video at the LOWEST crf whose whole wire fits [budget]
-/// (step-1 bisect over 20..63, as make_video_letter.sh). Synchronous;
+/// Encodes the audio tail once (Opus SILK VBR wideband, nibble 6, over
+/// [pcm16k], s16le 16 kHz mono) and the video at the LOWEST crf whose
+/// whole wire fits [budget]. The search is seeded: AV1 bytes scale about
+/// as 2^(-dcrf/6), so after each pass the next crf is predicted from the
+/// bytes ratio and clamped inside the still-open bisect range — two or
+/// three passes instead of six (Fable 5.1, 2026-09-22). Synchronous;
 /// [encodeVideoLetter] runs it in an isolate.
 VideoLetterBuild buildVideoLetter({
   required Uint8List i420,
-  required Uint8List pcm8k,
+  required Uint8List pcm16k,
   required int width,
   required int height,
   required int fps,
   required int budget,
   int preset = videoLetterPreset,
+  int audioBitrate = videoLetterAudioBitrate,
   int crfLow = 20,
   int crfHigh = 63,
 }) {
-  final codec = voiceFrameCodecFor(VoiceNoteMode.opus6k);
-  final tail = BytesBuilder(copy: false);
-  var audioPackets = 0;
-  try {
-    final s16 = Int16List.sublistView(
-      pcm8k,
-      0,
-      pcm8k.length - pcm8k.length % 2,
-    );
-    final n = codec.samplesPerFrame;
-    for (var i = 0; i + n <= s16.length; i += n) {
-      tail.add(codec.encodeFrame(s16.sublist(i, i + n)));
-      audioPackets++;
-    }
-  } finally {
-    codec.dispose();
-  }
-  final audio = tail.takeBytes();
+  final audio = encodeVbrTail(pcm16k, audioBitrate);
+  final audioPackets = countVbrPackets(audio);
   Uint8List? fit;
   var fitCrf = -1;
   var frames = 0;
   var passes = 0;
   var smallest = 1 << 30;
   var lo = crfLow, hi = crfHigh;
+  var crf = math.min(math.max(40, crfLow), crfHigh);
   while (lo <= hi) {
-    final crf = (lo + hi) ~/ 2;
     passes++;
     final units = encodeAv1I420(
       i420,
@@ -322,7 +350,7 @@ VideoLetterBuild buildVideoLetter({
       videoFrames: units,
       audioBits: audio,
     ).encode();
-    wire[11] = videoLetterAudioModeOpus;
+    wire[11] = videoLetterAudioModeOpusVbr;
     if (wire.length < smallest) smallest = wire.length;
     if (wire.length <= budget) {
       fit = wire;
@@ -332,6 +360,13 @@ VideoLetterBuild buildVideoLetter({
     } else {
       lo = crf + 1;
     }
+    if (lo > hi) break;
+    final videoBytes = wire.length - videoNoteHeaderBytes - audio.length;
+    final room = budget - videoNoteHeaderBytes - audio.length;
+    final guess = videoBytes <= 0 || room <= 0
+        ? (lo + hi) ~/ 2
+        : crf - (6 * (math.log(room / videoBytes) / math.ln2)).round();
+    crf = guess.clamp(lo, hi);
   }
   if (fit == null) throw VideoLetterTooLong(smallest, budget);
   return VideoLetterBuild(
@@ -347,7 +382,7 @@ VideoLetterBuild buildVideoLetter({
 /// peer's heartbeat keep running through the bisect.
 Future<VideoLetterBuild> encodeVideoLetter({
   required Uint8List i420,
-  required Uint8List pcm8k,
+  required Uint8List pcm16k,
   required int width,
   required int height,
   required int fps,
@@ -356,7 +391,7 @@ Future<VideoLetterBuild> encodeVideoLetter({
 }) => Isolate.run(
   () => buildVideoLetter(
     i420: i420,
-    pcm8k: pcm8k,
+    pcm16k: pcm16k,
     width: width,
     height: height,
     fps: fps,
