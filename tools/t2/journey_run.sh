@@ -911,9 +911,14 @@ if [ "$PROFILE" = dnsvalve ]; then
   fi
   if [ -n "$dv_session" ] && [ -s "$LOGD/$dv_session.letter" ]; then
     letter_b=$(wc -c <"$LOGD/$dv_session.letter" | tr -d ' ')
-    # iconv is a strict decoder (exit 1 on the first invalid byte); BSD `file`
+    # A strict UTF-8 decode (exit 1 on the first invalid byte); BSD `file`
     # guesses. Only text is echoed; anything else is named and left on disk.
-    if iconv -f UTF-8 -t UTF-8 "$LOGD/$dv_session.letter" >/dev/null 2>&1; then
+    # Not iconv: Apple's iconv fails with "Inappropriate ioctl for device"
+    # when its output is /dev/null and the letter is over about 1 KB
+    # (measured 2026-09-21 on the 7241 B Persian letter 04aed385 — the
+    # same bytes decode fine to a file), which called a text letter binary.
+    if python3 -c 'import sys; open(sys.argv[1], "rb").read().decode("utf-8")' \
+         "$LOGD/$dv_session.letter" >/dev/null 2>&1; then
       echo "letter    as the responder assembled it, written by the $VALVE_CHAT_SOURCE ($letter_b B, $LOGD/$dv_session.letter):"
       sed 's/^/          | /' "$LOGD/$dv_session.letter"
       echo
