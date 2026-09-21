@@ -10,7 +10,11 @@ import 'opus_ffi.dart';
 import 'voice_note_codec.dart';
 
 abstract class VoiceFrameCodec {
-  /// s16 samples per frame at 8 kHz.
+  /// PCM rate the codec takes and gives: 8000 for Codec2 and mode 12,
+  /// 16000 for the wideband Opus mode.
+  int get sampleRate;
+
+  /// s16 samples per frame at [sampleRate].
   int get samplesPerFrame;
 
   /// Bits per packed frame on the wire.
@@ -24,11 +28,20 @@ abstract class VoiceFrameCodec {
 }
 
 /// The codec a wire mode names. [decoderComplexity] only matters to Opus
-/// (OSCE enhancement at 6 or 7); Codec2 ignores it.
+/// (OSCE enhancement at 6 or 7, effective on wideband packets); Codec2
+/// ignores it. [opusBitrate] only matters to the VBR mode — the recorder's
+/// fit loop owns it; a decoder can leave the default.
 VoiceFrameCodec voiceFrameCodecFor(
   VoiceNoteMode mode, {
   int decoderComplexity = 0,
+  int opusBitrate = 10000,
 }) {
+  if (mode == VoiceNoteMode.opusVbr) {
+    return OpusVoice.configured(
+      OpusVoiceConfig.vbr(opusBitrate),
+      decoderComplexity: decoderComplexity,
+    );
+  }
   if (mode.isOpus) return OpusVoice(decoderComplexity: decoderComplexity);
   return Codec2(mode.codec2Mode);
 }

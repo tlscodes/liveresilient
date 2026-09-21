@@ -94,6 +94,11 @@ class Codec2 implements VoiceFrameCodec, Finalizable {
   final Object _bitsToken = Object();
 
   Pointer<Void> _state;
+
+  /// Codec2 is an 8 kHz codec.
+  @override
+  int get sampleRate => 8000;
+
   @override
   late final int samplesPerFrame;
   @override

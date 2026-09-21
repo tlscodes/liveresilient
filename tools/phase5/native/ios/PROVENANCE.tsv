@@ -10,4 +10,4 @@ zstd	github.com/facebook/zstd	[t2-build 12:57:23Z] clone https://github.com/face
 82d322c4973d9e2968d94047a40892bc6d9a9bdf	cba901978ce47b11fa1ec668a4af4ba321faaa0a459b542971dfdb37fd8fccb9
 brotlidec	github.com/google/brotli	[t2-build 12:57:51Z] clone https://github.com/google/brotli.git
 8e10eeb3378f6c459dbaf033ca6727e9816afccb	aee0cb371d01b75040da5c886cb653b8863fbb5f6d2c32e953dfd7687434bd72
-opus	opus-1.5.2.tar.gz sha256 65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1 (OSCE off, DRED off)	1.5.2	c80ab533c08f4d365869a8062aed64fe4c3578d3d24c2c792b27b2238a520a1d
+opus	opus-1.5.2.tar.gz sha256 65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1 (OSCE on, DRED off)	1.5.2	044767b2103ec8f7389db016762e2ebe61e69b4dc2bb3c27db47f9021e24d4b8

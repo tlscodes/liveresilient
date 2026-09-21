@@ -20,14 +20,20 @@ void main(List<String> args) {
     pcm.offsetInBytes,
     pcm.lengthInBytes ~/ 2,
   );
-  // Optional third argument: opus6k|3200|2400|1600|1200|700C (default 700C).
+  // Optional third argument: opusVbr|opus6k|3200|2400|1600|1200|700C
+  // (default 700C); optional fourth: the Opus VBR bitrate (default 10000).
+  // The input PCM must be at the mode's rate: 16 kHz for opusVbr, 8 kHz
+  // for everything else.
   final mode = args.length > 2
       ? VoiceNoteMode.values.firstWhere(
           (m) =>
               m.name == args[2] || m.name == 'c${args[2].replaceAll('C', '')}',
         )
       : VoiceNoteMode.c700;
-  final codec = voiceFrameCodecFor(mode);
+  final codec = voiceFrameCodecFor(
+    mode,
+    opusBitrate: args.length > 3 ? int.parse(args[3]) : 10000,
+  );
   final n = codec.samplesPerFrame;
   final frames = <Uint8List>[];
   for (var at = 0; at < samples.length; at += n) {
@@ -39,7 +45,7 @@ void main(List<String> args) {
   codec.dispose();
   final wire = packVoiceNote(frames: frames, mode: mode);
   File(args[1]).writeAsBytesSync(wire);
-  final seconds = samples.length / 8000;
+  final seconds = samples.length / mode.sampleRate;
   stdout.writeln(
     'encoded ${frames.length} frames (${seconds.toStringAsFixed(1)} s, ${mode.name}) '
     '-> ${wire.length} B ${args[1]}',

@@ -1,9 +1,10 @@
-/// FFI binding to libopus 1.5.2 for the voice letter's mode 12: Opus
-/// 6 kbit/s narrowband, hard CBR, 60 ms frames — 45 B per frame, 750 B/s,
-/// 30 s of speech in six letters. The same 8 kHz s16 PCM the Codec2 path
-/// takes goes straight in (Opus accepts 8 kHz input; SILK is forced at
-/// 6 kbit/s), so the recorder, the wire, and the receivers need no
-/// resampling.
+/// FFI binding to libopus 1.5.2 for the voice letter's Opus modes:
+///   mode 12 — 6 kbit/s narrowband, hard CBR, 60 ms frames of 8 kHz s16:
+///             45 B per frame, 750 B/s (the first Opus letter, 2026-09-21);
+///   mode 6  — SILK VBR, 60 ms frames of 16 kHz s16, wideband from
+///             9 kbit/s, one length byte per packet on the wire; the
+///             recorder's fit loop picks the bitrate the ten letters allow
+///             (about 10 kbit/s for 30 s). Decoded with NoLACE for the ear.
 ///
 /// Library resolution order, mirroring codec2_ffi.dart:
 ///   1. OPUS_LIB_PATH environment variable
@@ -47,6 +48,10 @@ const int _opusSignalVoice = 3001;
 /// The wire's fixed frame: 6000 bit/s × 60 ms / 8 = 45 B, exactly, in hard
 /// CBR (libopus pads every packet to the bitrate's byte count).
 const int opusVoiceSampleRate = 8000;
+
+/// Mode 6 takes and gives 16 kHz PCM: SILK wideband keeps the 4-8 kHz
+/// where Persian fricatives live.
+const int opusWideSampleRate = 16000;
 const int opusVoiceFrameMs = 60;
 const int opusVoiceSamplesPerFrame =
     opusVoiceSampleRate * opusVoiceFrameMs ~/ 1000;
@@ -124,23 +129,84 @@ void _check(int rc, String what) {
   if (rc != _opusOk) throw StateError('$what failed: opus error $rc');
 }
 
-/// Opus 6 kbit/s NB hard-CBR encoder + decoder over 60 ms frames of 8 kHz
-/// s16 PCM; one instance serves either direction. [decoderComplexity] is
-/// passed to opus_decoder_ctl and is inert here: the OSCE enhancement
-/// (LACE/NoLACE) only runs on 16 kHz SILK with 20 ms frames
-/// (dnn/osce.c:933), never on this narrowband 60 ms mode — measured
-/// 2026-09-21, complexity 7 decoded byte-identical to 0 — so the vendored
-/// library is built without it (make_opus.sh).
+const int _opusBandwidthWideband = 1103;
+
+/// One Opus tuning behind a wire mode. [cbr6kNb] is mode 12, byte-exact
+/// with c60e475. [OpusVoiceConfig.vbr] is mode 6: 16 kHz PCM both ways,
+/// SILK VBR, wideband from 9 kbit/s (libopus's own voice crossover,
+/// opus_encoder.c:145: NB below 9000, WB above), narrowband below; the
+/// decoder reads which from each packet's TOC, so one wire mode covers both.
+class OpusVoiceConfig {
+  const OpusVoiceConfig._({
+    required this.sampleRate,
+    required this.bitrate,
+    required this.bandwidth,
+    required this.vbr,
+  });
+
+  OpusVoiceConfig.vbr(int bitrate)
+    : this._(
+        sampleRate: opusWideSampleRate,
+        bitrate: bitrate.clamp(6000, 16000),
+        bandwidth: bitrate >= 9000
+            ? _opusBandwidthWideband
+            : _opusBandwidthNarrowband,
+        vbr: true,
+      );
+
+  static const cbr6kNb = OpusVoiceConfig._(
+    sampleRate: opusVoiceSampleRate,
+    bitrate: opusVoiceBitrate,
+    bandwidth: _opusBandwidthNarrowband,
+    vbr: false,
+  );
+
+  final int sampleRate;
+  final int bitrate;
+  final int bandwidth;
+  final bool vbr;
+
+  /// 60 ms everywhere: least side-info per second, and OSCE still runs
+  /// (osce.c:933 gates on the 20 ms SILK frame; dec_API.c:196 gives a
+  /// 60 ms packet three of them).
+  int get frameMs => opusVoiceFrameMs;
+  int get samplesPerFrame => sampleRate * frameMs ~/ 1000;
+
+  /// The fixed packet size in hard CBR, 0 when variable.
+  int get cbrBytes => vbr ? 0 : bitrate * frameMs ~/ 8000;
+
+  /// The largest packet the wire's one length byte can carry (255 B is
+  /// 34 kbit/s for one 60 ms packet; libopus caps at max_data_bytes).
+  int get maxPacketBytes => vbr ? 255 : cbrBytes;
+
+  /// Scratch bytes handed to opus_encode as max_data_bytes.
+  int get bufferBytes => vbr ? maxPacketBytes : cbrBytes * 2;
+}
+
+/// Opus encoder + decoder over 60 ms frames of s16 PCM at [config]'s rate;
+/// one instance serves either direction. [decoderComplexity] 6 = LACE,
+/// 7 = NoLACE (OSCE, compiled in by make_opus.sh): effective on a wideband
+/// packet, inert on mode 12 (8 kHz SILK, measured byte-identical). The
+/// digest witnesses compare complexity-0 decodes: OSCE is a float DNN whose
+/// NEON and AVX kernels differ in the last bits, so a complexity-7 decode
+/// is for the ear, never for a sha.
 class OpusVoice implements VoiceFrameCodec, Finalizable {
-  OpusVoice({int decoderComplexity = 0}) {
+  /// Mode 12, unchanged.
+  OpusVoice({int decoderComplexity = 0})
+    : this.configured(
+        OpusVoiceConfig.cbr6kNb,
+        decoderComplexity: decoderComplexity,
+      );
+
+  OpusVoice.configured(this.config, {int decoderComplexity = 0}) {
     final err = malloc<Int32>();
     try {
-      _enc = _encCreate(opusVoiceSampleRate, 1, _opusApplicationVoip, err);
+      _enc = _encCreate(config.sampleRate, 1, _opusApplicationVoip, err);
       if (_enc == nullptr || err.value != _opusOk) {
         throw StateError('opus_encoder_create failed: ${err.value}');
       }
       _encFinalizer.attach(this, _enc.cast(), detach: _encToken);
-      _dec = _decCreate(opusVoiceSampleRate, 1, err);
+      _dec = _decCreate(config.sampleRate, 1, err);
       if (_dec == nullptr || err.value != _opusOk) {
         throw StateError('opus_decoder_create failed: ${err.value}');
       }
@@ -148,21 +214,19 @@ class OpusVoice implements VoiceFrameCodec, Finalizable {
     } finally {
       malloc.free(err);
     }
-    _check(_encCtl(_enc, _opusSetBitrate, opusVoiceBitrate), 'set bitrate');
-    _check(_encCtl(_enc, _opusSetVbr, 0), 'set cbr');
+    // Order: bitrate, then VBR before its constraint, then MAX_BANDWIDTH
+    // before BANDWIDTH (BANDWIDTH is clamped to the max in force).
+    _check(_encCtl(_enc, _opusSetBitrate, config.bitrate), 'set bitrate');
+    _check(_encCtl(_enc, _opusSetVbr, config.vbr ? 1 : 0), 'set vbr');
+    // Unconstrained: a letter is a file, not a channel.
     _check(_encCtl(_enc, _opusSetVbrConstraint, 0), 'set vbr constraint');
     _check(_encCtl(_enc, _opusSetSignal, _opusSignalVoice), 'set signal');
-    _check(
-      _encCtl(_enc, _opusSetMaxBandwidth, _opusBandwidthNarrowband),
-      'set max bw',
-    );
-    _check(
-      _encCtl(_enc, _opusSetBandwidth, _opusBandwidthNarrowband),
-      'set bw',
-    );
+    _check(_encCtl(_enc, _opusSetMaxBandwidth, config.bandwidth), 'set max bw');
+    _check(_encCtl(_enc, _opusSetBandwidth, config.bandwidth), 'set bw');
     _check(_encCtl(_enc, _opusSetComplexity, 10), 'set complexity');
     _check(_encCtl(_enc, _opusSetInbandFec, 0), 'set fec');
     _check(_encCtl(_enc, _opusSetPacketLossPerc, 0), 'set loss');
+    // The wire has no clock: a DTX gap is time no receiver can see.
     _check(_encCtl(_enc, _opusSetDtx, 0), 'set dtx');
     _check(_encCtl(_enc, _opusSetLsbDepth, 16), 'set lsb depth');
     if (decoderComplexity > 0) {
@@ -171,11 +235,13 @@ class OpusVoice implements VoiceFrameCodec, Finalizable {
         'set decoder complexity',
       );
     }
-    _pcm = malloc<Int16>(opusVoiceSamplesPerFrame);
-    _bytes = malloc<Uint8>(opusVoiceFrameBytes * 2);
+    _pcm = malloc<Int16>(config.samplesPerFrame);
+    _bytes = malloc<Uint8>(config.bufferBytes);
     _bufFinalizer.attach(this, _pcm.cast(), detach: _pcmToken);
     _bufFinalizer.attach(this, _bytes.cast(), detach: _bytesToken);
   }
+
+  final OpusVoiceConfig config;
 
   final Object _encToken = Object();
   final Object _decToken = Object();
@@ -188,64 +254,72 @@ class OpusVoice implements VoiceFrameCodec, Finalizable {
   late final Pointer<Uint8> _bytes;
 
   @override
-  int get samplesPerFrame => opusVoiceSamplesPerFrame;
+  int get sampleRate => config.sampleRate;
 
   @override
-  int get bitsPerFrame => opusVoiceFrameBytes * 8;
+  int get samplesPerFrame => config.samplesPerFrame;
+
+  /// 0 for the variable mode: the wire measures, it does not predict.
+  @override
+  int get bitsPerFrame => config.cbrBytes * 8;
 
   void _checkLive() {
     if (_enc == nullptr) throw StateError('OpusVoice used after dispose');
   }
 
-  /// Encodes one 60 ms frame (480 s16 samples at 8 kHz) into exactly
-  /// [opusVoiceFrameBytes] bytes.
+  /// One 60 ms frame -> one Opus packet, TOC included: exactly
+  /// [OpusVoiceConfig.cbrBytes] in CBR, 1..255 B in VBR.
   @override
   Uint8List encodeFrame(Int16List speech) {
     _checkLive();
-    if (speech.length != opusVoiceSamplesPerFrame) {
-      throw ArgumentError(
-        'need $opusVoiceSamplesPerFrame samples, got ${speech.length}',
-      );
+    final want = config.samplesPerFrame;
+    if (speech.length != want) {
+      throw ArgumentError('need $want samples, got ${speech.length}');
     }
-    _pcm.asTypedList(opusVoiceSamplesPerFrame).setAll(0, speech);
-    final n = _encode(
-      _enc,
-      _pcm,
-      opusVoiceSamplesPerFrame,
-      _bytes,
-      opusVoiceFrameBytes * 2,
-    );
+    _pcm.asTypedList(want).setAll(0, speech);
+    final n = _encode(_enc, _pcm, want, _bytes, config.bufferBytes);
     if (n < 0) throw StateError('opus_encode failed: $n');
-    if (n != opusVoiceFrameBytes) {
+    if (config.vbr) {
+      if (n < 1 || n > config.maxPacketBytes) {
+        throw StateError(
+          'opus_encode returned $n B, the wire carries 1..${config.maxPacketBytes}',
+        );
+      }
+    } else if (n != config.cbrBytes) {
       throw StateError(
-        'opus_encode returned $n B, the wire wants $opusVoiceFrameBytes',
+        'opus_encode returned $n B, the wire wants ${config.cbrBytes}',
       );
     }
     return Uint8List.fromList(_bytes.asTypedList(n));
   }
 
-  /// Decodes one [opusVoiceFrameBytes]-byte packet into 480 s16 samples.
+  /// One packet -> exactly [samplesPerFrame] samples; a packet of any
+  /// other duration (foreign TOC) fails here, never plays at the wrong
+  /// speed.
   @override
   Int16List decodeFrame(Uint8List packet) {
     _checkLive();
-    if (packet.length != opusVoiceFrameBytes) {
+    final ok = config.vbr
+        ? packet.isNotEmpty && packet.length <= config.maxPacketBytes
+        : packet.length == config.cbrBytes;
+    if (!ok) {
       throw ArgumentError(
-        'need $opusVoiceFrameBytes bytes, got ${packet.length}',
+        'packet of ${packet.length} B does not fit this mode',
       );
     }
-    _bytes.asTypedList(opusVoiceFrameBytes).setAll(0, packet);
+    _bytes.asTypedList(packet.length).setAll(0, packet);
     final n = _decode(
       _dec,
       _bytes,
-      opusVoiceFrameBytes,
+      packet.length,
       _pcm,
-      opusVoiceSamplesPerFrame,
+      config.samplesPerFrame,
       0,
     );
     if (n < 0) throw StateError('opus_decode failed: $n');
-    if (n != opusVoiceSamplesPerFrame) {
+    if (n != config.samplesPerFrame) {
       throw StateError(
-        'opus_decode returned $n samples, want $opusVoiceSamplesPerFrame',
+        'opus_decode returned $n samples, want ${config.samplesPerFrame}',
       );
     }
     return Int16List.fromList(_pcm.asTypedList(n));

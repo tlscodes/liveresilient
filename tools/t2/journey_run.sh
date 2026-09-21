@@ -959,9 +959,11 @@ if [ "$PROFILE" = dnsvalve ]; then
         echo "letter    $dv_video ($letter_b B) — opening now"
         open "$LOGD/$dv_session.mp4" >/dev/null 2>&1 || echo "note: open failed; the mp4 is still at $LOGD/$dv_session.mp4"
         osascript -e "display notification \"$letter_b bytes, session $dv_session\" with title \"DNS-valve video letter received\"" >/dev/null 2>&1 || true
+      # The tool writes the wav at the mode's own rate (8 kHz Codec2 / mode
+      # 12, 16 kHz mode 6) — no "-ar 8000" here to play a 16 kHz letter at
+      # half speed past every digest witness (2026-09-21).
       elif ( cd "$REPO/packages/hamseda_codec" && dart run tool/decode_voice_letter.dart \
-             "$LOGD/$dv_session.letter" "$dv_raw" ) >/dev/null 2>&1 \
-         && ffmpeg -v error -y -f s16le -ac 1 -ar 8000 -i "$dv_raw" "$dv_wav" >/dev/null 2>&1; then
+             "$LOGD/$dv_session.letter" "$dv_wav" ) >/dev/null 2>&1; then
         dv_secs=$(afinfo "$dv_wav" 2>/dev/null | sed -nE 's/.*estimated duration: ([0-9.]+) sec.*/\1/p' | head -1)
         echo "letter    voice, $letter_b B (~${dv_secs:-?}s), decoded to $dv_wav — playing now"
         afplay "$dv_wav" >/dev/null 2>&1 || echo "note: afplay failed; the wav is still at $dv_wav"

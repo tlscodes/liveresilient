@@ -31,10 +31,83 @@ import 'package:record/record.dart';
 const Duration voiceLetterMaxLength = Duration(minutes: 5);
 
 /// What ten letters carry (letter_parts.dart: 10 x (4096 - 29)), the
-/// budget the recorder picks its mode against (owner's cap for voice,
-/// 2026-09-21): Opus 6k (750 B/s) up to 54 s, then the Codec2 ladder —
-/// 3200 to 101 s, 2400 to 135 s, 1600 to 254 s, 1200 to 338 s.
+/// budget the recorder fits its mode into (owner's cap for voice,
+/// 2026-09-21): Opus SILK VBR at the rate the budget allows (about
+/// 10 kbit/s for 30 s, wideband) down to 6 kbit/s at ~48 s, then the fixed
+/// 8 kHz ladder — Opus 6k CBR to 54 s, Codec2 3200 to 101 s, 2400 to 135 s,
+/// 1600 to 254 s, 1200 to 338 s.
 const int voiceLetterBudgetBytes = 10 * (4096 - 29);
+
+/// 16 kHz capture since mode 6: SILK wideband keeps the 4-8 kHz where
+/// Persian fricatives live. The fixed 8 kHz modes are fed by
+/// [downsample2x].
+const int voiceLetterSampleRate = 16000;
+
+/// 20 ms of capture — the gate's and the normaliser's frame.
+const int voiceLetterFrame = voiceLetterSampleRate ~/ 50;
+
+/// Bitrates to try for mode 6, highest first: what the budget allows for
+/// this length after the header and one length byte per packet, with a
+/// 7 % VBR margin, capped at 16 k (SILK WB gains little above), then 12 %
+/// steps down to 6 k. Empty (about 48 s and up): the fixed ladder takes
+/// over. 30 s -> [10000, 8800, 7700, 6800, 6000].
+List<int> opusBitrateLadder(double seconds, int budgetBytes) {
+  if (seconds <= 0) return const [];
+  final packets = (seconds * 1000 / 60).floor();
+  final payloadBytes = budgetBytes - voiceNoteHeaderBytes - packets;
+  if (payloadBytes <= 0) return const [];
+  final allowed = payloadBytes * 8 / seconds * 0.93;
+  if (allowed < 6000) return const [];
+  final ladder = <int>[];
+  var b = math.min(allowed, 16000.0);
+  while (true) {
+    final rung = math.max((b / 100).round() * 100, 6000);
+    ladder.add(rung);
+    if (rung <= 6000) break;
+    b *= 0.88;
+  }
+  return ladder;
+}
+
+/// 16 kHz -> 8 kHz: a 31-tap Hamming-windowed sinc low-pass at 3.4 kHz,
+/// unity DC gain, every second sample kept. Pure Dart.
+Int16List downsample2x(Int16List x) {
+  const taps = 31, half = taps ~/ 2;
+  const fc = 3400 / 16000;
+  final h = List<double>.generate(taps, (i) {
+    final n = i - half;
+    final sinc = n == 0
+        ? 2 * fc
+        : math.sin(2 * math.pi * fc * n) / (math.pi * n);
+    return sinc * (0.54 - 0.46 * math.cos(2 * math.pi * i / (taps - 1)));
+  });
+  final sum = h.fold(0.0, (a, b) => a + b);
+  for (var i = 0; i < taps; i++) {
+    h[i] /= sum;
+  }
+  final out = Int16List(x.length ~/ 2);
+  for (var o = 0; o < out.length; o++) {
+    final c = o * 2;
+    var acc = 0.0;
+    for (var i = 0; i < taps; i++) {
+      final k = c + i - half;
+      if (k >= 0 && k < x.length) acc += h[i] * x[k];
+    }
+    out[o] = acc.round().clamp(-32768, 32767);
+  }
+  return out;
+}
+
+/// Memoryless soft knee: identity to 0.8 FS, then a smooth curve that
+/// approaches 1.0 and never clips. Touches only the top 2 dB.
+double _softKnee(double v) {
+  const knee = 0.8;
+  final a = v.abs();
+  if (a <= knee) return v;
+  final over = (a - knee) / (1 - knee);
+  final y = knee + (1 - knee) * (over / (1 + over));
+  return v.isNegative ? -y : y;
+}
 
 /// Which 20 ms frames of [x] hold speech: an adaptive floor (the running
 /// 5th percentile of frame RMS, never under 30), a threshold 8 dB above
@@ -91,23 +164,28 @@ bool hasSpeech(Int16List x, {int frame = 160}) {
   return rms >= 32768 * 0.0056; // -45 dBFS
 }
 
-/// DC removal, a one-pole 80 Hz high-pass, then a gain computed from the
-/// SPEECH frames only (RMS to about -20 dBFS) and limited so the loudest
-/// peak stays under 0.9 full scale; non-speech frames are attenuated by
-/// 20 dB (Codec2 decodes near-silence cleanly and has no comfort noise).
-/// Pure Dart, 8 kHz mono. Call [hasSpeech] first; this does not refuse.
-Int16List normalizeSpeech(Int16List x, {int frame = 160}) {
+/// DC removal, one-pole 80 Hz high-pass at [sampleRate], gain from the
+/// SPEECH frames only to -20 dBFS RMS (SILK's VAD and quality heuristics
+/// assume -26..-16; never the room noise), a soft knee at 0.8 FS instead
+/// of a whole-take peak cap (one plosive no longer drags the whole letter
+/// down), non-speech frames -15 dB with a 20 ms linear ramp (a hard step
+/// clicks). No pre-emphasis: SILK's noise shaping expects natural tilt.
+/// Pure Dart, mono. Call [hasSpeech] first (same frame); this does not
+/// refuse. Fable 5.1's final design, 2026-09-21.
+Int16List normalizeSpeech(Int16List x, {int sampleRate = 16000}) {
   if (x.isEmpty) return x;
+  final frame = sampleRate ~/ 50;
   var mean = 0.0;
   for (final s in x) {
     mean += s;
   }
   mean /= x.length;
+  final a = 1 - 2 * math.pi * 80 / sampleRate; // 0.969 at 16 k, 0.937 at 8 k
   final hp = Float64List(x.length);
   var xPrev = 0.0, yPrev = 0.0;
   for (var i = 0; i < x.length; i++) {
     final v = x[i] - mean;
-    final y = v - xPrev + 0.94 * yPrev;
+    final y = v - xPrev + a * yPrev;
     hp[i] = y;
     xPrev = v;
     yPrev = y;
@@ -115,26 +193,28 @@ Int16List normalizeSpeech(Int16List x, {int frame = 160}) {
   final mask = speechMask(x, frame: frame);
   var e = 0.0;
   var count = 0;
-  var peak = 1.0;
   for (var i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
     for (var k = i * frame; k < (i + 1) * frame; k++) {
-      final a = hp[k].abs();
-      if (a > peak) peak = a;
-      if (mask[i]) {
-        e += hp[k] * hp[k];
-        count++;
-      }
+      e += hp[k] * hp[k];
+      count++;
     }
   }
   final rmsSpeech = math.sqrt(e / math.max(count, 1));
-  final gain = math
-      .min(0.1 * 32768 / math.max(rmsSpeech, 1.0), 0.9 * 32767 / peak)
-      .clamp(0.25, 8.0);
+  final gain = (0.1 * 32768 / math.max(rmsSpeech, 1.0)).clamp(0.25, 8.0);
+  const nonSpeech = 0.178; // -15 dB
   final out = Int16List(x.length);
+  var gPrev = mask.isNotEmpty && !mask[0] ? gain * nonSpeech : gain;
   for (var i = 0; i < x.length; i++) {
     final f = i ~/ frame;
-    final g = (f < mask.length && !mask[f]) ? gain * 0.1 : gain;
-    out[i] = (hp[i] * g).round().clamp(-32768, 32767);
+    final gNow = (f < mask.length && !mask[f]) ? gain * nonSpeech : gain;
+    final t = (i % frame + 1) / frame;
+    final g = gPrev + (gNow - gPrev) * t;
+    out[i] = (_softKnee(hp[i] * g / 32768) * 32767).round().clamp(
+      -32768,
+      32767,
+    );
+    if (i % frame == frame - 1) gPrev = gNow;
   }
   return out;
 }
@@ -159,7 +239,7 @@ enum VoiceLetterRefusal {
   /// Under one second of wall clock — a tap-tap, not a letter.
   tooShort,
 
-  /// The microphone delivered a byte count the configured 8 kHz mono PCM16
+  /// The microphone delivered a byte count the configured 16 kHz mono PCM16
   /// rate cannot explain (more than 10 % off). Encoding it would produce
   /// noise that still passes every digest witness, so it is refused.
   offRate,
@@ -269,7 +349,7 @@ class VoiceLetterRecorder implements VoiceRecording {
   @override
   String? get stopError => _stopError;
 
-  /// Opens the microphone and starts accumulating 8 kHz mono PCM16. Throws
+  /// Opens the microphone and starts accumulating 16 kHz mono PCM16. Throws
   /// [VoiceLetterUnavailable] if permission is refused. Arms a 30 s timer
   /// that calls [stop] on its own and hands the result to [onCapReached] —
   /// the caller does not have to enforce the cap itself, and a recording
@@ -282,7 +362,7 @@ class VoiceLetterRecorder implements VoiceRecording {
     final stream = await _recorder.startStream(
       const RecordConfig(
         encoder: AudioEncoder.pcm16bits,
-        sampleRate: 8000,
+        sampleRate: voiceLetterSampleRate,
         numChannels: 1,
         echoCancel: false,
         // Apple's voice-processing noise suppression: the cheapest quality
@@ -337,12 +417,13 @@ class VoiceLetterRecorder implements VoiceRecording {
         final elapsed = endedAt.difference(startedAt);
         final pcm = _pcm.takeBytes();
         _pcmBytes = pcm.length;
-        // Rate guard: 8 kHz * 2 bytes/sample = 16 000 B/s, expected. A
+        // Rate guard: 16 kHz * 2 bytes/sample = 32 000 B/s, expected. A
         // plugin that silently delivered a different rate would still hand
-        // Codec2 valid-looking bytes and produce noise that passes every
-        // existing witness (sha256, chunk count) — this is what catches
-        // that instead of trusting the config was honoured.
-        final expected = elapsed.inMilliseconds * 16;
+        // the codec valid-looking bytes and produce a chipmunk or half-speed
+        // letter that passes every existing witness (sha256, chunk count) —
+        // this is what catches that instead of trusting the config.
+        final expected =
+            elapsed.inMilliseconds * (voiceLetterSampleRate * 2 ~/ 1000);
         final within = expected == 0
             ? false
             : (pcm.length - expected).abs() <= expected * 0.10;
@@ -352,6 +433,7 @@ class VoiceLetterRecorder implements VoiceRecording {
           _refusal = VoiceLetterRefusal.offRate;
         } else if (!hasSpeech(
           Int16List.sublistView(pcm, 0, pcm.length - pcm.length % 2),
+          frame: voiceLetterFrame,
         )) {
           _refusal = VoiceLetterRefusal.noSpeech;
         } else {
@@ -375,35 +457,61 @@ class VoiceLetterRecorder implements VoiceRecording {
     // builder's offsetInBytes and would read a neighbouring chunk's bytes
     // as audio without any of the witnesses noticing.
     final raw = Int16List.sublistView(pcm, 0, pcm.length - pcm.length % 2);
-    // Both codecs want level-normalized speech: remove DC, pass 80 Hz,
-    // bring the SPEECH frames to about -20 dBFS (never the room noise —
-    // the gain is measured on the speech mask only, see normalizeSpeech).
-    final samples = normalizeSpeech(raw);
-    // The best mode whose wire fits ten letters (2026-09-21): Opus 6k for
-    // anything up to 54 s, the Codec2 ladder beyond; the mode rides the
-    // wire's own nibble, so every receiver decodes what was sent.
+    final wide = normalizeSpeech(raw, sampleRate: voiceLetterSampleRate);
+    final seconds = wide.length / voiceLetterSampleRate;
+    // 1. Mode 6 at the rate ten letters allow; a VBR average that lands
+    //    over the budget is re-encoded one rung lower, never under 6 k.
+    for (final bitrate in opusBitrateLadder(seconds, voiceLetterBudgetBytes)) {
+      final wire = _encodeWith(
+        VoiceNoteMode.opusVbr,
+        wide,
+        opusBitrate: bitrate,
+      );
+      if (wire.length <= voiceLetterBudgetBytes) {
+        return _letter(wire, VoiceNoteMode.opusVbr, pcm, elapsed);
+      }
+    }
+    // 2. The fixed 8 kHz ladder, sized ahead as before.
+    final narrow = downsample2x(wide);
     final mode = VoiceNoteMode.pick(
-      Duration(milliseconds: samples.length ~/ 8),
+      Duration(milliseconds: narrow.length ~/ 8),
       voiceLetterBudgetBytes,
     );
-    final codec = voiceFrameCodecFor(mode);
+    return _letter(_encodeWith(mode, narrow), mode, pcm, elapsed);
+  }
+
+  Uint8List _encodeWith(
+    VoiceNoteMode mode,
+    Int16List samples, {
+    int opusBitrate = 10000,
+  }) {
+    final codec = voiceFrameCodecFor(mode, opusBitrate: opusBitrate);
     try {
-      final perFrame = codec.samplesPerFrame;
-      final frameCount = samples.length ~/ perFrame;
+      final n = codec.samplesPerFrame;
+      final count = samples.length ~/ n;
       final frames = <Uint8List>[
-        for (var i = 0; i < frameCount; i++)
-          codec.encodeFrame(samples.sublist(i * perFrame, (i + 1) * perFrame)),
+        for (var i = 0; i < count; i++)
+          codec.encodeFrame(samples.sublist(i * n, (i + 1) * n)),
       ];
-      final wire = packVoiceNote(frames: frames, mode: mode);
-      return VoiceLetter(
-        wire: wire,
-        frames: frames.length,
-        length: Duration(milliseconds: frames.length * mode.frameMs),
-        pcmBytes: pcm.length,
-        elapsed: elapsed,
-      );
+      return packVoiceNote(frames: frames, mode: mode);
     } finally {
       codec.dispose();
     }
+  }
+
+  VoiceLetter _letter(
+    Uint8List wire,
+    VoiceNoteMode mode,
+    Uint8List pcm,
+    Duration elapsed,
+  ) {
+    final frames = wire[1] | (wire[2] << 8);
+    return VoiceLetter(
+      wire: wire,
+      frames: frames,
+      length: Duration(milliseconds: frames * mode.frameMs),
+      pcmBytes: pcm.length,
+      elapsed: elapsed,
+    );
   }
 }

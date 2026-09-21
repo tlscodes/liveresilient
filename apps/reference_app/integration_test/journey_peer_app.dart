@@ -642,6 +642,7 @@ class JourneyPeer extends LetterComposer {
       'frames': frames.length,
       'seconds': seconds,
       'pcm_bytes': bytes.length,
+      'sample_rate': mode.sampleRate,
       'pcm_sha256': contentSha256Hex(bytes),
       'decode_ms': ms,
       'posted': posted,

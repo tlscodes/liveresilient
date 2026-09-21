@@ -9,10 +9,11 @@
 # Source: opus-1.5.2.tar.gz, sha256
 #   65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1
 # (the one approved download, 2026-09-21). OSCE (LACE/NoLACE decoder
-# enhancement) is NOT compiled in: dnn/osce.c:933 only enhances SILK at
-# 16 kHz with 20 ms frames, and mode 12 is narrowband 60 ms — measured
-# 2026-09-21, complexity 7 decoded byte-identical to complexity 0 with
-# OSCE on, at +2.3 MB of weights. A wideband 20 ms mode would need it.
+# enhancement, +2.3 MB of weights) IS compiled in for mode 6 (SILK
+# wideband VBR, 60 ms): dnn/osce.c:933 gates on fs_kHz == 16 and a 20 ms
+# SILK frame, and silk/dec_API.c:196 gives a 60 ms packet three of them.
+# It is inert on mode 12 (8 kHz), where complexity 7 measured
+# byte-identical to 0 (2026-09-21).
 set -euo pipefail
 NATIVE="$(cd "$(dirname "$0")" && pwd)"
 TARBALL="$NATIVE/opus-1.5.2.tar.gz"
@@ -37,7 +38,7 @@ common=(
   -DOPUS_BUILD_SHARED_LIBRARY=ON
   -DOPUS_BUILD_PROGRAMS=OFF
   -DOPUS_BUILD_TESTING=OFF
-  -DOPUS_OSCE=OFF
+  -DOPUS_OSCE=ON
   -DOPUS_DRED=OFF
 )
 
@@ -82,7 +83,7 @@ if [ ! -d "$OUT/opus.xcframework" ] || [ "${FORCE:-0}" = 1 ]; then
   log "packed opus.xcframework ($(du -sh "$OUT/opus.xcframework" | awk '{print $1}'))"
   SHA=$(shasum -a 256 "$OUT/opus.xcframework/ios-arm64/opus.framework/opus" | awk '{print $1}')
   grep -v '^opus	' "$OUT/PROVENANCE.tsv" > "$OUT/PROVENANCE.tmp" || true
-  printf 'opus\topus-1.5.2.tar.gz sha256 %s (OSCE off, DRED off)\t1.5.2\t%s\n' "$EXPECT" "$SHA" >> "$OUT/PROVENANCE.tmp"
+  printf 'opus\topus-1.5.2.tar.gz sha256 %s (OSCE on, DRED off)\t1.5.2\t%s\n' "$EXPECT" "$SHA" >> "$OUT/PROVENANCE.tmp"
   mv "$OUT/PROVENANCE.tmp" "$OUT/PROVENANCE.tsv"
   rm -rf "$APP_FW/opus.xcframework"
   cp -R "$OUT/opus.xcframework" "$APP_FW/opus.xcframework"

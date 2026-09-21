@@ -54,13 +54,14 @@ void main() {
 
   test('gain comes from the speech, noise is pushed down, nothing clips', () {
     final x = take(toneAmp: 2000);
-    final y = normalizeSpeech(x);
+    final y = normalizeSpeech(x, sampleRate: 8000);
     final speech = rmsOf(y, 8400, 15600);
     final noise = rmsOf(y, 0, 7000);
     // Speech lands near -20 dBFS (3277; the mask also holds pre-roll and
     // hangover frames, so the burst itself comes out a little above).
     expect(speech, inInclusiveRange(2200, 4200));
-    expect(noise, lessThan(speech / 8));
+    // Non-speech sits -15 dB under the speech (x0.178), ramped, not gated.
+    expect(noise, lessThan(speech / 4));
     var peak = 0;
     for (final s in y) {
       if (s.abs() > peak) peak = s.abs();
@@ -68,10 +69,50 @@ void main() {
     expect(peak, lessThanOrEqualTo((0.9 * 32767).round() + 1));
   });
 
+  test('the mode-6 bitrate ladder for 30 s in ten letters', () {
+    // 500 packets: 40670 - 4 - 500 = 40166 B -> 10711 bit/s x 0.93 = 9961
+    // -> rounds to 10000, then 12 % steps to 6000 (Fable 5.1, 2026-09-21).
+    expect(opusBitrateLadder(30, 10 * 4067), [10000, 8800, 7700, 6800, 6000]);
+    // Short takes are capped at 16 k; long takes fall to the fixed ladder.
+    expect(opusBitrateLadder(5, 10 * 4067).first, 16000);
+    expect(opusBitrateLadder(60, 10 * 4067), isEmpty);
+    expect(opusBitrateLadder(0, 10 * 4067), isEmpty);
+  });
+
+  test('downsample2x keeps a 300 Hz tone and halves the length', () {
+    final x = Int16List(16000);
+    for (var i = 0; i < x.length; i++) {
+      x[i] = (8000 * sin(2 * pi * 300 * i / 16000)).round();
+    }
+    final y = downsample2x(x);
+    expect(y, hasLength(8000));
+    final rmsIn = rmsOf(x, 1000, 15000);
+    final rmsOut = rmsOf(y, 500, 7500);
+    expect(rmsOut / rmsIn, closeTo(1.0, 0.05));
+  });
+
+  test('normalizeSpeech at 16 kHz never clips and ramps the floor', () {
+    final x = Int16List(48000);
+    final r = Random(3);
+    for (var i = 0; i < x.length; i++) {
+      var v = (r.nextDouble() * 2 - 1) * 200;
+      if (i >= 16000 && i < 32000) v += 12000 * sin(2 * pi * 200 * i / 16000);
+      x[i] = v.round().clamp(-32768, 32767);
+    }
+    final y = normalizeSpeech(x);
+    var peak = 0;
+    for (final s in y) {
+      if (s.abs() > peak) peak = s.abs();
+    }
+    expect(peak, lessThanOrEqualTo(32767));
+    expect(rmsOf(y, 17000, 31000), inInclusiveRange(2200, 4500));
+    expect(rmsOf(y, 0, 14000), lessThan(rmsOf(y, 17000, 31000) / 4));
+  });
+
   test('a quiet room-noise take is not lifted into clipping', () {
     // The exact failure of 2026-09-21: -38 dBFS noise, gain x8, clipped.
     final x = take(noiseRms: 400, withTone: false);
-    final y = normalizeSpeech(x);
+    final y = normalizeSpeech(x, sampleRate: 8000);
     var peak = 0;
     for (final s in y) {
       if (s.abs() > peak) peak = s.abs();
