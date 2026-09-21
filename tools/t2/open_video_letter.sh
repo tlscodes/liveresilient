@@ -1,37 +1,60 @@
 #!/usr/bin/env bash
-# open_video_letter.sh — the receiver's half of a video letter on the Mac:
-# a phase-5 video-note wire (magic 'V1') as the responder assembled it ->
-# frames decoded with dav1d, audio with c2dec, muxed to one mp4 the person
-# can play. The display path costs no bytes and is where half of "blocky,
-# 3 fps" came from (2026-09-21): motion-compensated interpolation to 24 fps
-# at the native size, then a lanczos 4x upscale and a light unsharp — not
-# the nearest-neighbour 4x of the first version. Never guesses: a wire
-# that does not unpack or decode exits 2.
+# open_video_letter_v2.sh — receiver v2 for the video letter. Reads the flags byte
+# (low nibble = audio mode), decodes Codec2 700C/1200/1600/2400/3200 with c2dec or
+# Opus 6k CBR with ffmpeg (packets rebuilt into Ogg by pack_video_note_v2.py), and
+# a better display path. v1 letters (flags 0 = 700C) open unchanged.
 #
-# USAGE  tools/t2/open_video_letter.sh <letter.bin> <out.mp4> [plain]
-#        "plain" = the old path (nearest 4x, native fps), for comparison.
+# USAGE  open_video_letter_v2.sh <letter.bin> <out.mp4> [plain|enhanced]
+#        "plain" = nearest 4x at native fps (the old comparison path).
+#
+# DISPLAY PATH (costs no bytes; ~real-time on a 2015 iMac at ≤256x192):
+#   1. minterpolate to 24 fps at NATIVE size (mci/aobmc/bidir/vsbmc, epzs search,
+#      search_param 24 — a little wider than v1 because 6 fps means bigger motion
+#      vectors between neighbours; scd on so a cut does not get blended).
+#   2. scale 4x with SPLINE (softer ringing than lanczos on block edges; the AV1
+#      grain synthesis already supplies texture, we do not want halos around it).
+#   3. deband after the upscale (thr 0.012, range 14, blur) — smooths the 8-bit
+#      staircase that a 4x upscale exposes in skin and walls.
+#   4. cas 0.35 (contrast-adaptive sharpen) instead of unsharp — sharpens edges
+#      without amplifying grain or ringing the flat areas.
+#   x264 crf 18 veryfast + aac 48k.
 set -euo pipefail
 IN=${1:?letter}; OUT=${2:?out.mp4}; MODE=${3:-enhanced}
-REPO=$(cd "$(dirname "$0")/../.." && pwd)
-PACK="$REPO/tools/phase5/pack_video_note.py"
-for tool in dav1d c2dec ffmpeg python3; do
+HERE=$(cd "$(dirname "$0")" && pwd)
+PACK="$HERE/pack_video_note_v2.py"
+for tool in dav1d ffmpeg python3; do
   command -v "$tool" >/dev/null || { echo "ERROR: $tool not installed" >&2; exit 2; }
 done
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
-python3 "$PACK" unpack "$IN" "$T/v.ivf" "$T/a.c2"
+AMODE=$(python3 "$PACK" unpack "$IN" "$T/v.ivf" "$T/a.bits")
 FPS=$(od -An -j2 -N1 -tu1 "$IN" | tr -d ' ')
 W=$(python3 -c "d=open('$IN','rb').read(); print(d[3]|d[4]<<8)")
 H=$(python3 -c "d=open('$IN','rb').read(); print(d[5]|d[6]<<8)")
 dav1d -i "$T/v.ivf" -o "$T/v.y4m" >/dev/null 2>&1
 FRAMES=$(dav1d -i "$T/v.ivf" -o /dev/null --muxer null 2>&1 | grep -oE 'Decoded [0-9]+/' | tail -1 | grep -oE '[0-9]+')
-c2dec 700C "$T/a.c2" "$T/a.raw" >/dev/null 2>&1
+
+case "$AMODE" in
+  700C|1200|1600|2400|3200)
+    command -v c2dec >/dev/null || { echo "ERROR: c2dec not installed" >&2; exit 2; }
+    c2dec "$AMODE" "$T/a.bits" "$T/a.raw" >/dev/null 2>&1
+    AIN=(-f s16le -ar 8000 -ac 1 -i "$T/a.raw") ;;
+  opus)
+    python3 "$PACK" opus-ogg "$T/a.bits" "$T/a.opus" 45 >/dev/null
+    AIN=(-i "$T/a.opus") ;;
+  *) echo "ERROR: unknown audio mode '$AMODE' in flags byte" >&2; exit 2 ;;
+esac
+
 if [ "$MODE" = plain ]; then
   VF="scale=iw*4:ih*4:flags=neighbor"; OUTFPS=$FPS
 else
-  VF="minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,scale=iw*4:ih*4:flags=lanczos,unsharp=5:5:0.5"; OUTFPS=24
+  VF="minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=epzs:vsbmc=1:search_param=24:scd=fdiff"
+  VF="$VF,scale=iw*4:ih*4:flags=spline"
+  VF="$VF,deband=1thr=0.012:2thr=0.012:3thr=0.012:range=14:blur=1"
+  VF="$VF,cas=0.35"
+  OUTFPS=24
 fi
-ffmpeg -y -v error -r "$FPS" -i "$T/v.y4m" -f s16le -ar 8000 -ac 1 -i "$T/a.raw" \
+ffmpeg -y -v error -r "$FPS" -i "$T/v.y4m" "${AIN[@]}" \
   -vf "$VF" -r "$OUTFPS" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 18 \
-  -c:a aac -b:a 24k -shortest "$OUT"
+  -c:a aac -b:a 48k -ar 16000 -shortest "$OUT"
 SECS=$(python3 -c "print(round(${FRAMES:-0}/${FPS}, 1))")
-echo "video ${SECS}s ${W}x${H}@${FPS} frames ${FRAMES:-0} ($MODE) -> $OUT"
+echo "video ${SECS}s ${W}x${H}@${FPS} frames ${FRAMES:-0} audio $AMODE ($MODE) -> $OUT"
