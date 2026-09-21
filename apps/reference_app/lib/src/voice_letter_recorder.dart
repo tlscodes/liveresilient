@@ -35,10 +35,67 @@ const Duration voiceLetterMaxLength = Duration(minutes: 5);
 /// minutes is ~120 KB and fits.
 const int voiceLetterBudgetBytes = 30 * (4096 - 29);
 
-/// DC removal, a one-pole 80 Hz high-pass, and an RMS normalizer to about
-/// -20 dBFS (gain clamped 0.25..8, so a silent room is not blown up into
-/// noise). Pure Dart, 8 kHz mono.
-Int16List normalizeSpeech(Int16List x) {
+/// Which 20 ms frames of [x] hold speech: an adaptive floor (the running
+/// 5th percentile of frame RMS, never under 30), a threshold 8 dB above
+/// it, two frames of pre-roll and eight of hangover. The first cut of this
+/// file normalized BEFORE gating and lifted a -38 dBFS room-noise take by
+/// 18 dB into clipping; Codec2 then hallucinated voicing on clipped noise
+/// (measured 2026-09-21). Gate first, always.
+List<bool> speechMask(Int16List x, {int frame = 160}) {
+  final n = x.length ~/ frame;
+  if (n == 0) return const [];
+  final rms = List<double>.generate(n, (i) {
+    var e = 0.0;
+    for (var k = i * frame; k < (i + 1) * frame; k++) {
+      e += x[k] * x[k].toDouble();
+    }
+    return math.sqrt(e / frame);
+  });
+  final sorted = [...rms]..sort();
+  final floor = math.max(sorted[(n * 0.05).floor()], 30.0);
+  final thr = floor * 2.5; // +8 dB
+  final mask = List<bool>.filled(n, false);
+  var hang = 0;
+  for (var i = 0; i < n; i++) {
+    if (rms[i] > thr) {
+      hang = 8;
+      for (var p = math.max(0, i - 2); p <= i; p++) {
+        mask[p] = true;
+      }
+    } else if (hang > 0) {
+      hang--;
+      mask[i] = true;
+    }
+  }
+  return mask;
+}
+
+/// True when at least a tenth of the frames are speech and that speech
+/// sits above -45 dBFS. A take that fails this is refused (noSpeech).
+bool hasSpeech(Int16List x, {int frame = 160}) {
+  final mask = speechMask(x, frame: frame);
+  if (mask.isEmpty) return false;
+  final voiced = mask.where((m) => m).length;
+  if (voiced < mask.length * 0.10) return false;
+  var e = 0.0;
+  var count = 0;
+  for (var i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+    for (var k = i * frame; k < (i + 1) * frame; k++) {
+      e += x[k] * x[k].toDouble();
+      count++;
+    }
+  }
+  final rms = math.sqrt(e / math.max(count, 1));
+  return rms >= 32768 * 0.0056; // -45 dBFS
+}
+
+/// DC removal, a one-pole 80 Hz high-pass, then a gain computed from the
+/// SPEECH frames only (RMS to about -20 dBFS) and limited so the loudest
+/// peak stays under 0.9 full scale; non-speech frames are attenuated by
+/// 20 dB (Codec2 decodes near-silence cleanly and has no comfort noise).
+/// Pure Dart, 8 kHz mono. Call [hasSpeech] first; this does not refuse.
+Int16List normalizeSpeech(Int16List x, {int frame = 160}) {
   if (x.isEmpty) return x;
   var mean = 0.0;
   for (final s in x) {
@@ -54,15 +111,29 @@ Int16List normalizeSpeech(Int16List x) {
     xPrev = v;
     yPrev = y;
   }
-  var rms = 0.0;
-  for (final v in hp) {
-    rms += v * v;
+  final mask = speechMask(x, frame: frame);
+  var e = 0.0;
+  var count = 0;
+  var peak = 1.0;
+  for (var i = 0; i < mask.length; i++) {
+    for (var k = i * frame; k < (i + 1) * frame; k++) {
+      final a = hp[k].abs();
+      if (a > peak) peak = a;
+      if (mask[i]) {
+        e += hp[k] * hp[k];
+        count++;
+      }
+    }
   }
-  rms = math.sqrt(rms / hp.length);
-  final gain = (0.1 * 32768 / math.max(rms, 1.0)).clamp(0.25, 8.0);
+  final rmsSpeech = math.sqrt(e / math.max(count, 1));
+  final gain = math
+      .min(0.1 * 32768 / math.max(rmsSpeech, 1.0), 0.9 * 32767 / peak)
+      .clamp(0.25, 8.0);
   final out = Int16List(x.length);
   for (var i = 0; i < x.length; i++) {
-    out[i] = (hp[i] * gain).round().clamp(-32768, 32767);
+    final f = i ~/ frame;
+    final g = (f < mask.length && !mask[f]) ? gain * 0.1 : gain;
+    out[i] = (hp[i] * g).round().clamp(-32768, 32767);
   }
   return out;
 }
@@ -95,6 +166,12 @@ enum VoiceLetterRefusal {
   /// Teardown or encoding threw; the text is in
   /// [VoiceLetterRecorder.stopError].
   failed,
+
+  /// The take holds no speech: under a tenth of its frames rise above the
+  /// noise floor, or the speech itself sits below -45 dBFS. Codec2 turns
+  /// such a take into buzz that passes every digest witness (measured on
+  /// the rig 2026-09-21: a room-noise take at -38 dBFS), so it is refused.
+  noSpeech,
 }
 
 /// One successfully recorded and encoded voice letter.
@@ -207,7 +284,9 @@ class VoiceLetterRecorder implements VoiceRecording {
         sampleRate: 8000,
         numChannels: 1,
         echoCancel: false,
-        noiseSuppress: false,
+        // Apple's voice-processing noise suppression: the cheapest quality
+        // win for a close-mic codec like Codec2 (2026-09-21).
+        noiseSuppress: true,
         autoGain: false,
       ),
     );
@@ -270,6 +349,10 @@ class VoiceLetterRecorder implements VoiceRecording {
           _refusal = VoiceLetterRefusal.tooShort;
         } else if (!within) {
           _refusal = VoiceLetterRefusal.offRate;
+        } else if (!hasSpeech(
+          Int16List.sublistView(pcm, 0, pcm.length - pcm.length % 2),
+        )) {
+          _refusal = VoiceLetterRefusal.noSpeech;
         } else {
           letter = _encode(pcm, elapsed);
         }

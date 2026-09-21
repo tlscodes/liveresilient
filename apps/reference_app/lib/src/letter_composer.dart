@@ -117,6 +117,10 @@ String voiceRefusalText(VoiceRecording recorder) {
           'was refused rather than carried as noise.';
     case VoiceLetterRefusal.failed:
       return 'The recording failed: ${recorder.stopError}';
+    case VoiceLetterRefusal.noSpeech:
+      return 'No speech was heard in that take — only room noise, which '
+          'the voice codec would turn into buzz. Hold the phone closer, '
+          'tap Record and speak, then tap Stop.';
     case VoiceLetterRefusal.notStarted:
     case null:
       return 'The recording never started — nothing was captured.';
