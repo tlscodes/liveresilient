@@ -30,6 +30,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:adaptive_transport/adaptive_transport.dart'
     show
@@ -51,6 +52,7 @@ import 'package:device_link/device_link.dart'
     show BundleAdmission, DtnBundle, DtnBundleQueue, LinkMessagePriority;
 import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:media_webrtc/media_webrtc.dart' show RawRtcCounters;
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
     show SelectedIcePair;
@@ -82,10 +84,14 @@ const int journeyConnectBudgetS = int.fromEnvironment(
   defaultValue: 300,
 );
 
+/// The whole screen, so the peer can photograph what it shows (the letter
+/// on screen is evidence only if the Mac can see it).
+final GlobalKey journeyScreenKey = GlobalKey();
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final peer = JourneyPeer();
-  runApp(JourneyPeerApp(peer));
+  runApp(RepaintBoundary(key: journeyScreenKey, child: JourneyPeerApp(peer)));
   unawaited(peer.run());
 }
 
@@ -575,6 +581,37 @@ class JourneyPeer extends LetterComposer {
   /// The body goes through contentLength + add(bytes): `write` would send
   /// the bytes as chunked text, and the hub compares the sha of exactly
   /// what arrived against the query's sha256.
+  /// One PNG of the whole screen, posted as a blob (kind `screenshot`).
+  /// Never throws: a screen that cannot be captured is a note, not a
+  /// failed carry.
+  Future<void> _postScreenshot(String run, String id) async {
+    try {
+      final boundary =
+          journeyScreenKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) {
+        _note('screenshot $id skipped: no screen');
+        return;
+      }
+      final image = await boundary.toImage(pixelRatio: 1.5);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) {
+        _note('screenshot $id skipped: no bytes');
+        return;
+      }
+      final png = data.buffer.asUint8List();
+      final ok = await _postBlob(
+        run: run,
+        kind: 'screenshot',
+        id: id,
+        bytes: png,
+      );
+      _note('screenshot $id ${png.length} B posted=$ok');
+    } on Object catch (error) {
+      _note('screenshot $id failed: $error');
+    }
+  }
+
   Future<bool> _postBlob({
     required String run,
     required String kind,
@@ -1300,6 +1337,15 @@ class JourneyPeer extends LetterComposer {
         'session=${valve.lastSessionId} sha256=$sha',
       );
       status.value = 'job ${job.run}: letter ${outcome.name} · ${beat()}';
+      // What the screen shows for this letter, and a picture of the screen:
+      // the row's "seen on the phone" rests on these, not on the digest.
+      await _report('letter_on_screen', <String, Object?>{
+        'text': letter.value,
+        'sha256': sha,
+        'bytes': payload.length,
+        'source': config.chatSource,
+      }, run: job.run);
+      await _postScreenshot(job.run, 'letter-on-screen');
       // deliver() fans out, so a live carry may have gone by another lane
       // and left the valve without a session id; the fabric is disposed
       // right after this carry, so a parked bundle is never drained in this
