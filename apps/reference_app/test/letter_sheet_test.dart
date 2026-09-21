@@ -27,7 +27,7 @@ void main() {
         ),
       );
       expect(find.byKey(const Key('letter-sheet-title')), findsOneWidget);
-      expect(find.text('Record voice (30 s cap)'), findsOneWidget);
+      expect(find.text('Record voice (5 min cap)'), findsOneWidget);
       expect(find.textContaining('≤10 letters'), findsOneWidget);
       // No banner before any act: a blank is honest here, a spinner is not.
       expect(find.byKey(const Key('letter-sheet-hint')), findsNothing);

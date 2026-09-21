@@ -134,7 +134,7 @@ String voiceClock(Duration value) {
 String voiceRecordButtonLabel(VoiceRecordState state, Duration elapsed) {
   switch (state) {
     case VoiceRecordState.idle:
-      return 'Record voice (30 s cap)';
+      return 'Record voice (5 min cap)';
     case VoiceRecordState.starting:
       return 'Opening microphone…';
     case VoiceRecordState.recording:

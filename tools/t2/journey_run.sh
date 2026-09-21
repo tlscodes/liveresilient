@@ -951,6 +951,14 @@ if [ "$PROFILE" = dnsvalve ]; then
       # SAME FFI path the phone used to encode it, not the c2dec CLI's own
       # file format (which expects a header this wire never writes and
       # silently mis-decodes without one).
+      elif [ "${dv_head:0:4}" = 5631 ] \
+         && dv_video=$("$REPO/tools/t2/open_video_letter.sh" "$LOGD/$dv_session.letter" "$LOGD/$dv_session.mp4" 2>/dev/null); then
+        # A video letter (phase-5 video-note wire, magic 'V1'): frames by
+        # dav1d, audio by c2dec, one mp4 the person can play. Over 4096 B it
+        # arrived as parts; the responder assembled it under $dv_session.
+        echo "letter    $dv_video ($letter_b B) — opening now"
+        open "$LOGD/$dv_session.mp4" >/dev/null 2>&1 || echo "note: open failed; the mp4 is still at $LOGD/$dv_session.mp4"
+        osascript -e "display notification \"$letter_b bytes, session $dv_session\" with title \"DNS-valve video letter received\"" >/dev/null 2>&1 || true
       elif ( cd "$REPO/packages/hamseda_codec" && dart run tool/decode_voice_letter.dart \
              "$LOGD/$dv_session.letter" "$dv_raw" ) >/dev/null 2>&1 \
          && ffmpeg -v error -y -f s16le -ac 1 -ar 8000 -i "$dv_raw" "$dv_wav" >/dev/null 2>&1; then

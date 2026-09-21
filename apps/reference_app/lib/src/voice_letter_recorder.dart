@@ -22,11 +22,12 @@ import 'package:hamseda_codec/src/codec2_ffi.dart';
 import 'package:hamseda_codec/src/voice_note_codec.dart';
 import 'package:record/record.dart';
 
-/// The hard cap on one recording. The DNS-valve cap (4096 B) allows more
-/// than this at 700C, but 30 s is what was asked for and is plenty for a
-/// short letter — a longer cap is a deliberate future decision, not an
-/// oversight.
-const Duration voiceLetterMaxLength = Duration(seconds: 30);
+/// The hard cap on one recording. Since 2026-09-21 a letter over the
+/// door's 4096 B rides as up to ten letters (letter_parts.dart, 40670 B),
+/// and Codec2 700C costs about 88 B/s on the rig (2626 B for 30 s, session
+/// MDB52T): five minutes is about 26 KB, seven letters, with room to spare.
+/// The cap per letter is untouched.
+const Duration voiceLetterMaxLength = Duration(minutes: 5);
 
 /// Thrown when the microphone cannot be opened (permission denied, or no
 /// input device). The caller falls back to the typed-letter path.
