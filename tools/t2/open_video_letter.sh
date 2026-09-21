@@ -47,7 +47,7 @@ esac
 if [ "$MODE" = plain ]; then
   VF="scale=iw*4:ih*4:flags=neighbor"; OUTFPS=$FPS
 else
-  VF="minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=epzs:vsbmc=1:search_param=24:scd=fdiff"
+  VF="minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=epzs:vsbmc=1:search_param=24:scd=fdiff:scd_threshold=8:mb_size=8"
   VF="$VF,scale=iw*4:ih*4:flags=spline"
   VF="$VF,deband=1thr=0.012:2thr=0.012:3thr=0.012:range=14:blur=1"
   VF="$VF,cas=0.35"

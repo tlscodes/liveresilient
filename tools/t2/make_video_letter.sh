@@ -45,7 +45,7 @@
 set -euo pipefail
 SRC=${1:?src}; SECS=${2:?seconds}; OUT=${3:?out}
 LETTERS=${4:-20}
-PRESET=${PRESET:-3}; GRAIN=${GRAIN:-0}   # grain 6 cost ~6 VMAF at 20 letters (measured 2026-09-21): off by default
+PRESET=${PRESET:-2}; GRAIN=${GRAIN:-0}   # preset 2 on the Mac (v3); the phone will run 4. grain 6 cost ~6 VMAF at 20 letters (measured 2026-09-21): off
 HERE=$(cd "$(dirname "$0")" && pwd)
 PACK="$HERE/pack_video_note_v2.py"
 PART_PAYLOAD=4067
@@ -58,7 +58,7 @@ done
 if [ -z "${AUDIO:-}" ]; then
   if   [ "$LETTERS" -le 10 ]; then AUDIO=1200
   elif [ "$LETTERS" -le 20 ]; then AUDIO=2400
-  else                             AUDIO=3200; fi
+  else                             AUDIO=opus; fi   # v3: Opus 6k at 30 letters — SILK narrowband is far more natural than Codec2 3200 for ~2.8 kbit/s of video
 fi
 case "$AUDIO" in
   700C) ABPS=700 ;; 1200) ABPS=1200 ;; 1600) ABPS=1600 ;; 2400) ABPS=2400 ;; 3200) ABPS=3200 ;;
@@ -97,12 +97,12 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 # ---- audio ---------------------------------------------------------------------
 if [ "$AUDIO" = opus ]; then
   command -v ffmpeg >/dev/null
-  ffmpeg -y -v error -i "$SRC" -t "$SECS" -vn -ac 1 -ar 8000 \
-    -c:a libopus -b:a 6k -vbr off -frame_duration 60 -application voip -compression_level 10 \
+  ffmpeg -y -v error -i "$SRC" -t "$SECS" -vn -ac 1 -ar 8000 -af "highpass=f=80,speechnorm=e=6" \
+    -c:a libopus -b:a 6k -vbr off -frame_duration 60 -application voip -compression_level 10 -fec 0 -dtx 0 -cutoff 4000 \
     "$T/a.opus"
   python3 "$PACK" opus-extract "$T/a.opus" "$T/a.bits" 45 >/dev/null
 else
-  ffmpeg -y -v error -i "$SRC" -t "$SECS" -vn -ac 1 -ar 8000 -f s16le "$T/a.raw"
+  ffmpeg -y -v error -i "$SRC" -t "$SECS" -vn -ac 1 -ar 8000 -af "highpass=f=80,speechnorm=e=6" -f s16le "$T/a.raw"
   c2enc "$AUDIO" "$T/a.raw" "$T/a.bits" >/dev/null 2>&1
 fi
 
@@ -110,16 +110,24 @@ fi
 encode_shape() {  # $1=W $2=H $3=FPS -> sets FIT (crf) or ""
   local w=$1 h=$2 fps=$3 crf
   ffmpeg -y -v error -i "$SRC" -t "$SECS" \
-    -vf "hqdn3d=4:3:6:4.5,scale=${w}:${h}:flags=area,fps=${fps}" \
+    -vf "atadenoise=0a=0.04:0b=0.08:1a=0.04:1b=0.08:2a=0.04:2b=0.08:s=9,scale=$((w*2)):$((h*2)):flags=area,hqdn3d=2:1.5:4:3,scale=${w}:${h}:flags=area,fps=${fps}" \
     -pix_fmt yuv420p "$T/v.y4m"
+  # v3: bisect crf at step 1 — the step-3 ladder left 8 % of the budget
+  # unused (measured 112057 of 122010 B). Variance boost gives flat and
+  # dark areas (skin) their bits; hierarchical-levels 5 = 32-frame mini
+  # GOPs for a talking head; sharpness 1 biases the loop filter mildly.
   FIT=""
-  for crf in 29 32 35 38 41 44 47 50 53 56 60 63; do
+  local lo=20 hi=63
+  while [ "$lo" -le "$hi" ]; do
+    crf=$(( (lo + hi) / 2 ))
     SvtAv1EncApp --preset "$PRESET" --tune 0 --keyint -1 --scd 1 --lookahead 120 --enable-tf 1 \
       --film-grain "$GRAIN" --film-grain-denoise 0 --enable-qm 1 --qm-min 0 --enable-overlays 0 \
+      --enable-variance-boost 1 --variance-boost-strength 2 --variance-octile 6 \
+      --sharpness 1 --hierarchical-levels 5 \
       --crf "$crf" -i "$T/v.y4m" -b "$T/v.ivf" >/dev/null 2>&1
     python3 "$PACK" pack "$T/v.ivf" "$T/a.bits" "$T/note.bin" "$fps" "$w" "$h" "$AUDIO"
     local total; total=$(stat -f%z "$T/note.bin")
-    if [ "$total" -le "$BUDGET" ]; then FIT=$crf; cp "$T/note.bin" "$OUT"; break; fi
+    if [ "$total" -le "$BUDGET" ]; then FIT=$crf; cp "$T/note.bin" "$OUT"; hi=$((crf - 1)); else lo=$((crf + 1)); fi
   done
 }
 encode_shape "$W" "$H" "$FPS"
@@ -132,4 +140,4 @@ fi
 
 read -r TOTAL HDRB VIDEO AUDIOB NFRAMES MODE <<< "$(python3 "$PACK" stats "$OUT")"
 NEED=$(( (TOTAL + PART_PAYLOAD - 1) / PART_PAYLOAD )); [ "$TOTAL" -le 4096 ] && NEED=1
-echo "video letter v2 ${W}x${H}@${FPS} crf $FIT preset $PRESET grain $GRAIN audio $MODE, ${SECS}s: $TOTAL B (video $VIDEO, audio $AUDIOB, $NFRAMES frames) -> $NEED letter(s) of $LETTERS"
+echo "video letter v3 ${W}x${H}@${FPS} crf $FIT preset $PRESET grain $GRAIN audio $MODE, ${SECS}s: $TOTAL B (video $VIDEO, audio $AUDIOB, $NFRAMES frames) -> $NEED letter(s) of $LETTERS"
