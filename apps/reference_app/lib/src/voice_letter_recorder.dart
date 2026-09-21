@@ -18,7 +18,7 @@ import 'dart:typed_data';
 // package:hamseda_codec/hamseda_codec.dart is an unrelated token codec);
 // integration_test/e2e_matrix_test.dart already imports them the same way.
 // ignore: implementation_imports
-import 'package:hamseda_codec/src/codec2_ffi.dart';
+import 'package:hamseda_codec/src/voice_frame_codec.dart';
 // ignore: implementation_imports
 import 'package:hamseda_codec/src/voice_note_codec.dart';
 import 'package:record/record.dart';
@@ -30,10 +30,11 @@ import 'package:record/record.dart';
 /// The cap per letter is untouched.
 const Duration voiceLetterMaxLength = Duration(minutes: 5);
 
-/// What thirty letters carry (letter_parts.dart: 30 x (4096 - 29)), the
-/// budget the recorder picks its Codec2 mode against: 3200 for five
-/// minutes is ~120 KB and fits.
-const int voiceLetterBudgetBytes = 30 * (4096 - 29);
+/// What ten letters carry (letter_parts.dart: 10 x (4096 - 29)), the
+/// budget the recorder picks its mode against (owner's cap for voice,
+/// 2026-09-21): Opus 6k (750 B/s) up to 54 s, then the Codec2 ladder —
+/// 3200 to 101 s, 2400 to 135 s, 1600 to 254 s, 1200 to 338 s.
+const int voiceLetterBudgetBytes = 10 * (4096 - 29);
 
 /// Which 20 ms frames of [x] hold speech: an adaptive floor (the running
 /// 5th percentile of frame RMS, never under 30), a threshold 8 dB above
@@ -374,17 +375,18 @@ class VoiceLetterRecorder implements VoiceRecording {
     // builder's offsetInBytes and would read a neighbouring chunk's bytes
     // as audio without any of the witnesses noticing.
     final raw = Int16List.sublistView(pcm, 0, pcm.length - pcm.length % 2);
-    // Codec2's pitch/LPC stages are trained on level-normalized speech:
-    // remove DC, pass 80 Hz, bring the take to about -20 dBFS.
+    // Both codecs want level-normalized speech: remove DC, pass 80 Hz,
+    // bring the SPEECH frames to about -20 dBFS (never the room noise —
+    // the gain is measured on the speech mask only, see normalizeSpeech).
     final samples = normalizeSpeech(raw);
-    // The best mode whose wire fits the letters (2026-09-21): 3200 for
-    // anything up to five minutes within thirty letters; the mode rides
-    // the wire's own nibble, so every receiver decodes what was sent.
+    // The best mode whose wire fits ten letters (2026-09-21): Opus 6k for
+    // anything up to 54 s, the Codec2 ladder beyond; the mode rides the
+    // wire's own nibble, so every receiver decodes what was sent.
     final mode = VoiceNoteMode.pick(
       Duration(milliseconds: samples.length ~/ 8),
       voiceLetterBudgetBytes,
     );
-    final codec = Codec2(mode.codec2Mode);
+    final codec = voiceFrameCodecFor(mode);
     try {
       final perFrame = codec.samplesPerFrame;
       final frameCount = samples.length ~/ perFrame;

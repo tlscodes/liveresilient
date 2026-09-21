@@ -10,7 +10,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:hamseda_codec/src/codec2_ffi.dart';
+import 'package:hamseda_codec/src/voice_frame_codec.dart';
 import 'package:hamseda_codec/src/voice_note_codec.dart';
 
 void main(List<String> args) {
@@ -20,13 +20,14 @@ void main(List<String> args) {
     pcm.offsetInBytes,
     pcm.lengthInBytes ~/ 2,
   );
-  // Optional third argument: 3200|2400|1600|1200|700C (default 700C).
+  // Optional third argument: opus6k|3200|2400|1600|1200|700C (default 700C).
   final mode = args.length > 2
       ? VoiceNoteMode.values.firstWhere(
-          (m) => m.name == 'c${args[2].replaceAll('C', '')}',
+          (m) =>
+              m.name == args[2] || m.name == 'c${args[2].replaceAll('C', '')}',
         )
       : VoiceNoteMode.c700;
-  final codec = Codec2(mode.codec2Mode);
+  final codec = voiceFrameCodecFor(mode);
   final n = codec.samplesPerFrame;
   final frames = <Uint8List>[];
   for (var at = 0; at < samples.length; at += n) {

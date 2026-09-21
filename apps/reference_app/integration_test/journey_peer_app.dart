@@ -53,6 +53,8 @@ import 'package:device_link/device_link.dart'
 import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:hamseda_codec/src/voice_frame_codec.dart';
+import 'package:hamseda_codec/src/voice_note_codec.dart';
 import 'package:media_webrtc/media_webrtc.dart' show RawRtcCounters;
 import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
     show SelectedIcePair;
@@ -587,6 +589,65 @@ class JourneyPeer extends LetterComposer {
   /// The body goes through contentLength + add(bytes): `write` would send
   /// the bytes as chunked text, and the hub compares the sha of exactly
   /// what arrived against the query's sha256.
+  /// Decodes [payload] on the phone when it is a voice-note wire and posts
+  /// the s16le 8 kHz PCM as blob `voice-pcm/letter-decoded`, with a
+  /// `voice_decoded` event naming the mode, the frames and the PCM's
+  /// sha256. Text, photos and video letters pass through untouched; a
+  /// decode failure is a note, never a failed carry.
+  Future<void> _decodeVoiceOnPhone(String run, Uint8List payload) async {
+    if (payload.length < 4 || payload[0] >> 4 != voiceNoteVersion) return;
+    // A JPEG or the video wire ('V1') never has version nibble 1 in byte 0
+    // (0xFF, 0x56), and UTF-8 text starting with 0x10..0x1F is a control
+    // character no typed letter opens with; still, refuse quietly.
+    final VoiceNoteMode mode;
+    final List<Uint8List> frames;
+    try {
+      mode = voiceNoteModeOf(payload);
+      frames = unpackVoiceNote(payload);
+    } on MalformedVoiceNote catch (error) {
+      _note('not a voice letter ($error); shown as text/binary');
+      return;
+    }
+    final started = DateTime.now();
+    final codec = voiceFrameCodecFor(mode);
+    final pcm = BytesBuilder(copy: false);
+    try {
+      for (final f in frames) {
+        final s = codec.decodeFrame(f);
+        pcm.add(s.buffer.asUint8List(s.offsetInBytes, s.lengthInBytes));
+      }
+    } on Object catch (error) {
+      _note('voice decode on the phone failed: $error');
+      return;
+    } finally {
+      codec.dispose();
+    }
+    final bytes = pcm.takeBytes();
+    final ms = DateTime.now().difference(started).inMilliseconds;
+    final seconds = frames.length * mode.frameMs / 1000;
+    final posted = await _postBlob(
+      run: run,
+      kind: 'voice-pcm',
+      id: 'letter-decoded',
+      bytes: bytes,
+    );
+    _note(
+      'voice letter decoded on the phone: ${mode.name} ${frames.length} frames '
+      '${seconds.toStringAsFixed(1)} s -> ${bytes.length} B pcm in $ms ms '
+      'posted=$posted',
+    );
+    await _report('voice_decoded', <String, Object?>{
+      'mode': mode.name,
+      'mode_id': mode.id,
+      'frames': frames.length,
+      'seconds': seconds,
+      'pcm_bytes': bytes.length,
+      'pcm_sha256': contentSha256Hex(bytes),
+      'decode_ms': ms,
+      'posted': posted,
+    }, run: run);
+  }
+
   /// One PNG of the whole screen, posted as a blob (kind `screenshot`).
   /// Never throws: a screen that cannot be captured is a note, not a
   /// failed carry.
@@ -1340,6 +1401,11 @@ class JourneyPeer extends LetterComposer {
     }
 
     letter.value = describeLetter(payload, sha);
+    // A voice letter is decoded HERE, on the phone, with the same FFI codec
+    // the app ships (Opus 6k for mode 12, Codec2 below), and the PCM goes
+    // to the hub: the Mac-authored voice letter is thereby heard through
+    // the phone's decoder, not the Mac's (2026-09-21).
+    await _decodeVoiceOnPhone(job.run, payload);
     _note(
       'letter handed to the valve: ${payload.length} B, $total chunks'
       '${parts.length > 1 ? ', ${parts.length} letters id=$partsId' : ''}',

@@ -21,6 +21,8 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import 'voice_frame_codec.dart';
+
 /// Codec2 mode ids from codec2.h (the 450-capable revision the repo pins).
 // libcodec2's mode ints (codec2.h): 3200=0, 2400=1, 1600=2, 1200=5, 700C=8,
 // 450=10. 3200/2400 use 20 ms frames (160 samples), the rest 40 ms (320).
@@ -72,7 +74,7 @@ final _finalizer = NativeFinalizer(_destroyPtr.cast());
 // silent). Each buffer now carries its own native-free finalizer.
 final _bufFinalizer = NativeFinalizer(malloc.nativeFree);
 
-class Codec2 implements Finalizable {
+class Codec2 implements VoiceFrameCodec, Finalizable {
   Codec2(int mode) : _state = _create(mode) {
     if (_state == nullptr) {
       throw StateError('codec2_create($mode) returned null');
@@ -92,7 +94,9 @@ class Codec2 implements Finalizable {
   final Object _bitsToken = Object();
 
   Pointer<Void> _state;
+  @override
   late final int samplesPerFrame;
+  @override
   late final int bitsPerFrame;
   late final int _bytesPerFrame;
   late final Pointer<Int16> _speech;
@@ -103,6 +107,7 @@ class Codec2 implements Finalizable {
   }
 
   /// Encodes one frame ([samplesPerFrame] s16 samples) into packed bits.
+  @override
   Uint8List encodeFrame(Int16List speech) {
     _checkLive();
     if (speech.length != samplesPerFrame) {
@@ -116,6 +121,7 @@ class Codec2 implements Finalizable {
   }
 
   /// Decodes one packed frame back into [samplesPerFrame] s16 samples.
+  @override
   Int16List decodeFrame(Uint8List bits) {
     _checkLive();
     if (bits.length != _bytesPerFrame) {
@@ -127,6 +133,7 @@ class Codec2 implements Finalizable {
   }
 
   /// Eager teardown; the finalizer is detached so GC can never double-free.
+  @override
   void dispose() {
     if (_state == nullptr) return;
     _finalizer.detach(this);

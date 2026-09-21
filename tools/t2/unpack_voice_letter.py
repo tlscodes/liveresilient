@@ -18,18 +18,78 @@ per frame before packVoiceNote tightens it. This script re-pads each
 frame back to that shape.
 
 Usage:
-    python3 unpack_voice_letter.py <in.letter> <out.c2>
-Exit 0 and writes out.c2 on a mode-1 (700C) letter; exit 2 naming the
-reason on anything else (wrong mode, truncated, not a voice letter at
-all — a plain non-UTF8 binary letter from an unrelated feature should
-fail here, not be guessed at).
+    python3 unpack_voice_letter.py <in.letter> <out.c2|out.opus>
+Exit 0 and writes out.c2 on a Codec2 letter (modes 1..5); on a mode-12
+letter (Opus 6k NB CBR, 45 B per 60 ms frame, byte-aligned) it writes an
+Ogg Opus file instead, which ffmpeg's own Opus decoder opens — an
+independent second decoder beside the Dart FFI one:
+    ffmpeg -i out.opus out.wav
+Exit 2 naming the reason on anything else (reserved or unknown mode,
+truncated, not a voice letter at all — a plain non-UTF8 binary letter
+from an unrelated feature should fail here, not be guessed at).
 """
+import struct
 import sys
 
 # The wire's mode nibble -> (c2dec mode name, bits per frame). Since
 # 2026-09-21 the phone picks the highest mode its letters carry
 # (voice_note_codec.dart VoiceNoteMode); before that everything was 700C.
-MODES = {1: ("700C", 28), 2: ("1200", 48), 3: ("1600", 64), 4: ("2400", 48), 5: ("3200", 64)}
+MODES = {1: ("700C", 28), 2: ("1200", 48), 3: ("1600", 64), 4: ("2400", 48), 5: ("3200", 64),
+         12: ("opus6k", 360)}
+# Reserved nibbles (voice_note_codec.dart): named in the refusal.
+RESERVED = {13: "Lyra v2 3.2k (reserved, not built)", 14: "Lyra v2 6k (reserved, not built)",
+            15: "extension escape (reserved)"}
+OPUS_FRAME_BYTES = 45
+OPUS_FRAME_MS = 60
+
+
+def _ogg_crc(data: bytes) -> int:
+    """Ogg's CRC-32: polynomial 0x04c11db7, no reflection, init 0, no xor."""
+    crc = 0
+    for byte in data:
+        crc ^= byte << 24
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x04C11DB7) if crc & 0x80000000 else (crc << 1)
+            crc &= 0xFFFFFFFF
+    return crc
+
+
+def _ogg_page(serial: int, seq: int, granule: int, packets: list, flags: int) -> bytes:
+    segs = bytearray()
+    body = bytearray()
+    for p in packets:
+        n = len(p)
+        while n >= 255:
+            segs.append(255)
+            n -= 255
+        segs.append(n)
+        body += p
+    head = bytearray(b"OggS") + struct.pack("<BBqIII", 0, flags, granule, serial, seq, 0)
+    head += bytes([len(segs)]) + segs
+    page = bytes(head) + bytes(body)
+    crc = _ogg_crc(page)
+    return page[:22] + struct.pack("<I", crc) + page[26:]
+
+
+def opus_ogg(data: bytes) -> bytes:
+    """A mode-12 letter as an Ogg Opus stream: OpusHead (8 kHz input, one
+    channel, pre-skip 0 — the phone encoder's own lookahead is what it is;
+    the wire carries no skip), OpusTags, then one 60 ms packet per page,
+    granule in 48 kHz units (2880 per frame)."""
+    count = data[1] | (data[2] << 8)
+    body = data[4:]
+    if len(body) < count * OPUS_FRAME_BYTES:
+        raise ValueError(f"truncated: {len(body)} B holds fewer than {count} Opus frames")
+    serial = 0x4C455454  # 'LETT'
+    head = b"OpusHead" + struct.pack("<BBHIhB", 1, 1, 0, 8000, 0, 0)
+    tags = b"OpusTags" + struct.pack("<I", 6) + b"letter" + struct.pack("<I", 0)
+    out = bytearray(_ogg_page(serial, 0, 0, [head], 0x02))
+    out += _ogg_page(serial, 1, 0, [tags], 0)
+    for i in range(count):
+        pkt = body[i * OPUS_FRAME_BYTES:(i + 1) * OPUS_FRAME_BYTES]
+        last = 0x04 if i == count - 1 else 0
+        out += _ogg_page(serial, 2 + i, (i + 1) * 2880, [pkt], last)
+    return bytes(out)
 
 
 def mode_of(data: bytes) -> str:
@@ -41,8 +101,12 @@ def unpack(data: bytes) -> bytes:
     if len(data) < 4:
         raise ValueError(f"too short for a header: {len(data)} B")
     mode = data[0] & 0x0F
+    if mode in RESERVED:
+        raise ValueError(f"mode {mode} is {RESERVED[mode]}")
     if mode not in MODES:
         raise ValueError(f"mode {mode} is not a known voice-letter mode — not this format")
+    if mode == 12:
+        return opus_ogg(data)
     BITS_PER_FRAME_700C = MODES[mode][1]
     FRAME_BYTES_700C = (BITS_PER_FRAME_700C + 7) // 8
     frame_count = data[1] | (data[2] << 8)
@@ -81,6 +145,12 @@ def main() -> int:
     with open(dst, "wb") as f:
         f.write(c2)
     name, bits = MODES[data[0] & 0x0F]
+    if name == "opus6k":
+        frames = data[1] | (data[2] << 8)
+        print(f"unpacked {len(data)} B -> {len(c2)} B Ogg Opus, {frames} frames of opus6k "
+              f"(~{frames * OPUS_FRAME_MS / 1000:.2f}s at {OPUS_FRAME_MS}ms/frame); "
+              f"decode with: ffmpeg -i {dst} out.wav")
+        return 0
     frame_bytes = (bits + 7) // 8
     frame_ms = 20 if name in ("3200", "2400") else 40
     frames = len(c2) // frame_bytes
