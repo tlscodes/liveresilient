@@ -26,16 +26,25 @@ fail here, not be guessed at).
 """
 import sys
 
-BITS_PER_FRAME_700C = 28
-FRAME_BYTES_700C = (BITS_PER_FRAME_700C + 7) // 8  # 4
+# The wire's mode nibble -> (c2dec mode name, bits per frame). Since
+# 2026-09-21 the phone picks the highest mode its letters carry
+# (voice_note_codec.dart VoiceNoteMode); before that everything was 700C.
+MODES = {1: ("700C", 28), 2: ("1200", 48), 3: ("1600", 64), 4: ("2400", 48), 5: ("3200", 64)}
+
+
+def mode_of(data: bytes) -> str:
+    """The c2dec mode name a letter's header names."""
+    return MODES[data[0] & 0x0F][0]
 
 
 def unpack(data: bytes) -> bytes:
     if len(data) < 4:
         raise ValueError(f"too short for a header: {len(data)} B")
     mode = data[0] & 0x0F
-    if mode != 1:
-        raise ValueError(f"mode {mode} is not 700C (1) — not this format")
+    if mode not in MODES:
+        raise ValueError(f"mode {mode} is not a known voice-letter mode — not this format")
+    BITS_PER_FRAME_700C = MODES[mode][1]
+    FRAME_BYTES_700C = (BITS_PER_FRAME_700C + 7) // 8
     frame_count = data[1] | (data[2] << 8)
     packed = data[4:]
     need_bits = frame_count * BITS_PER_FRAME_700C
@@ -67,13 +76,16 @@ def main() -> int:
     try:
         c2 = unpack(data)
     except ValueError as error:
-        print(f"not a decodable 700C voice letter: {error}", file=sys.stderr)
+        print(f"not a decodable voice letter: {error}", file=sys.stderr)
         return 2
     with open(dst, "wb") as f:
         f.write(c2)
-    frames = len(c2) // FRAME_BYTES_700C
-    print(f"unpacked {len(data)} B -> {len(c2)} B, {frames} frames "
-          f"(~{frames * 40 / 1000:.2f}s at 40ms/frame)")
+    name, bits = MODES[data[0] & 0x0F]
+    frame_bytes = (bits + 7) // 8
+    frame_ms = 20 if name in ("3200", "2400") else 40
+    frames = len(c2) // frame_bytes
+    print(f"unpacked {len(data)} B -> {len(c2)} B, {frames} frames of {name} "
+          f"(~{frames * frame_ms / 1000:.2f}s at {frame_ms}ms/frame)")
     return 0
 
 

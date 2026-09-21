@@ -193,7 +193,7 @@ String photoRefusalText(PhotoLetterRefusal? refusal, {String? error}) {
 String photoPickButtonLabel(PhotoPickState state, PhotoLetter? letter) {
   switch (state) {
     case PhotoPickState.idle:
-      return 'Photo (≤${photoLetterSize(photoLetterMaxBytes)}, ≤10 letters)';
+      return 'Photo (≤${photoLetterSize(photoLetterMaxBytes)}, ≤30 letters)';
     case PhotoPickState.picking:
       return 'Choosing a photo…';
     case PhotoPickState.shrinking:

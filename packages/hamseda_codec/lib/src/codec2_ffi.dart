@@ -22,6 +22,12 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 /// Codec2 mode ids from codec2.h (the 450-capable revision the repo pins).
+// libcodec2's mode ints (codec2.h): 3200=0, 2400=1, 1600=2, 1200=5, 700C=8,
+// 450=10. 3200/2400 use 20 ms frames (160 samples), the rest 40 ms (320).
+const int codec2Mode3200 = 0;
+const int codec2Mode2400 = 1;
+const int codec2Mode1600 = 2;
+const int codec2Mode1200 = 5;
 const int codec2Mode700C = 8;
 const int codec2Mode450 = 10;
 

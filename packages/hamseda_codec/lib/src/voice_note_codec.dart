@@ -17,12 +17,45 @@ const int voiceNoteVersion = 1;
 const int voiceNoteHeaderBytes = 4;
 
 enum VoiceNoteMode {
-  c700(1, 28),
-  c1200(2, 48);
+  c700(1, 28, 8, 40),
+  c1200(2, 48, 5, 40),
+  c1600(3, 64, 2, 40),
+  c2400(4, 48, 1, 20),
+  c3200(5, 64, 0, 20);
 
-  const VoiceNoteMode(this.id, this.bitsPerFrame);
+  const VoiceNoteMode(
+    this.id,
+    this.bitsPerFrame,
+    this.codec2Mode,
+    this.frameMs,
+  );
+
+  /// The wire nibble.
   final int id;
   final int bitsPerFrame;
+
+  /// libcodec2's mode int (codec2.h).
+  final int codec2Mode;
+
+  /// Frame length in milliseconds at 8 kHz: 20 for 3200/2400, 40 below.
+  final int frameMs;
+
+  /// Bytes per second of wire, before the 4 B header.
+  double get bytesPerSecond => bitsPerFrame / 8 * (1000 / frameMs);
+
+  /// Bits per second the mode's name promises (700C is 700).
+  int get bitsPerSecond => (bytesPerSecond * 8).round();
+
+  /// The best mode whose wire for [length] fits [budgetBytes] (header
+  /// included), highest quality first; 700C when nothing fits.
+  static VoiceNoteMode pick(Duration length, int budgetBytes) {
+    for (final m in const [c3200, c2400, c1600, c1200, c700]) {
+      final frames = length.inMilliseconds ~/ m.frameMs;
+      final bytes = voiceNoteHeaderBytes + (frames * m.bitsPerFrame + 7) ~/ 8;
+      if (bytes <= budgetBytes) return m;
+    }
+    return c700;
+  }
 }
 
 class MalformedVoiceNote implements Exception {
@@ -69,6 +102,17 @@ Uint8List packVoiceNote({
 
 /// Unpacks the wire back into per-frame byte lists (trailing bits zeroed),
 /// ready to feed the Codec2 decoder.
+/// The mode a wire names, or [MalformedVoiceNote].
+VoiceNoteMode voiceNoteModeOf(Uint8List wire) {
+  if (wire.length < voiceNoteHeaderBytes) {
+    throw MalformedVoiceNote('shorter than header: ${wire.length}');
+  }
+  return VoiceNoteMode.values.firstWhere(
+    (m) => m.id == (wire[0] & 0x0F),
+    orElse: () => throw MalformedVoiceNote('unknown mode ${wire[0] & 0x0F}'),
+  );
+}
+
 List<Uint8List> unpackVoiceNote(Uint8List wire) {
   if (wire.length < voiceNoteHeaderBytes) {
     throw MalformedVoiceNote('shorter than header: ${wire.length}');

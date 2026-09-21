@@ -28,17 +28,21 @@ import 'package:image_picker/image_picker.dart';
 ///
 /// The lane's own cap is 4096 (`TxtQueryLane.maxPayloadBytes`, enforced again
 /// by `DnsValveConfig.parse`). Since 2026-09-21 a letter over that cap goes
-/// as up to ten letters in a row (letter_parts.dart: 10 × (4096 − 29) =
-/// 40670 B), so a picture may spend 40000 B — 670 B under that line, the
-/// same idea as the old 512 B headroom — and the ladder's largest edge (640
-/// px) is reachable for most pictures. The cap per letter is untouched.
-const int photoLetterMaxBytes = 40000;
+/// as up to thirty letters in a row (letter_parts.dart: 30 × (4096 − 29) =
+/// 122010 B), so a picture may spend 121500 B — 510 B under that line, the
+/// same idea as the old 512 B headroom. Thirty letters take ~105 s on the
+/// rig; a picture that needs fewer takes fewer. The cap per letter is
+/// untouched.
+const int photoLetterMaxBytes = 121500;
 
 /// The long-edge ladder, largest first. The search takes the LARGEST size
 /// that can be made to fit at an acceptable quality, because a photo letter
 /// is looked at, and a 64-pixel thumbnail of a screenshot is unreadable at
 /// any quality.
 const List<int> photoLetterEdges = <int>[
+  1280,
+  1024,
+  800,
   640,
   512,
   416,
@@ -57,7 +61,10 @@ const List<int> photoLetterEdges = <int>[
 /// The JPEG quality ladder tried at each edge, best first. The floor is 20
 /// and not lower on purpose: below it the result is blocks, not a picture,
 /// and a smaller-but-honest size is the better answer.
-const List<int> photoLetterQualities = <int>[75, 65, 55, 45, 38, 32, 26, 20];
+// JPEG bytes fall slowly below q45 while the blocks explode: the ladder
+// stops at 45 and drops an edge instead (2026-09-21, after the Fable 5.1
+// consult on the photo letter).
+const List<int> photoLetterQualities = <int>[80, 70, 60, 50, 45];
 
 /// Thrown when the picker itself cannot run — photo-library permission
 /// refused, or the plugin failed. The caller falls back to the typed-letter
@@ -290,9 +297,11 @@ class GalleryPhotoSelection implements PhotoSelection {
       // the seconds the shrink would otherwise cost.
       file = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 85,
+        // 2048: the ladder's top edge is now 1280 and a 1600 cap would
+        // make it a no-op on a phone photo.
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 92,
       );
     } on Object catch (error) {
       // The plugin refused. That is not the end of it: the refusal it is

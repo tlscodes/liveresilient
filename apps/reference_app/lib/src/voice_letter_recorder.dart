@@ -11,6 +11,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 // hamseda_codec has no public barrel exporting these two files (its own
@@ -28,6 +29,43 @@ import 'package:record/record.dart';
 /// MDB52T): five minutes is about 26 KB, seven letters, with room to spare.
 /// The cap per letter is untouched.
 const Duration voiceLetterMaxLength = Duration(minutes: 5);
+
+/// What thirty letters carry (letter_parts.dart: 30 x (4096 - 29)), the
+/// budget the recorder picks its Codec2 mode against: 3200 for five
+/// minutes is ~120 KB and fits.
+const int voiceLetterBudgetBytes = 30 * (4096 - 29);
+
+/// DC removal, a one-pole 80 Hz high-pass, and an RMS normalizer to about
+/// -20 dBFS (gain clamped 0.25..8, so a silent room is not blown up into
+/// noise). Pure Dart, 8 kHz mono.
+Int16List normalizeSpeech(Int16List x) {
+  if (x.isEmpty) return x;
+  var mean = 0.0;
+  for (final s in x) {
+    mean += s;
+  }
+  mean /= x.length;
+  final hp = Float64List(x.length);
+  var xPrev = 0.0, yPrev = 0.0;
+  for (var i = 0; i < x.length; i++) {
+    final v = x[i] - mean;
+    final y = v - xPrev + 0.94 * yPrev;
+    hp[i] = y;
+    xPrev = v;
+    yPrev = y;
+  }
+  var rms = 0.0;
+  for (final v in hp) {
+    rms += v * v;
+  }
+  rms = math.sqrt(rms / hp.length);
+  final gain = (0.1 * 32768 / math.max(rms, 1.0)).clamp(0.25, 8.0);
+  final out = Int16List(x.length);
+  for (var i = 0; i < x.length; i++) {
+    out[i] = (hp[i] * gain).round().clamp(-32768, 32767);
+  }
+  return out;
+}
 
 /// Thrown when the microphone cannot be opened (permission denied, or no
 /// input device). The caller falls back to the typed-letter path.
@@ -249,27 +287,33 @@ class VoiceLetterRecorder implements VoiceRecording {
   }
 
   VoiceLetter _encode(Uint8List pcm, Duration elapsed) {
-    final codec = Codec2(codec2Mode700C);
+    // sublistView, not buffer.asInt16List: the latter ignores the
+    // builder's offsetInBytes and would read a neighbouring chunk's bytes
+    // as audio without any of the witnesses noticing.
+    final raw = Int16List.sublistView(pcm, 0, pcm.length - pcm.length % 2);
+    // Codec2's pitch/LPC stages are trained on level-normalized speech:
+    // remove DC, pass 80 Hz, bring the take to about -20 dBFS.
+    final samples = normalizeSpeech(raw);
+    // The best mode whose wire fits the letters (2026-09-21): 3200 for
+    // anything up to five minutes within thirty letters; the mode rides
+    // the wire's own nibble, so every receiver decodes what was sent.
+    final mode = VoiceNoteMode.pick(
+      Duration(milliseconds: samples.length ~/ 8),
+      voiceLetterBudgetBytes,
+    );
+    final codec = Codec2(mode.codec2Mode);
     try {
-      // sublistView, not buffer.asInt16List: the latter ignores the
-      // builder's offsetInBytes and would read a neighbouring chunk's bytes
-      // as audio without any of the witnesses noticing.
-      final samples = Int16List.sublistView(
-        pcm,
-        0,
-        pcm.length - pcm.length % 2,
-      );
       final perFrame = codec.samplesPerFrame;
       final frameCount = samples.length ~/ perFrame;
       final frames = <Uint8List>[
         for (var i = 0; i < frameCount; i++)
           codec.encodeFrame(samples.sublist(i * perFrame, (i + 1) * perFrame)),
       ];
-      final wire = packVoiceNote(frames: frames, mode: VoiceNoteMode.c700);
+      final wire = packVoiceNote(frames: frames, mode: mode);
       return VoiceLetter(
         wire: wire,
         frames: frames.length,
-        length: Duration(milliseconds: frames.length * 40),
+        length: Duration(milliseconds: frames.length * mode.frameMs),
         pcmBytes: pcm.length,
         elapsed: elapsed,
       );

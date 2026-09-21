@@ -1012,7 +1012,7 @@ void main() {
     test('the button names every state it can be in', () {
       expect(
         photoPickButtonLabel(PhotoPickState.idle, null),
-        'Photo (≤39.1 KB, ≤10 letters)',
+        'Photo (≤118.7 KB, ≤30 letters)',
       );
       expect(
         photoPickButtonLabel(PhotoPickState.picking, null),

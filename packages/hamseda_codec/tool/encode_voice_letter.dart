@@ -20,7 +20,13 @@ void main(List<String> args) {
     pcm.offsetInBytes,
     pcm.lengthInBytes ~/ 2,
   );
-  final codec = Codec2(codec2Mode700C);
+  // Optional third argument: 3200|2400|1600|1200|700C (default 700C).
+  final mode = args.length > 2
+      ? VoiceNoteMode.values.firstWhere(
+          (m) => m.name == 'c${args[2].replaceAll('C', '')}',
+        )
+      : VoiceNoteMode.c700;
+  final codec = Codec2(mode.codec2Mode);
   final n = codec.samplesPerFrame;
   final frames = <Uint8List>[];
   for (var at = 0; at < samples.length; at += n) {
@@ -30,11 +36,11 @@ void main(List<String> args) {
     frames.add(Uint8List.fromList(codec.encodeFrame(chunk)));
   }
   codec.dispose();
-  final wire = packVoiceNote(frames: frames, mode: VoiceNoteMode.c700);
+  final wire = packVoiceNote(frames: frames, mode: mode);
   File(args[1]).writeAsBytesSync(wire);
   final seconds = samples.length / 8000;
   stdout.writeln(
-    'encoded ${frames.length} frames (${seconds.toStringAsFixed(1)} s) '
+    'encoded ${frames.length} frames (${seconds.toStringAsFixed(1)} s, ${mode.name}) '
     '-> ${wire.length} B ${args[1]}',
   );
 }

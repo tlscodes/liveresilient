@@ -12,7 +12,8 @@ void main(List<String> args) {
   final bytes = File(args[0]).readAsBytesSync();
   final wire = Uint8List.fromList(bytes);
   final frames = unpackVoiceNote(wire);
-  final codec = Codec2(codec2Mode700C);
+  final mode = voiceNoteModeOf(wire);
+  final codec = Codec2(mode.codec2Mode);
   final out = BytesBuilder();
   for (final f in frames) {
     final samples = codec.decodeFrame(f);
@@ -22,5 +23,7 @@ void main(List<String> args) {
   }
   codec.dispose();
   File(args[1]).writeAsBytesSync(out.takeBytes());
-  stdout.writeln('decoded ${frames.length} frames -> ${args[1]}');
+  stdout.writeln(
+    'decoded ${frames.length} frames (${mode.name}, ${frames.length * mode.frameMs / 1000} s) -> ${args[1]}',
+  );
 }
