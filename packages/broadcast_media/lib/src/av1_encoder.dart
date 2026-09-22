@@ -340,8 +340,11 @@ VideoLetterBuild buildVideoLetter({
   required int budget,
   int preset = videoLetterPreset,
   int audioBitrate = videoLetterAudioBitrate,
-  int crfLow = 20,
-  int crfHigh = 63,
+  // Frozen 2026-09-22: the bisect may spend the whole budget (crf 16 fills
+  // sixty letters at 216x384@6 where 20 left 58 KB unused), and anything
+  // that would need worse than 22 is refused rather than shipped ugly.
+  int crfLow = 16,
+  int crfHigh = 22,
 }) {
   final audio = encodeVbrTail(pcm16k, audioBitrate);
   final audioPackets = countVbrPackets(audio);
@@ -351,7 +354,7 @@ VideoLetterBuild buildVideoLetter({
   var passes = 0;
   var smallest = 1 << 30;
   var lo = crfLow, hi = crfHigh;
-  var crf = math.min(math.max(40, crfLow), crfHigh);
+  var crf = math.min(math.max(20, crfLow), crfHigh);
   while (lo <= hi) {
     passes++;
     final units = encodeAv1I420(

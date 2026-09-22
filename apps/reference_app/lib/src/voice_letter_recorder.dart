@@ -23,12 +23,16 @@ import 'package:hamseda_codec/src/voice_frame_codec.dart';
 import 'package:hamseda_codec/src/voice_note_codec.dart';
 import 'package:record/record.dart';
 
-/// The hard cap on one recording. Since 2026-09-21 a letter over the
-/// door's 4096 B rides as up to ten letters (letter_parts.dart, 40670 B),
-/// and Codec2 700C costs about 88 B/s on the rig (2626 B for 30 s, session
-/// MDB52T): five minutes is about 26 KB, seven letters, with room to spare.
-/// The cap per letter is untouched.
-const Duration voiceLetterMaxLength = Duration(minutes: 5);
+/// The hard cap on one recording, frozen at FIFTY SECONDS on 2026-09-22.
+/// Twenty letters hold 81340 B; the ladder's top rung is 11979 bit/s at
+/// 50 s, 11082 at 54 s, 9961 at 60 s — and the owner's accepted quality
+/// is the ~12 kbit/s wideband take he called excellent (row 83314d80).
+/// The old five-minute cap allowed 200 s of a codec he never heard. A cap
+/// the ladder cannot honour is a lie: past this the recorder REFUSES
+/// (VoiceLetterRefusal.tooLong), it never degrades silently. One letter
+/// carries about 2.5 s of accepted-quality voice. The cap per letter is
+/// untouched.
+const Duration voiceLetterMaxLength = Duration(seconds: 50);
 
 /// What twenty letters carry (letter_parts.dart: 20 x (4096 - 29) =
 /// 81340 B), the budget the recorder fits its mode into — the owner's
@@ -47,28 +51,38 @@ const int voiceLetterSampleRate = 48000;
 /// opus_encoder.c:1493); below, mode 6 at 16 kHz carries the same SILK.
 const int opusHybridFloorBitrate = 15000;
 
+/// The lowest rung the letter may ship, frozen 2026-09-22: one 12 % step
+/// under the ~12 kbit/s wideband the owner called excellent. A take whose
+/// budget cannot reach it is refused, not degraded.
+const int opusQualityFloorBitrate = 10600;
+
 /// 20 ms of capture — the gate's and the normaliser's frame.
 const int voiceLetterFrame = voiceLetterSampleRate ~/ 50;
 
 /// Bitrates to try for mode 6, highest first: what the budget allows for
 /// this length after the header and one length byte per packet, with a
 /// 7 % VBR margin, capped at 24 k (hybrid gains little above for speech),
-/// then 12 % steps down to 6 k. Empty (about 96 s and up): the fixed
-/// ladder takes over. 30 s in twenty letters -> [20000, 17600, 15500,
-/// 13700, 12000, 10600, 9300, 8200, 7200, 6300, 6000].
+/// then 12 % steps down to [opusQualityFloorBitrate] and no further — a
+/// take the floor cannot carry is refused, not shipped quieter (frozen
+/// 2026-09-22). 30 s in twenty letters -> [20000, 17600, 15500, 13700,
+/// 12000, 10600]; 50 s -> [11900, 10600]; past ~54 s the list is empty.
 List<int> opusBitrateLadder(double seconds, int budgetBytes) {
   if (seconds <= 0) return const [];
   final packets = (seconds * 1000 / 60).floor();
   final payloadBytes = budgetBytes - voiceNoteHeaderBytes - packets;
   if (payloadBytes <= 0) return const [];
   final allowed = payloadBytes * 8 / seconds * 0.93;
-  if (allowed < 6000) return const [];
+  // The quality floor, frozen 2026-09-22: one 12 % step under the rung the
+  // owner accepted, so a VBR overshoot still fits. Below it the ladder is
+  // empty and the recorder refuses — the fixed 8 kHz ladder stays in the
+  // file as a wall for whoever raises the cap, never as a slope under it.
+  if (allowed < opusQualityFloorBitrate) return const [];
   final ladder = <int>[];
   var b = math.min(allowed, 24000.0);
   while (true) {
-    final rung = math.max((b / 100).round() * 100, 6000);
+    final rung = math.max((b / 100).round() * 100, opusQualityFloorBitrate);
     ladder.add(rung);
-    if (rung <= 6000) break;
+    if (rung <= opusQualityFloorBitrate) break;
     b *= 0.88;
   }
   return ladder;
@@ -235,6 +249,43 @@ Int16List normalizeSpeech(Int16List x, {int sampleRate = 16000}) {
   return out;
 }
 
+/// Thrown when a take cannot be carried at the accepted quality: the
+/// twenty letters would force a rung under [opusQualityFloorBitrate].
+/// The caller shows [VoiceLetterRefusal.tooLong] in plain words.
+class VoiceLetterTooLong implements Exception {
+  const VoiceLetterTooLong(this.seconds, this.budgetBytes);
+  final double seconds;
+  final int budgetBytes;
+  @override
+  String toString() =>
+      'VoiceLetterTooLong(${seconds.toStringAsFixed(1)} s, $budgetBytes B)';
+}
+
+/// The fixed 8 kHz ladder (Opus 6k CBR, then Codec2), for a caller that
+/// deliberately wants a long, lower-quality letter. Not used by the
+/// recorder since the cap was frozen at fifty seconds (2026-09-22).
+Uint8List encodeAtFixedLadder(Int16List full48k, int budgetBytes) {
+  final narrow = decimate(full48k, 6, cutoffHz: 3400);
+  final mode = VoiceNoteMode.pick(
+    Duration(milliseconds: narrow.length ~/ 8),
+    budgetBytes,
+  );
+  final codec = voiceFrameCodecFor(mode);
+  try {
+    final n = codec.samplesPerFrame;
+    final count = narrow.length ~/ n;
+    return packVoiceNote(
+      frames: <Uint8List>[
+        for (var i = 0; i < count; i++)
+          codec.encodeFrame(narrow.sublist(i * n, (i + 1) * n)),
+      ],
+      mode: mode,
+    );
+  } finally {
+    codec.dispose();
+  }
+}
+
 /// Thrown when the microphone cannot be opened (permission denied, or no
 /// input device). The caller falls back to the typed-letter path.
 class VoiceLetterUnavailable implements Exception {
@@ -263,6 +314,11 @@ enum VoiceLetterRefusal {
   /// Teardown or encoding threw; the text is in
   /// [VoiceLetterRecorder.stopError].
   failed,
+
+  /// Longer than [voiceLetterMaxLength]: the twenty letters cannot carry
+  /// it at the quality the owner accepted, and a quieter codec is not what
+  /// this product ships (frozen 2026-09-22).
+  tooLong,
 
   /// The take holds no speech: under a tenth of its frames rise above the
   /// noise floor, or the speech itself sits below -45 dBFS. Codec2 turns
@@ -447,6 +503,11 @@ class VoiceLetterRecorder implements VoiceRecording {
             : (pcm.length - expected).abs() <= expected * 0.10;
         if (elapsed < const Duration(seconds: 1)) {
           _refusal = VoiceLetterRefusal.tooShort;
+        } else if (elapsed >
+            voiceLetterMaxLength + const Duration(seconds: 1)) {
+          // The cap auto-stops the recording; this catches a take that
+          // arrived long anyway (a wedged timer, a resumed app).
+          _refusal = VoiceLetterRefusal.tooLong;
         } else if (!within) {
           _refusal = VoiceLetterRefusal.offRate;
         } else if (!hasSpeech(
@@ -458,6 +519,13 @@ class VoiceLetterRecorder implements VoiceRecording {
           letter = _encode(pcm, elapsed);
         }
       }
+    } on VoiceLetterTooLong catch (error) {
+      // The ladder could not reach the accepted quality: named as such, so
+      // the person reads "record a shorter take", not "the recording
+      // failed" (frozen 2026-09-22).
+      _refusal = VoiceLetterRefusal.tooLong;
+      _stopError = '$error';
+      letter = null;
     } on Object catch (error) {
       // A refusal, not a crash: the caller falls back to text and the
       // person is told what threw instead of watching a silent no-op.
@@ -492,13 +560,11 @@ class VoiceLetterRecorder implements VoiceRecording {
         return _letter(wire, mode, pcm, elapsed);
       }
     }
-    // 2. The fixed 8 kHz ladder, sized ahead as before.
-    final narrow = decimate(full, 6, cutoffHz: 3400);
-    final mode = VoiceNoteMode.pick(
-      Duration(milliseconds: narrow.length ~/ 8),
-      voiceLetterBudgetBytes,
-    );
-    return _letter(_encodeWith(mode, narrow), mode, pcm, elapsed);
+    // 2. Nothing on the ladder fits at the accepted quality. The fixed
+    //    8 kHz ladder below is NOT taken: the letter is refused instead
+    //    (frozen 2026-09-22). It stays reachable for a caller that asks
+    //    for it explicitly — see [encodeAtFixedLadder].
+    throw VoiceLetterTooLong(seconds, voiceLetterBudgetBytes);
   }
 
   Uint8List _encodeWith(

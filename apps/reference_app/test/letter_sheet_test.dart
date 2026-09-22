@@ -9,6 +9,7 @@ import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_courier.dart';
 import 'package:reference_app/src/ui/conversations_screen.dart';
 import 'package:reference_app/src/ui/letter_sheet.dart';
+import 'package:reference_app/src/voice_letter_recorder.dart';
 
 void main() {
   testWidgets(
@@ -27,7 +28,10 @@ void main() {
         ),
       );
       expect(find.byKey(const Key('letter-sheet-title')), findsOneWidget);
-      expect(find.text('Record voice (5 min cap)'), findsOneWidget);
+      expect(
+        find.text('Record voice · up to ${voiceLetterMaxLength.inSeconds} s'),
+        findsOneWidget,
+      );
       expect(find.textContaining('≤30 letters'), findsOneWidget);
       // No banner before any act: a blank is honest here, a spinner is not.
       expect(find.byKey(const Key('letter-sheet-hint')), findsNothing);

@@ -1,5 +1,5 @@
 /// Records one clip with this device's camera and turns it into a video
-/// letter that fits thirty letters — the fourth way to author a letter on
+/// letter that fits sixty letters — the fourth way to author a letter on
 /// the phone, beside a typed draft, a voice take and a photo, on the same
 /// `chat_source: phone` path in journey_peer_app.dart (2026-09-21).
 ///
@@ -36,9 +36,13 @@ import 'voice_letter_recorder.dart'
         voiceLetterFrame,
         voiceLetterSampleRate;
 
-/// The hard cap on one clip: thirty letters carry 30 s at 144x256@6 with
-/// Opus audio (the Mac's measured row, 121699 B of 122010).
-const Duration videoLetterMaxLength = Duration(seconds: 30);
+/// The hard cap on one clip, frozen at THIRTY-NINE SECONDS on 2026-09-22:
+/// sixty letters hold 244020 B and the measured rate at 216x384@6 with the
+/// wideband tail is 6199 B/s (row ed73ca7e: 30 s in 185970 B), so 39 s is
+/// what the budget carries at tonight's quality. image_picker's maxDuration
+/// governs only the iOS camera, so the reader's frame count is capped too
+/// and a longer clip is refused by the crf wall, never shipped ugly.
+const Duration videoLetterMaxLength = Duration(seconds: 39);
 
 /// A human-readable size, shared with the photo button.
 String videoLetterSize(int bytes) =>
@@ -61,7 +65,7 @@ enum VideoLetterRefusal {
   /// The clip could not be read (no video track, reader failed).
   unreadable,
 
-  /// Even at crf 63 the clip did not fit thirty letters.
+  /// Even at the crf wall the clip did not fit the letters.
   tooLong,
 
   /// The reader or the encoder threw; the text is in [VideoSelection.error].

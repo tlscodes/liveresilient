@@ -69,12 +69,10 @@ void main() {
     expect(peak, lessThanOrEqualTo((0.9 * 32767).round() + 1));
   });
 
-  test('the bitrate ladder for 30 s in ten and in twenty letters', () {
-    // 500 packets: 40670 - 4 - 500 = 40166 B -> 10711 bit/s x 0.93 = 9961
-    // -> rounds to 10000, then 12 % steps to 6000 (Fable 5.1, 2026-09-21).
-    expect(opusBitrateLadder(30, 10 * 4067), [10000, 8800, 7700, 6800, 6000]);
-    // Twenty letters (the owner's rule, 2026-09-22): 81340 - 504 = 80836 B
-    // -> 21556 bit/s x 0.93 = 20047 -> 20000, the first three rungs hybrid.
+  test('the ladder stops at the quality floor, never under it', () {
+    // Twenty letters (frozen 2026-09-22): 81340 - 4 - 500 = 80836 B ->
+    // 21556 bit/s x 0.93 = 20047 -> 20000, then 12 % steps down to the
+    // floor (10600) and no further. The first three rungs are hybrid.
     expect(opusBitrateLadder(30, voiceLetterBudgetBytes), [
       20000,
       17600,
@@ -82,11 +80,6 @@ void main() {
       13700,
       12000,
       10600,
-      9300,
-      8200,
-      7200,
-      6300,
-      6000,
     ]);
     expect(
       opusBitrateLadder(
@@ -95,10 +88,30 @@ void main() {
       ).where((b) => b >= opusHybridFloorBitrate).length,
       3,
     );
-    // Short takes are capped at 24 k; long takes fall to the fixed ladder.
+    for (final rung in opusBitrateLadder(30, voiceLetterBudgetBytes)) {
+      expect(rung, greaterThanOrEqualTo(opusQualityFloorBitrate));
+    }
+    // Short takes are capped at 24 k; a budget that cannot reach the floor
+    // yields nothing, and the recorder refuses (ten letters at 30 s allow
+    // only 9961 bit/s, under the floor).
     expect(opusBitrateLadder(5, voiceLetterBudgetBytes).first, 24000);
-    expect(opusBitrateLadder(60, 10 * 4067), isEmpty);
-    expect(opusBitrateLadder(0, 10 * 4067), isEmpty);
+    expect(opusBitrateLadder(30, 10 * 4067), isEmpty);
+    expect(opusBitrateLadder(0, voiceLetterBudgetBytes), isEmpty);
+  });
+
+  test('the frozen caps: fifty seconds of voice in twenty letters', () {
+    // 2026-09-22, the owner's decision: twenty letters, fifty seconds, and
+    // a refusal past the rung he accepted — never a quieter codec.
+    expect(voiceLetterMaxLength, const Duration(seconds: 50));
+    expect(voiceLetterBudgetBytes, 20 * 4067);
+    final atCap = opusBitrateLadder(50, voiceLetterBudgetBytes);
+    expect(atCap.first, greaterThanOrEqualTo(opusQualityFloorBitrate));
+    expect(atCap.first, inInclusiveRange(11000, 12500));
+    expect(atCap.last, greaterThanOrEqualTo(opusQualityFloorBitrate));
+    // A take past the cap cannot reach the floor, so the ladder is empty
+    // and the encoder refuses (VoiceLetterTooLong) instead of degrading.
+    expect(opusBitrateLadder(75, voiceLetterBudgetBytes), isEmpty);
+    expect(opusBitrateLadder(120, voiceLetterBudgetBytes), isEmpty);
   });
 
   test('decimate 48 -> 16 keeps a 1 kHz tone and drops a 10 kHz one', () {

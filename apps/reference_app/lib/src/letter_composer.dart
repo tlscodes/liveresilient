@@ -119,6 +119,12 @@ String voiceRefusalText(VoiceRecording recorder) {
           '${recorder.elapsed.inSeconds}s, not the '
           '${recorder.elapsed.inMilliseconds * 16} expected. The recording '
           'was refused rather than carried as noise.';
+    case VoiceLetterRefusal.tooLong:
+      return 'That take is longer than ${voiceLetterMaxLength.inSeconds} '
+          'seconds. Twenty letters carry fifty seconds at the quality this '
+          'product ships; a longer take would have to sound worse, so it is '
+          'refused. Tap Record and speak for up to '
+          '${voiceLetterMaxLength.inSeconds} seconds.';
     case VoiceLetterRefusal.failed:
       return 'The recording failed: ${recorder.stopError}';
     case VoiceLetterRefusal.noSpeech:
@@ -142,7 +148,7 @@ String voiceClock(Duration value) {
 String voiceRecordButtonLabel(VoiceRecordState state, Duration elapsed) {
   switch (state) {
     case VoiceRecordState.idle:
-      return 'Record voice (5 min cap)';
+      return 'Record voice · up to ${voiceLetterMaxLength.inSeconds} s';
     case VoiceRecordState.starting:
       return 'Opening microphone…';
     case VoiceRecordState.recording:

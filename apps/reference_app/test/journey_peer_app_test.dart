@@ -568,7 +568,10 @@ void main() {
           isFalse,
           reason: 'the cap is a success, not a fault',
         );
-        expect(alert.message, contains('Maximum 300s reached'));
+        expect(
+          alert.message,
+          contains('Maximum ${voiceLetterMaxLength.inSeconds}s reached'),
+        );
       },
     );
 
@@ -679,7 +682,7 @@ void main() {
     test('the button names every state it can be in', () {
       expect(
         voiceRecordButtonLabel(VoiceRecordState.idle, Duration.zero),
-        'Record voice (5 min cap)',
+        'Record voice · up to ${voiceLetterMaxLength.inSeconds} s',
       );
       expect(
         voiceRecordButtonLabel(VoiceRecordState.starting, Duration.zero),
@@ -690,7 +693,7 @@ void main() {
           VoiceRecordState.recording,
           const Duration(seconds: 7),
         ),
-        'STOP • 0:07 / 5:00',
+        'STOP • 0:07 / ${voiceClock(voiceLetterMaxLength)}',
       );
       expect(
         voiceRecordButtonLabel(VoiceRecordState.stopping, Duration.zero),
