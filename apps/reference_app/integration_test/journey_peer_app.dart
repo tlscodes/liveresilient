@@ -1372,6 +1372,21 @@ class JourneyPeer extends LetterComposer {
           job,
           config,
         );
+        // A Send window that closed with nothing in hand carries nothing:
+        // the owner's rule (2026-09-23) — a row is never filled with the
+        // default letter. Only an unattended run (window zero) sends it.
+        if (letterKind == 'default' && config.phoneWait > Duration.zero) {
+          _note('window closed empty: nothing carried (no default letter)');
+          _setLetter(
+            LetterState.notDelivered,
+            'the Send window closed with nothing chosen — nothing was sent',
+          );
+          await _report('lane', <String, Object?>{
+            'stage': 'letter_skipped',
+            'reason': 'window_closed_empty',
+          }, run: job.run);
+          return;
+        }
       } else {
         letterPayload =
             config.chatText ?? dnsValvePayload(job.run, config.chatBytes);
