@@ -912,16 +912,20 @@ void main() {
         lessThanOrEqualTo(letterMaxParts),
       );
       expect(letter.sourceBytes, source.length);
-      // What came out is a picture, not a truncated prefix of one: it
-      // decodes, and at exactly the size the letter claims.
-      final decoded = img.decodeJpg(letter.wire);
+      // Since 2026-09-23 the letter is an AVIF: one AV1 keyframe in an
+      // ISOBMFF wrapper that names itself 'ftypavif' at byte 4.
+      expect(letter.format, PhotoLetterFormat.avif);
+      expect(String.fromCharCodes(letter.wire.sublist(4, 12)), 'ftypavif');
+      // The JPEG path still works and still produces a picture, at exactly
+      // the size the letter claims, with a quality inside the ladder.
+      final asJpeg = shrinkPhotoLetter(source, avif: false).letter!;
+      expect(asJpeg.format, PhotoLetterFormat.jpeg);
+      final decoded = img.decodeJpg(asJpeg.wire);
       expect(decoded, isNotNull);
-      expect(decoded!.width, letter.width);
-      expect(decoded.height, letter.height);
-      // The step-1 bisect lands between two ladder rungs (58 here), never
-      // above the top rung or under the floor.
+      expect(decoded!.width, asJpeg.width);
+      expect(decoded.height, asJpeg.height);
       expect(
-        letter.quality,
+        asJpeg.quality,
         inInclusiveRange(photoLetterQualities.last, photoLetterQualities.first),
       );
     });

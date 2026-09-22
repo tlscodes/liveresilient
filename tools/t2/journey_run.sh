@@ -939,12 +939,15 @@ if [ "$PROFILE" = dnsvalve ]; then
       # from the phone is opened as a picture instead of failing
       # unpackVoiceNote() and being reported as anonymous "binary".
       dv_head=$(od -An -N3 -tx1 "$LOGD/$dv_session.letter" | tr -d ' \n')
+      # An AVIF photo letter (2026-09-23) names itself at bytes 4..11:
+      # 'ftypavif'. Checked beside the JPEG magic, before the voice path.
+      dv_brand=$(od -An -j4 -N8 -c "$LOGD/$dv_session.letter" | tr -d ' \n')
       dv_wav="$LOGD/$dv_session.wav"
       dv_raw="$RUN/$dv_session.pcm"
-      if [ "$dv_head" = ffd8ff ]; then
+      if [ "$dv_head" = ffd8ff ] || [ "$dv_brand" = ftypavif ]; then
         # The letter file itself stays untouched as the evidence; the .jpg is
         # a copy with an extension Preview will open.
-        dv_jpg="$LOGD/$dv_session.jpg"
+        dv_jpg="$LOGD/$dv_session.$([ "$dv_brand" = ftypavif ] && echo avif || echo jpg)"
         cp "$LOGD/$dv_session.letter" "$dv_jpg"
         dv_dim=$(sips -g pixelWidth -g pixelHeight "$dv_jpg" 2>/dev/null \
                  | awk '/pixelWidth|pixelHeight/{print $2}' | paste -sd x -)

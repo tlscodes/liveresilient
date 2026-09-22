@@ -54,6 +54,7 @@ import 'package:device_link/device_link.dart'
 import 'package:device_link/durable_store.dart' show DurableBundleStore;
 import 'package:flutter/material.dart';
 import 'package:broadcast_media/src/av1_decoder.dart';
+import 'package:broadcast_media/src/avif_writer.dart' show isAvif;
 import 'package:broadcast_media/src/video_note_codec.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hamseda_codec/src/voice_frame_codec.dart';
@@ -670,6 +671,12 @@ class JourneyPeer extends LetterComposer {
   bool _isJpeg(Uint8List p) =>
       p.length > 3 && p[0] == 0xFF && p[1] == 0xD8 && p[2] == 0xFF;
 
+  /// An AVIF photo letter (2026-09-23): one AV1 keyframe in an ISOBMFF
+  /// wrapper. iOS 16 and the Mac open it natively, so the same
+  /// instantiateImageCodec path paints it; dav1d is the fallback if a
+  /// platform ever refuses.
+  bool _isPhoto(Uint8List p) => _isJpeg(p) || isAvif(p);
+
   /// A JPEG letter is decoded here with the app's image codec, painted, and
   /// the painted screen posted (screenshot `letter-photo`), with a
   /// `photo_decoded` event naming width, height and the decode time and
@@ -679,13 +686,11 @@ class JourneyPeer extends LetterComposer {
     Uint8List payload,
     String sha,
   ) async {
-    if (!_isJpeg(payload)) return;
+    if (!_isPhoto(payload)) return;
     final started = DateTime.now();
     final ui.Image image;
     try {
-      final codec = await ui.instantiateImageCodec(payload);
-      image = (await codec.getNextFrame()).image;
-      codec.dispose();
+      image = await _decodePhoto(payload);
     } on Object catch (error) {
       _note('photo letter did not decode on the phone: $error');
       await _report('photo_decoded', <String, Object?>{
@@ -726,6 +731,31 @@ class JourneyPeer extends LetterComposer {
       'posted': posted,
     }, run: run);
     image.dispose();
+  }
+
+  /// The platform's own decoder first (iOS 16 and macOS read AVIF); if it
+  /// refuses, dav1d unwraps the AVIF's AV1 keyframe — the decoder the
+  /// video letter already uses.
+  Future<ui.Image> _decodePhoto(Uint8List payload) async {
+    try {
+      final codec = await ui.instantiateImageCodec(payload);
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      return frame.image;
+    } on Object catch (error) {
+      if (!isAvif(payload)) rethrow;
+      _note('platform refused the AVIF ($error); decoding with dav1d');
+      final frame = decodeAv1Frames([avifMdatPayload(payload)]).first;
+      final done = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        frame.rgba,
+        frame.width,
+        frame.height,
+        ui.PixelFormat.rgba8888,
+        done.complete,
+      );
+      return done.future;
+    }
   }
 
   /// The 'V1' wire's flags low nibble (pack_video_note_v2.py MODES) as the

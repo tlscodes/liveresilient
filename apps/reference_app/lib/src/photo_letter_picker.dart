@@ -18,6 +18,9 @@ library;
 
 import 'dart:isolate';
 
+// ignore: implementation_imports
+import 'package:broadcast_media/src/av1_encoder.dart';
+
 // Uint8List comes with this import too, which is why dart:typed_data is not
 // listed: the file needs services.dart for the fallback picker's channel.
 import 'package:flutter/services.dart';
@@ -42,7 +45,13 @@ const int photoLetterMaxBytes = 121500;
 /// that can be made to fit at an acceptable quality, because a photo letter
 /// is looked at, and a 64-pixel thumbnail of a screenshot is unreadable at
 /// any quality.
+/// Since 2026-09-23 the ladder starts higher: AV1 carries the same picture
+/// in about a quarter fewer bytes than JPEG (measured on row 402504ee:
+/// JPEG 113532 B -> ssim 0.9727, AVIF 92638 B -> 0.9759), so the freed
+/// bytes buy edges a JPEG letter could never reach.
 const List<int> photoLetterEdges = <int>[
+  2048,
+  1600,
   1280,
   1024,
   800,
@@ -98,6 +107,17 @@ enum PhotoLetterRefusal {
   failed,
 }
 
+/// Which codec produced a photo letter's bytes.
+enum PhotoLetterFormat {
+  /// AVIF: one AV1 keyframe through the phone's vendored SVT-AV1, wrapped
+  /// by [wrapAvif]. The default since 2026-09-23.
+  avif,
+
+  /// JPEG 4:2:0 through package:image — the fallback when the AV1 encoder
+  /// is unavailable or refuses, so a letter is never lost to a codec.
+  jpeg,
+}
+
 /// One photo, shrunk and encoded, ready to ride the lane as opaque bytes
 /// exactly like a typed letter's UTF-8 or a voice letter's Codec2 frames.
 class PhotoLetter {
@@ -107,7 +127,12 @@ class PhotoLetter {
     required this.height,
     required this.quality,
     required this.sourceBytes,
+    this.format = PhotoLetterFormat.jpeg,
   });
+
+  /// The codec behind [wire]; the receivers read it from the bytes, this is
+  /// for the screen and the logs.
+  final PhotoLetterFormat format;
 
   /// The encoded JPEG — this is the payload.
   final Uint8List wire;
@@ -155,9 +180,29 @@ class PhotoShrinkResult {
 ///
 /// Pure, synchronous, and free of Flutter: the caller runs it on a worker
 /// isolate for a full-size photo, and a unit test calls it directly.
+/// [image]'s pixels as tightly packed RGBA8888, the shape
+/// [encodeAvifStill] takes.
+Uint8List rgbaOf(img.Image image) {
+  final w = image.width - image.width % 2;
+  final h = image.height - image.height % 2;
+  final out = Uint8List(w * h * 4);
+  var at = 0;
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      final p = image.getPixel(x, y);
+      out[at++] = p.r.toInt();
+      out[at++] = p.g.toInt();
+      out[at++] = p.b.toInt();
+      out[at++] = 255;
+    }
+  }
+  return out;
+}
+
 PhotoShrinkResult shrinkPhotoLetter(
   Uint8List source, {
   int maxBytes = photoLetterMaxBytes,
+  bool avif = true,
 }) {
   final decoded = img.decodeImage(source);
   if (decoded == null) {
@@ -182,6 +227,34 @@ PhotoShrinkResult shrinkPhotoLetter(
             height: wide ? null : edge,
             interpolation: img.Interpolation.average,
           );
+    // AVIF first: the same encoder the video letter uses, crf bisected to
+    // the budget. Its bytes buy a bigger edge than any JPEG rung, so a
+    // fit here ends the ladder (2026-09-23). A throw — an old library, a
+    // missing framework — falls through to JPEG, never loses the letter.
+    if (avif) {
+      try {
+        final file = encodeAvifStill(
+          rgbaOf(scaled),
+          width: scaled.width - scaled.width % 2,
+          height: scaled.height - scaled.height % 2,
+          budget: maxBytes,
+        );
+        if (file != null) {
+          return PhotoShrinkResult.letter(
+            PhotoLetter(
+              wire: file,
+              width: scaled.width - scaled.width % 2,
+              height: scaled.height - scaled.height % 2,
+              quality: 0, // crf lives inside the bitstream
+              sourceBytes: source.length,
+              format: PhotoLetterFormat.avif,
+            ),
+          );
+        }
+      } on Object {
+        // fall through to JPEG at this edge
+      }
+    }
     // yuv420 chroma subsampling, not the library default yuv444: at this
     // budget the chroma planes are worth a quarter of the bytes for a
     // difference nobody sees on a 200-pixel letter.
@@ -228,6 +301,7 @@ PhotoShrinkResult shrinkPhotoLetter(
         height: scaled.height,
         quality: bestQuality,
         sourceBytes: source.length,
+        format: PhotoLetterFormat.jpeg,
       ),
     );
   }
