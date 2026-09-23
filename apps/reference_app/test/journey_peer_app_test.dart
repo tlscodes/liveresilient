@@ -812,7 +812,10 @@ void main() {
           _FakeVideoSelection(refusal: VideoLetterRefusal.tooLong);
       await peer.recordVideo();
       expect(peer.videoState.value, VideoRecordState.idle);
-      expect(peer.videoAlert.value!.message, contains('thirty letters'));
+      expect(
+        peer.videoAlert.value!.message,
+        contains('$letterMaxParts letters'),
+      );
     });
 
     test(

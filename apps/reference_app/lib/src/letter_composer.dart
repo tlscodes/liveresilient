@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import 'letter_parts.dart' show letterMaxParts;
 import 'photo_letter_picker.dart';
 import 'video_letter_picker.dart';
 import 'voice_letter_recorder.dart';
@@ -245,8 +246,8 @@ String videoRefusalText(VideoLetterRefusal? refusal, {String? error}) {
     case VideoLetterRefusal.unreadable:
       return 'That clip could not be read: ${error ?? 'no reason reported'}';
     case VideoLetterRefusal.tooLong:
-      return 'That clip could not be made to fit thirty letters even at the '
-          'lowest quality. Record a shorter or calmer take.';
+      return 'That clip could not be made to fit $letterMaxParts letters at '
+          'an acceptable quality. Record a shorter or steadier take.';
     case VideoLetterRefusal.failed:
       return 'Preparing the video failed: ${error ?? 'no reason reported'}';
     case null:

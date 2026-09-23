@@ -341,11 +341,14 @@ VideoLetterBuild buildVideoLetter({
   required int budget,
   int preset = videoLetterPreset,
   int audioBitrate = videoLetterAudioBitrate,
-  // Frozen 2026-09-22: the bisect may spend the whole budget (crf 16 fills
-  // sixty letters at 216x384@6 where 20 left 58 KB unused), and anything
-  // that would need worse than 22 is refused rather than shipped ugly.
+  // The bisect may spend the whole budget (crf 16 fills sixty letters at
+  // 216x384@6 where 20 left 58 KB unused). The wall was 22 and refused the
+  // owner's first real 39 s hand-held take on 2026-09-23 — the accepted
+  // 30 s row sat at crf 20 on a steady clip, so a moving one needs a few
+  // steps more. 30 keeps the picture near tonight's and still refuses a
+  // clip that would only fit as mush.
   int crfLow = 16,
-  int crfHigh = 22,
+  int crfHigh = 30,
 }) {
   final audio = encodeVbrTail(pcm16k, audioBitrate);
   final audioPackets = countVbrPackets(audio);
