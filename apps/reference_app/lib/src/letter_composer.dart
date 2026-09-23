@@ -543,7 +543,17 @@ class LetterComposer {
       source = await selection.pick();
     } on Object catch (error) {
       photoState.value = PhotoPickState.idle;
-      _photoFailed('The photo library did not open. $error');
+      // The common case on a phone in airplane mode: the picture's original
+      // lives in iCloud, and neither the HEIC nor a JPEG copy can be fetched
+      // (2026-09-23). Say what to do, not the platform's exception.
+      final text = '$error';
+      _photoFailed(
+        text.contains('Cannot load representation')
+            ? 'That picture is stored in iCloud and cannot be downloaded '
+                  'without the internet. Choose a photo that is on this phone '
+                  '— a screenshot, or one you just took with the camera.'
+            : 'The photo library did not open. $error',
+      );
       return;
     }
     if (source == null) {

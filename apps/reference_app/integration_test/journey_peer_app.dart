@@ -1550,6 +1550,14 @@ class JourneyPeer extends LetterComposer {
       final bytes = text.isEmpty ? phoneDefaultLetter(job.run) : text;
       return (Uint8List.fromList(utf8.encode(bytes)), kind, false);
     }
+    // A new window starts clean: the last window's verdict and any photo,
+    // voice or video banner belong to that window, not to this one — a red
+    // "not delivered" left on screen read as this window failing
+    // (2026-09-23).
+    letterStatus.value = null;
+    photoAlert.value = null;
+    voiceAlert.value = null;
+    videoAlert.value = null;
     letterWanted.value = true;
     final gate = _letterGate = Completer<void>();
     final started = DateTime.now();
