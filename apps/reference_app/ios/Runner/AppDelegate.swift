@@ -80,6 +80,14 @@ final class PhotoLetterFallbackPicker: NSObject {
       VideoLetterSourceReader.read(call, result: result)
       return
     }
+    if call.method == "videoDuration" {
+      VideoLetterSourceReader.duration(call, result: result)
+      return
+    }
+    if call.method == "readVideoStills" {
+      VideoLetterSourceReader.stills(call, result: result)
+      return
+    }
     guard call.method == "pickCompatibleImage" else {
       result(FlutterMethodNotImplemented)
       return
@@ -290,6 +298,70 @@ extension PhotoLetterFallbackPicker: PHPickerViewControllerDelegate {
 /// Arguments: path, width, height, fps, seconds. Result: {frames: <i420
 /// path>, count: <frames written>, audio: <s16le path>}.
 enum VideoLetterSourceReader {
+  /// The clip's length in seconds, for the trim window (2026-09-23).
+  static func duration(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let a = call.arguments as? [String: Any] ?? [:]
+    guard let path = a["path"] as? String else {
+      result(FlutterError(code: "args", message: "path", details: nil))
+      return
+    }
+    DispatchQueue.global(qos: .userInitiated).async {
+      let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+      let track = asset.tracks(withMediaType: .video).first
+      let s = track?.timeRange.end.seconds ?? asset.duration.seconds
+      DispatchQueue.main.async { result(s.isFinite ? s : 0) }
+    }
+  }
+
+  /// The page band's source (2026-09-23): full-resolution frames at the
+  /// asked times, drawn onto width x height (the same squash the motion
+  /// band uses, so page and motion line up) and written as packed RGBA.
+  /// Exact times, not the nearest keyframe: the sharpest frame is chosen
+  /// in Dart by Laplacian variance.
+  /// Arguments: path, times [seconds], width, height.
+  /// Result: {rgba: <path>, count: <frames written>}.
+  static func stills(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let a = call.arguments as? [String: Any] ?? [:]
+    guard let path = a["path"] as? String, let times = a["times"] as? [Double],
+      let w = a["width"] as? Int, let h = a["height"] as? Int
+    else {
+      result(FlutterError(code: "args", message: "path times width height", details: nil))
+      return
+    }
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        gen.requestedTimeToleranceBefore = .zero
+        gen.requestedTimeToleranceAfter = .zero
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("video_letter_stills.rgba")
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        let fh = try FileHandle(forWritingTo: url)
+        var count = 0
+        let space = CGColorSpaceCreateDeviceRGB()
+        for t in times {
+          let img = try gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil)
+          var buf = [UInt8](repeating: 0, count: w * h * 4)
+          guard let ctx = CGContext(
+            data: &buf, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+          else { continue }
+          ctx.interpolationQuality = .high
+          ctx.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+          fh.write(Data(buf))
+          count += 1
+        }
+        try fh.close()
+        DispatchQueue.main.async { result(["rgba": url.path, "count": count]) }
+      } catch {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "stills", message: "\(error)", details: nil))
+        }
+      }
+    }
+  }
+
   static func read(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     let a = call.arguments as? [String: Any] ?? [:]
     guard let path = a["path"] as? String,
@@ -300,6 +372,9 @@ enum VideoLetterSourceReader {
       return
     }
     let audioRate = (a["audioRate"] as? Int) ?? 8000
+    // The window the person chose in a longer clip (2026-09-23): the reader
+    // starts there; every timestamp below is relative to the asset.
+    let start = (a["start"] as? Double) ?? 0
     DispatchQueue.global(qos: .userInitiated).async {
       do {
         let asset = AVURLAsset(url: URL(fileURLWithPath: path))
@@ -307,7 +382,9 @@ enum VideoLetterSourceReader {
           throw NSError(domain: "video", code: 1, userInfo: [NSLocalizedDescriptionKey: "no video track"])
         }
         let reader = try AVAssetReader(asset: asset)
-        reader.timeRange = CMTimeRange(start: .zero, end: CMTime(seconds: secs, preferredTimescale: 600))
+        reader.timeRange = CMTimeRange(
+          start: CMTime(seconds: start, preferredTimescale: 600),
+          end: CMTime(seconds: start + secs, preferredTimescale: 600))
         // Rendered at 2x and box-averaged to w x h below: the compositor's
         // single-step 7.5x downscale aliased sensor noise straight into
         // the encoder (the most expensive thing AV1 can be asked to keep);
@@ -330,7 +407,7 @@ enum VideoLetterSourceReader {
         // 2026-09-22); the instruction must cover the reader's whole range.
         let trackRange = vt.timeRange
         let coverEnd = max(
-          trackRange.end.seconds.isFinite ? trackRange.end.seconds : 0, secs + 1)
+          trackRange.end.seconds.isFinite ? trackRange.end.seconds : 0, start + secs + 1)
         instr.timeRange = CMTimeRange(
           start: .zero, end: CMTime(seconds: coverEnd, preferredTimescale: 600))
         instr.layerInstructions = [layer]
@@ -368,7 +445,7 @@ enum VideoLetterSourceReader {
         let fh = try FileHandle(forWritingTo: fURL)
         let ah = try FileHandle(forWritingTo: aURL)
         var count = 0
-        var next = 0.0
+        var next = start
         var prevY = [UInt8]()
         let maxFrames = Int(secs * Double(fps))
         while count < maxFrames, let sb = vout.copyNextSampleBuffer() {

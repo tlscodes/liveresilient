@@ -23,6 +23,8 @@ import 'dart:typed_data';
 
 // ignore: implementation_imports
 import 'package:broadcast_media/src/av1_encoder.dart';
+// ignore: implementation_imports
+import 'package:broadcast_media/src/two_band_video.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -82,7 +84,11 @@ class VideoLetter {
     required this.audioPackets,
     required this.passes,
     required this.encodeMs,
+    this.pages = 0,
   });
+
+  /// How many still stretches went as sharp page-resolution frames.
+  final int pages;
 
   /// The 'V1' wire — this is the payload.
   final Uint8List wire;
@@ -109,13 +115,22 @@ class VideoBuildResult {
 /// unit test with no camera. [CameraVideoSelection] is the only
 /// implementation that opens a real camera.
 abstract class VideoSelection {
-  /// Opens the camera and returns the recorded clip's path, or null when
-  /// the person backed out. Throws [VideoLetterUnavailable] when the
-  /// camera itself cannot run.
+  /// Opens the photo library's videos and returns the chosen clip's path,
+  /// or null when the person backed out. People send a video they already
+  /// have far more often than one they record for the letter (the owner,
+  /// 2026-09-23). Throws [VideoLetterUnavailable] when the picker cannot run.
   Future<String?> capture();
 
-  /// Reads the clip and encodes it under [budget] bytes.
-  Future<VideoBuildResult> build(String path, {required int budget});
+  /// The clip's length, so a longer clip can be trimmed to a window.
+  Future<Duration> duration(String path);
+
+  /// Reads [videoLetterMaxLength] of the clip from [start] and encodes it
+  /// under [budget] bytes.
+  Future<VideoBuildResult> build(
+    String path, {
+    required int budget,
+    Duration start = Duration.zero,
+  });
 
   /// The last error text, for [VideoLetterRefusal.failed].
   String? get error;
@@ -136,19 +151,94 @@ class CameraVideoSelection implements VideoSelection {
   Future<String?> capture() async {
     final XFile? clip;
     try {
-      clip = await _picker.pickVideo(
-        source: ImageSource.camera,
-        maxDuration: videoLetterMaxLength,
-        preferredCameraDevice: CameraDevice.front,
-      );
+      clip = await _picker.pickVideo(source: ImageSource.gallery);
     } on Object catch (e) {
       throw VideoLetterUnavailable('$e');
     }
     return clip?.path;
   }
 
+  /// Up to five full-resolution frames spread across [hold], drawn at the
+  /// page band's geometry; the one with the highest Laplacian variance
+  /// becomes the page (the first frame of a hold is still settling).
+  Future<Uint8List?> _sharpestPage(
+    String path,
+    Duration start,
+    Hold hold,
+  ) async {
+    final n = hold.length < 5 ? hold.length : 5;
+    final times = [
+      for (var k = 0; k < n; k++)
+        start.inMilliseconds / 1000 +
+            (hold.start + (hold.length - 1) * k / (n > 1 ? n - 1 : 1)) /
+                videoLetterFps,
+    ];
+    final Map<Object?, Object?>? read;
+    try {
+      read = await photoLetterFallbackChannel.invokeMapMethod<Object?, Object?>(
+        'readVideoStills',
+        {
+          'path': path,
+          'times': times,
+          'width': pageBandWidth,
+          'height': pageBandHeight,
+        },
+      );
+    } on PlatformException {
+      return null; // no page: the hold stays in the motion band
+    }
+    final rgbaPath = read?['rgba'] as String?;
+    final count = read?['count'] as int? ?? 0;
+    if (rgbaPath == null || count == 0) return null;
+    final rgba = await File(rgbaPath).readAsBytes();
+    try {
+      File(rgbaPath).deleteSync();
+    } on Object {
+      // a temp file that stays is not a failed letter
+    }
+    return Isolate.run(() {
+      const px = pageBandWidth * pageBandHeight;
+      var best = 0;
+      var bestScore = -1.0;
+      for (var k = 0; k < count; k++) {
+        final frame = Uint8List.sublistView(rgba, k * px * 4, (k + 1) * px * 4);
+        final lum = Uint8List(px);
+        for (var i = 0; i < px; i++) {
+          lum[i] =
+              (frame[i * 4] * 77 +
+                  frame[i * 4 + 1] * 150 +
+                  frame[i * 4 + 2] * 29) >>
+              8;
+        }
+        final s = laplacianVariance(lum, pageBandWidth, pageBandHeight);
+        if (s > bestScore) {
+          bestScore = s;
+          best = k;
+        }
+      }
+      return rgbaToI420(
+        Uint8List.sublistView(rgba, best * px * 4, (best + 1) * px * 4),
+        width: pageBandWidth,
+        height: pageBandHeight,
+      );
+    });
+  }
+
   @override
-  Future<VideoBuildResult> build(String path, {required int budget}) async {
+  Future<Duration> duration(String path) async {
+    final s = await photoLetterFallbackChannel.invokeMethod<double>(
+      'videoDuration',
+      {'path': path},
+    );
+    return Duration(milliseconds: ((s ?? 0) * 1000).round());
+  }
+
+  @override
+  Future<VideoBuildResult> build(
+    String path, {
+    required int budget,
+    Duration start = Duration.zero,
+  }) async {
     final Map<Object?, Object?>? read;
     try {
       read = await photoLetterFallbackChannel.invokeMapMethod<Object?, Object?>(
@@ -159,6 +249,7 @@ class CameraVideoSelection implements VideoSelection {
           'height': videoLetterHeight,
           'fps': videoLetterFps,
           'seconds': videoLetterMaxLength.inMilliseconds / 1000,
+          'start': start.inMilliseconds / 1000,
           // The voice letter's own capture rate: the clip's track is
           // read at 48 kHz and gated + normalised + decimated in Dart
           // below — the chain the owner called excellent (2026-09-22).
@@ -181,23 +272,36 @@ class CameraVideoSelection implements VideoSelection {
     final started = DateTime.now();
     try {
       final pcm16k = await Isolate.run(() => videoLetterAudioChain(raw48k));
-      final build = await encodeVideoLetter(
-        i420: i420,
-        pcm16k: pcm16k,
-        width: videoLetterWidth,
-        height: videoLetterHeight,
-        fps: videoLetterFps,
-        budget: budget,
+      // The page band: the still stretches of the clip, each carried by its
+      // sharpest full-resolution frame (Fable 5.1's two-band design).
+      final holds = await Isolate.run(
+        () =>
+            findHolds(i420, width: videoLetterWidth, height: videoLetterHeight),
+      );
+      final pages = <Hold, Uint8List>{};
+      for (final h in holds) {
+        final page = await _sharpestPage(path, start, h);
+        if (page != null) pages[h] = page;
+      }
+      final build = await Isolate.run(
+        () => buildTwoBandLetter(
+          clip: i420,
+          pcm16k: pcm16k,
+          fps: videoLetterFps,
+          budget: budget,
+          pages: pages,
+        ),
       );
       return VideoBuildResult.letter(
         VideoLetter(
           wire: build.wire,
           frames: build.frames,
           fps: videoLetterFps,
-          crf: build.crf,
-          audioPackets: build.audioPackets,
+          crf: build.movingCrf,
+          audioPackets: 0,
           passes: build.passes,
           encodeMs: DateTime.now().difference(started).inMilliseconds,
+          pages: build.pages,
         ),
       );
     } on VideoLetterTooLong catch (e) {

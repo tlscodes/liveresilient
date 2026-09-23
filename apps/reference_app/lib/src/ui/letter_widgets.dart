@@ -303,7 +303,8 @@ class LetterVideoButton extends StatelessWidget {
         builder: (context, letter, _) {
           final busy =
               state == VideoRecordState.capturing ||
-              state == VideoRecordState.encoding;
+              state == VideoRecordState.encoding ||
+              state == VideoRecordState.trimming;
           final done = state == VideoRecordState.ready;
           return SizedBox(
             height: 56,
@@ -335,6 +336,58 @@ class LetterVideoButton extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// The window over a longer clip: a slider for where it starts and a
+/// button that sends that part (2026-09-23). Hidden unless trimming.
+class LetterVideoTrim extends StatelessWidget {
+  const LetterVideoTrim({super.key, required this.composer});
+
+  final LetterComposer composer;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<VideoTrim?>(
+      valueListenable: composer.videoTrim,
+      builder: (context, trim, _) {
+        if (trim == null) return const SizedBox.shrink();
+        final max = trim.maxStart.inMilliseconds.toDouble();
+        return Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Send ${voiceClock(trim.start)} – ${voiceClock(trim.end)} '
+                'of ${voiceClock(trim.length)}',
+                key: const Key('journey-peer-video-trim-label'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Slider(
+                key: const Key('journey-peer-video-trim'),
+                min: 0,
+                max: max <= 0 ? 1 : max,
+                value: trim.start.inMilliseconds.toDouble().clamp(
+                  0,
+                  max <= 0 ? 1 : max,
+                ),
+                onChanged: (v) =>
+                    composer.moveVideoTrim(Duration(milliseconds: v.round())),
+              ),
+              FilledButton(
+                key: const Key('journey-peer-video-trim-use'),
+                onPressed: () => composer.confirmVideoTrim(trim.start),
+                child: const Text('Use this part'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

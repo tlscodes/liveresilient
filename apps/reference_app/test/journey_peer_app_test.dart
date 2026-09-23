@@ -788,7 +788,7 @@ void main() {
       await peer.recordVideo();
       expect(peer.videoState.value, VideoRecordState.idle);
       expect(peer.videoLetter.value, isNull);
-      expect(peer.videoAlert.value!.message, contains('No video was recorded'));
+      expect(peer.videoAlert.value!.message, contains('No video was chosen'));
       peer.dismissVideoAlert();
       expect(peer.videoAlert.value, isNull);
     });
@@ -851,6 +851,54 @@ void main() {
           reason: 'a later photo clears the video',
         );
         expect(peer.videoState.value, VideoRecordState.idle);
+      },
+    );
+
+    test(
+      'a longer clip waits for the chosen window, then builds from it',
+      () async {
+        final peer = JourneyPeer();
+        final fake = _FakeVideoSelection(
+          letter: fakeVideo(300),
+          length: const Duration(minutes: 2),
+        );
+        peer.newVideoSelection = () => fake;
+        final done = peer.recordVideo();
+        await Future<void>.delayed(Duration.zero);
+        expect(peer.videoState.value, VideoRecordState.trimming);
+        final trim = peer.videoTrim.value!;
+        expect(
+          trim.maxStart,
+          const Duration(seconds: 120) - videoLetterMaxLength,
+        );
+        peer.moveVideoTrim(const Duration(seconds: 30));
+        expect(
+          peer.videoTrim.value!.end,
+          const Duration(seconds: 30) + videoLetterMaxLength,
+        );
+        peer.confirmVideoTrim(peer.videoTrim.value!.start);
+        await done;
+        expect(fake.builtFrom, const Duration(seconds: 30));
+        expect(peer.videoState.value, VideoRecordState.ready);
+        expect(peer.videoTrim.value, isNull);
+      },
+    );
+
+    test(
+      'a window that closes while trimming sends the part on screen',
+      () async {
+        final peer = JourneyPeer();
+        final fake = _FakeVideoSelection(
+          letter: fakeVideo(300),
+          length: const Duration(seconds: 90),
+        );
+        peer.newVideoSelection = () => fake;
+        unawaited(peer.recordVideo());
+        await Future<void>.delayed(Duration.zero);
+        peer.moveVideoTrim(const Duration(seconds: 12));
+        await peer.finalizeVideo();
+        expect(fake.builtFrom, const Duration(seconds: 12));
+        expect(peer.videoLetter.value, isNotNull);
       },
     );
 
@@ -1362,14 +1410,22 @@ class _FakeVideoSelection implements VideoSelection {
     this.refusal,
     this.openError,
     this.buildDelay = Duration.zero,
+    this.length = const Duration(seconds: 20),
   });
 
   /// The letter the build yields; null with no [refusal] means the person
-  /// backed out of the camera.
+  /// backed out of the library.
   final VideoLetter? letter;
   final VideoLetterRefusal? refusal;
   final Object? openError;
   final Duration buildDelay;
+
+  /// The clip's length, and the start the build was asked for.
+  final Duration length;
+  Duration? builtFrom;
+
+  @override
+  Future<Duration> duration(String path) async => length;
 
   @override
   String? error;
@@ -1386,7 +1442,12 @@ class _FakeVideoSelection implements VideoSelection {
   }
 
   @override
-  Future<VideoBuildResult> build(String path, {required int budget}) async {
+  Future<VideoBuildResult> build(
+    String path, {
+    required int budget,
+    Duration start = Duration.zero,
+  }) async {
+    builtFrom = start;
     if (buildDelay > Duration.zero) await Future<void>.delayed(buildDelay);
     final r = refusal;
     if (r != null) {

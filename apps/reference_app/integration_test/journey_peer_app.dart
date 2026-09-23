@@ -3063,6 +3063,7 @@ class JourneyPeerApp extends StatelessWidget {
                         ),
                 ),
                 LetterPhotoPreview(composer: peer),
+                LetterVideoTrim(composer: peer),
                 ValueListenableBuilder<VideoAlert?>(
                   valueListenable: peer.videoAlert,
                   builder: (context, alert, _) => alert == null

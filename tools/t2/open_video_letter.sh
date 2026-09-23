@@ -30,8 +30,22 @@ AMODE=$(python3 "$PACK" unpack "$IN" "$T/v.ivf" "$T/a.bits")
 FPS=$(od -An -j2 -N1 -tu1 "$IN" | tr -d ' ')
 W=$(python3 -c "d=open('$IN','rb').read(); print(d[3]|d[4]<<8)")
 H=$(python3 -c "d=open('$IN','rb').read(); print(d[5]|d[6]<<8)")
-dav1d -i "$T/v.ivf" -o "$T/v.y4m" >/dev/null 2>&1
-FRAMES=$(dav1d -i "$T/v.ivf" -o /dev/null --muxer null 2>&1 | grep -oE 'Decoded [0-9]+/' | tail -1 | grep -oE '[0-9]+')
+# A two-band letter (2026-09-23) switches frame size mid-stream: page
+# frames at 3x the moving band. dav1d's y4m writer cannot change size, so
+# a mixed stream is decoded by ffmpeg's libdav1d and every frame is scaled
+# to one output size first (page x1.33, motion x4) — the rest of the chain
+# then sees a single size.
+SIZES=$(ffprobe -v error -c:v libdav1d -select_streams v -show_entries frame=width,height \
+  -of csv=p=0 "$T/v.ivf" 2>/dev/null | sort -u)
+NSIZES=$(printf '%s\n' "$SIZES" | grep -c . || true)
+FRAMES=$(ffprobe -v error -c:v libdav1d -count_frames -select_streams v \
+  -show_entries stream=nb_read_frames -of csv=p=0 "$T/v.ivf" 2>/dev/null)
+if [ "${NSIZES:-1}" -le 1 ]; then
+  dav1d -i "$T/v.ivf" -o "$T/v.y4m" >/dev/null 2>&1
+  VIN=(-r "$FPS" -i "$T/v.y4m")
+else
+  VIN=(-r "$FPS" -c:v libdav1d -i "$T/v.ivf")
+fi
 
 case "$AMODE" in
   700C|1200|1600|2400|3200)
@@ -51,7 +65,17 @@ case "$AMODE" in
   *) echo "ERROR: unknown audio mode '$AMODE' in flags byte" >&2; exit 2 ;;
 esac
 
-if [ "$MODE" = plain ]; then
+if [ "${NSIZES:-1}" -gt 1 ]; then
+  # Two bands: one output size for both, lanczos, a firm cas for the text
+  # the page frames carry. No motion interpolation: inventing frames across
+  # a page would smear exactly the print the page band is there to carry.
+  OW=$((W * 4)); OH=$((H * 4))
+  VF="scale=${OW}:${OH}:flags=lanczos:param0=3,setsar=1"
+  VF="$VF,deband=1thr=0.008:2thr=0.008:3thr=0.008:range=8:blur=1"
+  VF="$VF,cas=0.6"
+  OUTFPS=$FPS
+  MODE="two-band, pages $(printf '%s\n' "$SIZES" | grep -vc "^${W},${H}$" || true) size(s)"
+elif [ "$MODE" = plain ]; then
   VF="scale=iw*4:ih*4:flags=neighbor"; OUTFPS=$FPS
 else
   # For a talking face (2026-09-22): denoise the crf pulse first, invent
@@ -64,7 +88,7 @@ else
   VF="$VF,cas=0.5"
   OUTFPS=12
 fi
-ffmpeg -y -v error -r "$FPS" -i "$T/v.y4m" "${AIN[@]}" \
+ffmpeg -y -v error "${VIN[@]}" "${AIN[@]}" \
   -vf "$VF" -r "$OUTFPS" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 18 \
   -c:a aac -b:a 48k -ar 16000 -shortest "$OUT"
 SECS=$(python3 -c "print(round(${FRAMES:-0}/${FPS}, 1))")

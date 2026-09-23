@@ -226,8 +226,12 @@ enum VideoRecordState {
   /// Nothing recorded yet, or the last take was refused.
   idle,
 
-  /// The system camera is open, or opening.
+  /// The photo library is open, or opening.
   capturing,
+
+  /// A clip longer than the letter's cap is in hand: the person slides the
+  /// window they want to send (2026-09-23).
+  trimming,
 
   /// A clip is in hand: the Runner is reading it and SVT-AV1 is bisecting
   /// crf on a worker isolate.
@@ -237,17 +241,30 @@ enum VideoRecordState {
   ready,
 }
 
+/// A longer clip and the window the person has slid to.
+class VideoTrim {
+  const VideoTrim({required this.length, required this.start});
+  final Duration length;
+  final Duration start;
+
+  /// The latest start the window can take.
+  Duration get maxStart => length - videoLetterMaxLength;
+
+  Duration get end => start + videoLetterMaxLength;
+}
+
 /// The plain-words reason a take produced no letter.
 String videoRefusalText(VideoLetterRefusal? refusal, {String? error}) {
   switch (refusal) {
     case VideoLetterRefusal.cancelled:
-      return 'No video was recorded — the camera closed without one. Tap '
-          'Video again, record up to 30 seconds, then tap Use Video.';
+      return 'No video was chosen — the library closed without one. Tap '
+          'Video again and choose a clip; a longer one can be trimmed to '
+          '${videoLetterMaxLength.inSeconds} seconds.';
     case VideoLetterRefusal.unreadable:
       return 'That clip could not be read: ${error ?? 'no reason reported'}';
     case VideoLetterRefusal.tooLong:
       return 'That clip could not be made to fit $letterMaxParts letters at '
-          'an acceptable quality. Record a shorter or steadier take.';
+          'an acceptable quality. Choose a shorter or steadier part.';
     case VideoLetterRefusal.failed:
       return 'Preparing the video failed: ${error ?? 'no reason reported'}';
     case null:
@@ -259,9 +276,11 @@ String videoRefusalText(VideoLetterRefusal? refusal, {String? error}) {
 String videoButtonLabel(VideoRecordState state, VideoLetter? letter) {
   switch (state) {
     case VideoRecordState.idle:
-      return 'Video (≤30 s)';
+      return 'Video (≤${videoLetterMaxLength.inSeconds} s)';
     case VideoRecordState.capturing:
       return 'Recording video…';
+    case VideoRecordState.trimming:
+      return 'Choose the part to send…';
     case VideoRecordState.encoding:
       return 'Encoding video…';
     case VideoRecordState.ready:
@@ -666,11 +685,31 @@ class LetterComposer {
       _videoFailed(videoRefusalText(VideoLetterRefusal.cancelled));
       return;
     }
+    // A clip longer than the cap: the person slides the window to send.
+    var start = Duration.zero;
+    Duration length;
+    try {
+      length = await selection.duration(path);
+    } on Object {
+      length = Duration.zero;
+    }
+    if (length > videoLetterMaxLength) {
+      final gate = _trimGate = Completer<Duration>();
+      videoTrim.value = VideoTrim(length: length, start: Duration.zero);
+      videoState.value = VideoRecordState.trimming;
+      note(
+        'video ${length.inSeconds}s: choose ${videoLetterMaxLength.inSeconds}s',
+      );
+      start = await gate.future;
+      videoTrim.value = null;
+      _trimGate = null;
+    }
     videoState.value = VideoRecordState.encoding;
-    note('video captured, encoding');
+    note('video chosen, encoding from ${start.inSeconds}s');
     final result = await selection.build(
       path,
       budget: videoLetterBudgetBytes(),
+      start: start,
     );
     final letter = result.letter;
     if (letter == null) {
@@ -705,8 +744,31 @@ class LetterComposer {
   /// still encoding when the window closes would otherwise be dropped for
   /// the typed draft and the row would pass as a text carry.
   Future<void> finalizeVideo() async {
+    // A window that closes while the person is still sliding takes the
+    // part they are looking at, rather than hanging on the slider.
+    final trim = videoTrim.value;
+    if (trim != null) confirmVideoTrim(trim.start);
     final live = _videoTransition;
     if (live != null) await live;
+  }
+
+  /// The window over a longer clip, while the person chooses (null when
+  /// not trimming).
+  final ValueNotifier<VideoTrim?> videoTrim = ValueNotifier<VideoTrim?>(null);
+
+  Completer<Duration>? _trimGate;
+
+  /// Moves the window; the screen's slider calls this.
+  void moveVideoTrim(Duration start) {
+    final t = videoTrim.value;
+    if (t == null) return;
+    videoTrim.value = VideoTrim(length: t.length, start: start);
+  }
+
+  /// Sends the part starting at [start].
+  void confirmVideoTrim(Duration start) {
+    final gate = _trimGate;
+    if (gate != null && !gate.isCompleted) gate.complete(start);
   }
 
   /// Stops a live recording and releases the ticker. Safe to call twice.

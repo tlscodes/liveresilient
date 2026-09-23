@@ -165,6 +165,7 @@ class _LetterSheetState extends State<LetterSheet> {
                       ),
               ),
               LetterPhotoPreview(composer: composer),
+              LetterVideoTrim(composer: composer),
               ValueListenableBuilder<VideoAlert?>(
                 valueListenable: composer.videoAlert,
                 builder: (context, alert, _) => alert == null
