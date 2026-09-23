@@ -345,10 +345,11 @@ VideoLetterBuild buildVideoLetter({
   // 216x384@6 where 20 left 58 KB unused). The wall was 22 and refused the
   // owner's first real 39 s hand-held take on 2026-09-23 — the accepted
   // 30 s row sat at crf 20 on a steady clip, so a moving one needs a few
-  // steps more. 30 keeps the picture near tonight's and still refuses a
-  // clip that would only fit as mush.
+  // steps more. 30 still refused it (a busy 39 s clip needed crf 34,
+  // measured on the Mac); 40 lets every real take fit, a calm one still
+  // lands near crf 20 because the bisect takes the lowest that fits.
   int crfLow = 16,
-  int crfHigh = 30,
+  int crfHigh = 40,
 }) {
   final audio = encodeVbrTail(pcm16k, audioBitrate);
   final audioPackets = countVbrPackets(audio);
