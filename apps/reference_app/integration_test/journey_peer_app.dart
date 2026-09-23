@@ -451,10 +451,11 @@ class JourneyPeer extends LetterComposer {
   final ValueNotifier<LetterStatus?> letterStatus =
       ValueNotifier<LetterStatus?>(null);
 
-  void _setLetter(LetterState state, [String detail = '']) {
-    final next = LetterStatus(state, detail);
+  void _setLetter(LetterState state, [String detail = '', double? progress]) {
+    final next = LetterStatus(state, detail, progress);
     letterStatus.value = next;
-    _note('letter state: $next');
+    // The bar moves every second; only the verdicts go to the log.
+    if (progress == null) _note('letter state: $next');
   }
 
   /// True while a phone letter's Send window is open (chatSource=phone,
@@ -1733,6 +1734,16 @@ class JourneyPeer extends LetterComposer {
     final heartbeat = Timer.periodic(const Duration(seconds: 1), (_) {
       try {
         status.value = 'job ${job.run}: ${beat()}';
+        // The percentage the person watches: chunks the door answered over
+        // all chunks of all letters (2026-09-23).
+        final landedNow = valve.replies - repliesAtStart;
+        _setLetter(
+          LetterState.queued,
+          '${payload.length} B · '
+          '${parts.length > 1 ? '${parts.length} letters · ' : ''}'
+          'going through the door',
+          total == 0 ? 0 : (landedNow > total ? total : landedNow) / total,
+        );
       } on Object catch (error) {
         _note('heartbeat error=$error');
       }

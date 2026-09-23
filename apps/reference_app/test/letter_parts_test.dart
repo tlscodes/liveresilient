@@ -103,7 +103,7 @@ void main() {
     expect(() => splitLetter(tooBig), throwsA(isA<LetterTooLong>()));
     final justFits = Uint8List(letterMaxTotalBytes());
     expect(splitLetter(justFits, id: 5), hasLength(letterMaxParts));
-    expect(letterMaxParts, 60);
+    expect(letterMaxParts, 100);
   });
 
   test(

@@ -22,9 +22,8 @@ import 'av1_encoder.dart';
 import 'video_note_codec.dart';
 
 /// The page band's geometry: 3x the moving band (multiples of 8).
-const int pageBandScale = 3;
-const int pageBandWidth = videoLetterWidth * pageBandScale; // 648
-const int pageBandHeight = videoLetterHeight * pageBandScale; // 1152
+const int pageBandWidth = 648;
+const int pageBandHeight = 1152;
 
 /// The page keyframe is not bisected: text edges ring past ~32.
 const int pageBandCrf = 30;
@@ -32,8 +31,8 @@ const int pageBandCrf = 30;
 /// A hold: mean |dY| between consecutive 216x384 frames under this…
 const double holdMeanDiff = 1.5;
 
-/// …for at least this many output frames (1 s at 6 fps).
-const int holdMinFrames = 6;
+/// …for at least this many output frames (1 s at 4 fps).
+const int holdMinFrames = 4;
 
 /// At most this many holds become pages (each costs ~44 KB of motion).
 const int holdMaxPages = 3;

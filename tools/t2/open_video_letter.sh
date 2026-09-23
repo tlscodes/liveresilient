@@ -69,7 +69,7 @@ if [ "${NSIZES:-1}" -gt 1 ]; then
   # Two bands: one output size for both, lanczos, a firm cas for the text
   # the page frames carry. No motion interpolation: inventing frames across
   # a page would smear exactly the print the page band is there to carry.
-  OW=$((W * 4)); OH=$((H * 4))
+  OW=864; OH=1536
   VF="scale=${OW}:${OH}:flags=lanczos:param0=3,setsar=1"
   VF="$VF,deband=1thr=0.008:2thr=0.008:3thr=0.008:range=8:blur=1"
   VF="$VF,cas=0.6"
@@ -83,7 +83,7 @@ else
   # instead of the softest kernel, a firmer cas.
   VF="hqdn3d=1.0:0.8:3.0:2.5"
   VF="$VF,minterpolate=fps=12:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=epzs:vsbmc=1:search_param=32:scd=fdiff:scd_threshold=8:mb_size=16"
-  VF="$VF,scale=iw*4:ih*4:flags=lanczos:param0=3"
+  VF="$VF,scale=864:1536:flags=lanczos:param0=3"
   VF="$VF,deband=1thr=0.010:2thr=0.010:3thr=0.010:range=12:blur=1"
   VF="$VF,cas=0.5"
   OUTFPS=12

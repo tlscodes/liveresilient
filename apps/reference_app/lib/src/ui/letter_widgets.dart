@@ -62,6 +62,35 @@ class LetterStatusBanner extends StatelessWidget {
                     key: const Key('journey-peer-letter-state-detail'),
                     style: const TextStyle(color: Colors.white, fontSize: 14),
                   ),
+                if (status.percent != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            key: const Key('journey-peer-letter-progress'),
+                            value: status.percent! / 100,
+                            minHeight: 8,
+                            color: Colors.white,
+                            backgroundColor: Colors.white24,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${status.percent}%',
+                        key: const Key('journey-peer-letter-percent'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

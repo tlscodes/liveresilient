@@ -82,7 +82,13 @@ void main() {
       final decoded = decodeAv1Frames(note.videoFrames);
       expect(decoded, hasLength(18));
       final sizes = decoded.map((f) => '${f.width}x${f.height}').toSet();
-      expect(sizes, containsAll(['216x384', '648x1152']));
+      expect(
+        sizes,
+        containsAll([
+          '${videoLetterWidth}x$videoLetterHeight',
+          '${pageBandWidth}x$pageBandHeight',
+        ]),
+      );
       final big = decoded.where((f) => f.width == pageBandWidth).length;
       expect(big, holds.first.length);
     },

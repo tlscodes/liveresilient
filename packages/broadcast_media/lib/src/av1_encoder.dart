@@ -89,9 +89,13 @@ const Map<String, String> av1LetterOptionalParams = {
 /// portrait at 6 fps — 2.25x the pixels of the 144x256 the owner judged a
 /// thumbnail, at the same ~0.10 bits per pixel; the 45-letter plan is
 /// 192x336@6. Multiples of 8, and the reader's 2x render (432x768) fits.
-const int videoLetterWidth = 216;
-const int videoLetterHeight = 384;
-const int videoLetterFps = 6;
+// 2026-09-23, measured on the Mac on two real phone clips at the same
+// bytes: 288x512@4 beat 216x384@6 by +6 VMAF (20.5 -> 26.9, 44.4 -> 50.2);
+// the cost is a slightly jerkier motion. With 100 letters the budget
+// roughly doubles for 39 s.
+const int videoLetterWidth = 288;
+const int videoLetterHeight = 512;
+const int videoLetterFps = 4;
 
 /// SVT-AV1 preset for the phone: 5 since the bisect is seeded (two to
 /// three passes instead of six, 2026-09-22) — the Mac's preset 2 would

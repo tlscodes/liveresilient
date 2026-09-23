@@ -61,10 +61,24 @@ String letterStateLabel(LetterState state) {
 
 /// The banner's whole truth: a state and one line of detail under it.
 class LetterStatus {
-  const LetterStatus(this.state, [this.detail = '']);
+  const LetterStatus(this.state, [this.detail = '', this.progress]);
 
   final LetterState state;
   final String detail;
+
+  /// How much of the letter has reached the other side, 0..1, while it is
+  /// being carried; null when there is nothing to count (2026-09-23: the
+  /// owner wants a percentage that climbs from 1 to 100).
+  final double? progress;
+
+  /// The percentage the banner shows: never 0 once carrying has started,
+  /// so the person sees it move from the first second.
+  int? get percent {
+    final p = progress;
+    if (p == null) return null;
+    final v = (p * 100).floor();
+    return v < 1 ? 1 : (v > 100 ? 100 : v);
+  }
 
   @override
   String toString() => detail.isEmpty

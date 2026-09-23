@@ -27,7 +27,7 @@ from dataclasses import dataclass
 MAGIC = b"LP"
 VERSION = 1
 HEADER_BYTES = 29
-MAX_PARTS = 60  # sixty since 2026-09-22 (the video letter); the photo keeps thirty on its own
+MAX_PARTS = 100  # one hundred since 2026-09-23 (the video letter); the photo keeps thirty on its own
 PART_MAX_BYTES = 4096
 
 

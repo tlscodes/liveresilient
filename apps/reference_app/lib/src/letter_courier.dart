@@ -219,8 +219,8 @@ class LetterCourier {
     notes.value = next;
   }
 
-  void _set(LetterState state, [String detail = '']) {
-    final next = LetterStatus(state, detail);
+  void _set(LetterState state, [String detail = '', double? progress]) {
+    final next = LetterStatus(state, detail, progress);
     status.value = next;
     note('letter state: $next');
   }
@@ -557,6 +557,7 @@ class LetterCourier {
         LetterState.queued,
         '${whole.length} B · $landed/$n letters landed · '
         '${inFlight.length} in flight',
+        landed / n,
       );
     }
 
