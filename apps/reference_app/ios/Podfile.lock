@@ -31,7 +31,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_webrtc: ea1e854207d820fc0538ffa5632eb1e9193b0efc
-  NativeCodecs: 364909cf8c67ceeaa8bd31528ccb5bfb5ee7ca4d
+  NativeCodecs: 08a3fd506660f82de814edfb6d4db37ed342ff15
   pt_transport_darwin: 9a42cfba883d70721500de36fb8827e5d833a01d
   WebRTC-SDK: e6006119cd730d6315d875e4a421b6cc8bb88833
 
