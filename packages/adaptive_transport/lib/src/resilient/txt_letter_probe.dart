@@ -55,6 +55,16 @@ class TxtProbeOutcome {
   final int? winnerIndex;
 
   bool get reachedServer => winnerIndex != null;
+
+  /// One greppable line for the phone's event log, the same on the app and
+  /// the rig peer: `group=<hex> winner=<i|null> <label>:<nonce>:<rank>...`.
+  /// The group and nonces match the responder's `probe group=` lines, so
+  /// tools/t2/probe_check.sh can be read against it. A resolver with no
+  /// answer shows `-` or its error type instead of a rank.
+  String describe() =>
+      'group=$groupId winner=$winnerIndex '
+      '${answers.map((a) => '${a.label}:${a.nonce}:'
+          '${a.rank ?? (a.error == null ? '-' : a.error.runtimeType)}').join(' ')}';
 }
 
 /// Races one tiny probe through each resolver and lets the SERVER'S log

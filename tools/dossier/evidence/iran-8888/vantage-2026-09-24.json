@@ -1,0 +1,98 @@
+{
+ "globalping": {
+  "rc": 0,
+  "err": "",
+  "total_probes": 5122,
+  "ir_probes": [
+   {
+    "asn": 202468,
+    "network": "AbrArvan CDN and IaaS",
+    "city": "Tehran",
+    "tags": [
+     "datacenter-network",
+     "u-hatamiarash7"
+    ]
+   },
+   {
+    "asn": 202468,
+    "network": "AbrArvan CDN and IaaS",
+    "city": "Tehran",
+    "tags": [
+     "datacenter-network",
+     "u-hatamiarash7"
+    ]
+   },
+   {
+    "asn": 42043,
+    "network": "Parsian High Tech Company",
+    "city": "Tehran",
+    "tags": [
+     "datacenter-network",
+     "u-hatamiarash7"
+    ]
+   },
+   {
+    "asn": 59441,
+    "network": "Hostiran Network",
+    "city": "Tehran",
+    "tags": [
+     "datacenter-network",
+     "u-hatamiarash7"
+    ]
+   },
+   {
+    "asn": 59580,
+    "network": "Batterflyai Media",
+    "city": "Tehran",
+    "tags": [
+     "datacenter-network",
+     "u-gbzret4d"
+    ]
+   }
+  ],
+  "ir_on_L1": []
+ },
+ "tor": {
+  "relay": {
+   "rc": 0,
+   "err": "",
+   "header": [
+    "date,country,users,lower,upper,frac"
+   ],
+   "last": [
+    "2026-09-18,ir,83656,31337,110712,59",
+    "2026-09-19,ir,89840,38077,122372,57",
+    "2026-09-20,ir,85031,35602,115675,60",
+    "2026-09-21,ir,94015,30531,134362,55",
+    "2026-09-22,ir,93317,52412,122127,53"
+   ]
+  },
+  "bridge": {
+   "rc": 0,
+   "err": "",
+   "header": [
+    "date,country,users,frac"
+   ],
+   "last": [
+    "2026-09-18,ir,21124,85",
+    "2026-09-19,ir,21434,84",
+    "2026-09-20,ir,21500,81",
+    "2026-09-21,ir,21112,83",
+    "2026-09-22,ir,21338,85"
+   ]
+  }
+ },
+ "cloudflare_radar": {
+  "token_present": false,
+  "unauth_http_code": "400"
+ },
+ "mlab": {
+  "bq_cli": "/usr/local/bin/bq",
+  "gcloud_cli": "/usr/local/bin/gcloud"
+ },
+ "censoredplanet": {
+  "rc": 0,
+  "err": "",
+  "http": "404 https://data.censoredplanet.org/raw"
+ }
+}

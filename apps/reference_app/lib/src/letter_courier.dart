@@ -470,11 +470,7 @@ class LetterCourier {
       _set(LetterState.queued, '${payload.length} B · racing 3 resolvers');
       final probe = await (lanes as LetterDoorProbe).probeDoor();
       if (probe != null) {
-        note(
-          'probe group=${probe.groupId} winner=${probe.winnerIndex} '
-          '${probe.answers.map((a) => '${a.label}:${a.nonce}:'
-              '${a.rank ?? (a.error == null ? '-' : a.error.runtimeType)}').join(' ')}',
-        );
+        note('probe ${probe.describe()}');
         if (!probe.reachedServer) return _park(letter);
       }
     }

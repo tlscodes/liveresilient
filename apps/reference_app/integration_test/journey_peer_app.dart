@@ -37,6 +37,7 @@ import 'package:adaptive_transport/adaptive_transport.dart'
     show
         HostPort,
         HttpLongPollLane,
+        TxtLetterProbe,
         TxtQueryLane,
         TxtQueryWire,
         TxtQueryValve,
@@ -1400,6 +1401,43 @@ class JourneyPeer extends LetterComposer {
       );
       final deadline = DateTime.now().add(config.totalBudget);
       final selected = await _awaitValveSelection(job, fabric, valve, config);
+      // The app's Send path (LetterCourier._send): race the valve's
+      // resolvers first; the nonce our responder LOGGED first names the
+      // resolver the letter starts on, and none logged means the letter
+      // waits. The line carries the group and every nonce, so the phone's
+      // event and the responder's `probe group=` lines can be matched.
+      final probe = TxtLetterProbe.forLane(valve);
+      final outcome = await probe.run();
+      final winner = outcome.winnerIndex;
+      if (winner != null) valve.preferTransport(probe.transports[winner]);
+      _note('LETTER probe ${outcome.describe()}');
+      await _report('lane', <String, Object?>{
+        'stage': 'letter_probe',
+        'group': outcome.groupId,
+        'winner': winner,
+        'winner_nonce': winner == null ? null : outcome.answers[winner].nonce,
+        'nonces': [
+          for (final a in outcome.answers)
+            <String, Object?>{
+              'label': a.label,
+              'nonce': a.nonce,
+              'rank': a.rank,
+              'error': a.error == null ? null : '${a.error.runtimeType}',
+            },
+        ],
+      }, run: job.run);
+      if (!outcome.reachedServer) {
+        _setLetter(
+          LetterState.queued,
+          '${letterPayload.length} B · no probe reached the responder — queued',
+        );
+        await _report('lane', <String, Object?>{
+          'stage': 'letter_skipped',
+          'reason': 'probe_no_nonce_logged',
+          'group': outcome.groupId,
+        }, run: job.run);
+        return;
+      }
       await _carryOverValve(
         job,
         fabric,

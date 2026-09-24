@@ -115,8 +115,35 @@ void main() {
       // Three distinct nonces, one group.
       expect(out.answers.map((x) => x.nonce).toSet().length, 3);
       expect(server.log.length, 1);
+      // The phone's event line names the server's group and every nonce.
+      final line = out.describe();
+      expect(line, startsWith('group=${server.log.keys.single} winner=0 '));
+      for (final a in out.answers) {
+        expect(line, contains('${a.label}:${a.nonce}:${a.rank}'));
+      }
     },
   );
+
+  test('describe() marks an unanswered resolver', () {
+    const out = TxtProbeOutcome(
+      groupId: '0011223344556677',
+      answers: [
+        TxtProbeAnswer(
+          index: 0,
+          label: 'sys',
+          nonce: 'aa',
+          winnerNonce: 'aa',
+          rank: 1,
+        ),
+        TxtProbeAnswer(index: 1, label: '8.8.8.8', nonce: 'bb'),
+      ],
+      winnerIndex: 0,
+    );
+    expect(
+      out.describe(),
+      'group=0011223344556677 winner=0 sys:aa:1 8.8.8.8:bb:-',
+    );
+  });
 
   test('the letter leaves through the winner first', () async {
     final server = _Server();
