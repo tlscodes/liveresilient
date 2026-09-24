@@ -80,6 +80,15 @@ final class PhotoLetterFallbackPicker: NSObject {
       VideoLetterSourceReader.read(call, result: result)
       return
     }
+    if call.method == "playPcm" {
+      LetterPcmPlayer.play(call, result: result)
+      return
+    }
+    if call.method == "stopPcm" {
+      LetterPcmPlayer.stop()
+      result(nil)
+      return
+    }
     if call.method == "videoDuration" {
       VideoLetterSourceReader.duration(call, result: result)
       return
@@ -511,6 +520,63 @@ enum VideoLetterSourceReader {
           result(FlutterError(code: "read", message: "\(error)", details: nil))
         }
       }
+    }
+  }
+}
+
+/// The basic letter player's sound (2026-09-24): s16le mono PCM at the
+/// letter's own rate, through AVAudioEngine — part of iOS, no plugin. The
+/// session is play-and-record so the microphone keeps working afterwards.
+enum LetterPcmPlayer {
+  static var engine: AVAudioEngine?
+  static var node: AVAudioPlayerNode?
+
+  static func stop() {
+    node?.stop()
+    engine?.stop()
+    node = nil
+    engine = nil
+  }
+
+  static func play(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let a = call.arguments as? [String: Any] ?? [:]
+    guard let path = a["path"] as? String, let rate = a["rate"] as? Int, rate > 0 else {
+      result(FlutterError(code: "args", message: "path rate", details: nil))
+      return
+    }
+    do {
+      stop()
+      let data = try Data(contentsOf: URL(fileURLWithPath: path))
+      let frames = data.count / 2
+      guard frames > 0,
+        let fmt = AVAudioFormat(
+          commonFormat: .pcmFormatFloat32, sampleRate: Double(rate), channels: 1, interleaved: false),
+        let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(frames))
+      else {
+        result(0.0)
+        return
+      }
+      buf.frameLength = AVAudioFrameCount(frames)
+      data.withUnsafeBytes { raw in
+        let s = raw.bindMemory(to: Int16.self)
+        let dst = buf.floatChannelData![0]
+        for i in 0..<frames { dst[i] = Float(s[i]) / 32768.0 }
+      }
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth])
+      try session.setActive(true)
+      let e = AVAudioEngine()
+      let n = AVAudioPlayerNode()
+      e.attach(n)
+      e.connect(n, to: e.mainMixerNode, format: fmt)
+      try e.start()
+      n.scheduleBuffer(buf, completionHandler: nil)
+      n.play()
+      engine = e
+      node = n
+      result(Double(frames) / Double(rate))
+    } catch {
+      result(FlutterError(code: "play", message: "\(error)", details: nil))
     }
   }
 }

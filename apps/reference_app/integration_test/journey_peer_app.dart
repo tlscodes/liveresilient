@@ -68,6 +68,8 @@ import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:reference_app/src/datagram_lane_port.dart';
 import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_parts.dart';
+import 'package:reference_app/src/photo_letter_picker.dart'
+    show photoLetterFallbackChannel;
 import 'package:reference_app/src/call_session.dart'
     show defaultBorderRelayEndpoints, parseValveResolvers;
 import 'package:reference_app/src/ui/letter_widgets.dart';
@@ -446,6 +448,91 @@ class JourneyPeer extends LetterComposer {
   /// this phone and painted on this screen.
   final ValueNotifier<ui.Image?> letterFrame = ValueNotifier<ui.Image?>(null);
 
+  /// A basic player for the last voice or video letter decoded on this
+  /// phone (2026-09-24, for the test and the closing): the PCM plays through
+  /// iOS AVAudioEngine, the video frames follow the elapsed time at the
+  /// letter's own fps. The iPhone 11 has no AV1 hardware decoder and iOS no
+  /// AV1 software one, so the frames are dav1d's — no new plugin.
+  final ValueNotifier<bool> canPlay = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> playing = ValueNotifier<bool>(false);
+  String? _playPath;
+  int _playRate = 0;
+  List<DecodedFrame>? _playFrames;
+  int _playFps = 0;
+  Timer? _playTimer;
+
+  Future<void> _setPlayable(
+    Uint8List pcm,
+    int rate, {
+    List<DecodedFrame>? frames,
+    int fps = 0,
+  }) async {
+    if (pcm.isEmpty && (frames == null || frames.isEmpty)) return;
+    final file = File('${Directory.systemTemp.path}/letter_play.s16le');
+    await file.writeAsBytes(pcm, flush: true);
+    _playPath = file.path;
+    _playRate = rate;
+    _playFrames = frames;
+    _playFps = fps;
+    canPlay.value = true;
+  }
+
+  /// Plays the last decoded voice or video letter from the start.
+  Future<void> playLetter() async {
+    final path = _playPath;
+    if (path == null) return;
+    stopLetter();
+    playing.value = true;
+    double seconds = 0;
+    try {
+      seconds =
+          await photoLetterFallbackChannel.invokeMethod<double>('playPcm', {
+            'path': path,
+            'rate': _playRate,
+          }) ??
+          0;
+    } on Object catch (error) {
+      _note('play failed: $error');
+    }
+    final frames = _playFrames;
+    final fps = _playFps;
+    final clock = Stopwatch()..start();
+    var shown = -1;
+    final total = frames == null || fps == 0
+        ? seconds
+        : [seconds, frames.length / fps].reduce((a, b) => a > b ? a : b);
+    _playTimer = Timer.periodic(const Duration(milliseconds: 50), (t) {
+      final at = clock.elapsedMilliseconds / 1000;
+      if (at >= total) {
+        stopLetter();
+        return;
+      }
+      if (frames == null || fps == 0) return;
+      final i = (at * fps).floor().clamp(0, frames.length - 1);
+      if (i == shown) return;
+      shown = i;
+      final f = frames[i];
+      ui.decodeImageFromPixels(
+        f.rgba,
+        f.width,
+        f.height,
+        ui.PixelFormat.rgba8888,
+        (image) => letterFrame.value = image,
+      );
+    });
+  }
+
+  void stopLetter() {
+    _playTimer?.cancel();
+    _playTimer = null;
+    playing.value = false;
+    unawaited(
+      photoLetterFallbackChannel
+          .invokeMethod<void>('stopPcm')
+          .catchError((_) {}),
+    );
+  }
+
   /// The letter's verdict for the person holding the phone (see
   /// [LetterState]); null until a job names a letter and again at the next
   /// job's start, so a verdict never outlives the letter it judged.
@@ -630,7 +717,8 @@ class JourneyPeer extends LetterComposer {
       return;
     }
     final started = DateTime.now();
-    final codec = voiceFrameCodecFor(mode);
+    // NoLACE (complexity 7): this PCM is what the person hears.
+    final codec = voiceFrameCodecFor(mode, decoderComplexity: 7);
     final pcm = BytesBuilder(copy: false);
     try {
       for (final f in frames) {
@@ -646,6 +734,7 @@ class JourneyPeer extends LetterComposer {
     final bytes = pcm.takeBytes();
     final ms = DateTime.now().difference(started).inMilliseconds;
     final seconds = frames.length * mode.frameMs / 1000;
+    await _setPlayable(bytes, mode.sampleRate);
     final posted = await _postBlob(
       run: run,
       kind: 'voice-pcm',
@@ -801,7 +890,7 @@ class JourneyPeer extends LetterComposer {
     final audioMode = _videoAudioModes[payload[11] & 0x0F];
     final units = note.videoFrames;
     final started = DateTime.now();
-    final (int, String, String, DecodedFrame) decoded;
+    final (int, String, String, DecodedFrame, List<DecodedFrame>) decoded;
     try {
       decoded = await Isolate.run(() {
         final frames = decodeAv1Frames(units);
@@ -811,6 +900,7 @@ class JourneyPeer extends LetterComposer {
           contentSha256Hex(frames.first.rgba),
           contentSha256Hex(m.rgba),
           m,
+          frames,
         );
       });
     } on Object catch (error) {
@@ -822,13 +912,14 @@ class JourneyPeer extends LetterComposer {
       }, run: run);
       return;
     }
-    final (frameCount, firstSha, midSha, mid) = decoded;
+    final (frameCount, firstSha, midSha, mid, allFrames) = decoded;
     final videoMs = DateTime.now().difference(started).inMilliseconds;
     var pcm = Uint8List(0);
     var audioFrames = 0;
     var sampleRate = 0;
     if (audioMode != null) {
-      final codec = voiceFrameCodecFor(audioMode);
+      // NoLACE (complexity 7): the tail is what the person hears.
+      final codec = voiceFrameCodecFor(audioMode, decoderComplexity: 7);
       final out = BytesBuilder(copy: false);
       try {
         sampleRate = codec.sampleRate;
@@ -862,6 +953,7 @@ class JourneyPeer extends LetterComposer {
       }
       pcm = out.takeBytes();
     }
+    await _setPlayable(pcm, sampleRate, frames: allFrames, fps: note.fps);
     final ms = DateTime.now().difference(started).inMilliseconds;
     final done = Completer<ui.Image>();
     ui.decodeImageFromPixels(
@@ -3025,6 +3117,23 @@ class JourneyPeerApp extends StatelessWidget {
                               value,
                               key: const Key('journey-peer-letter'),
                               style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: peer.canPlay,
+                  builder: (context, can, _) => !can
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: peer.playing,
+                            builder: (context, on, _) => FilledButton.icon(
+                              key: const Key('journey-peer-play'),
+                              onPressed: on ? peer.stopLetter : peer.playLetter,
+                              icon: Icon(on ? Icons.stop : Icons.play_arrow),
+                              label: Text(on ? 'Stop' : 'Play the letter'),
                             ),
                           ),
                         ),
