@@ -82,4 +82,4 @@ verifies (`tail -n +2 tools/dossier/manifest.tsv | awk -F'\t' '{print $3"  "$1}'
 ## Open
 
 - Not pushed (the owner decides when).
-- The phone plays video tails without NoLACE (Mac does); the phone has no video player yet beyond the middle frame.
+- The phone has a basic player (commit 0cda839): "Play the letter" plays a decoded voice or video letter — sound through AVAudioEngine with NoLACE, frames from dav1d in step. The owner played it on the phone (2026-09-25). No scrubbing or pause yet.
