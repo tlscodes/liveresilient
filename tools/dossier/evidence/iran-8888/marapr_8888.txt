@@ -1,0 +1,590 @@
+candidate measurements overlapping window: 32793 (dns 12166, ping 20627)
+  scanned 200/32793
+  scanned 400/32793
+  scanned 600/32793
+  scanned 800/32793
+  scanned 1000/32793
+  scanned 1200/32793
+  scanned 1400/32793
+  scanned 1600/32793
+  scanned 1800/32793
+  scanned 2000/32793
+  scanned 2200/32793
+  scanned 2400/32793
+  scanned 2600/32793
+  scanned 2800/32793
+  scanned 3000/32793
+  scanned 3200/32793
+  scanned 3400/32793
+  scanned 3600/32793
+  scanned 3800/32793
+  scanned 4000/32793
+  scanned 4200/32793
+  scanned 4400/32793
+  scanned 4600/32793
+  scanned 4800/32793
+  scanned 5000/32793
+  scanned 5200/32793
+  scanned 5400/32793
+  scanned 5600/32793
+  scanned 5800/32793
+  scanned 6000/32793
+  scanned 6200/32793
+  scanned 6400/32793
+  scanned 6600/32793
+  scanned 6800/32793
+  scanned 7000/32793
+  scanned 7200/32793
+  scanned 7400/32793
+  scanned 7600/32793
+  scanned 7800/32793
+  scanned 8000/32793
+  scanned 8200/32793
+  scanned 8400/32793
+  scanned 8600/32793
+  scanned 8800/32793
+  scanned 9000/32793
+  scanned 9200/32793
+  scanned 9400/32793
+  scanned 9600/32793
+  scanned 9800/32793
+  scanned 10000/32793
+  scanned 10200/32793
+  scanned 10400/32793
+  scanned 10600/32793
+  scanned 10800/32793
+  scanned 11000/32793
+  scanned 11200/32793
+  scanned 11400/32793
+  scanned 11600/32793
+  scanned 11800/32793
+  scanned 12000/32793
+  scanned 12200/32793
+  scanned 12400/32793
+  scanned 12600/32793
+  scanned 12800/32793
+  scanned 13000/32793
+  scanned 13200/32793
+  scanned 13400/32793
+  scanned 13600/32793
+  scanned 13800/32793
+  scanned 14000/32793
+  scanned 14200/32793
+  scanned 14400/32793
+  scanned 14600/32793
+  scanned 14800/32793
+  scanned 15000/32793
+  scanned 15200/32793
+  scanned 15400/32793
+  scanned 15600/32793
+  scanned 15800/32793
+  scanned 16000/32793
+  scanned 16200/32793
+  scanned 16400/32793
+  scanned 16600/32793
+  scanned 16800/32793
+  scanned 17000/32793
+  scanned 17200/32793
+  scanned 17400/32793
+  scanned 17600/32793
+  scanned 17800/32793
+  scanned 18000/32793
+  scanned 18200/32793
+  scanned 18400/32793
+  scanned 18600/32793
+  scanned 18800/32793
+  scanned 19000/32793
+  scanned 19200/32793
+  scanned 19400/32793
+  scanned 19600/32793
+  scanned 19800/32793
+  scanned 20000/32793
+  scanned 20200/32793
+  scanned 20400/32793
+  scanned 20600/32793
+  scanned 20800/32793
+  scanned 21000/32793
+  scanned 21200/32793
+  scanned 21400/32793
+  scanned 21600/32793
+  scanned 21800/32793
+  scanned 22000/32793
+  scanned 22200/32793
+  scanned 22400/32793
+  scanned 22600/32793
+  scanned 22800/32793
+  scanned 23000/32793
+  scanned 23200/32793
+  scanned 23400/32793
+  scanned 23600/32793
+  scanned 23800/32793
+  scanned 24000/32793
+  scanned 24200/32793
+  scanned 24400/32793
+  scanned 24600/32793
+  scanned 24800/32793
+  scanned 25000/32793
+  scanned 25200/32793
+  scanned 25400/32793
+  scanned 25600/32793
+  scanned 25800/32793
+  scanned 26000/32793
+  scanned 26200/32793
+  scanned 26400/32793
+  scanned 26600/32793
+  scanned 26800/32793
+  scanned 27000/32793
+  scanned 27200/32793
+  scanned 27400/32793
+  scanned 27600/32793
+  scanned 27800/32793
+  scanned 28000/32793
+  scanned 28200/32793
+  scanned 28400/32793
+  scanned 28600/32793
+  scanned 28800/32793
+  scanned 29000/32793
+  scanned 29200/32793
+  scanned 29400/32793
+  scanned 29600/32793
+  scanned 29800/32793
+  scanned 30000/32793
+  scanned 30200/32793
+  scanned 30400/32793
+  scanned 30600/32793
+  scanned 30800/32793
+  scanned 31000/32793
+  scanned 31200/32793
+  scanned 31400/32793
+  scanned 31600/32793
+  scanned 31800/32793
+  scanned 32000/32793
+  scanned 32200/32793
+  scanned 32400/32793
+  scanned 32600/32793
+measurements with IR probe results: 153
+2026-03-01 15535 dns/udp answered 1
+2026-03-01 17437 dns/udp answered 1
+2026-03-01 25407 dns/udp answered 1
+2026-03-01 33013 dns/udp answered 1
+2026-03-01 1006478 dns/udp answered 1
+2026-03-01 1006479 dns/udp answered 1
+2026-03-01 1006480 dns/udp answered 1
+2026-03-01 1009502 dns/udp answered 1
+2026-03-02 15535 dns/udp answered 1
+2026-03-02 17437 dns/udp answered 1
+2026-03-02 25407 dns/udp answered 1
+2026-03-02 1006478 dns/udp answered 1
+2026-03-02 1006479 dns/udp answered 1
+2026-03-02 1006480 dns/udp answered 1
+2026-03-02 1009502 dns/udp answered 1
+2026-03-03 15535 dns/udp answered 11
+2026-03-03 15535 ping/icmp reply 1
+2026-03-03 17437 dns/udp answered 11
+2026-03-03 17437 ping/icmp reply 1
+2026-03-03 25407 dns/udp answered 11
+2026-03-03 25407 ping/icmp reply 1
+2026-03-03 33013 dns/udp error:timeout 1
+2026-03-03 1006478 dns/udp answered 11
+2026-03-03 1006478 ping/icmp reply 1
+2026-03-03 1006479 dns/udp answered 11
+2026-03-03 1006479 ping/icmp reply 1
+2026-03-03 1006480 dns/udp answered 11
+2026-03-03 1006480 ping/icmp reply 1
+2026-03-03 1009502 dns/udp answered 1
+2026-03-03 1009502 ping/icmp reply 1
+2026-03-04 15535 dns/udp answered 1
+2026-03-04 17437 dns/udp answered 1
+2026-03-04 25407 dns/udp answered 1
+2026-03-04 1006478 dns/udp answered 1
+2026-03-04 1006479 dns/udp answered 1
+2026-03-04 1006480 dns/udp answered 1
+2026-03-04 1009502 dns/udp answered 1
+2026-03-05 15535 dns/udp answered 1
+2026-03-05 17437 dns/udp answered 1
+2026-03-05 25407 dns/udp answered 1
+2026-03-05 1006478 dns/udp answered 1
+2026-03-05 1006479 dns/udp answered 1
+2026-03-05 1006480 dns/udp answered 1
+2026-03-05 1009502 dns/udp answered 1
+2026-03-06 15535 dns/udp answered 1
+2026-03-06 17437 dns/udp answered 1
+2026-03-06 1006478 dns/udp answered 1
+2026-03-06 1006479 dns/udp answered 1
+2026-03-06 1006480 dns/udp answered 1
+2026-03-06 1009502 dns/udp answered 1
+2026-03-07 15535 dns/udp answered 1
+2026-03-07 15535 ping/icmp reply 1
+2026-03-07 17437 dns/udp answered 1
+2026-03-07 17437 ping/icmp reply 1
+2026-03-07 25407 dns/udp answered 1
+2026-03-07 25407 ping/icmp reply 1
+2026-03-07 1006478 dns/udp answered 1
+2026-03-07 1006478 ping/icmp reply 1
+2026-03-07 1006479 dns/udp answered 1
+2026-03-07 1006479 ping/icmp reply 1
+2026-03-07 1006480 dns/udp answered 1
+2026-03-07 1006480 ping/icmp reply 1
+2026-03-07 1009502 dns/udp answered 1
+2026-03-07 1009502 ping/icmp reply 1
+2026-03-08 15535 dns/udp answered 1
+2026-03-08 17437 dns/udp answered 1
+2026-03-08 25407 dns/udp answered 1
+2026-03-08 1006478 dns/udp answered 1
+2026-03-08 1006479 dns/udp answered 1
+2026-03-08 1006480 dns/udp answered 1
+2026-03-08 1009502 dns/udp answered 1
+2026-03-09 15535 dns/udp answered 1
+2026-03-09 17437 dns/udp answered 1
+2026-03-09 25407 dns/udp answered 1
+2026-03-09 1006478 dns/udp answered 1
+2026-03-09 1006479 dns/udp answered 1
+2026-03-09 1006480 dns/udp answered 1
+2026-03-09 1009502 dns/udp answered 1
+2026-03-10 15535 dns/udp answered 1
+2026-03-10 15535 ping/icmp reply 1
+2026-03-10 17437 dns/udp answered 1
+2026-03-10 17437 ping/icmp reply 1
+2026-03-10 25407 dns/udp answered 1
+2026-03-10 25407 ping/icmp reply 1
+2026-03-10 1006478 dns/udp answered 1
+2026-03-10 1006478 ping/icmp reply 1
+2026-03-10 1006479 dns/udp answered 1
+2026-03-10 1006479 ping/icmp reply 1
+2026-03-10 1006480 dns/udp answered 1
+2026-03-10 1006480 ping/icmp reply 1
+2026-03-10 1009502 dns/udp answered 1
+2026-03-10 1009502 ping/icmp reply 1
+2026-03-11 15535 dns/udp answered 1
+2026-03-11 17437 dns/udp answered 1
+2026-03-11 25407 dns/udp answered 1
+2026-03-11 1006478 dns/udp answered 1
+2026-03-11 1006479 dns/udp answered 1
+2026-03-11 1006480 dns/udp answered 1
+2026-03-11 1009502 dns/udp answered 1
+2026-03-12 15535 dns/udp answered 1
+2026-03-12 17437 dns/udp answered 1
+2026-03-12 25407 dns/udp answered 1
+2026-03-12 1006478 dns/udp answered 1
+2026-03-12 1006479 dns/udp answered 1
+2026-03-12 1006480 dns/udp answered 1
+2026-03-12 1009502 dns/udp answered 1
+2026-03-13 15535 dns/udp answered 1
+2026-03-13 17437 dns/udp answered 1
+2026-03-13 25407 dns/udp answered 1
+2026-03-13 1006478 dns/udp answered 1
+2026-03-13 1006479 dns/udp answered 1
+2026-03-13 1006480 dns/udp answered 1
+2026-03-13 1009502 dns/udp answered 1
+2026-03-14 15535 dns/udp answered 1
+2026-03-14 15535 ping/icmp reply 1
+2026-03-14 17437 dns/udp answered 1
+2026-03-14 17437 ping/icmp reply 1
+2026-03-14 1006478 dns/udp answered 1
+2026-03-14 1006478 ping/icmp reply 1
+2026-03-14 1006479 dns/udp answered 2
+2026-03-14 1006479 ping/icmp reply 1
+2026-03-14 1006480 dns/udp answered 1
+2026-03-14 1006480 ping/icmp reply 1
+2026-03-14 1009502 dns/udp answered 1
+2026-03-14 1009502 ping/icmp reply 1
+2026-03-15 15535 dns/udp answered 1
+2026-03-15 17437 dns/udp answered 1
+2026-03-15 1006478 dns/udp error:timeout 1
+2026-03-15 1006479 dns/udp error:timeout 1
+2026-03-15 1006480 dns/udp error:timeout 1
+2026-03-15 1009502 dns/udp answered 1
+2026-03-16 1009502 dns/udp answered 1
+2026-03-17 1009502 dns/udp answered 1
+2026-03-17 1009502 ping/icmp reply 1
+2026-03-18 1009502 dns/udp answered 1
+2026-03-19 17437 dns/udp answered 1
+2026-03-19 1006478 dns/udp answered 1
+2026-03-19 1006479 dns/udp answered 1
+2026-03-19 1006480 dns/udp answered 1
+2026-03-19 1009502 dns/udp answered 1
+2026-03-20 17437 dns/udp answered 1
+2026-03-20 1006478 dns/udp answered 1
+2026-03-20 1006479 dns/udp answered 1
+2026-03-20 1006480 dns/udp answered 1
+2026-03-20 1009502 dns/udp answered 1
+2026-03-21 17437 dns/udp answered 1
+2026-03-21 17437 ping/icmp reply 1
+2026-03-21 1006478 dns/udp answered 1
+2026-03-21 1006478 ping/icmp reply 1
+2026-03-21 1006479 dns/udp answered 1
+2026-03-21 1006479 ping/icmp reply 1
+2026-03-21 1006480 dns/udp answered 1
+2026-03-21 1006480 ping/icmp reply 1
+2026-03-21 1009502 dns/udp answered 1
+2026-03-21 1009502 ping/icmp reply 1
+2026-03-22 17437 dns/udp answered 1
+2026-03-22 1006478 dns/udp answered 1
+2026-03-22 1006479 dns/udp answered 1
+2026-03-22 1006480 dns/udp answered 1
+2026-03-22 1009502 dns/udp answered 1
+2026-03-23 17437 dns/udp answered 1
+2026-03-23 1006478 dns/udp answered 1
+2026-03-23 1006479 dns/udp answered 1
+2026-03-23 1006480 dns/udp answered 1
+2026-03-23 1009502 dns/udp answered 1
+2026-03-24 17437 dns/udp answered 1
+2026-03-24 17437 ping/icmp reply 1
+2026-03-24 1006478 dns/udp answered 1
+2026-03-24 1006478 ping/icmp reply 1
+2026-03-24 1006479 dns/udp answered 1
+2026-03-24 1006479 ping/icmp reply 1
+2026-03-24 1006480 dns/udp answered 1
+2026-03-24 1006480 ping/icmp reply 1
+2026-03-24 1009502 dns/udp answered 1
+2026-03-24 1009502 ping/icmp reply 1
+2026-03-25 17437 dns/udp answered 1
+2026-03-25 1006478 dns/udp answered 1
+2026-03-25 1006479 dns/udp answered 1
+2026-03-25 1006480 dns/udp answered 1
+2026-03-25 1009502 dns/udp answered 1
+2026-03-26 17437 dns/udp answered 1
+2026-03-26 1006478 dns/udp answered 1
+2026-03-26 1006479 dns/udp answered 1
+2026-03-26 1006480 dns/udp answered 1
+2026-03-26 1009502 dns/udp answered 1
+2026-03-26 1012845 dns/udp answered 1
+2026-03-27 17437 dns/udp answered 1
+2026-03-27 1006478 dns/udp answered 1
+2026-03-27 1006479 dns/udp answered 1
+2026-03-27 1006480 dns/udp answered 1
+2026-03-27 1009502 dns/udp answered 1
+2026-03-27 1012845 dns/udp answered 1
+2026-03-28 17437 dns/udp answered 1
+2026-03-28 17437 ping/icmp reply 1
+2026-03-28 1006478 dns/udp answered 1
+2026-03-28 1006478 ping/icmp reply 1
+2026-03-28 1006479 dns/udp answered 1
+2026-03-28 1006479 ping/icmp reply 1
+2026-03-28 1006480 dns/udp answered 1
+2026-03-28 1006480 ping/icmp reply 1
+2026-03-28 1009502 dns/udp answered 1
+2026-03-28 1009502 ping/icmp reply 1
+2026-03-28 1012845 dns/udp answered 1
+2026-03-28 1012845 ping/icmp reply 1
+2026-03-29 17437 dns/udp answered 14
+2026-03-29 1006478 dns/udp answered 14
+2026-03-29 1006479 dns/udp answered 14
+2026-03-29 1006480 dns/udp answered 14
+2026-03-29 1009502 dns/udp answered 14
+2026-03-29 1012845 dns/udp answered 14
+2026-03-30 17437 dns/udp answered 1
+2026-03-30 1006478 dns/udp answered 1
+2026-03-30 1006479 dns/udp answered 1
+2026-03-30 1006480 dns/udp answered 1
+2026-03-30 1009502 dns/udp answered 1
+2026-03-30 1012845 dns/udp answered 1
+2026-03-31 17437 dns/udp answered 1
+2026-03-31 17437 ping/icmp reply 1
+2026-03-31 1006478 dns/udp answered 1
+2026-03-31 1006478 ping/icmp reply 1
+2026-03-31 1006479 dns/udp answered 1
+2026-03-31 1006479 ping/icmp reply 1
+2026-03-31 1006480 dns/udp answered 1
+2026-03-31 1006480 ping/icmp reply 1
+2026-03-31 1009502 dns/udp answered 1
+2026-03-31 1009502 ping/icmp reply 1
+2026-03-31 1012845 dns/udp answered 1
+2026-03-31 1012845 ping/icmp reply 1
+2026-04-01 17437 dns/udp answered 3
+2026-04-01 1006478 dns/udp answered 3
+2026-04-01 1006479 dns/udp answered 3
+2026-04-01 1006480 dns/udp answered 3
+2026-04-01 1009502 dns/udp answered 3
+2026-04-01 1012845 dns/udp answered 3
+2026-04-02 17437 dns/udp answered 1
+2026-04-02 1006478 dns/udp answered 1
+2026-04-02 1006479 dns/udp answered 1
+2026-04-02 1006480 dns/udp answered 1
+2026-04-02 1009502 dns/udp answered 1
+2026-04-02 1012845 dns/udp answered 1
+2026-04-03 1006478 dns/udp answered 1
+2026-04-03 1006479 dns/udp answered 1
+2026-04-03 1006480 dns/udp answered 1
+2026-04-03 1009502 dns/udp answered 1
+2026-04-03 1012845 dns/udp answered 1
+2026-04-04 1006478 dns/udp answered 1
+2026-04-04 1006478 ping/icmp reply 1
+2026-04-04 1006479 dns/udp answered 1
+2026-04-04 1006479 ping/icmp reply 1
+2026-04-04 1006480 dns/udp answered 1
+2026-04-04 1006480 ping/icmp reply 1
+2026-04-04 1009502 dns/udp answered 1
+2026-04-04 1009502 ping/icmp reply 1
+2026-04-04 1012845 dns/udp error:timeout 1
+2026-04-04 1012845 ping/icmp reply 1
+2026-04-05 1006478 dns/udp answered 1
+2026-04-05 1006479 dns/udp answered 1
+2026-04-05 1006480 dns/udp answered 1
+2026-04-05 1009502 dns/udp answered 1
+2026-04-05 1012845 dns/udp answered 1
+2026-04-06 1006478 dns/udp answered 9
+2026-04-06 1006479 dns/udp answered 9
+2026-04-06 1006480 dns/udp answered 9
+2026-04-06 1009502 dns/udp answered 9
+2026-04-06 1012845 dns/udp answered 9
+2026-04-07 1006478 dns/udp answered 4
+2026-04-07 1006478 ping/icmp reply 1
+2026-04-07 1006479 dns/udp answered 4
+2026-04-07 1006479 ping/icmp reply 1
+2026-04-07 1006480 dns/udp answered 4
+2026-04-07 1006480 ping/icmp reply 1
+2026-04-07 1009502 dns/udp answered 4
+2026-04-07 1009502 ping/icmp reply 1
+2026-04-07 1012845 dns/udp answered 4
+2026-04-07 1012845 ping/icmp reply 1
+2026-04-08 1006478 dns/udp answered 1
+2026-04-08 1006479 dns/udp answered 1
+2026-04-08 1006480 dns/udp answered 1
+2026-04-08 1009502 dns/udp answered 1
+2026-04-08 1012845 dns/udp answered 1
+2026-04-09 1006478 dns/udp answered 1
+2026-04-09 1006479 dns/udp answered 1
+2026-04-09 1006480 dns/udp answered 1
+2026-04-09 1009502 dns/udp answered 1
+2026-04-09 1012845 dns/udp answered 1
+2026-04-10 1006478 dns/udp answered 1
+2026-04-10 1006479 dns/udp answered 1
+2026-04-10 1006480 dns/udp answered 1
+2026-04-10 1009502 dns/udp answered 1
+2026-04-10 1012845 dns/udp answered 1
+2026-04-11 1006478 dns/udp answered 1
+2026-04-11 1006478 ping/icmp reply 1
+2026-04-11 1006479 dns/udp answered 1
+2026-04-11 1006479 ping/icmp reply 1
+2026-04-11 1006480 dns/udp answered 1
+2026-04-11 1006480 ping/icmp reply 1
+2026-04-11 1009502 dns/udp answered 2
+2026-04-11 1009502 ping/icmp reply 1
+2026-04-11 1012845 dns/udp error:timeout 1
+2026-04-11 1012845 ping/icmp reply 1
+2026-04-12 1006478 dns/udp answered 1
+2026-04-12 1006479 dns/udp answered 1
+2026-04-12 1006480 dns/udp answered 1
+2026-04-12 1009502 dns/udp answered 1
+2026-04-12 1012845 dns/udp answered 1
+2026-04-13 1006478 dns/udp answered 15
+2026-04-13 1006479 dns/udp answered 15
+2026-04-13 1006480 dns/udp answered 15
+2026-04-13 1009502 dns/udp answered 15
+2026-04-13 1012845 dns/udp answered 17
+2026-04-13 1012845 dns/udp error:timeout 2
+2026-04-14 1006478 dns/udp answered 1
+2026-04-14 1006478 ping/icmp reply 1
+2026-04-14 1006479 dns/udp answered 1
+2026-04-14 1006479 ping/icmp reply 1
+2026-04-14 1006480 dns/udp answered 1
+2026-04-14 1006480 ping/icmp reply 1
+2026-04-14 1009502 dns/udp answered 1
+2026-04-14 1009502 ping/icmp reply 2
+2026-04-14 1012845 dns/udp answered 1
+2026-04-14 1012845 ping/icmp reply 1
+2026-04-15 1006478 dns/udp answered 12
+2026-04-15 1006479 dns/udp answered 12
+2026-04-15 1006480 dns/udp answered 12
+2026-04-15 1009502 dns/udp answered 12
+2026-04-15 1012845 dns/udp answered 12
+2026-04-16 1006478 dns/udp answered 21
+2026-04-16 1006479 dns/udp answered 21
+2026-04-16 1006480 dns/udp answered 21
+2026-04-16 1009502 dns/udp answered 21
+2026-04-16 1012845 dns/udp answered 21
+2026-04-17 1006478 dns/udp answered 6
+2026-04-17 1006479 dns/udp answered 6
+2026-04-17 1006480 dns/udp answered 6
+2026-04-17 1009502 dns/udp answered 6
+2026-04-17 1012845 dns/udp answered 1
+2026-04-18 1006478 dns/udp answered 1
+2026-04-18 1006478 ping/icmp reply 1
+2026-04-18 1006479 dns/udp answered 1
+2026-04-18 1006479 ping/icmp reply 1
+2026-04-18 1006480 dns/udp answered 1
+2026-04-18 1006480 ping/icmp reply 1
+2026-04-18 1009502 dns/udp answered 1
+2026-04-18 1009502 ping/icmp reply 1
+2026-04-19 1006478 dns/udp answered 1
+2026-04-19 1006479 dns/udp answered 1
+2026-04-19 1006480 dns/udp answered 1
+2026-04-19 1009502 dns/udp answered 1
+2026-04-19 1012845 dns/udp answered 1
+2026-04-20 1006478 dns/udp answered 1
+2026-04-20 1006479 dns/udp answered 1
+2026-04-20 1006480 dns/udp answered 1
+2026-04-20 1009502 dns/udp answered 1
+2026-04-20 1012845 dns/udp answered 1
+2026-04-21 1006478 dns/udp answered 1
+2026-04-21 1006478 ping/icmp reply 1
+2026-04-21 1006479 dns/udp answered 1
+2026-04-21 1006479 ping/icmp reply 1
+2026-04-21 1006480 dns/udp answered 1
+2026-04-21 1006480 ping/icmp reply 1
+2026-04-21 1009502 dns/udp answered 1
+2026-04-21 1009502 ping/icmp reply 1
+2026-04-21 1012845 dns/udp answered 1
+2026-04-21 1012845 ping/icmp reply 1
+2026-04-22 1006478 dns/udp answered 1
+2026-04-22 1006479 dns/udp answered 1
+2026-04-22 1006480 dns/udp answered 1
+2026-04-22 1009502 dns/udp answered 1
+2026-04-22 1012845 dns/udp answered 1
+2026-04-23 1006478 dns/udp answered 8
+2026-04-23 1006479 dns/udp answered 8
+2026-04-23 1006480 dns/udp answered 8
+2026-04-23 1009502 dns/udp answered 8
+2026-04-23 1012845 dns/udp answered 8
+2026-04-24 1006478 dns/udp answered 1
+2026-04-24 1006479 dns/udp answered 1
+2026-04-24 1006480 dns/udp answered 1
+2026-04-24 1009502 dns/udp answered 1
+2026-04-24 1012845 dns/udp error:timeout 1
+2026-04-25 1006478 dns/udp answered 1
+2026-04-25 1006478 ping/icmp reply 1
+2026-04-25 1006479 dns/udp answered 1
+2026-04-25 1006479 ping/icmp reply 1
+2026-04-25 1006480 dns/udp answered 1
+2026-04-25 1006480 ping/icmp reply 1
+2026-04-25 1009502 dns/udp answered 1
+2026-04-25 1009502 ping/icmp reply 1
+2026-04-25 1012845 dns/udp answered 1
+2026-04-25 1012845 ping/icmp reply 1
+2026-04-26 1001473 dns/udp answered 1
+2026-04-26 1006478 dns/udp answered 1
+2026-04-26 1006479 dns/udp answered 1
+2026-04-26 1006480 dns/udp answered 1
+2026-04-26 1009502 dns/udp answered 1
+2026-04-26 1012845 dns/udp answered 1
+2026-04-27 33233 dns/udp answered 12
+2026-04-27 1006478 dns/udp answered 12
+2026-04-27 1006479 dns/udp answered 12
+2026-04-27 1006480 dns/udp answered 12
+2026-04-27 1009502 dns/udp answered 12
+2026-04-27 1012845 dns/udp answered 12
+2026-04-28 33233 dns/udp answered 1
+2026-04-28 33233 ping/icmp reply 1
+2026-04-28 1006478 dns/udp answered 1
+2026-04-28 1006478 ping/icmp reply 1
+2026-04-28 1006479 dns/udp answered 1
+2026-04-28 1006479 ping/icmp reply 1
+2026-04-28 1006480 dns/udp answered 1
+2026-04-28 1006480 ping/icmp reply 1
+2026-04-28 1009502 dns/udp answered 1
+2026-04-28 1009502 ping/icmp reply 1
+2026-04-28 1012845 dns/udp answered 1
+2026-04-28 1012845 ping/icmp reply 1
+2026-04-29 33233 dns/udp answered 5
+2026-04-29 1006478 dns/udp answered 5
+2026-04-29 1006479 dns/udp answered 5
+2026-04-29 1006480 dns/udp answered 5
+2026-04-29 1009502 dns/udp answered 5
+2026-04-29 1012845 dns/udp answered 5
+2026-04-30 33233 dns/udp answered 1
+2026-04-30 1006478 dns/udp answered 1
+2026-04-30 1006479 dns/udp answered 1
+2026-04-30 1006480 dns/udp error:timeout 1
+2026-04-30 1009502 dns/udp answered 1
+2026-04-30 1012845 dns/udp answered 1

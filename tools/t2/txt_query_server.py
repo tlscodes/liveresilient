@@ -101,9 +101,34 @@ class TxtQueryServer:
         self._per_source: dict[str, int] = {}
         self._down: dict[str, _Down] = {}
         self._complete: "deque[tuple[str, bytes]]" = deque(maxlen=max_complete)
+        self._probes: dict[bytes, list[bytes]] = {}
         self.queries_ok = 0
         self.queries_nx = 0
         self.queries_refused = 0
+
+    # Path probe (Dart: TxtLetterProbe). Payload "PRB1" + group(8) + nonce(8);
+    # reply "PRB1" + group + FIRST logged nonce of that group + this probe's
+    # 1-based rank. The winner is decided by arrival order HERE, in this log.
+    PROBE_MAGIC = b"PRB1"
+    PROBE_ID = 8
+    MAX_PROBE_GROUPS = 4096
+
+    def _probe_reply_locked(self, payload: bytes, source: str) -> bytes | None:
+        n = self.PROBE_ID
+        if len(payload) != 4 + 2 * n or not payload.startswith(self.PROBE_MAGIC):
+            return None
+        group, nonce = payload[4:4 + n], payload[4 + n:]
+        seen = self._probes.get(group)
+        if seen is None:
+            if len(self._probes) >= self.MAX_PROBE_GROUPS:
+                self._probes.pop(next(iter(self._probes)))
+            seen = self._probes[group] = []
+        if nonce not in seen:
+            seen.append(nonce)
+        rank = seen.index(nonce) + 1
+        log.info("probe group=%s nonce=%s rank=%d winner=%s source=%s",
+                 group.hex(), nonce.hex(), rank, seen[0].hex(), source)
+        return self.PROBE_MAGIC + group + seen[0] + bytes([min(rank, 255)])
 
     def queue_down(self, session: str, payload: bytes) -> None:
         with self._lock:
@@ -275,9 +300,14 @@ class TxtQueryServer:
                 buf.last_seen = _now()
                 assembled = self._try_assemble(buf)
                 if assembled is not None:
-                    self._complete.append((parsed.session_id, assembled))
-                    if self.echo:
-                        self._queue_down_locked(parsed.session_id, assembled)
+                    reply = self._probe_reply_locked(assembled, source)
+                    if reply is not None:
+                        # A path probe, not a letter: never reaches take_complete.
+                        self._queue_down_locked(parsed.session_id, reply)
+                    else:
+                        self._complete.append((parsed.session_id, assembled))
+                        if self.echo:
+                            self._queue_down_locked(parsed.session_id, assembled)
                     self._drop_session(parsed.session_id)
             # POLL_SEQ falls through: a poll reads the queue and stores
             # nothing, so it can neither overwrite chunk 0 nor open a session.

@@ -225,6 +225,19 @@ class TxtQueryLane implements TransportChannel {
   /// The transport the next exchange will use.
   TxtQueryTransport get currentTransport => _transports[_transportIndex];
 
+  /// Every candidate, in the order the lane rotates through them.
+  List<TxtQueryTransport> get transports => _transports;
+
+  /// Makes [transport] the one the next exchange starts on — the path a
+  /// [TxtLetterProbe] saw reach the responder first. Rotation after it is
+  /// unchanged. False when [transport] is not one of this lane's.
+  bool preferTransport(TxtQueryTransport transport) {
+    final at = _transports.indexOf(transport);
+    if (at < 0) return false;
+    _transportIndex = at;
+    return true;
+  }
+
   @override
   Future<SendResult> send(List<int> payload) async {
     if (_disposed) {

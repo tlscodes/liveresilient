@@ -31,6 +31,7 @@ export 'src/resilient/local_mesh_lane.dart';
 export 'src/resilient/txt_query_wire.dart';
 export 'src/resilient/txt_query_transport.dart';
 export 'src/resilient/txt_query_lane.dart';
+export 'src/resilient/txt_letter_probe.dart';
 export 'src/resilient/resilient_fallback_transport_chain.dart';
 export 'src/resilient/poisson_pacer.dart';
 export 'src/lanes/domestic_edge_bridge_lane.dart';

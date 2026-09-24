@@ -1,0 +1,1243 @@
+{
+ "2026-03-01": {
+  "ooni_ir_uploads": 136,
+  "ooni_foreign_uploads": 1716,
+  "ooni_ir_asns": {
+   "AS52140": 134,
+   "AS31549": 2
+  },
+  "atlas_ir": 0,
+  "atlas_ir_asns": {},
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 2
+ },
+ "2026-03-02": {
+  "ooni_ir_uploads": 300,
+  "ooni_foreign_uploads": 2506,
+  "ooni_ir_asns": {
+   "AS31549": 166,
+   "AS52140": 132,
+   "AS24631": 2
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 3
+ },
+ "2026-03-03": {
+  "ooni_ir_uploads": 105,
+  "ooni_foreign_uploads": 2246,
+  "ooni_ir_asns": {
+   "AS31549": 105
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-04": {
+  "ooni_ir_uploads": 37,
+  "ooni_foreign_uploads": 2528,
+  "ooni_ir_asns": {
+   "AS44244": 32,
+   "AS31549": 5
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {
+   "AS44244": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-05": {
+  "ooni_ir_uploads": 144,
+  "ooni_foreign_uploads": 1004,
+  "ooni_ir_asns": {
+   "AS52140": 108,
+   "AS24631": 26,
+   "AS197207": 10
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS24631": 2
+  },
+  "g8888_foreign_ok": 6
+ },
+ "2026-03-06": {
+  "ooni_ir_uploads": 494,
+  "ooni_foreign_uploads": 3091,
+  "ooni_ir_asns": {
+   "AS44244": 251,
+   "AS52140": 134,
+   "AS31549": 109
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 12
+ },
+ "2026-03-07": {
+  "ooni_ir_uploads": 134,
+  "ooni_foreign_uploads": 2075,
+  "ooni_ir_asns": {
+   "AS52140": 134
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 26
+ },
+ "2026-03-08": {
+  "ooni_ir_uploads": 1183,
+  "ooni_foreign_uploads": 1736,
+  "ooni_ir_asns": {
+   "AS47262": 1049,
+   "AS52140": 134
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS47262": 8,
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 28
+ },
+ "2026-03-09": {
+  "ooni_ir_uploads": 1848,
+  "ooni_foreign_uploads": 944,
+  "ooni_ir_asns": {
+   "AS47262": 1845,
+   "AS206065": 3
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS47262": 32
+  },
+  "g8888_foreign_ok": 18
+ },
+ "2026-03-10": {
+  "ooni_ir_uploads": 2119,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS47262": 1985,
+   "AS52140": 134
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS47262": 34,
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-11": {
+  "ooni_ir_uploads": 1345,
+  "ooni_foreign_uploads": 136,
+  "ooni_ir_asns": {
+   "AS47262": 1101,
+   "AS31549": 110,
+   "AS24631": 100,
+   "AS52140": 34
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS47262": 8,
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-12": {
+  "ooni_ir_uploads": 2203,
+  "ooni_foreign_uploads": 1196,
+  "ooni_ir_asns": {
+   "AS47262": 2045,
+   "AS52140": 134,
+   "AS58224": 24
+  },
+  "atlas_ir": 6,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS47262": 34,
+   "AS58224": 2,
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-13": {
+  "ooni_ir_uploads": 1314,
+  "ooni_foreign_uploads": 1494,
+  "ooni_ir_asns": {
+   "AS47262": 1071,
+   "AS31549": 109,
+   "AS24631": 100,
+   "AS52140": 34
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS47262": 22,
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 4
+ },
+ "2026-03-14": {
+  "ooni_ir_uploads": 137,
+  "ooni_foreign_uploads": 2852,
+  "ooni_ir_asns": {
+   "AS52140": 134,
+   "AS58224": 3
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS52140": 2
+  },
+  "g8888_foreign_ok": 24
+ },
+ "2026-03-15": {
+  "ooni_ir_uploads": 275,
+  "ooni_foreign_uploads": 2174,
+  "ooni_ir_asns": {
+   "AS47262": 141,
+   "AS52140": 130,
+   "AS24631": 4
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 2
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS47262": 2
+  },
+  "g8888_foreign_ok": 20
+ },
+ "2026-03-16": {
+  "ooni_ir_uploads": 217,
+  "ooni_foreign_uploads": 735,
+  "ooni_ir_asns": {
+   "AS31549": 215,
+   "AS52140": 2
+  },
+  "atlas_ir": 0,
+  "atlas_ir_asns": {},
+  "g8888_ok_ir": {
+   "AS52140": 1
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-17": {
+  "ooni_ir_uploads": 444,
+  "ooni_foreign_uploads": 270,
+  "ooni_ir_asns": {
+   "AS31549": 444
+  },
+  "atlas_ir": 0,
+  "atlas_ir_asns": {},
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 2
+ },
+ "2026-03-18": {
+  "ooni_ir_uploads": 566,
+  "ooni_foreign_uploads": 399,
+  "ooni_ir_asns": {
+   "AS31549": 406,
+   "AS39308": 132,
+   "AS58224": 28
+  },
+  "atlas_ir": 6,
+  "atlas_ir_asns": {
+   "AS58224": 3,
+   "AS12880": 3
+  },
+  "g8888_ok_ir": {
+   "AS39308": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 4
+ },
+ "2026-03-19": {
+  "ooni_ir_uploads": 252,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS52140": 134,
+   "AS31549": 118
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-20": {
+  "ooni_ir_uploads": 311,
+  "ooni_foreign_uploads": 106,
+  "ooni_ir_asns": {
+   "AS31549": 177,
+   "AS52140": 134
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-21": {
+  "ooni_ir_uploads": 233,
+  "ooni_foreign_uploads": 27,
+  "ooni_ir_asns": {
+   "AS52140": 130,
+   "AS31549": 99,
+   "AS24631": 4
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-22": {
+  "ooni_ir_uploads": 243,
+  "ooni_foreign_uploads": 928,
+  "ooni_ir_asns": {
+   "AS52140": 134,
+   "AS197207": 108,
+   "AS31549": 1
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-23": {
+  "ooni_ir_uploads": 1119,
+  "ooni_foreign_uploads": 35,
+  "ooni_ir_asns": {
+   "AS31549": 872,
+   "AS52140": 134,
+   "AS197207": 108,
+   "AS42337": 5
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-24": {
+  "ooni_ir_uploads": 550,
+  "ooni_foreign_uploads": 376,
+  "ooni_ir_asns": {
+   "AS31549": 218,
+   "AS44244": 198,
+   "AS52140": 108,
+   "AS24631": 26
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1
+  },
+  "g8888_ok_ir": {
+   "AS24631": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-25": {
+  "ooni_ir_uploads": 594,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 460,
+   "AS52140": 132,
+   "AS24631": 2
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS31549": 2,
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-26": {
+  "ooni_ir_uploads": 247,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS52140": 134,
+   "AS31549": 109,
+   "AS197207": 4
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-27": {
+  "ooni_ir_uploads": 714,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 339,
+   "AS197207": 204,
+   "AS52140": 134,
+   "AS44244": 37
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-28": {
+  "ooni_ir_uploads": 353,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS197207": 219,
+   "AS52140": 134
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-29": {
+  "ooni_ir_uploads": 239,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS52140": 134,
+   "AS197207": 105
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-30": {
+  "ooni_ir_uploads": 660,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 311,
+   "AS197207": 215,
+   "AS52140": 134
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-03-31": {
+  "ooni_ir_uploads": 166,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS24631": 100,
+   "AS52140": 34,
+   "AS39308": 16,
+   "AS197207": 11,
+   "AS31549": 5
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS39308": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-01": {
+  "ooni_ir_uploads": 226,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS52140": 134,
+   "AS31549": 85,
+   "AS39308": 7
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-02": {
+  "ooni_ir_uploads": 724,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 543,
+   "AS52140": 134,
+   "AS51074": 47
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS6736": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-03": {
+  "ooni_ir_uploads": 477,
+  "ooni_foreign_uploads": 267,
+  "ooni_ir_asns": {
+   "AS31549": 202,
+   "AS52140": 134,
+   "AS197207": 108,
+   "AS39308": 33
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS39308": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-04": {
+  "ooni_ir_uploads": 461,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 327,
+   "AS52140": 134
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-05": {
+  "ooni_ir_uploads": 750,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 239,
+   "AS197207": 175,
+   "AS52140": 134,
+   "AS51074": 104,
+   "AS39308": 98
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS51074": 2,
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-06": {
+  "ooni_ir_uploads": 636,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 371,
+   "AS52140": 134,
+   "AS39308": 91,
+   "AS197207": 40
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-07": {
+  "ooni_ir_uploads": 533,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 242,
+   "AS197207": 118,
+   "AS24631": 102,
+   "AS39308": 39,
+   "AS52140": 32
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS39308": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-08": {
+  "ooni_ir_uploads": 143,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 141,
+   "AS39308": 2
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-09": {
+  "ooni_ir_uploads": 1286,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS44244": 360,
+   "AS197207": 338,
+   "AS39308": 276,
+   "AS52140": 134,
+   "AS25306": 99,
+   "AS31549": 79
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS39308": 4
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-10": {
+  "ooni_ir_uploads": 908,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 493,
+   "AS51074": 164,
+   "AS197207": 117,
+   "AS52140": 108,
+   "AS24631": 26
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS51074": 2,
+   "AS24631": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-11": {
+  "ooni_ir_uploads": 478,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 223,
+   "AS52140": 132,
+   "AS197207": 117,
+   "AS58224": 4,
+   "AS24631": 2
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-12": {
+  "ooni_ir_uploads": 713,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 210,
+   "AS5627": 196,
+   "AS52140": 134,
+   "AS197207": 100,
+   "AS51074": 73
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS51074": 4,
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-13": {
+  "ooni_ir_uploads": 424,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS51074": 143,
+   "AS52140": 132,
+   "AS197207": 111,
+   "AS49666": 23,
+   "AS31549": 15
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2,
+   "AS51074": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-14": {
+  "ooni_ir_uploads": 870,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 516,
+   "AS49666": 216,
+   "AS52140": 134,
+   "AS197207": 4
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS49666": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-15": {
+  "ooni_ir_uploads": 727,
+  "ooni_foreign_uploads": 914,
+  "ooni_ir_asns": {
+   "AS197207": 323,
+   "AS52140": 108,
+   "AS31549": 105,
+   "AS5627": 98,
+   "AS51074": 45,
+   "AS24631": 26
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS24631": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-16": {
+  "ooni_ir_uploads": 396,
+  "ooni_foreign_uploads": 1073,
+  "ooni_ir_asns": {
+   "AS197207": 211,
+   "AS52140": 134,
+   "AS31549": 41,
+   "AS49666": 8,
+   "AS12880": 2
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-17": {
+  "ooni_ir_uploads": 1090,
+  "ooni_foreign_uploads": 1416,
+  "ooni_ir_asns": {
+   "AS51074": 757,
+   "AS49666": 139,
+   "AS197207": 108,
+   "AS31549": 58,
+   "AS52140": 28
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS51074": 13,
+   "AS49666": 2,
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-18": {
+  "ooni_ir_uploads": 811,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS49666": 506,
+   "AS31549": 208,
+   "AS52140": 34,
+   "AS51074": 33,
+   "AS59962": 30
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2,
+   "AS49666": 4,
+   "AS51074": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-19": {
+  "ooni_ir_uploads": 443,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS31549": 143,
+   "AS52140": 134,
+   "AS197207": 108,
+   "AS51074": 31,
+   "AS49666": 27
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS51074": 2,
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS49666": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-20": {
+  "ooni_ir_uploads": 777,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS197207": 319,
+   "AS51074": 134,
+   "AS52140": 130,
+   "AS49666": 104,
+   "AS31549": 80,
+   "AS44244": 6
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS51074": 2,
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-21": {
+  "ooni_ir_uploads": 529,
+  "ooni_foreign_uploads": 33,
+  "ooni_ir_asns": {
+   "AS197207": 215,
+   "AS52140": 130,
+   "AS42337": 107,
+   "AS31549": 32,
+   "AS51074": 27,
+   "AS49666": 16
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS51074": 2
+  },
+  "g8888_foreign_ok": 2
+ },
+ "2026-04-22": {
+  "ooni_ir_uploads": 189,
+  "ooni_foreign_uploads": 138,
+  "ooni_ir_asns": {
+   "AS49666": 123,
+   "AS31549": 34,
+   "AS52140": 32
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 4
+ },
+ "2026-04-23": {
+  "ooni_ir_uploads": 672,
+  "ooni_foreign_uploads": 1759,
+  "ooni_ir_asns": {
+   "AS49666": 286,
+   "AS197207": 227,
+   "AS52140": 134,
+   "AS31549": 19,
+   "AS44244": 6
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 32
+ },
+ "2026-04-24": {
+  "ooni_ir_uploads": 689,
+  "ooni_foreign_uploads": 301,
+  "ooni_ir_asns": {
+   "AS31549": 290,
+   "AS49666": 154,
+   "AS52140": 128,
+   "AS197207": 109,
+   "AS44244": 8
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS49666": 4,
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 2
+ },
+ "2026-04-25": {
+  "ooni_ir_uploads": 409,
+  "ooni_foreign_uploads": 130,
+  "ooni_ir_asns": {
+   "AS52140": 130,
+   "AS49666": 111,
+   "AS197207": 108,
+   "AS31549": 56,
+   "AS42337": 4
+  },
+  "atlas_ir": 4,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 2
+ },
+ "2026-04-26": {
+  "ooni_ir_uploads": 611,
+  "ooni_foreign_uploads": 751,
+  "ooni_ir_asns": {
+   "AS49666": 308,
+   "AS197207": 132,
+   "AS31549": 93,
+   "AS52140": 72,
+   "AS42337": 6
+  },
+  "atlas_ir": 6,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS9147": 1,
+   "AS39074": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 12
+ },
+ "2026-04-27": {
+  "ooni_ir_uploads": 642,
+  "ooni_foreign_uploads": 135,
+  "ooni_ir_asns": {
+   "AS49666": 359,
+   "AS31549": 141,
+   "AS59441": 115,
+   "AS44244": 10,
+   "AS42337": 7,
+   "AS197207": 7
+  },
+  "atlas_ir": 6,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS9147": 1,
+   "AS39074": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {},
+  "g8888_fail_ir": {
+   "AS49666": 2
+  },
+  "g8888_foreign_ok": 2
+ },
+ "2026-04-28": {
+  "ooni_ir_uploads": 805,
+  "ooni_foreign_uploads": 2,
+  "ooni_ir_asns": {
+   "AS49666": 240,
+   "AS197207": 223,
+   "AS52140": 133,
+   "AS42337": 105,
+   "AS31549": 101,
+   "AS57218": 3
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS9147": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS49666": 1
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-29": {
+  "ooni_ir_uploads": 428,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS197207": 106,
+   "AS24631": 100,
+   "AS49666": 95,
+   "AS31549": 83,
+   "AS52140": 32,
+   "AS57218": 12
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS9147": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {
+   "AS49666": 2
+  },
+  "g8888_foreign_ok": 0
+ },
+ "2026-04-30": {
+  "ooni_ir_uploads": 453,
+  "ooni_foreign_uploads": 0,
+  "ooni_ir_asns": {
+   "AS197207": 176,
+   "AS31549": 123,
+   "AS49666": 107,
+   "AS52140": 32,
+   "AS44244": 15
+  },
+  "atlas_ir": 5,
+  "atlas_ir_asns": {
+   "AS12880": 3,
+   "AS9147": 1,
+   "AS58303": 1
+  },
+  "g8888_ok_ir": {
+   "AS52140": 2
+  },
+  "g8888_fail_ir": {},
+  "g8888_foreign_ok": 0
+ }
+}

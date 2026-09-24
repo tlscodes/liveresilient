@@ -1,0 +1,429 @@
+listed 878
+2026-03-01 AS142578 - bootstrap:dns_bogon_error 2
+2026-03-01 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 2
+2026-03-01 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 2
+2026-03-01 AS142578 8.8.4.4 answered 2
+2026-03-01 AS142578 8.8.4.4 fail:generic_timeout_error 30
+2026-03-01 AS142578 8.8.8.8 answered 2
+2026-03-01 AS142578 8.8.8.8 fail:generic_timeout_error 30
+2026-03-01 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-01 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-01 AS52140 8.8.4.4 answered 2
+2026-03-01 AS52140 8.8.8.8 answered 2
+2026-03-02 AS142578 - bootstrap:generic_timeout_error 2
+2026-03-02 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 6
+2026-03-02 AS142578 2001:4860:4860::8844 fail:host_unreachable 1
+2026-03-02 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 6
+2026-03-02 AS142578 2001:4860:4860::8888 fail:host_unreachable 1
+2026-03-02 AS142578 8.8.4.4 answered 3
+2026-03-02 AS142578 8.8.4.4 fail:generic_timeout_error 38
+2026-03-02 AS142578 8.8.8.8 answered 3
+2026-03-02 AS142578 8.8.8.8 fail:generic_timeout_error 38
+2026-03-02 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-02 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-02 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-02 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-03 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 2
+2026-03-03 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 2
+2026-03-03 AS142578 8.8.4.4 fail:generic_timeout_error 32
+2026-03-03 AS142578 8.8.8.8 fail:generic_timeout_error 32
+2026-03-04 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 26
+2026-03-04 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 26
+2026-03-04 AS142578 8.8.4.4 fail:generic_timeout_error 36
+2026-03-04 AS142578 8.8.8.8 fail:generic_timeout_error 36
+2026-03-04 AS44244 8.8.4.4 answered 2
+2026-03-04 AS44244 8.8.8.8 answered 2
+2026-03-05 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 8
+2026-03-05 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 8
+2026-03-05 AS142578 8.8.4.4 answered 8
+2026-03-05 AS142578 8.8.4.4 fail:generic_timeout_error 10
+2026-03-05 AS142578 8.8.8.8 answered 6
+2026-03-05 AS142578 8.8.8.8 fail:generic_timeout_error 12
+2026-03-05 AS24631 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-05 AS24631 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-05 AS24631 8.8.4.4 fail:generic_timeout_error 2
+2026-03-05 AS24631 8.8.8.8 fail:generic_timeout_error 2
+2026-03-06 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 6
+2026-03-06 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 6
+2026-03-06 AS142578 8.8.4.4 answered 14
+2026-03-06 AS142578 8.8.4.4 fail:generic_timeout_error 30
+2026-03-06 AS142578 8.8.8.8 answered 12
+2026-03-06 AS142578 8.8.8.8 fail:generic_timeout_error 32
+2026-03-06 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-06 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-06 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-06 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-07 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 2
+2026-03-07 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 2
+2026-03-07 AS142578 8.8.4.4 answered 26
+2026-03-07 AS142578 8.8.4.4 fail:generic_timeout_error 2
+2026-03-07 AS142578 8.8.8.8 answered 26
+2026-03-07 AS142578 8.8.8.8 fail:generic_timeout_error 2
+2026-03-07 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-07 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-07 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-07 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-08 AS142578 8.8.4.4 answered 30
+2026-03-08 AS142578 8.8.8.8 answered 28
+2026-03-08 AS142578 8.8.8.8 fail:generic_timeout_error 2
+2026-03-08 AS47262 8.8.4.4 fail:generic_timeout_error 8
+2026-03-08 AS47262 8.8.8.8 fail:generic_timeout_error 8
+2026-03-08 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-08 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-08 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-08 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-09 AS142578 8.8.4.4 answered 22
+2026-03-09 AS142578 8.8.8.8 answered 18
+2026-03-09 AS142578 8.8.8.8 fail:generic_timeout_error 4
+2026-03-09 AS47262 8.8.4.4 fail:generic_timeout_error 32
+2026-03-09 AS47262 8.8.8.8 fail:generic_timeout_error 32
+2026-03-10 AS47262 8.8.4.4 fail:generic_timeout_error 34
+2026-03-10 AS47262 8.8.8.8 fail:generic_timeout_error 34
+2026-03-10 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-10 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-10 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-10 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-11 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 2
+2026-03-11 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 2
+2026-03-11 AS142578 8.8.4.4 fail:generic_timeout_error 2
+2026-03-11 AS142578 8.8.8.8 fail:generic_timeout_error 2
+2026-03-11 AS47262 8.8.4.4 fail:generic_timeout_error 8
+2026-03-11 AS47262 8.8.8.8 fail:generic_timeout_error 8
+2026-03-11 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-11 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-11 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-11 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-12 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 18
+2026-03-12 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 18
+2026-03-12 AS142578 8.8.4.4 answered 2
+2026-03-12 AS142578 8.8.4.4 fail:generic_timeout_error 18
+2026-03-12 AS142578 8.8.8.8 fail:generic_timeout_error 20
+2026-03-12 AS47262 8.8.4.4 fail:generic_timeout_error 34
+2026-03-12 AS47262 8.8.8.8 fail:generic_timeout_error 34
+2026-03-12 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-12 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-12 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-12 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-12 AS58224 2001:4860:4860::8844 fail:generic_timeout_error 2
+2026-03-12 AS58224 2001:4860:4860::8888 fail:generic_timeout_error 2
+2026-03-12 AS58224 8.8.4.4 answered 2
+2026-03-12 AS58224 8.8.8.8 fail:generic_timeout_error 2
+2026-03-13 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 18
+2026-03-13 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 18
+2026-03-13 AS142578 8.8.4.4 answered 4
+2026-03-13 AS142578 8.8.4.4 fail:generic_timeout_error 18
+2026-03-13 AS142578 8.8.8.8 answered 4
+2026-03-13 AS142578 8.8.8.8 fail:generic_timeout_error 18
+2026-03-13 AS47262 8.8.4.4 fail:generic_timeout_error 22
+2026-03-13 AS47262 8.8.8.8 fail:generic_timeout_error 22
+2026-03-13 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-13 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-13 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-13 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-14 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 18
+2026-03-14 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 18
+2026-03-14 AS142578 8.8.4.4 answered 28
+2026-03-14 AS142578 8.8.4.4 fail:generic_timeout_error 18
+2026-03-14 AS142578 8.8.8.8 answered 24
+2026-03-14 AS142578 8.8.8.8 fail:generic_timeout_error 22
+2026-03-14 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-14 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-14 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-03-14 AS52140 8.8.8.8 fail:generic_timeout_error 2
+2026-03-15 AS142578 - bootstrap:generic_timeout_error 2
+2026-03-15 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 10
+2026-03-15 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 10
+2026-03-15 AS142578 8.8.4.4 answered 28
+2026-03-15 AS142578 8.8.4.4 fail:generic_timeout_error 8
+2026-03-15 AS142578 8.8.8.8 answered 20
+2026-03-15 AS142578 8.8.8.8 fail:generic_timeout_error 16
+2026-03-15 AS47262 8.8.4.4 fail:generic_timeout_error 2
+2026-03-15 AS47262 8.8.8.8 fail:generic_timeout_error 2
+2026-03-15 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-15 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-15 AS52140 8.8.4.4 answered 2
+2026-03-15 AS52140 8.8.8.8 answered 2
+2026-03-16 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 14
+2026-03-16 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 14
+2026-03-16 AS142578 8.8.4.4 fail:generic_timeout_error 14
+2026-03-16 AS142578 8.8.8.8 fail:generic_timeout_error 14
+2026-03-16 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 1
+2026-03-16 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 1
+2026-03-16 AS52140 8.8.4.4 answered 1
+2026-03-16 AS52140 8.8.8.8 answered 1
+2026-03-17 AS142578 8.8.4.4 answered 4
+2026-03-17 AS142578 8.8.8.8 answered 2
+2026-03-17 AS142578 8.8.8.8 fail:generic_timeout_error 2
+2026-03-18 AS142578 8.8.4.4 answered 6
+2026-03-18 AS142578 8.8.8.8 answered 4
+2026-03-18 AS142578 8.8.8.8 fail:generic_timeout_error 2
+2026-03-18 AS39308 8.8.4.4 answered 2
+2026-03-18 AS39308 8.8.8.8 answered 2
+2026-03-19 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-19 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-19 AS52140 8.8.4.4 answered 2
+2026-03-19 AS52140 8.8.8.8 answered 2
+2026-03-20 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-20 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-20 AS52140 8.8.4.4 answered 2
+2026-03-20 AS52140 8.8.8.8 answered 2
+2026-03-21 AS142578 8.8.4.4 answered 2
+2026-03-21 AS142578 8.8.8.8 fail:generic_timeout_error 2
+2026-03-21 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-21 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-21 AS52140 8.8.4.4 answered 2
+2026-03-21 AS52140 8.8.8.8 answered 2
+2026-03-22 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 14
+2026-03-22 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 14
+2026-03-22 AS142578 8.8.4.4 fail:generic_timeout_error 14
+2026-03-22 AS142578 8.8.8.8 fail:generic_timeout_error 14
+2026-03-22 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-22 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-22 AS52140 8.8.4.4 answered 2
+2026-03-22 AS52140 8.8.8.8 answered 2
+2026-03-23 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 2
+2026-03-23 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 2
+2026-03-23 AS142578 8.8.4.4 fail:generic_timeout_error 2
+2026-03-23 AS142578 8.8.8.8 fail:generic_timeout_error 2
+2026-03-23 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-23 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-23 AS52140 8.8.4.4 answered 2
+2026-03-23 AS52140 8.8.8.8 answered 2
+2026-03-24 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 4
+2026-03-24 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 4
+2026-03-24 AS142578 8.8.4.4 fail:generic_timeout_error 4
+2026-03-24 AS142578 8.8.8.8 fail:generic_timeout_error 4
+2026-03-24 AS24631 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-24 AS24631 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-24 AS24631 8.8.4.4 answered 2
+2026-03-24 AS24631 8.8.8.8 answered 2
+2026-03-25 AS31549 - bootstrap:dns_bogon_error 2
+2026-03-25 AS31549 8.8.4.4 answered 2
+2026-03-25 AS31549 8.8.8.8 answered 2
+2026-03-25 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-25 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-25 AS52140 8.8.4.4 answered 2
+2026-03-25 AS52140 8.8.8.8 answered 2
+2026-03-26 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-26 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-26 AS52140 8.8.4.4 answered 2
+2026-03-26 AS52140 8.8.8.8 answered 2
+2026-03-27 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-27 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-27 AS52140 8.8.4.4 answered 2
+2026-03-27 AS52140 8.8.8.8 answered 2
+2026-03-28 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-28 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-28 AS52140 8.8.4.4 answered 2
+2026-03-28 AS52140 8.8.8.8 answered 2
+2026-03-29 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-29 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-29 AS52140 8.8.4.4 answered 2
+2026-03-29 AS52140 8.8.8.8 answered 2
+2026-03-30 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-30 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-30 AS52140 8.8.4.4 answered 2
+2026-03-30 AS52140 8.8.8.8 answered 2
+2026-03-31 AS39308 8.8.4.4 fail:generic_timeout_error 2
+2026-03-31 AS39308 8.8.8.8 fail:generic_timeout_error 2
+2026-03-31 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-31 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-03-31 AS52140 8.8.4.4 answered 2
+2026-03-31 AS52140 8.8.8.8 answered 2
+2026-04-01 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-01 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-01 AS52140 8.8.4.4 answered 2
+2026-04-01 AS52140 8.8.8.8 answered 2
+2026-04-02 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-02 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-02 AS52140 8.8.4.4 answered 2
+2026-04-02 AS52140 8.8.8.8 answered 2
+2026-04-03 AS142578 2001:4860:4860::8844 fail:generic_timeout_error 2
+2026-04-03 AS142578 2001:4860:4860::8888 fail:generic_timeout_error 2
+2026-04-03 AS142578 8.8.4.4 fail:generic_timeout_error 2
+2026-04-03 AS142578 8.8.8.8 fail:generic_timeout_error 2
+2026-04-03 AS39308 8.8.4.4 fail:generic_timeout_error 2
+2026-04-03 AS39308 8.8.8.8 fail:generic_timeout_error 2
+2026-04-03 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-03 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-03 AS52140 8.8.4.4 answered 2
+2026-04-03 AS52140 8.8.8.8 answered 2
+2026-04-04 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-04 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-04 AS52140 8.8.4.4 answered 2
+2026-04-04 AS52140 8.8.8.8 answered 2
+2026-04-05 AS51074 - bootstrap:dns_bogon_error 2
+2026-04-05 AS51074 8.8.4.4 answered 2
+2026-04-05 AS51074 8.8.8.8 answered 2
+2026-04-05 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-05 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-05 AS52140 8.8.4.4 answered 2
+2026-04-05 AS52140 8.8.8.8 answered 2
+2026-04-06 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-06 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-06 AS52140 8.8.4.4 answered 2
+2026-04-06 AS52140 8.8.8.8 answered 2
+2026-04-07 AS39308 8.8.4.4 fail:generic_timeout_error 2
+2026-04-07 AS39308 8.8.8.8 fail:generic_timeout_error 2
+2026-04-07 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-07 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-07 AS52140 8.8.4.4 answered 2
+2026-04-07 AS52140 8.8.8.8 answered 2
+2026-04-09 AS39308 8.8.4.4 fail:generic_timeout_error 4
+2026-04-09 AS39308 8.8.8.8 fail:generic_timeout_error 4
+2026-04-09 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-09 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-09 AS52140 8.8.4.4 answered 2
+2026-04-09 AS52140 8.8.8.8 answered 2
+2026-04-10 AS24631 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-10 AS24631 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-10 AS24631 8.8.4.4 answered 2
+2026-04-10 AS24631 8.8.8.8 answered 2
+2026-04-10 AS51074 8.8.4.4 answered 2
+2026-04-10 AS51074 8.8.8.8 answered 2
+2026-04-11 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-11 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-11 AS52140 8.8.4.4 answered 2
+2026-04-11 AS52140 8.8.8.8 answered 2
+2026-04-12 AS51074 - bootstrap:dns_bogon_error 2
+2026-04-12 AS51074 8.8.4.4 answered 4
+2026-04-12 AS51074 8.8.8.8 answered 4
+2026-04-12 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-12 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-12 AS52140 8.8.4.4 answered 2
+2026-04-12 AS52140 8.8.8.8 answered 2
+2026-04-13 AS51074 - bootstrap:dns_bogon_error 2
+2026-04-13 AS51074 8.8.4.4 answered 2
+2026-04-13 AS51074 8.8.8.8 answered 2
+2026-04-13 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-13 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-13 AS52140 8.8.4.4 answered 2
+2026-04-13 AS52140 8.8.8.8 answered 2
+2026-04-14 AS49666 - bootstrap:dns_bogon_error 2
+2026-04-14 AS49666 8.8.4.4 fail:generic_timeout_error 2
+2026-04-14 AS49666 8.8.8.8 fail:generic_timeout_error 2
+2026-04-14 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-14 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-14 AS52140 8.8.4.4 answered 2
+2026-04-14 AS52140 8.8.8.8 answered 2
+2026-04-15 AS142578 8.8.4.4 fail:generic_timeout_error 12
+2026-04-15 AS142578 8.8.8.8 fail:generic_timeout_error 12
+2026-04-15 AS24631 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-15 AS24631 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-15 AS24631 8.8.4.4 answered 2
+2026-04-15 AS24631 8.8.8.8 answered 2
+2026-04-16 AS142578 8.8.4.4 fail:generic_timeout_error 16
+2026-04-16 AS142578 8.8.8.8 fail:generic_timeout_error 16
+2026-04-16 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-16 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-16 AS52140 8.8.4.4 answered 2
+2026-04-16 AS52140 8.8.8.8 answered 2
+2026-04-17 AS142578 8.8.4.4 fail:generic_timeout_error 18
+2026-04-17 AS142578 8.8.8.8 fail:generic_timeout_error 18
+2026-04-17 AS49666 8.8.4.4 answered 2
+2026-04-17 AS49666 8.8.8.8 answered 2
+2026-04-17 AS51074 - bootstrap:dns_bogon_error 4
+2026-04-17 AS51074 8.8.4.4 answered 13
+2026-04-17 AS51074 8.8.8.8 answered 13
+2026-04-17 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-17 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-17 AS52140 8.8.4.4 answered 2
+2026-04-17 AS52140 8.8.8.8 answered 2
+2026-04-18 AS49666 8.8.4.4 answered 4
+2026-04-18 AS49666 8.8.8.8 answered 4
+2026-04-18 AS51074 8.8.4.4 answered 2
+2026-04-18 AS51074 8.8.8.8 answered 2
+2026-04-18 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-18 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-18 AS52140 8.8.4.4 answered 2
+2026-04-18 AS52140 8.8.8.8 answered 2
+2026-04-19 AS49666 8.8.4.4 fail:generic_timeout_error 2
+2026-04-19 AS49666 8.8.8.8 fail:generic_timeout_error 2
+2026-04-19 AS51074 - bootstrap:dns_bogon_error 2
+2026-04-19 AS51074 8.8.4.4 answered 2
+2026-04-19 AS51074 8.8.8.8 answered 2
+2026-04-19 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-19 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-19 AS52140 8.8.4.4 answered 2
+2026-04-19 AS52140 8.8.8.8 answered 2
+2026-04-20 AS51074 8.8.4.4 answered 2
+2026-04-20 AS51074 8.8.8.8 answered 2
+2026-04-20 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-20 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-20 AS52140 8.8.4.4 answered 2
+2026-04-20 AS52140 8.8.8.8 answered 2
+2026-04-21 AS142578 - bootstrap:dns_bogon_error 2
+2026-04-21 AS142578 8.8.4.4 answered 2
+2026-04-21 AS142578 8.8.8.8 answered 2
+2026-04-21 AS51074 - bootstrap:dns_bogon_error 2
+2026-04-21 AS51074 8.8.4.4 fail:generic_timeout_error 2
+2026-04-21 AS51074 8.8.8.8 fail:generic_timeout_error 2
+2026-04-21 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-21 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-21 AS52140 8.8.4.4 answered 2
+2026-04-21 AS52140 8.8.8.8 answered 2
+2026-04-22 AS142578 - bootstrap:dns_bogon_error 4
+2026-04-22 AS142578 8.8.4.4 answered 2
+2026-04-22 AS142578 8.8.4.4 fail:generic_timeout_error 2
+2026-04-22 AS142578 8.8.8.8 answered 4
+2026-04-22 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-22 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-22 AS52140 8.8.4.4 answered 2
+2026-04-22 AS52140 8.8.8.8 answered 2
+2026-04-23 AS142578 - bootstrap:dns_bogon_error 32
+2026-04-23 AS142578 8.8.4.4 answered 32
+2026-04-23 AS142578 8.8.8.8 answered 32
+2026-04-23 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-23 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-23 AS52140 8.8.4.4 answered 2
+2026-04-23 AS52140 8.8.8.8 answered 2
+2026-04-24 AS142578 - bootstrap:dns_bogon_error 2
+2026-04-24 AS142578 8.8.4.4 fail:generic_timeout_error 6
+2026-04-24 AS142578 8.8.8.8 answered 2
+2026-04-24 AS142578 8.8.8.8 fail:generic_timeout_error 4
+2026-04-24 AS49666 - bootstrap:dns_bogon_error 2
+2026-04-24 AS49666 2001:4860:4860::8844 answered 2
+2026-04-24 AS49666 2001:4860:4860::8888 answered 2
+2026-04-24 AS49666 8.8.4.4 answered 4
+2026-04-24 AS49666 8.8.8.8 answered 4
+2026-04-24 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-24 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-24 AS52140 8.8.4.4 answered 2
+2026-04-24 AS52140 8.8.8.8 answered 2
+2026-04-25 AS142578 - bootstrap:dns_bogon_error 2
+2026-04-25 AS142578 8.8.4.4 fail:generic_timeout_error 2
+2026-04-25 AS142578 8.8.8.8 answered 2
+2026-04-25 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-25 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-25 AS52140 8.8.4.4 answered 2
+2026-04-25 AS52140 8.8.8.8 answered 2
+2026-04-26 AS142578 - bootstrap:dns_bogon_error 12
+2026-04-26 AS142578 8.8.4.4 answered 12
+2026-04-26 AS142578 8.8.8.8 answered 12
+2026-04-26 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-26 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-26 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-04-26 AS52140 8.8.8.8 answered 2
+2026-04-27 AS142578 - bootstrap:dns_bogon_error 2
+2026-04-27 AS142578 8.8.4.4 answered 2
+2026-04-27 AS142578 8.8.8.8 answered 2
+2026-04-27 AS49666 - bootstrap:dns_bogon_error 2
+2026-04-27 AS49666 8.8.4.4 fail:generic_timeout_error 2
+2026-04-27 AS49666 8.8.8.8 fail:generic_timeout_error 2
+2026-04-28 AS49666 - bootstrap:dns_bogon_error 1
+2026-04-28 AS49666 8.8.4.4 fail:connection_aborted 1
+2026-04-28 AS49666 8.8.8.8 fail:ssl_unknown_authority 1
+2026-04-28 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-28 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-28 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-04-28 AS52140 8.8.8.8 answered 2
+2026-04-29 AS49666 8.8.4.4 fail:generic_timeout_error 2
+2026-04-29 AS49666 8.8.8.8 fail:generic_timeout_error 2
+2026-04-29 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-29 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-29 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-04-29 AS52140 8.8.8.8 answered 2
+2026-04-30 AS52140 2001:4860:4860::8844 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-30 AS52140 2001:4860:4860::8888 fail:unknown_failure: INTERNAL_ERROR (local): unknown_failure: write udp [scrubbed]->[scrubbed]: address [scrubbed] non-IPv4 address 2
+2026-04-30 AS52140 8.8.4.4 fail:generic_timeout_error 2
+2026-04-30 AS52140 8.8.8.8 answered 2

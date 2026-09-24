@@ -15,7 +15,13 @@
 import 'dart:async';
 
 import 'package:adaptive_transport/adaptive_transport.dart'
-    show HttpLongPollLane, TxtQueryLane, TxtQueryWire, WebSocketRelayLane;
+    show
+        HttpLongPollLane,
+        TxtLetterProbe,
+        TxtProbeOutcome,
+        TxtQueryLane,
+        TxtQueryWire,
+        WebSocketRelayLane;
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show
         ConnectionFabric,
@@ -83,7 +89,16 @@ abstract class LetterLanes {
 
 /// The lanes one courier registered, so the valve's session id and the
 /// lane objects' dispose are reachable.
-class _FabricLanes implements LetterLanes {
+/// Lanes that can race the door's resolvers before a letter goes out
+/// (TxtLetterProbe): three resolvers, one nonce each, and the nonce our
+/// responder LOGGED first names the resolver the letter starts on.
+abstract interface class LetterDoorProbe {
+  /// Null when there is no door. The door's next exchange is already
+  /// pointed at the winner when this returns one.
+  Future<TxtProbeOutcome?> probeDoor();
+}
+
+class _FabricLanes implements LetterLanes, LetterDoorProbe {
   _FabricLanes({
     required this.fabric,
     required this.queue,
@@ -122,6 +137,17 @@ class _FabricLanes implements LetterLanes {
 
   @override
   String? get doorSessionId => valve?.lastSessionId;
+
+  @override
+  Future<TxtProbeOutcome?> probeDoor() async {
+    final lane = valve;
+    if (lane == null) return null;
+    final probe = TxtLetterProbe.forLane(lane);
+    final outcome = await probe.run();
+    final w = outcome.winnerIndex;
+    if (w != null) lane.preferTransport(probe.transports[w]);
+    return outcome;
+  }
 
   @override
   Future<void> dispose() async {
@@ -436,6 +462,21 @@ class LetterCourier {
       // now. Parked here, not offered to the fabric, so the one deliver
       // it gets is the watch's.
       return _park(letter);
+    }
+    if (best == ResilientLaneIds.txtQuery && lanes is LetterDoorProbe) {
+      // The door carries it: race three resolvers first. The winner is the
+      // nonce our responder logged first, not the first answer home; none
+      // logged means none of them reaches us now, so the letter waits.
+      _set(LetterState.queued, '${payload.length} B · racing 3 resolvers');
+      final probe = await (lanes as LetterDoorProbe).probeDoor();
+      if (probe != null) {
+        note(
+          'probe group=${probe.groupId} winner=${probe.winnerIndex} '
+          '${probe.answers.map((a) => '${a.label}:${a.nonce}:'
+              '${a.rank ?? (a.error == null ? '-' : a.error.runtimeType)}').join(' ')}',
+        );
+        if (!probe.reachedServer) return _park(letter);
+      }
     }
     _set(
       LetterState.queued,
