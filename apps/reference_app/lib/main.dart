@@ -43,6 +43,7 @@ import 'src/letter_composer.dart';
 import 'src/letter_courier.dart';
 import 'src/letter_ledger.dart';
 import 'src/letter_queue.dart';
+import 'src/letter_rung_ladder.dart';
 import 'src/startup_manifest.dart';
 import 'src/theme.dart';
 import 'src/ui/conversations_screen.dart';
@@ -217,6 +218,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       role: CallRole.initiator,
     ),
     queue: LetterQueue(FileLetterQueueStore(letterQueueDirectory())),
+    // The startup ladder: the rung (and, under the door, the resolver)
+    // that last delivered on THIS network is tried first, next open.
+    // Null intelligence (widget tests) just means no resolver — the
+    // ladder then keys everything under one 'unknown' bucket.
+    networkResolver: widget.intelligence?.hub.resolver,
+    rungLadder: LetterRungLadder.disk(),
+    doorResolverLadder: DoorResolverLadder.disk(),
   );
 
   late final ChatDemoController _chat = ChatDemoController(

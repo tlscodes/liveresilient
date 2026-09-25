@@ -21,10 +21,13 @@ import 'package:connection_orchestrator/connection_orchestrator.dart'
         ResilientLaneEndpoints,
         ResilientLaneIds;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:reference_app/src/intelligence/disk_json_storage.dart';
+import 'package:reference_app/src/intelligence/network_name_resolver.dart';
 import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_courier.dart';
 import 'package:reference_app/src/letter_parts.dart';
 import 'package:reference_app/src/letter_queue.dart';
+import 'package:reference_app/src/letter_rung_ladder.dart';
 
 const fast = LetterCourierBudget(
   select: Duration(milliseconds: 300),
@@ -118,6 +121,26 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
+  test('wired the way main.dart wires it, a letter with no ladder history '
+      'does not break', () async {
+    final courier = LetterCourier(
+      endpoints: deadLanes,
+      budget: fast,
+      valveFailThreshold: 1,
+      networkResolver: const _FixedNetwork('test-net'),
+      rungLadder: LetterRungLadder(_MemoryStorage()),
+      doorResolverLadder: DoorResolverLadder(_MemoryStorage()),
+    );
+
+    final state = await courier.send(
+      Uint8List.fromList('hello'.codeUnits),
+      kind: 'typed',
+    );
+
+    expect(state, LetterState.queued, reason: courier.notes.value.join('\n'));
+    await courier.dispose();
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
   test(
     'a second Send while one is in flight is ignored, not stacked',
     () async {
@@ -135,6 +158,71 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
+
+  group('the startup rung ladder (scripted lanes, no network)', () {
+    test('the previous winner is tried alone, overriding the fabric — '
+        'and the win is stored again', () async {
+      final lanes = ScriptedLanes()
+        ..liveUp =
+            true // fabric's OWN pick would be wss
+        ..doorUp = true; // the door also has a path right now
+      final store = _MemoryStorage();
+      final ladder = LetterRungLadder(store);
+      await ladder.record(
+        'test-net',
+        const LetterRungAttempt(
+          rung: ResilientLaneIds.txtQuery,
+          outcome: LetterRungOutcome.delivered,
+        ),
+      );
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        networkResolver: const _FixedNetwork('test-net'),
+        rungLadder: ladder,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.arrived);
+      // wss was the fabric's top rank; the door won anyway.
+      expect(courier.status.value!.detail, contains('through the door'));
+      expect(
+        await ladder.previousWinner('test-net'),
+        ResilientLaneIds.txtQuery,
+      );
+      await courier.dispose();
+    });
+
+    test(
+      'all three lanes dead: the letter queues and no rung is stored',
+      () async {
+        final lanes = ScriptedLanes(); // liveUp/doorUp both false: all dead
+        final ladder = LetterRungLadder(_MemoryStorage());
+        final courier = LetterCourier(
+          endpoints: () => throw StateError('scripted lanes, never assembled'),
+          budget: fast,
+          openLanes: () async => lanes,
+          networkResolver: const _FixedNetwork('test-net'),
+          rungLadder: ladder,
+        );
+
+        final state = await courier.send(
+          Uint8List.fromList([1, 2, 3]),
+          kind: 'typed',
+        );
+
+        expect(state, LetterState.queued);
+        expect(await ladder.previousWinner('test-net'), isNull);
+        expect(lanes.delivered, isEmpty); // never even offered to the fabric
+        await courier.dispose();
+      },
+    );
+  });
 
   group('the durable queue behind a down door (scripted lanes, no network)', () {
     test(
@@ -839,4 +927,27 @@ class Rig {
   final ManualClock clock = ManualClock();
   final MemoryLetterQueueStore store;
   late final LetterCourier courier;
+}
+
+/// Always the same coarse label — the ladder's memory keyed on one
+/// network, deterministically, with no hardware probe.
+class _FixedNetwork implements NetworkNameResolver {
+  const _FixedNetwork(this.label);
+  final String label;
+
+  @override
+  Future<String> resolveNetworkLabel() async => label;
+}
+
+/// In-memory [PersistentStorage] so the ladder's tests need no disk.
+class _MemoryStorage implements PersistentStorage {
+  Map<String, Object?> data = {};
+
+  @override
+  Future<Map<String, Object?>> load() async => Map<String, Object?>.from(data);
+
+  @override
+  Future<void> save(Map<String, Object?> data) async {
+    this.data = Map<String, Object?>.from(data);
+  }
 }

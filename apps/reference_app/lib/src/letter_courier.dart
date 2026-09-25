@@ -36,10 +36,12 @@ import 'package:device_link/device_link.dart'
     show DtnBundleQueue, LinkMessagePriority;
 import 'package:flutter/foundation.dart';
 
+import 'intelligence/network_name_resolver.dart' show NetworkNameResolver;
 import 'letter_composer.dart';
 import 'letter_parts.dart';
 import 'letter_ledger.dart';
 import 'letter_queue.dart';
+import 'letter_rung_ladder.dart';
 
 /// How long each phase may take. All finite: a letter never spins.
 class LetterCourierBudget {
@@ -105,6 +107,8 @@ class _FabricLanes implements LetterLanes, LetterDoorProbe {
     this.wss,
     this.longPoll,
     this.valve,
+    this.doorResolverLadder,
+    this.networkResolver,
   });
 
   final ConnectionFabric fabric;
@@ -112,6 +116,15 @@ class _FabricLanes implements LetterLanes, LetterDoorProbe {
   final WebSocketRelayLane? wss;
   final HttpLongPollLane? longPoll;
   final TxtQueryLane? valve;
+
+  /// The valve's own resolvers' win/attempt memory, one level under the
+  /// courier's top-level rung ladder. Null keeps every probe a full,
+  /// parallel race of every candidate — today's behaviour.
+  final DoorResolverLadder? doorResolverLadder;
+
+  /// Same network label the top-level ladder uses, so both levels agree
+  /// on which place's memory they are reading.
+  final NetworkNameResolver? networkResolver;
 
   @override
   Future<void> refresh() => fabric.refresh();
@@ -142,10 +155,29 @@ class _FabricLanes implements LetterLanes, LetterDoorProbe {
   Future<TxtProbeOutcome?> probeDoor() async {
     final lane = valve;
     if (lane == null) return null;
-    final probe = TxtLetterProbe.forLane(lane);
+    var probe = TxtLetterProbe.forLane(lane);
+    final ladder = doorResolverLadder;
+    String? label;
+    if (ladder != null) {
+      label =
+          await (networkResolver?.resolveNetworkLabel() ??
+              Future.value('unknown'));
+      final history = await ladder.history(label!);
+      if (history.isNotEmpty) {
+        final previous = await ladder.previousWinner(label);
+        probe = _narrowDoorProbe(probe, history, previous);
+      }
+    }
     final outcome = await probe.run();
     final w = outcome.winnerIndex;
     if (w != null) lane.preferTransport(probe.transports[w]);
+    if (ladder != null && label != null) {
+      await ladder.record(
+        label,
+        asked: [for (final t in probe.transports) t.label],
+        winner: w == null ? null : probe.transports[w].label,
+      );
+    }
     return outcome;
   }
 
@@ -156,6 +188,37 @@ class _FabricLanes implements LetterLanes, LetterDoorProbe {
     await longPoll?.dispose();
     await valve?.dispose();
   }
+}
+
+/// History-bearing network: race the previous winner and its strongest
+/// remaining competitor only, "the rest, no". A previous winner absent
+/// from today's candidate list (the resolver set changed since) falls
+/// back to the full race, unchanged.
+TxtLetterProbe _narrowDoorProbe(
+  TxtLetterProbe probe,
+  Map<String, ({int wins, int attempts})> history,
+  String? previousWinner,
+) {
+  final all = probe.transports;
+  final prevIndex = previousWinner == null
+      ? -1
+      : all.indexWhere((t) => t.label == previousWinner);
+  if (prevIndex < 0) return probe;
+  double weight(int i) {
+    final h = history[all[i].label];
+    return (h == null || h.attempts == 0) ? -1 : h.wins / h.attempts;
+  }
+
+  var bestRival = -1;
+  for (var i = 0; i < all.length; i++) {
+    if (i == prevIndex) continue;
+    if (bestRival == -1 || weight(i) > weight(bestRival)) bestRival = i;
+  }
+  return TxtLetterProbe(
+    domain: probe.domain,
+    transports: [all[prevIndex], if (bestRival >= 0) all[bestRival]],
+    timeout: probe.timeout,
+  );
 }
 
 /// Carries letters over the app's own fallback lanes and reports each
@@ -170,6 +233,9 @@ class LetterCourier {
     LetterLedger? ledger,
     LetterQueue? queue,
     this._openLanes,
+    this._networkResolver,
+    this._rungLadder,
+    this._doorResolverLadder,
     Future<void> Function(Duration)? wait,
     Timer Function(Duration period, void Function() tick)? schedulePeriodic,
   }) : _now = now ?? DateTime.now,
@@ -198,6 +264,19 @@ class LetterCourier {
 
   /// A test's scripted lanes; null builds the fabric from [endpoints].
   final Future<LetterLanes?> Function()? _openLanes;
+
+  /// Names the current network so [_rungLadder]'s memory is per-place,
+  /// not global. Null keeps the ladder inert even when one is given.
+  final NetworkNameResolver? _networkResolver;
+
+  /// The rung that last delivered on this network, tried alone before
+  /// the fabric's own ranking; null keeps today's behaviour unchanged —
+  /// whichever lane the fabric ranks first, every time.
+  final LetterRungLadder? _rungLadder;
+
+  /// The DNS valve's own resolver ladder, one level under [_rungLadder];
+  /// null keeps every door probe a full race of every resolver.
+  final DoorResolverLadder? _doorResolverLadder;
 
   /// The select loop's pause and the watch's period, both injectable so
   /// tests advance a clock instead of sleeping.
@@ -308,6 +387,8 @@ class LetterCourier {
       wss: wss,
       longPoll: longPoll,
       valve: valve,
+      doorResolverLadder: _doorResolverLadder,
+      networkResolver: _networkResolver,
     );
   }
 
@@ -332,6 +413,16 @@ class LetterCourier {
 
   static bool _hasPath(LaneStatus lane) =>
       lane.eligible && lane.score > _deadAtOrBelow;
+
+  /// Whether [laneId] specifically has a path right now — the previous
+  /// winner's own check, independent of which lane the fabric currently
+  /// ranks first.
+  static bool _hasPathFor(ConnectivitySnapshot s, String laneId) {
+    for (final lane in s.lanes) {
+      if (lane.id == laneId) return _hasPath(lane);
+    }
+    return false;
+  }
 
   /// A lane that works right now: eligible, ranked first, has a path.
   static bool _bestIsUsable(ConnectivitySnapshot s) {
@@ -432,9 +523,23 @@ class LetterCourier {
     }
     _set(LetterState.queued, '${payload.length} B ($kind) · probing the door');
 
-    // Select: refresh until some lane ranks first with a positive score.
-    // A live lane wins as soon as it does; on the rig the two dead WAN
-    // lanes score negative and the valve overtakes them after its probe.
+    // The ladder's memory: the rung that last delivered on THIS network,
+    // tried alone before the fabric's own ranking. Null resolver/ladder
+    // (the default) keeps today's behaviour: whichever lane the fabric
+    // ranks first, every time.
+    final ladder = _rungLadder;
+    final networkLabel = ladder == null
+        ? null
+        : await (_networkResolver?.resolveNetworkLabel() ??
+              Future.value('unknown'));
+    final previousWinner = ladder == null || networkLabel == null
+        ? null
+        : await ladder.previousWinner(networkLabel);
+
+    // Select: refresh until the previous winner has a path again, or
+    // some lane ranks first with a positive score. A live lane wins as
+    // soon as it does; on the rig the two dead WAN lanes score negative
+    // and the valve overtakes them after its probe.
     final selectUntil = _now().add(budget.select);
     var refreshes = 0;
     ConnectivitySnapshot s;
@@ -442,14 +547,26 @@ class LetterCourier {
       await lanes.refresh();
       refreshes++;
       s = _snap(lanes);
-      if (_bestIsUsable(s) || !_now().isBefore(selectUntil)) break;
+      final winnerReady =
+          previousWinner != null && _hasPathFor(s, previousWinner);
+      if (winnerReady || _bestIsUsable(s) || !_now().isBefore(selectUntil)) {
+        break;
+      }
       await _wait(budget.refreshEvery);
     }
     if (!_liveCallReachable(s)) {
       _set(LetterState.liveCallUnavailable, _scores(s));
     }
-    final best = s.bestLaneId;
-    note('selected best=$best refreshes=$refreshes ${_scores(s)}');
+    final winnerReady =
+        previousWinner != null && _hasPathFor(s, previousWinner);
+    final best = winnerReady
+        ? previousWinner
+        : (_bestIsUsable(s) ? s.bestLaneId : null);
+    note(
+      'selected best=$best refreshes=$refreshes '
+      '${winnerReady ? 'previous winner · ' : ''}${_scores(s)}',
+    );
+    final attemptStart = _now();
     final letter = QueuedLetter(
       id: 'letter-${_now().millisecondsSinceEpoch}',
       bytes: payload,
@@ -457,12 +574,13 @@ class LetterCourier {
       queuedAt: _now(),
       duration: duration,
     );
-    if (!_bestIsUsable(s)) {
+    if (best == null) {
       // Every call lane negative and the door down: nothing to carry it
       // now. Parked here, not offered to the fabric, so the one deliver
       // it gets is the watch's.
       return _park(letter);
     }
+    String? doorResolver;
     if (best == ResilientLaneIds.txtQuery && lanes is LetterDoorProbe) {
       // The door carries it: race three resolvers first. The winner is the
       // nonce our responder logged first, not the first answer home; none
@@ -471,14 +589,60 @@ class LetterCourier {
       final probe = await (lanes as LetterDoorProbe).probeDoor();
       if (probe != null) {
         note('probe ${probe.describe()}');
-        if (!probe.reachedServer) return _park(letter);
+        if (!probe.reachedServer) {
+          _recordRung(
+            networkLabel,
+            ladder,
+            best,
+            latencyMs: _now().difference(attemptStart).inMilliseconds,
+            delivered: false,
+          );
+          return _park(letter);
+        }
+        doorResolver = probe.answers[probe.winnerIndex!].label;
       }
     }
     _set(
       LetterState.queued,
       '${payload.length} B · $chunks chunks · via ${_short(best)}',
     );
-    return _carry(lanes, letter, best, fromQueue: false);
+    final result = await _carry(lanes, letter, best, fromQueue: false);
+    _recordRung(
+      networkLabel,
+      ladder,
+      best,
+      resolver: doorResolver,
+      latencyMs: _now().difference(attemptStart).inMilliseconds,
+      delivered: result == LetterState.arrived,
+    );
+    return result;
+  }
+
+  /// Appends one row to [ladder]'s history for [networkLabel] and, only
+  /// on [delivered], stores [rung] as the next Send's previous winner. A
+  /// no-op when the ladder (or its network label) is absent.
+  void _recordRung(
+    String? networkLabel,
+    LetterRungLadder? ladder,
+    String rung, {
+    String? resolver,
+    int? latencyMs,
+    required bool delivered,
+  }) {
+    if (ladder == null || networkLabel == null) return;
+    unawaited(
+      ladder.record(
+        networkLabel,
+        LetterRungAttempt(
+          rung: rung,
+          resolver: resolver,
+          latencyMs: latencyMs,
+          outcome: delivered
+              ? LetterRungOutcome.delivered
+              : LetterRungOutcome.queued,
+        ),
+      ),
+    );
   }
 
   /// One bounded deliver and its verdict. A letter from the queue leaves
