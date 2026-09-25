@@ -11,7 +11,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:adaptive_transport/adaptive_transport.dart'
-    show HostPort, TxtQueryLane, TxtQueryValve;
+    show HostPort, TxtProbeAnswer, TxtProbeOutcome, TxtQueryLane, TxtQueryValve;
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show
         CallHistoryStore,
@@ -29,6 +29,7 @@ import 'package:reference_app/src/letter_courier.dart';
 import 'package:reference_app/src/letter_parts.dart';
 import 'package:reference_app/src/letter_queue.dart';
 import 'package:reference_app/src/letter_rung_ladder.dart';
+import 'package:reference_app/src/letter_status_ladder.dart';
 
 const fast = LetterCourierBudget(
   select: Duration(milliseconds: 300),
@@ -254,6 +255,65 @@ void main() {
         await courier.dispose();
       },
     );
+  });
+
+  group('the six-rung status ladder on the banner', () {
+    test('normal reaches the arrived banner when both non-door lanes are '
+        'healthy', () async {
+      final lanes = ScriptedLanes()
+        ..liveUp = true
+        ..httpsUp = true;
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.arrived);
+      expect(courier.ladderStatus.value?.rung, LetterLadderRung.normal);
+      expect(courier.status.value!.detail, contains('normal'));
+      await courier.dispose();
+    });
+
+    test('closed reaches the queued banner — queue and next probe only, '
+        'never a second probe', () async {
+      var probeCalls = 0;
+      final lanes = DoorProbingLanes()
+        ..doorUp = true
+        ..answer = () {
+          probeCalls++;
+          return const TxtProbeOutcome(
+            groupId: 'g',
+            answers: [
+              TxtProbeAnswer(index: 0, label: 'udp53:8.8.8.8:53', nonce: 'aa'),
+            ],
+            winnerIndex: null,
+          );
+        };
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.queued);
+      expect(courier.ladderStatus.value?.rung, LetterLadderRung.closed);
+      expect(courier.status.value!.detail, contains('closed'));
+      expect(courier.status.value!.detail, contains('waiting'));
+      expect(courier.status.value!.detail, contains('next probe in'));
+      expect(probeCalls, 1); // not a scanner: exactly this Send's probe
+      await courier.dispose();
+    });
   });
 
   group('the durable queue behind a down door (scripted lanes, no network)', () {
@@ -780,6 +840,11 @@ class ScriptedLanes implements LetterLanes {
   bool liveUp = false;
   bool doorUp = false;
 
+  /// Defaults dead like every other test expects; only the new ladder
+  /// tests raise it, to reach a snapshot where BOTH non-door lanes are
+  /// healthy (the ladder's "normal" rung).
+  bool httpsUp = false;
+
   /// The door answers but has one reply's worth of health: the fabric
   /// scores it 0.01 − 0.15 = −0.14, still above every dead lane.
   bool doorFresh = false;
@@ -819,10 +884,10 @@ class ScriptedLanes implements LetterLanes {
       eligible: true,
       score: liveUp ? 0.9 : -1.05,
     );
-    const https = LaneStatus(
+    final https = LaneStatus(
       id: ResilientLaneIds.httpLongPoll,
       eligible: true,
-      score: -1.10,
+      score: httpsUp ? 0.9 : -1.10,
     );
     final door = LaneStatus(
       id: ResilientLaneIds.txtQuery,
@@ -880,6 +945,16 @@ class ScriptedLanes implements LetterLanes {
 
   @override
   Future<void> dispose() async {}
+}
+
+/// A [ScriptedLanes] that also answers door probes — a SEPARATE class so
+/// every existing test (which relies on `lanes is LetterDoorProbe` being
+/// false) is untouched.
+class DoorProbingLanes extends ScriptedLanes implements LetterDoorProbe {
+  TxtProbeOutcome? Function()? answer;
+
+  @override
+  Future<TxtProbeOutcome?> probeDoor() async => answer?.call();
 }
 
 /// Time the test drives: [wait] advances the clock instead of sleeping,

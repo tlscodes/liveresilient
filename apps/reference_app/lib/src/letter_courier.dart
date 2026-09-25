@@ -43,6 +43,7 @@ import 'package:flutter/foundation.dart';
 import 'intelligence/network_name_resolver.dart' show NetworkNameResolver;
 import 'letter_composer.dart';
 import 'letter_parts.dart';
+import 'letter_status_ladder.dart';
 import 'letter_ledger.dart';
 import 'letter_queue.dart';
 import 'letter_rung_ladder.dart';
@@ -335,10 +336,40 @@ class LetterCourier {
   final ValueNotifier<ConnectivitySnapshot?> laneSnapshot =
       ValueNotifier<ConnectivitySnapshot?>(null);
 
+  /// The letter path's own six-rung reading (letter_status_ladder.dart),
+  /// from this same snapshot and the door probe's own outcome. Read-only:
+  /// updating it never runs a probe, never arms a timer — "closed" is a
+  /// report of the existing queue and existing next-probe schedule, not
+  /// a reason to make either happen sooner.
+  final ValueNotifier<LetterLadderStatus?> ladderStatus =
+      ValueNotifier<LetterLadderStatus?>(null);
+
   ConnectivitySnapshot _snap(LetterLanes source) {
     final s = source.snapshot;
     if (!_disposed) laneSnapshot.value = s;
     return s;
+  }
+
+  /// Recomputes [ladderStatus] from [s] and, when the door raced this
+  /// round, [probe]. [_doorResolverLadder]'s history is read, never
+  /// written, here.
+  Future<void> _updateLadder(
+    ConnectivitySnapshot s, {
+    TxtProbeOutcome? probe,
+    String? networkLabel,
+  }) async {
+    final doorLadder = _doorResolverLadder;
+    final history = (doorLadder == null || networkLabel == null)
+        ? const <String, ({int wins, int attempts})>{}
+        : await doorLadder.history(networkLabel);
+    if (_disposed) return;
+    ladderStatus.value = classifyLetterLadder(
+      snapshot: s,
+      lastProbe: probe,
+      doorHistory: history,
+      queueWaiting: queue.waiting,
+      nextProbeIn: budget.refreshEvery,
+    );
   }
 
   LetterLanes? _lanes;
@@ -608,6 +639,7 @@ class LetterCourier {
       queuedAt: _now(),
       duration: duration,
     );
+    await _updateLadder(s, networkLabel: networkLabel);
     if (best == null) {
       // Every call lane negative and the door down: nothing to carry it
       // now. Parked here, not offered to the fabric, so the one deliver
@@ -623,6 +655,7 @@ class LetterCourier {
       final probe = await (lanes as LetterDoorProbe).probeDoor();
       if (probe != null) {
         note('probe ${probe.describe()}');
+        await _updateLadder(s, probe: probe, networkLabel: networkLabel);
         if (!probe.reachedServer) {
           final rttMs = _now().difference(attemptStart).inMilliseconds;
           _recordRung(
@@ -816,11 +849,13 @@ class LetterCourier {
         final throughDoor = best == ResilientLaneIds.txtQuery;
         if (fromQueue) await queue.remove(letter.id);
         _record(letter, best, throughDoor ? session : null);
+        final rung = ladderStatus.value?.rung;
         _set(
           LetterState.arrived,
-          throughDoor && session != null
-              ? '${payload.length} B · through the door · session $session'
-              : '${payload.length} B · via ${_short(best)}',
+          (throughDoor && session != null
+                  ? '${payload.length} B · through the door · session $session'
+                  : '${payload.length} B · via ${_short(best)}') +
+              (rung == null ? '' : ' · ${rung.name}'),
         );
         return LetterState.arrived;
       case DeliveryOutcome.queuedForLater:
@@ -976,10 +1011,18 @@ class LetterCourier {
       );
       return LetterState.notDelivered;
     }
+    final rung = ladderStatus.value?.rung;
+    // Rung 6 (closed) alone names the next probe — a reading of the
+    // watch's own schedule, never a reason to run one sooner.
+    final rungNote = rung == null
+        ? ''
+        : rung == LetterLadderRung.closed
+        ? ' · closed · next probe in ${budget.refreshEvery.inSeconds}s'
+        : ' · ${rung.name}';
     _set(
       LetterState.queued,
       '${letter.bytes.length} B · door down · parked in the queue · '
-      '${queue.waiting} waiting',
+      '${queue.waiting} waiting$rungNote',
     );
     _startWatch();
     return LetterState.queued;
@@ -1113,6 +1156,7 @@ class LetterCourier {
     notes.dispose();
     busy.dispose();
     laneSnapshot.dispose();
+    ladderStatus.dispose();
     ledger.dispose();
     queue.dispose();
   }
