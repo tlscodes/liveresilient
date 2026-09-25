@@ -18,6 +18,7 @@ import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_courier.dart';
 import 'package:reference_app/src/letter_ledger.dart';
 import 'package:reference_app/src/letter_queue.dart';
+import 'package:reference_app/src/letter_status_ladder.dart';
 import 'package:reference_app/src/ui/conversations_screen.dart';
 import 'package:reference_app/src/ui/letter_thread.dart';
 import 'package:reference_app/src/ui/network_truth.dart';
@@ -296,6 +297,34 @@ void main() {
       expect(find.byKey(const ValueKey('letter-queued-0')), findsNothing);
       expect(find.byKey(const ValueKey('letter-bubble-1')), findsOneWidget);
       expect(find.text('still waiting'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'the thread names the letter\'s own rung under the lane line, the '
+    'same word Director says',
+    (tester) async {
+      final ledger = LetterLedger();
+      addTearDown(ledger.dispose);
+      final ladder = ValueNotifier<LetterLadderStatus?>(
+        const LetterLadderStatus(LetterLadderRung.closed),
+      );
+      addTearDown(ladder.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppThemeData(Brightness.light),
+          home: LetterThreadPage(ledger: ledger, ladder: ladder),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('letter-thread-rung')), findsOneWidget);
+      expect(find.text('closed'), findsOneWidget);
+
+      // The rung moves with the courier's own updates, live on screen.
+      ladder.value = const LetterLadderStatus(LetterLadderRung.normal);
+      await tester.pumpAndSettle();
+      expect(find.text('normal'), findsOneWidget);
+      expect(find.text('closed'), findsNothing);
     },
   );
 

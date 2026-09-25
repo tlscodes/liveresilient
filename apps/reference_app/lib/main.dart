@@ -609,6 +609,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ledger: _letterCourier.ledger,
             pending: _letterCourier.queue.pending,
             lanes: _letterCourier.laneSnapshot,
+            ladder: _letterCourier.ladderStatus,
           ),
         ),
       );

@@ -11,21 +11,28 @@ import 'package:flutter/material.dart';
 
 import '../letter_ledger.dart';
 import '../letter_queue.dart';
+import '../letter_status_ladder.dart';
 
 /// One page over the ledger, the queue and the fabric's last snapshot,
-/// pushed from the Chats row. [pending] and [lanes] are optional so a host
-/// with only a ledger still gets the records.
+/// pushed from the Chats row. [pending], [lanes] and [ladder] are optional
+/// so a host with only a ledger still gets the records.
 class LetterThreadPage extends StatelessWidget {
   const LetterThreadPage({
     super.key,
     required this.ledger,
     this.pending,
     this.lanes,
+    this.ladder,
   });
 
   final LetterLedger ledger;
   final ValueListenable<List<QueuedLetter>>? pending;
   final ValueListenable<ConnectivitySnapshot?>? lanes;
+
+  /// Same source the Director's own sentence reads — see
+  /// [LetterThread]'s doc comment for why this is a second line, not a
+  /// parsed piece of the lane line above it.
+  final ValueListenable<LetterLadderStatus?>? ladder;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -40,11 +47,17 @@ class LetterThreadPage extends StatelessWidget {
                 ValueListenableBuilder<ConnectivitySnapshot?>(
                   valueListenable:
                       lanes ?? const _Always<ConnectivitySnapshot?>(null),
-                  builder: (context, snapshot, _) => LetterThread(
-                    records: records,
-                    pending: parked,
-                    lanes: snapshot,
-                  ),
+                  builder: (context, snapshot, _) =>
+                      ValueListenableBuilder<LetterLadderStatus?>(
+                        valueListenable:
+                            ladder ?? const _Always<LetterLadderStatus?>(null),
+                        builder: (context, ladderStatus, _) => LetterThread(
+                          records: records,
+                          pending: parked,
+                          lanes: snapshot,
+                          ladder: ladderStatus,
+                        ),
+                      ),
                 ),
           ),
     ),
@@ -88,17 +101,25 @@ String laneStateLine(ConnectivitySnapshot? s) {
 
 /// The records as bubbles, ours and on the end side, newest at the bottom,
 /// then the parked ones, greyed, each saying it waits for the door.
+///
+/// The rung line under the lane line reads [ladder] directly — the same
+/// [LetterLadderStatus] the courier publishes and the Director's own
+/// sentence narrates — rather than being parsed out of a status string,
+/// so the word on screen here can never drift from the word Director
+/// says.
 class LetterThread extends StatelessWidget {
   const LetterThread({
     super.key,
     required this.records,
     this.pending = const [],
     this.lanes,
+    this.ladder,
   });
 
   final List<LetterRecord> records;
   final List<QueuedLetter> pending;
   final ConnectivitySnapshot? lanes;
+  final LetterLadderStatus? ladder;
 
   @override
   Widget build(BuildContext context) {
@@ -109,13 +130,25 @@ class LetterThread extends StatelessWidget {
       itemCount: 1 + records.length + pending.length,
       itemBuilder: (context, index) {
         if (index == 0) {
+          final rung = ladder?.rung;
           return Padding(
             key: const Key('letter-thread-lanes'),
             padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              laneStateLine(lanes),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelSmall,
+            child: Column(
+              children: [
+                Text(
+                  laneStateLine(lanes),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall,
+                ),
+                if (rung != null)
+                  Text(
+                    rung.bannerName,
+                    key: const Key('letter-thread-rung'),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall,
+                  ),
+              ],
             ),
           );
         }
