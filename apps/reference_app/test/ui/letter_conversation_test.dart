@@ -325,6 +325,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('normal'), findsOneWidget);
       expect(find.text('closed'), findsNothing);
+
+      // Every rung, top to bottom: each word shows alone, the one before
+      // it is gone.
+      String? previous;
+      for (final rung in LetterLadderRung.values) {
+        ladder.value = LetterLadderStatus(rung);
+        await tester.pumpAndSettle();
+        expect(find.text(rung.bannerName), findsOneWidget, reason: '$rung');
+        if (previous != null && previous != rung.bannerName) {
+          expect(find.text(previous), findsNothing, reason: '$rung');
+        }
+        previous = rung.bannerName;
+      }
+      expect(
+        LetterLadderRung.values.map((r) => r.bannerName).toSet(),
+        hasLength(LetterLadderRung.values.length),
+      );
     },
   );
 
