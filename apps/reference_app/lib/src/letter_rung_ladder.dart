@@ -176,13 +176,20 @@ class DoorResolverLadder {
     return value is String ? value : null;
   }
 
-  /// Chooses at most 2 of [all] to race when history exists: the
-  /// previous winner (by [previousWinner]) and its strongest remaining
-  /// competitor by wins/attempts — "the rest, no". Returns [all]
-  /// unchanged when [previousWinner] is absent from today's candidates
-  /// (the resolver set changed since); the caller checks separately
-  /// whether [history] is empty at all (the empty-history case still
-  /// races everything, unchanged).
+  /// The previous winner still always races (this rung's whole point is
+  /// previous-winner-first stability). Its rivals are ranked by
+  /// win/attempts and raced in that order — highest first — and a rival
+  /// within [closeWithin] of the top rival's ratio races alongside it
+  /// instead of being dropped; the ranking stops at the first gap wider
+  /// than that, so only a clear straggler is cut. No rtt factors in:
+  /// this probe's whole design is that the SERVER's arrival log picks
+  /// the winner, never the client's return-path timing, so there is no
+  /// client-measured latency at this layer to rank by.
+  ///
+  /// Returns [all] unchanged when [previousWinner] is absent from
+  /// today's candidates (the resolver set changed since); the caller
+  /// checks separately whether [history] is empty at all (the
+  /// empty-history case still races everything, unchanged).
   ///
   /// Generic and label-keyed only, so it needs no transport type here:
   /// [labelOf] is the one seam between this pure choice and whatever
@@ -191,8 +198,9 @@ class DoorResolverLadder {
     List<T> all,
     String Function(T) labelOf,
     Map<String, ({int wins, int attempts})> history,
-    String? previousWinner,
-  ) {
+    String? previousWinner, {
+    double closeWithin = 0.15,
+  }) {
     final prevIndex = previousWinner == null
         ? -1
         : all.indexWhere((t) => labelOf(t) == previousWinner);
@@ -202,12 +210,21 @@ class DoorResolverLadder {
       return (h == null || h.attempts == 0) ? -1 : h.wins / h.attempts;
     }
 
-    var bestRival = -1;
-    for (var i = 0; i < all.length; i++) {
-      if (i == prevIndex) continue;
-      if (bestRival == -1 || weight(i) > weight(bestRival)) bestRival = i;
+    final rivals = [
+      for (var i = 0; i < all.length; i++)
+        if (i != prevIndex) i,
+    ]..sort((a, b) => weight(b).compareTo(weight(a)));
+    if (rivals.isEmpty) return [all[prevIndex]];
+
+    final top = rivals.first;
+    final kept = [top];
+    if (weight(top) > -1) {
+      for (final i in rivals.skip(1)) {
+        if (weight(top) - weight(i) > closeWithin) break;
+        kept.add(i);
+      }
     }
-    return [all[prevIndex], if (bestRival >= 0) all[bestRival]];
+    return [all[prevIndex], for (final i in kept) all[i]];
   }
 
   /// wins/attempts per resolver label attempted so far on [networkLabel].

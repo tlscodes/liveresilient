@@ -110,6 +110,36 @@ void main() {
     await stack.dispose();
   });
 
+  test('narration names the letters\' own last-used network, not the '
+      'phone\'s current one', () async {
+    final stack = await boot(_ToggleChannel('net'));
+    final door = DoorResolverLadder(
+      DiskJsonStorage(
+        directoryFactory: () => tempDir,
+        fileName: 'letter_door_resolvers.json',
+      ),
+    );
+    // The letters last went out on cellular:mci; the test resolver below
+    // reports wifi:TestNet as the phone's current network, which the
+    // door has never recorded a round on.
+    for (var i = 0; i < 5; i++) {
+      await door.record(
+        'cellular:mci',
+        asked: ['udp53:8.8.8.8:53'],
+        winner: i < 3 ? 'udp53:8.8.8.8:53' : null,
+      );
+    }
+
+    await stack.fabric.refresh();
+    for (var i = 0; i < 20; i++) {
+      if (stack.director.advisory.detail.contains('door')) break;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    expect(stack.director.advisory.detail, contains('door 3/5'));
+    await stack.dispose();
+  });
+
   test(
     'losing every lane escalates to critical and shows queue counts',
     () async {

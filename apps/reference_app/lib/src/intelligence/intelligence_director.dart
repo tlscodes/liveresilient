@@ -295,15 +295,16 @@ class IntelligenceDirector extends ChangeNotifier {
   }
 
   /// One descriptive clause on the door's own resolver record for the
-  /// current network — never a suggestion, only what already happened.
-  /// Null when there is no ladder, or nothing attempted here yet.
+  /// network the letters last actually used — never a suggestion, only
+  /// what already happened. Falls back to the phone's current network
+  /// only when no round has ever been recorded yet. Null when there is
+  /// no ladder, or nothing attempted anywhere yet.
   Future<String?> _doorLadderNote() async {
     final parts = <String>[];
     final ladder = _doorResolverLadder;
     if (ladder != null) {
-      final t = DoorResolverLadder.totals(
-        await ladder.history(_hub.resolver.lastKnownLabel),
-      );
+      final label = await ladder.lastNetwork() ?? _hub.resolver.lastKnownLabel;
+      final t = DoorResolverLadder.totals(await ladder.history(label));
       if (t.attempts > 0) parts.add('door ${t.wins}/${t.attempts}');
     }
     final rung = letterLadder?.value?.rung;

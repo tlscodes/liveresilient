@@ -131,6 +131,45 @@ void main() {
 
       expect(chosen, ['8.8.8.8', '1.1.1.1']);
     });
+
+    test('a higher win rate sorts before a lower one among the rivals', () {
+      final chosen = DoorResolverLadder.narrow<String>(
+        ['prev', 'low', 'high'],
+        (label) => label,
+        {'low': (wins: 1, attempts: 10), 'high': (wins: 8, attempts: 10)},
+        'prev',
+      );
+
+      expect(chosen, ['prev', 'high']); // high (0.8) named before low (0.1)
+    });
+
+    test('two rivals with close win rates both keep racing; only the clear '
+        'straggler is dropped', () {
+      final chosen = DoorResolverLadder.narrow<String>(
+        ['prev', 'a', 'b', 'c'],
+        (label) => label,
+        {
+          'a': (wins: 3, attempts: 10), // 0.3
+          'b': (wins: 4, attempts: 10), // 0.4 — within 0.15 of 'a'
+          'c': (wins: 0, attempts: 10), // 0.0 — far below both
+        },
+        'prev',
+      );
+
+      expect(chosen, ['prev', 'b', 'a']); // b first (higher), a kept, c cut
+    });
+
+    test('empty history still means the full race, even with the new '
+        'closeWithin parameter in play', () {
+      final chosen = DoorResolverLadder.narrow<String>(
+        ['system', '8.8.8.8', '1.1.1.1'],
+        (label) => label,
+        const {},
+        null,
+      );
+
+      expect(chosen, ['system', '8.8.8.8', '1.1.1.1']);
+    });
   });
 
   group('DoorResolverLadder.totals and lastNetwork', () {

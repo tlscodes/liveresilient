@@ -205,8 +205,9 @@ class _FabricLanes implements LetterLanes, LetterDoorProbe {
   }
 }
 
-/// History-bearing network: race the previous winner and its strongest
-/// remaining competitor only, "the rest, no". A previous winner absent
+/// History-bearing network: race the previous winner, then its rivals
+/// ordered by win rate — one or, when two rivals' win rates sit close
+/// together, both, "the clear straggler, no". A previous winner absent
 /// from today's candidate list (the resolver set changed since) falls
 /// back to the full race, unchanged.
 TxtLetterProbe _narrowDoorProbe(
