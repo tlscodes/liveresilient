@@ -51,6 +51,48 @@ TransportChannel? buildLocalLinkLane({
   );
 }
 
+/// This device's own DNS resolver, read from the platform's own system
+/// API — never discovered, never scanned for. `TxtQueryResolvers.
+/// systemResolvers` only reads `/etc/resolv.conf`, which the iOS sandbox
+/// hides entirely and Android never publishes there either, so on a
+/// phone the door's own "the network's own resolver races first"
+/// promise (see `TxtQueryLane.forValve`'s doc comment) currently goes
+/// unmet — this fills exactly that one slot, no wider, with whatever
+/// address the OS already has configured for this connection (the same
+/// one the phone's other apps already send their DNS queries to).
+///
+/// Returns `[]` whenever [existingSystemResolvers] is already non-empty
+/// (desktop/CI: resolv.conf already answered, nothing to add) or
+/// [probe] is unset (the demo/test build: no native binding, the same
+/// seam [buildLocalLinkLane] uses). A [probe] that throws or answers
+/// `null` is "not published right now", never a crash and never a
+/// reason to fail the lane.
+///
+/// On a real device build, bind the platform's own DHCP-assigned
+/// resolver into [probe] — one closure:
+///
+///   final resolvers = systemDnsResolverBinding(
+///     existingSystemResolvers: TxtQueryResolvers.systemResolvers(),
+///     probe: () => nativeSystemDnsResolver(),
+///     // iOS: res_getservers() (libresolv) — first entry.
+///     // Android: ConnectivityManager.getLinkProperties(activeNetwork)
+///     //   .dnsServers.first.
+///   );
+List<HostPort> systemDnsResolverBinding({
+  HostPort? Function()? probe,
+  List<HostPort> existingSystemResolvers = const <HostPort>[],
+}) {
+  if (probe == null || existingSystemResolvers.isNotEmpty) {
+    return const <HostPort>[];
+  }
+  try {
+    final found = probe();
+    return found == null ? const <HostPort>[] : <HostPort>[found];
+  } catch (_) {
+    return const <HostPort>[];
+  }
+}
+
 /// Where the intelligence brains persist their JSON files.
 ///
 /// On iOS/Android the app sandbox exposes its own home; `Documents` under

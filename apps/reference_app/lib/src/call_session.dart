@@ -11,7 +11,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:adaptive_transport/adaptive_transport.dart'
-    show HostPort, TxtQueryValve;
+    show HostPort, TxtQueryResolvers, TxtQueryValve;
 import 'package:call_core/call_core.dart';
 import 'package:call_media_adapter/call_media_adapter.dart';
 import 'package:call_signaling_adapter/call_signaling_adapter.dart';
@@ -33,6 +33,7 @@ import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:signaling/signaling.dart';
 import 'call_memory.dart';
+import 'intelligence/device_bindings.dart' show systemDnsResolverBinding;
 import 'intelligence/intelligence_hub.dart';
 import 'live_quality_feed.dart';
 import 'ui/network_truth.dart';
@@ -237,12 +238,31 @@ ResilientLaneEndpoints defaultBorderRelayEndpoints({
   // offered it — the lane is a UDP socket and a DNS message, and a phone
   // has both.
   final valveDomain = txtQueryValveDomain;
+  // A pinned resolver list (the rig build) is never widened. Otherwise —
+  // the production default — the system resolver /etc/resolv.conf found,
+  // plus this device's own DHCP-assigned resolver when a real platform
+  // binding names one (see systemDnsResolverBinding; unset today, so
+  // this changes nothing until a real build wires it), ahead of the
+  // public resolvers TxtQueryResolvers.candidates always appends.
+  final systemResolvers = TxtQueryResolvers.systemResolvers();
   return ResilientLaneEndpoints(
     relayUri: relay.relayUri,
     longPollUri: relay.longPollUri,
     txtQueryValve: valveDomain == null
         ? null
-        : TxtQueryValve(domain: valveDomain, resolvers: txtQueryValveResolvers),
+        : TxtQueryValve(
+            domain: valveDomain,
+            resolvers: txtQueryValveResolvers.isNotEmpty
+                ? txtQueryValveResolvers
+                : TxtQueryResolvers.candidates(
+                    system: [
+                      ...systemResolvers,
+                      ...systemDnsResolverBinding(
+                        existingSystemResolvers: systemResolvers,
+                      ),
+                    ],
+                  ),
+          ),
   );
 }
 

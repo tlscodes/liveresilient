@@ -42,4 +42,44 @@ void main() {
     consent.setGranted(true);
     expect((await lane.send([1])).status, SendStatus.ok);
   });
+
+  group('systemDnsResolverBinding', () {
+    test('no probe bound: the demo/test build, unchanged', () {
+      expect(
+        systemDnsResolverBinding(
+          existingSystemResolvers: const [HostPort(host: '10.0.0.1', port: 53)],
+        ),
+        isEmpty,
+      );
+      expect(systemDnsResolverBinding(), isEmpty);
+    });
+
+    test('resolv.conf already answered: never widened, even with a '
+        'probe bound', () {
+      final resolvers = systemDnsResolverBinding(
+        probe: () => const HostPort(host: '203.0.113.9', port: 53),
+        existingSystemResolvers: const [HostPort(host: '10.0.0.1', port: 53)],
+      );
+      expect(resolvers, isEmpty);
+    });
+
+    test('resolv.conf empty and a probe names the device\'s own resolver: '
+        'that one, and only that one, is added', () {
+      final resolvers = systemDnsResolverBinding(
+        probe: () => const HostPort(host: '203.0.113.9', port: 53),
+      );
+      expect(resolvers, [const HostPort(host: '203.0.113.9', port: 53)]);
+    });
+
+    test('a probe naming nothing yet is not published, not a crash', () {
+      expect(systemDnsResolverBinding(probe: () => null), isEmpty);
+    });
+
+    test('a throwing probe is not published, not a crash', () {
+      expect(
+        systemDnsResolverBinding(probe: () => throw StateError('no radio')),
+        isEmpty,
+      );
+    });
+  });
 }
