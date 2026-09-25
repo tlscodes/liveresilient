@@ -325,10 +325,10 @@ class TxtLetterCourier {
 /// — ONLY when none of [TxtQueryResolvers.publicResolvers] (8.8.8.8,
 /// 1.1.1.1, 9.9.9.9) is already racing in [transports]. The system
 /// resolver and every other candidate already in [transports] are
-/// returned unchanged; no address outside that fixed six-IP set is
-/// ever added. A pure function — it schedules nothing and disposes
-/// nothing, so a caller with no absence to fix pays only one pass over
-/// [transports].
+/// returned unchanged; no address outside that fixed, already-published
+/// list is ever added — never a discovered one. A pure function — it
+/// schedules nothing and disposes nothing, so a caller with no absence
+/// to fix pays only one pass over [transports].
 List<TxtQueryTransport> withFallbackIfDoorAbsent(
   List<TxtQueryTransport> transports,
 ) {

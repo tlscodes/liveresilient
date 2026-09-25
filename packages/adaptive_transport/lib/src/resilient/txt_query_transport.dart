@@ -367,14 +367,21 @@ abstract final class TxtQueryResolvers {
     HostPort(host: '9.9.9.9', port: 53),
   ];
 
-  /// Secondary IPs for the same three providers in [publicResolvers] —
-  /// used only when a probe's own race does not already include any of
-  /// them (see `withFallbackIfDoorAbsent`), never added on their own and
-  /// never extended past this fixed set.
+  /// Secondary IPs for [publicResolvers]' own three providers, plus three
+  /// more independent public resolvers (OpenDNS, AdGuard, ControlD) — the
+  /// same already-published, fixed list this app has always drawn its
+  /// door candidates from, never a discovered one. Used only when a
+  /// probe's own race does not already include a [publicResolvers] host
+  /// (see `withFallbackIfDoorAbsent`), never added on their own and never
+  /// extended past this fixed list.
   static const List<HostPort> publicResolversFallback = <HostPort>[
     HostPort(host: '8.8.4.4', port: 53),
     HostPort(host: '1.0.0.1', port: 53),
     HostPort(host: '149.112.112.112', port: 53),
+    HostPort(host: '208.67.222.222', port: 53),
+    HostPort(host: '208.67.220.220', port: 53),
+    HostPort(host: '94.140.14.14', port: 53),
+    HostPort(host: '76.76.2.0', port: 53),
   ];
 
   /// RFC 8484 endpoints matching [publicResolvers], as the fallback for a

@@ -235,18 +235,25 @@ void main() {
   );
 
   group('withFallbackIfDoorAbsent', () {
-    test('adds the three secondary IPs when no door resolver is racing', () {
+    test('adds the seven secondary IPs when no door resolver is racing, '
+        'each once', () {
       final transports = [_Resolver('system', _Server())];
 
       final widened = withFallbackIfDoorAbsent(transports);
 
-      expect(widened, hasLength(4));
+      expect(widened, hasLength(8));
       expect(widened.first.label, 'system');
-      expect(widened.skip(1).map((t) => t.label), [
+      final added = widened.skip(1).map((t) => t.label).toList();
+      expect(added, [
         'udp53:8.8.4.4:53',
         'udp53:1.0.0.1:53',
         'udp53:149.112.112.112:53',
+        'udp53:208.67.222.222:53',
+        'udp53:208.67.220.220:53',
+        'udp53:94.140.14.14:53',
+        'udp53:76.76.2.0:53',
       ]);
+      expect(added.toSet(), hasLength(added.length)); // no duplicate label
     });
 
     test('leaves the race untouched when a door resolver is already in it', () {
@@ -265,7 +272,7 @@ void main() {
       expect(widened, same(probe.transports)); // unchanged, no copy either
     });
 
-    test('adds no address outside the fixed six-IP set', () {
+    test('adds no address outside the fixed published fallback list', () {
       final widened = withFallbackIfDoorAbsent([
         _Resolver('system', _Server()),
       ]);
@@ -275,7 +282,22 @@ void main() {
         'udp53:8.8.4.4:53',
         'udp53:1.0.0.1:53',
         'udp53:149.112.112.112:53',
+        'udp53:208.67.222.222:53',
+        'udp53:208.67.220.220:53',
+        'udp53:94.140.14.14:53',
+        'udp53:76.76.2.0:53',
       });
+    });
+
+    test('forLane races UDP/53 only — the probe carries no DoH transport, '
+        'so no DoH name is added here', () {
+      final lane = TxtQueryLane.forValve(TxtQueryValve(domain: _domain));
+      final probe = TxtLetterProbe.forLane(lane);
+
+      expect(
+        probe.transports.map((t) => t.label).where((l) => l.startsWith('doh:')),
+        isEmpty,
+      );
     });
   });
 
