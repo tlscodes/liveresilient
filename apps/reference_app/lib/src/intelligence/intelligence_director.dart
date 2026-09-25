@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:flutter/foundation.dart';
 
+import '../letter_rung_ladder.dart' show DoorResolverLadder;
 import 'connectivity_playbook.dart';
 import 'intelligence_hub.dart';
 
@@ -95,6 +96,7 @@ class IntelligenceDirector extends ChangeNotifier {
     required this._hub,
     this.refreshCooldown = const Duration(seconds: 10),
     DateTime Function()? now,
+    this._doorResolverLadder,
   }) : _fabric = fabric,
        _now = now ?? DateTime.now {
     _sub = fabric.snapshots.listen(_onSnapshot);
@@ -103,6 +105,11 @@ class IntelligenceDirector extends ChangeNotifier {
 
   final ConnectionFabric _fabric;
   final IntelligenceHub _hub;
+
+  /// Read-only narration source: the letter's own door-resolver ladder,
+  /// already written by [LetterCourier]. Null adds no narration line —
+  /// this never proposes a path, only describes one already on disk.
+  final DoorResolverLadder? _doorResolverLadder;
 
   /// Minimum spacing between self-healing refresh actions, so a flapping
   /// path cannot make the director thrash.
@@ -269,13 +276,35 @@ class IntelligenceDirector extends ChangeNotifier {
     final seq = ++_narrationSeq;
     try {
       final text = await _hub.assistant.explainConnectivity(snapshot);
+      final ladderNote = await _doorLadderNote();
       // Only the newest narration wins; stale ones are dropped.
       if (_disposed || seq != _narrationSeq) return;
-      _advisory = _advisory.withDetail(text);
+      _advisory = _advisory.withDetail(
+        ladderNote == null ? text : '$text $ladderNote',
+      );
       notifyListeners();
     } catch (_) {
       // Narration is decoration; judgment already shipped.
     }
+  }
+
+  /// One descriptive clause on the door's own resolver record for the
+  /// current network — never a suggestion, only what already happened.
+  /// Null when there is no ladder, or nothing attempted here yet.
+  Future<String?> _doorLadderNote() async {
+    final ladder = _doorResolverLadder;
+    if (ladder == null) return null;
+    final label = _hub.resolver.lastKnownLabel;
+    final history = await ladder.history(label);
+    if (history.isEmpty) return null;
+    var wins = 0;
+    var attempts = 0;
+    for (final h in history.values) {
+      wins += h.wins;
+      attempts += h.attempts;
+    }
+    if (attempts == 0) return null;
+    return '· door $wins/$attempts here';
   }
 
   @override

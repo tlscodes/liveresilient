@@ -11,6 +11,7 @@ import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:device_link/device_link.dart' show DtnBundleQueue;
 
+import '../letter_rung_ladder.dart' show DoorResolverLadder;
 import 'disk_json_storage.dart';
 import 'intelligence_director.dart';
 import 'intelligence_hub.dart';
@@ -157,7 +158,19 @@ Future<IntelligenceStack> bootIntelligence({
     networkOfLane: (_) => hub.placeResolver(),
   );
 
-  final director = IntelligenceDirector(fabric: fabric, hub: hub);
+  // Same folder, same file the letter courier already writes — read
+  // only, never a new lane and never a write from this side.
+  final doorResolverLadder = DoorResolverLadder(
+    DiskJsonStorage(
+      directoryFactory: dirFactory,
+      fileName: 'letter_door_resolvers.json',
+    ),
+  );
+  final director = IntelligenceDirector(
+    fabric: fabric,
+    hub: hub,
+    doorResolverLadder: doorResolverLadder,
+  );
   return IntelligenceStack._(hub, fabric, director);
 }
 

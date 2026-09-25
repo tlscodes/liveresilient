@@ -30,6 +30,7 @@ import 'dart:io';
 
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 
+import '../letter_rung_ladder.dart' show DoorResolverLadder;
 import 'intelligence_hub.dart';
 
 /// 50: promotion-log entries kept — one nightly round per day is ~7
@@ -46,6 +47,40 @@ File _candidateFile(Directory dir) =>
 File _prevFile(Directory dir) => File('${dir.path}/generations/prev.json');
 File _logFile(Directory dir) =>
     File('${dir.path}/generations/promotion_log.json');
+File _ladderRatioFile(Directory dir) =>
+    File('${dir.path}/generations/ladder_ratio_at_promotion.json');
+
+/// The door's win ratio on [networkLabel] the last time a candidate was
+/// actually staged, or null — a fresh network, or one never promoted on.
+double? _readLadderRatio(Directory dir, String networkLabel) {
+  final file = _ladderRatioFile(dir);
+  try {
+    if (!file.existsSync()) return null;
+    final decoded = jsonDecode(file.readAsStringSync());
+    if (decoded is! Map) return null;
+    final value = decoded[networkLabel];
+    return value is num ? value.toDouble() : null;
+  } catch (_) {
+    return null; // A corrupt file never blocks staging; see the caller.
+  }
+}
+
+void _writeLadderRatio(Directory dir, String networkLabel, double ratio) {
+  final file = _ladderRatioFile(dir)..parent.createSync(recursive: true);
+  var all = <String, Object?>{};
+  try {
+    if (file.existsSync()) {
+      final decoded = jsonDecode(file.readAsStringSync());
+      if (decoded is Map) all = Map<String, Object?>.from(decoded);
+    }
+  } catch (_) {
+    all = {};
+  }
+  all[networkLabel] = ratio;
+  final tmp = File('${file.path}.tmp');
+  tmp.writeAsStringSync(jsonEncode(all), flush: true);
+  tmp.renameSync(file.path);
+}
 
 Map<String, Object?> _brainSnapshot(IntelligenceHub hub) => {
   'atlas': hub.atlas.toJson(),
@@ -104,6 +139,7 @@ Future<GenerationDecision?> runNightlyEvolution({
   bool force = false,
   int epochs = _defaultEpochs,
   int Function()? nowMs,
+  DoorResolverLadder? doorResolverLadder,
 }) async {
   final now = nowMs ?? () => DateTime.now().millisecondsSinceEpoch;
   if (!force) {
@@ -134,7 +170,8 @@ Future<GenerationDecision?> runNightlyEvolution({
     scoredCount: replay.lastScoredCount,
     nowMs: now(),
   );
-  if (decision.promoted) {
+  if (decision.promoted &&
+      await _ladderAllows(hub, intelligenceDir, doorResolverLadder)) {
     final candidate = _candidateFile(intelligenceDir);
     candidate.parent.createSync(recursive: true);
     final tmp = File('${candidate.path}.tmp');
@@ -151,6 +188,36 @@ Future<GenerationDecision?> runNightlyEvolution({
   }
   _appendLog(intelligenceDir, decision);
   return decision;
+}
+
+/// The second gate, ALONGSIDE [decideGeneration], not instead of it: a
+/// challenger [decideGeneration] already approved is still withheld if
+/// the door's own win ratio on the CURRENT network has fallen since the
+/// last time a candidate was staged for it. No ladder, no history for
+/// this network, or no prior promotion to compare against — the gate
+/// stays silent (never blocks on an absent signal, only on a measured
+/// drop), and a pass records today's ratio as the new baseline.
+Future<bool> _ladderAllows(
+  IntelligenceHub hub,
+  Directory intelligenceDir,
+  DoorResolverLadder? ladder,
+) async {
+  if (ladder == null) return true;
+  final label = hub.resolver.lastKnownLabel;
+  final history = await ladder.history(label);
+  if (history.isEmpty) return true;
+  var wins = 0;
+  var attempts = 0;
+  for (final h in history.values) {
+    wins += h.wins;
+    attempts += h.attempts;
+  }
+  if (attempts == 0) return true;
+  final ratio = wins / attempts;
+  final last = _readLadderRatio(intelligenceDir, label);
+  if (last != null && ratio < last) return false;
+  _writeLadderRatio(intelligenceDir, label, ratio);
+  return true;
 }
 
 /// Installs a staged candidate generation, if one exists — called at

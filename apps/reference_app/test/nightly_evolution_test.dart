@@ -10,8 +10,10 @@ import 'dart:io';
 
 import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:reference_app/src/intelligence/disk_json_storage.dart';
 import 'package:reference_app/src/intelligence/intelligence_boot.dart';
 import 'package:reference_app/src/intelligence/nightly_evolution.dart';
+import 'package:reference_app/src/letter_rung_ladder.dart';
 
 CallHistoryRecord _call({required int connectMs, required String network}) =>
     CallHistoryRecord(
@@ -111,6 +113,32 @@ void main() {
     expect(File('${tempDir.path}/generations/prev.json').existsSync(), isTrue);
     expect(reborn.hub.calibrator.correction(), 2.0);
     await reborn.dispose();
+  });
+
+  test("an empty door ladder never blocks a promotion decideGeneration "
+      'already approved', () async {
+    final stack = await boot();
+    feedRisingHistory(stack);
+    // Fresh file, nothing ever written to it: history() returns {}.
+    final ladder = DoorResolverLadder(
+      DiskJsonStorage(
+        directoryFactory: () => tempDir,
+        fileName: 'letter_door_resolvers.json',
+      ),
+    );
+    final decision = (await runNightlyEvolution(
+      hub: stack.hub,
+      intelligenceDir: tempDir,
+      powerGate: () async => true,
+      nowMs: () => 7,
+      doorResolverLadder: ladder,
+    ))!;
+    expect(decision.promoted, isTrue);
+    expect(
+      File('${tempDir.path}/generations/candidate.json').existsSync(),
+      isTrue,
+    );
+    await stack.dispose();
   });
 
   test('a vacuous round stages nothing but is logged', () async {

@@ -236,6 +236,8 @@ class LetterCourier {
     this._networkResolver,
     this._rungLadder,
     this._doorResolverLadder,
+    this._measurementConsent,
+    this._installMeasurement,
     Future<void> Function(Duration)? wait,
     Timer Function(Duration period, void Function() tick)? schedulePeriodic,
   }) : _now = now ?? DateTime.now,
@@ -277,6 +279,14 @@ class LetterCourier {
   /// The DNS valve's own resolver ladder, one level under [_rungLadder];
   /// null keeps every door probe a full race of every resolver.
   final DoorResolverLadder? _doorResolverLadder;
+
+  /// Gates [_installMeasurement]; null (the default) means no consent
+  /// object was wired in, which the recorder treats as withheld.
+  final LetterMeasurementConsent? _measurementConsent;
+
+  /// The once-per-install-lifetime measurement; null keeps every Send
+  /// exactly as it is today, nothing extra written anywhere.
+  final InstallLetterMeasurement? _installMeasurement;
 
   /// The select loop's pause and the watch's period, both injectable so
   /// tests advance a clock instead of sleeping.
@@ -528,7 +538,8 @@ class LetterCourier {
     // (the default) keeps today's behaviour: whichever lane the fabric
     // ranks first, every time.
     final ladder = _rungLadder;
-    final networkLabel = ladder == null
+    final measurement = _installMeasurement;
+    final networkLabel = ladder == null && measurement == null
         ? null
         : await (_networkResolver?.resolveNetworkLabel() ??
               Future.value('unknown'));
@@ -590,11 +601,19 @@ class LetterCourier {
       if (probe != null) {
         note('probe ${probe.describe()}');
         if (!probe.reachedServer) {
+          final rttMs = _now().difference(attemptStart).inMilliseconds;
           _recordRung(
             networkLabel,
             ladder,
             best,
-            latencyMs: _now().difference(attemptStart).inMilliseconds,
+            latencyMs: rttMs,
+            delivered: false,
+          );
+          _recordInstallMeasurement(
+            measurement,
+            networkLabel,
+            best,
+            rttMs: rttMs,
             delivered: false,
           );
           return _park(letter);
@@ -607,15 +626,53 @@ class LetterCourier {
       '${payload.length} B · $chunks chunks · via ${_short(best)}',
     );
     final result = await _carry(lanes, letter, best, fromQueue: false);
+    final rttMs = _now().difference(attemptStart).inMilliseconds;
     _recordRung(
       networkLabel,
       ladder,
       best,
       resolver: doorResolver,
-      latencyMs: _now().difference(attemptStart).inMilliseconds,
+      latencyMs: rttMs,
+      delivered: result == LetterState.arrived,
+    );
+    _recordInstallMeasurement(
+      measurement,
+      networkLabel,
+      best,
+      resolver: doorResolver,
+      rttMs: rttMs,
       delivered: result == LetterState.arrived,
     );
     return result;
+  }
+
+  /// The once-per-install-lifetime measurement's call site: same rung,
+  /// resolver and latency the top-level ladder already has, split into
+  /// operator/network-type by [splitNetworkLabel]. A no-op when
+  /// [measurement] or [networkLabel] is absent, or [recordOnce] itself
+  /// finds consent withheld or a row already on disk.
+  void _recordInstallMeasurement(
+    InstallLetterMeasurement? measurement,
+    String? networkLabel,
+    String rung, {
+    String? resolver,
+    required int rttMs,
+    required bool delivered,
+  }) {
+    if (measurement == null || networkLabel == null) return;
+    final (networkType, operatorName) = splitNetworkLabel(networkLabel);
+    unawaited(
+      measurement.recordOnce(
+        consent: _measurementConsent,
+        networkLabel: networkLabel,
+        operatorName: operatorName ?? '',
+        networkType: networkType,
+        rung: rung,
+        resolver: resolver,
+        rttMs: rttMs,
+        delivered: delivered,
+      ),
+    );
   }
 
   /// Appends one row to [ladder]'s history for [networkLabel] and, only

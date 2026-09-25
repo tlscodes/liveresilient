@@ -9,8 +9,23 @@ library;
 
 import 'dart:io';
 
+import 'package:connection_orchestrator/connection_orchestrator.dart'
+    show NetworkAtlas;
+
 import 'intelligence/device_bindings.dart' show buildStorageDirectory;
 import 'intelligence/disk_json_storage.dart';
+
+/// Splits a [NetworkNameResolver] label ("cellular:mci", "wifi:home",
+/// "ethernet", "offline", "unresolved") into (networkType, operator).
+/// Only cellular carries an operator name; every other type's second
+/// field is null — a Wi-Fi SSID is not a carrier.
+(String networkType, String? operatorName) splitNetworkLabel(String label) {
+  final colon = label.indexOf(':');
+  if (colon < 0) return (label, null);
+  final type = label.substring(0, colon);
+  final rest = label.substring(colon + 1);
+  return (type, type == 'cellular' ? rest : null);
+}
 
 /// Where one attempt ended up.
 enum LetterRungOutcome { delivered, queued }
@@ -225,6 +240,79 @@ class DoorResolverLadder {
     entry['resolvers'] = resolvers;
     if (winner != null) entry['lastWinner'] = winner;
     data[networkLabel] = entry;
+    await _storage.save(data);
+  }
+}
+
+/// Gates the once-per-install measurement below — separate from
+/// [DeviceLinkConsent] (device_link package), which gates the mesh lane.
+/// This is its own opt-in: a person may allow the one-time measurement
+/// without ever granting nearby-connectivity access, and the reverse.
+abstract interface class LetterMeasurementConsent {
+  bool get granted;
+}
+
+/// One anonymous row, written at most once in the life of an install:
+/// which rung (and, under the door, which resolver) carried the very
+/// first letter, on which kind of network, how fast, and on which build.
+/// No letter text, no person id — see the field list below.
+class InstallLetterMeasurement {
+  InstallLetterMeasurement(this._storage);
+
+  /// Same storage folder as [LetterRungLadder.disk] and
+  /// [DoorResolverLadder.disk], a sibling file.
+  factory InstallLetterMeasurement.disk() {
+    final factory =
+        buildStorageDirectory() ??
+        (() => Directory(
+          '${Directory.systemTemp.path}/voice_call_kit_intelligence',
+        ));
+    return InstallLetterMeasurement(
+      DiskJsonStorage(
+        directoryFactory: factory,
+        fileName: 'letter_install_measurement.json',
+      ),
+    );
+  }
+
+  final PersistentStorage _storage;
+
+  Future<bool> alreadyRecorded() async {
+    final data = await _storage.load();
+    return data['recordedOnce'] == true;
+  }
+
+  /// Records the seven fields once, keyed by [NetworkAtlas.identityHash]
+  /// of [networkLabel] — the same hash the call side already uses for
+  /// [CallHistoryRecord.networkIdentityHash], so the two can be
+  /// correlated without ever storing the raw label. A no-op when
+  /// [consent] withholds it or a row is already on disk; a second
+  /// install-lifetime Send never overwrites the first row.
+  Future<void> recordOnce({
+    required LetterMeasurementConsent? consent,
+    required String networkLabel,
+    required String operatorName,
+    required String networkType,
+    required String rung,
+    String? resolver,
+    int? rttMs,
+    required bool delivered,
+    String appVersion = 'reference v3',
+  }) async {
+    if (consent == null || !consent.granted) return;
+    if (await alreadyRecorded()) return;
+    final data = await _storage.load();
+    final identityHash = NetworkAtlas.identityHash(networkLabel);
+    data['recordedOnce'] = true;
+    data[identityHash] = {
+      'operator': operatorName,
+      'networkType': networkType,
+      'rung': rung,
+      'resolver': resolver,
+      'rttMs': rttMs,
+      'outcome': delivered ? 'delivered' : 'queued',
+      'appVersion': appVersion,
+    };
     await _storage.save(data);
   }
 }

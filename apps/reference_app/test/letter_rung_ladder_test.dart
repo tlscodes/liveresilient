@@ -173,4 +173,77 @@ void main() {
       ));
     });
   });
+
+  group('InstallLetterMeasurement — once per install, with consent', () {
+    test('consent withheld: nothing is written, ever', () async {
+      final store = _MemoryStorage();
+      final measurement = InstallLetterMeasurement(store);
+      const noConsent = _FixedConsent(false);
+
+      await measurement.recordOnce(
+        consent: noConsent,
+        networkLabel: 'cellular:mci',
+        operatorName: 'mci',
+        networkType: 'cellular',
+        rung: 'resilient.dns-valve',
+        resolver: 'udp53:8.8.8.8:53',
+        rttMs: 300,
+        delivered: true,
+      );
+
+      expect(store.data, isEmpty);
+      expect(await measurement.alreadyRecorded(), isFalse);
+
+      // A null consent object is withheld too, not a crash.
+      await measurement.recordOnce(
+        consent: null,
+        networkLabel: 'cellular:mci',
+        operatorName: 'mci',
+        networkType: 'cellular',
+        rung: 'resilient.dns-valve',
+        rttMs: 300,
+        delivered: true,
+      );
+      expect(store.data, isEmpty);
+    });
+
+    test(
+      'granted: the seven fields land once, keyed by identityHash',
+      () async {
+        final store = _MemoryStorage();
+        final measurement = InstallLetterMeasurement(store);
+        const granted = _FixedConsent(true);
+
+        await measurement.recordOnce(
+          consent: granted,
+          networkLabel: 'cellular:mci',
+          operatorName: 'mci',
+          networkType: 'cellular',
+          rung: 'resilient.dns-valve',
+          resolver: 'udp53:8.8.8.8:53',
+          rttMs: 300,
+          delivered: true,
+        );
+        expect(await measurement.alreadyRecorded(), isTrue);
+
+        // A second Send, even with consent, never overwrites the row.
+        await measurement.recordOnce(
+          consent: granted,
+          networkLabel: 'wifi:home',
+          operatorName: '',
+          networkType: 'wifi',
+          rung: 'resilient.wss',
+          rttMs: 10,
+          delivered: true,
+        );
+        expect(store.data.keys.where((k) => k != 'recordedOnce'), hasLength(1));
+      },
+    );
+  });
+}
+
+class _FixedConsent implements LetterMeasurementConsent {
+  const _FixedConsent(this.granted);
+  @override
+  final bool granted;
 }
