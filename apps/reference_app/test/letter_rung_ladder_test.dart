@@ -240,6 +240,74 @@ void main() {
       },
     );
   });
+
+  group('PersistedMeasurementConsent driving InstallLetterMeasurement', () {
+    Iterable<String> rowKeys(Map<String, Object?> data) =>
+        data.keys.where((k) => k != 'recordedOnce');
+
+    test('off = empty file; on = one row; on again = the same row', () async {
+      final consentStore = _MemoryStorage();
+      final measurementStore = _MemoryStorage();
+      final consent = await PersistedMeasurementConsent.load(consentStore);
+      final measurement = InstallLetterMeasurement(measurementStore);
+
+      // Off (the default): a Send never writes anything.
+      await measurement.recordOnce(
+        consent: consent,
+        networkLabel: 'cellular:mci',
+        operatorName: 'mci',
+        networkType: 'cellular',
+        rung: 'resilient.dns-valve',
+        rttMs: 300,
+        delivered: true,
+      );
+      expect(measurementStore.data, isEmpty);
+
+      // On: the next Send writes exactly one row.
+      await consent.setGranted(true);
+      await measurement.recordOnce(
+        consent: consent,
+        networkLabel: 'cellular:mci',
+        operatorName: 'mci',
+        networkType: 'cellular',
+        rung: 'resilient.dns-valve',
+        resolver: 'udp53:8.8.8.8:53',
+        rttMs: 300,
+        delivered: true,
+      );
+      expect(rowKeys(measurementStore.data), hasLength(1));
+      final firstRow = Map<String, Object?>.from(
+        measurementStore.data[rowKeys(measurementStore.data).single] as Map,
+      );
+
+      // On again, on a different Send/network: the same row survives —
+      // once per install lifetime means once, not once per network.
+      await measurement.recordOnce(
+        consent: consent,
+        networkLabel: 'wifi:home',
+        operatorName: '',
+        networkType: 'wifi',
+        rung: 'resilient.wss',
+        rttMs: 5,
+        delivered: true,
+      );
+      expect(rowKeys(measurementStore.data), hasLength(1));
+      expect(
+        measurementStore.data[rowKeys(measurementStore.data).single],
+        firstRow,
+      );
+    });
+
+    test('the toggle survives a reload from the same storage', () async {
+      final store = _MemoryStorage();
+      final firstBoot = await PersistedMeasurementConsent.load(store);
+      expect(firstBoot.granted, isFalse);
+
+      await firstBoot.setGranted(true);
+      final secondBoot = await PersistedMeasurementConsent.load(store);
+      expect(secondBoot.granted, isTrue);
+    });
+  });
 }
 
 class _FixedConsent implements LetterMeasurementConsent {

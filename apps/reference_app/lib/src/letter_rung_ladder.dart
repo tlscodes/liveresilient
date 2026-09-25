@@ -316,3 +316,52 @@ class InstallLetterMeasurement {
     await _storage.save(data);
   }
 }
+
+/// Persisted, on-device opt-in for [InstallLetterMeasurement] — separate
+/// from the mesh's `DeviceLinkConsent` (device_link package). Defaults
+/// to false; [disk]/[load] read the saved value once, at boot, because
+/// [granted] itself stays a plain synchronous getter, the interface's
+/// own contract.
+class PersistedMeasurementConsent implements LetterMeasurementConsent {
+  PersistedMeasurementConsent(this._storage, {this._granted = false});
+
+  final PersistentStorage _storage;
+  bool _granted;
+
+  @override
+  bool get granted => _granted;
+
+  /// Reads the persisted value (false when nothing was ever saved).
+  static Future<PersistedMeasurementConsent> load(
+    PersistentStorage storage,
+  ) async {
+    final data = await storage.load();
+    return PersistedMeasurementConsent(
+      storage,
+      granted: data['granted'] == true,
+    );
+  }
+
+  /// Same storage folder as [InstallLetterMeasurement.disk], a sibling
+  /// file.
+  static Future<PersistedMeasurementConsent> disk() {
+    final factory =
+        buildStorageDirectory() ??
+        (() => Directory(
+          '${Directory.systemTemp.path}/voice_call_kit_intelligence',
+        ));
+    return load(
+      DiskJsonStorage(
+        directoryFactory: factory,
+        fileName: 'letter_measurement_consent.json',
+      ),
+    );
+  }
+
+  /// Updates the in-memory flag immediately; the disk write follows in
+  /// the background, so the very next Send already sees the new value.
+  Future<void> setGranted(bool value) async {
+    _granted = value;
+    await _storage.save({'granted': value});
+  }
+}

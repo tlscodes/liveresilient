@@ -141,6 +141,49 @@ void main() {
     await stack.dispose();
   });
 
+  test('a dropped door win ratio withholds a candidate decideGeneration '
+      'already approved', () async {
+    final stack = await boot();
+    feedRisingHistory(stack);
+    final label = stack.hub.resolver.lastKnownLabel;
+
+    // A prior round already promoted at ratio 0.8 for this network.
+    File('${tempDir.path}/generations/ladder_ratio_at_promotion.json')
+      ..createSync(recursive: true)
+      ..writeAsStringSync(jsonEncode({label: 0.8}));
+
+    // Today's door is doing much worse here: 2/10 = 0.2.
+    final ladder = DoorResolverLadder(
+      DiskJsonStorage(
+        directoryFactory: () => tempDir,
+        fileName: 'letter_door_resolvers.json',
+      ),
+    );
+    for (var i = 0; i < 2; i++) {
+      await ladder.record(label, asked: ['8.8.8.8'], winner: '8.8.8.8');
+    }
+    for (var i = 0; i < 8; i++) {
+      await ladder.record(label, asked: ['8.8.8.8'], winner: null);
+    }
+
+    final decision = (await runNightlyEvolution(
+      hub: stack.hub,
+      intelligenceDir: tempDir,
+      powerGate: () async => true,
+      nowMs: () => 7,
+      doorResolverLadder: ladder,
+    ))!;
+
+    // decideGeneration's own verdict is untouched by the second gate.
+    expect(decision.promoted, isTrue);
+    // The second gate withheld the file: no candidate this round.
+    expect(
+      File('${tempDir.path}/generations/candidate.json').existsSync(),
+      isFalse,
+    );
+    await stack.dispose();
+  });
+
   test('a vacuous round stages nothing but is logged', () async {
     final stack = await boot();
     // One call per network: no budget pair anywhere, score is vacuous.
