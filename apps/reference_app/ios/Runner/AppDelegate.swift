@@ -54,7 +54,7 @@ final class SystemDnsReader: NSObject {
   }
 
   static func firstResolver() -> String? {
-    var state = __res_9_state()
+    var state: __res_9_state = .init()
     guard res_9_ninit(&state) == 0 else { return nil }
     defer { res_9_ndestroy(&state) }
     var servers = [res_9_sockaddr_union](
