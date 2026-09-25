@@ -184,6 +184,47 @@ void main() {
     await stack.dispose();
   });
 
+  test('the gate judges the network the letters last used, not the one '
+      'the phone is on at night', () async {
+    final stack = await boot();
+    feedRisingHistory(stack);
+    const lettersNet = 'cellular:mci';
+    expect(stack.hub.resolver.lastKnownLabel, isNot(lettersNet));
+
+    File('${tempDir.path}/generations/ladder_ratio_at_promotion.json')
+      ..createSync(recursive: true)
+      ..writeAsStringSync(jsonEncode({lettersNet: 0.8}));
+    final ladder = DoorResolverLadder(
+      DiskJsonStorage(
+        directoryFactory: () => tempDir,
+        fileName: 'letter_door_resolvers.json',
+      ),
+    );
+    for (var i = 0; i < 10; i++) {
+      await ladder.record(
+        lettersNet,
+        asked: ['8.8.8.8'],
+        winner: i < 2 ? '8.8.8.8' : null,
+      );
+    }
+
+    await runNightlyEvolution(
+      hub: stack.hub,
+      intelligenceDir: tempDir,
+      powerGate: () async => true,
+      nowMs: () => 7,
+      doorResolverLadder: ladder,
+    );
+
+    // 0.2 on the letters' own network, below its 0.8 baseline: withheld,
+    // even though the phone's current network has no history at all.
+    expect(
+      File('${tempDir.path}/generations/candidate.json').existsSync(),
+      isFalse,
+    );
+    await stack.dispose();
+  });
+
   test('a vacuous round stages nothing but is logged', () async {
     final stack = await boot();
     // One call per network: no budget pair anywhere, score is vacuous.

@@ -12,6 +12,8 @@ import 'package:adaptive_transport/adaptive_transport.dart'
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show ConnectivitySnapshot, LaneStatus, ResilientLaneIds;
 
+import 'letter_rung_ladder.dart' show DoorResolverLadder;
+
 /// Ordered rungs, best (checked last) to worst (checked first).
 enum LetterLadderRung {
   /// A live-call-capable lane AND the door are both healthy.
@@ -72,7 +74,17 @@ class LetterLadderStatus {
       detail.isEmpty ? rung.bannerName : '${rung.bannerName} · $detail';
 }
 
-bool _hasPath(LaneStatus lane) => lane.eligible && lane.score > -1.0;
+/// The fabric's line between a lane with a path and one without:
+/// `deadLaneScore` is −1.0 minus the cost penalty, so every dead lane
+/// scores at or below −1.0. The courier's selection and this ladder read
+/// the SAME constant — a third ranking must not disagree with the two.
+const double letterDeadAtOrBelow = -1.0;
+
+/// Eligible and above [letterDeadAtOrBelow].
+bool letterLaneHasPath(LaneStatus lane) =>
+    lane.eligible && lane.score > letterDeadAtOrBelow;
+
+bool _hasPath(LaneStatus lane) => letterLaneHasPath(lane);
 
 /// Classifies [snapshot] — plus [lastProbe] (the most recent door probe
 /// this courier ran, or null when none ran this round) and
@@ -94,13 +106,7 @@ LetterLadderStatus classifyLetterLadder({
   final liveReachable = nonDoorUp > 0;
   final slowRelay = nonDoor.any((l) => _hasPath(l) && l.score < 0.15);
 
-  var wins = 0;
-  var attempts = 0;
-  for (final h in doorHistory.values) {
-    wins += h.wins;
-    attempts += h.attempts;
-  }
-  final doorReliability = attempts == 0 ? null : wins / attempts;
+  final doorReliability = DoorResolverLadder.totals(doorHistory).ratio;
 
   if (lastProbe != null && !lastProbe.reachedServer) {
     return LetterLadderStatus(

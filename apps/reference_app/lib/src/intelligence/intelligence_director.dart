@@ -301,14 +301,10 @@ class IntelligenceDirector extends ChangeNotifier {
     final parts = <String>[];
     final ladder = _doorResolverLadder;
     if (ladder != null) {
-      final history = await ladder.history(_hub.resolver.lastKnownLabel);
-      var wins = 0;
-      var attempts = 0;
-      for (final h in history.values) {
-        wins += h.wins;
-        attempts += h.attempts;
-      }
-      if (attempts > 0) parts.add('door $wins/$attempts');
+      final t = DoorResolverLadder.totals(
+        await ladder.history(_hub.resolver.lastKnownLabel),
+      );
+      if (t.attempts > 0) parts.add('door ${t.wins}/${t.attempts}');
     }
     final rung = letterLadder?.value?.rung;
     if (rung != null) parts.add(rung.bannerName);

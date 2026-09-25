@@ -133,6 +133,29 @@ void main() {
     });
   });
 
+  group('DoorResolverLadder.totals and lastNetwork', () {
+    test('totals sums every resolver; empty history has no ratio', () {
+      final t = DoorResolverLadder.totals({
+        'a': (wins: 3, attempts: 4),
+        'b': (wins: 5, attempts: 6),
+      });
+      expect(t.wins, 8);
+      expect(t.attempts, 10);
+      expect(t.ratio, 0.8);
+      expect(DoorResolverLadder.totals(const {}).ratio, isNull);
+    });
+
+    test('lastNetwork names the most recent probe round, not a key the '
+        'history can read back', () async {
+      final ladder = DoorResolverLadder(_MemoryStorage());
+      expect(await ladder.lastNetwork(), isNull);
+      await ladder.record('wifi:home', asked: ['x'], winner: 'x');
+      await ladder.record('cellular:mci', asked: ['x'], winner: null);
+      expect(await ladder.lastNetwork(), 'cellular:mci');
+      expect((await ladder.history('wifi:home'))['x'], (wins: 1, attempts: 1));
+    });
+  });
+
   group('DoorResolverLadder wins/attempts bookkeeping', () {
     test(
       'a probe round updates wins/attempts and the previous winner',

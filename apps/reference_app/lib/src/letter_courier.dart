@@ -463,11 +463,10 @@ class LetterCourier {
   /// was the wrong test: measured on the phone 2026-09-20 (real app, the
   /// responder answering every 12 s probe), the letter was parked as "door
   /// down" for 200 s while the door was up. Same trap the fabric records
-  /// from 2026-09-13; a third ranking must not disagree with the two.
-  static const double _deadAtOrBelow = -1.0;
-
-  static bool _hasPath(LaneStatus lane) =>
-      lane.eligible && lane.score > _deadAtOrBelow;
+  /// from 2026-09-13; a third ranking must not disagree with the two —
+  /// so the constant lives once, in letter_status_ladder.dart, and both
+  /// this selection and the status ladder read it.
+  static bool _hasPath(LaneStatus lane) => letterLaneHasPath(lane);
 
   /// Whether [laneId] specifically has a path right now — the previous
   /// winner's own check, independent of which lane the fabric currently
@@ -512,6 +511,9 @@ class LetterCourier {
     await lanes.refresh();
     final s = _snap(lanes);
     note('probe mode=${s.mode.name} best=${s.bestLaneId} ${_scores(s)}');
+    // The sheet opens on a rung too — read from this same refresh, no
+    // probe of its own.
+    await _updateLadder(s);
     if (!_liveCallReachable(s)) {
       _set(
         LetterState.liveCallUnavailable,
@@ -991,7 +993,8 @@ class LetterCourier {
     _set(
       LetterState.arrived,
       '${whole.length} B · $n letters, $partsInFlight at a time · '
-      '${throughDoor ? 'through the door · id ${idHex(id)}' : 'via ${_short(best)}'}',
+      '${throughDoor ? 'through the door · id ${idHex(id)}' : 'via ${_short(best)}'}'
+      '${ladderStatus.value == null ? '' : ' · ${ladderStatus.value!.rung.bannerName}'}',
     );
     return LetterState.arrived;
   }

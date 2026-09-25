@@ -315,6 +315,38 @@ void main() {
       await courier.dispose();
     });
 
+    test('probe() alone sets the rung — no Send, no door probe', () async {
+      final lanes = ScriptedLanes()..liveUp = true; // https stays dead
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+      );
+      await courier.probe();
+      expect(courier.ladderStatus.value?.rung, LetterLadderRung.limited);
+      expect(lanes.delivered, isEmpty);
+      await courier.dispose();
+    });
+
+    test('a multi-part letter names its rung on the arrived banner', () async {
+      final lanes = ScriptedLanes()
+        ..liveUp = true
+        ..httpsUp = true;
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+      );
+      final state = await courier.send(
+        Uint8List(TxtQueryLane.maxPayloadBytes + 1),
+        kind: 'typed',
+      );
+      expect(state, LetterState.arrived);
+      expect(courier.status.value!.detail, contains('letters'));
+      expect(courier.status.value!.detail, endsWith('· normal'));
+      await courier.dispose();
+    });
+
     test('a letter drained after "closed" does not carry "closed" onto its '
         'arrived banner', () async {
       final clock = ManualClock();

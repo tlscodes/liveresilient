@@ -143,6 +143,39 @@ class DoorResolverLadder {
 
   final PersistentStorage _storage;
 
+  /// Summed wins and attempts over every resolver in [history], and their
+  /// ratio (null when nothing was attempted). The ONE place the door's win
+  /// ratio is computed — the status ladder, the director's sentence and
+  /// nightly's second gate all read it here.
+  static ({int wins, int attempts, double? ratio}) totals(
+    Map<String, ({int wins, int attempts})> history,
+  ) {
+    var wins = 0;
+    var attempts = 0;
+    for (final h in history.values) {
+      wins += h.wins;
+      attempts += h.attempts;
+    }
+    return (
+      wins: wins,
+      attempts: attempts,
+      ratio: attempts == 0 ? null : wins / attempts,
+    );
+  }
+
+  /// Top-level key for the network the most recent probe round ran on.
+  /// Network labels always carry a type prefix ("wifi:", "cellular:",
+  /// "ethernet", ...), so this key can never collide with one.
+  static const String _lastNetworkKey = '_lastNetwork';
+
+  /// The network label the most recent door probe was recorded under, or
+  /// null before the first one — so nightly judges the network the
+  /// letters actually used, not whatever the phone is on at night.
+  Future<String?> lastNetwork() async {
+    final value = (await _storage.load())[_lastNetworkKey];
+    return value is String ? value : null;
+  }
+
   /// Chooses at most 2 of [all] to race when history exists: the
   /// previous winner (by [previousWinner]) and its strongest remaining
   /// competitor by wins/attempts — "the rest, no". Returns [all]
@@ -240,6 +273,7 @@ class DoorResolverLadder {
     entry['resolvers'] = resolvers;
     if (winner != null) entry['lastWinner'] = winner;
     data[networkLabel] = entry;
+    data[_lastNetworkKey] = networkLabel;
     await _storage.save(data);
   }
 }

@@ -203,17 +203,11 @@ Future<bool> _ladderAllows(
   DoorResolverLadder? ladder,
 ) async {
   if (ladder == null) return true;
-  final label = hub.resolver.lastKnownLabel;
-  final history = await ladder.history(label);
-  if (history.isEmpty) return true;
-  var wins = 0;
-  var attempts = 0;
-  for (final h in history.values) {
-    wins += h.wins;
-    attempts += h.attempts;
-  }
-  if (attempts == 0) return true;
-  final ratio = wins / attempts;
+  // The network the letters last actually used; the current-network
+  // guess only when no probe round has been recorded yet.
+  final label = await ladder.lastNetwork() ?? hub.resolver.lastKnownLabel;
+  final ratio = DoorResolverLadder.totals(await ladder.history(label)).ratio;
+  if (ratio == null) return true;
   final last = _readLadderRatio(intelligenceDir, label);
   if (last != null && ratio < last) return false;
   _writeLadderRatio(intelligenceDir, label, ratio);
