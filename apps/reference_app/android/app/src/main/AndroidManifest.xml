@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Read the active link's DNS servers (MainActivity.firstResolver):
+         a normal permission, granted at install, never prompted. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
         android:label="Voice Call Kit"
         android:name="${applicationName}"

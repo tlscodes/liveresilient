@@ -6,9 +6,10 @@ import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  /// Held for the process lifetime: the channel handler must outlive the
-  /// call that registered it.
+  /// Held for the process lifetime: the channel handlers must outlive the
+  /// call that registered them.
   private var photoFallback: PhotoLetterFallbackPicker?
+  private var systemDns: SystemDnsReader?
 
   override func application(
     _ application: UIApplication,
@@ -19,9 +20,67 @@ import UniformTypeIdentifiers
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    photoFallback = PhotoLetterFallbackPicker(
-      messenger: engineBridge.applicationRegistrar.messenger()
+    let messenger = engineBridge.applicationRegistrar.messenger()
+    photoFallback = PhotoLetterFallbackPicker(messenger: messenger)
+    systemDns = SystemDnsReader(messenger: messenger)
+  }
+}
+
+/// This device's own DNS resolver, from the system's own resolver state
+/// (libresolv `res_9_getservers`): the first entry, as a numeric host —
+/// the address iOS itself sends this connection's queries to. A read of
+/// configuration only; nothing is probed. Nil when the resolver state
+/// cannot be initialised or names no server. Needs `<resolv.h>` in the
+/// bridging header and `-lresolv` (Flutter/*.xcconfig).
+final class SystemDnsReader: NSObject {
+  /// Must match `SystemDns.channelName` in system_dns.dart.
+  static let channelName = "com.tlscodes.reference_app/system_dns"
+
+  private let channel: FlutterMethodChannel
+
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(
+      name: SystemDnsReader.channelName,
+      binaryMessenger: messenger
     )
+    super.init()
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "firstResolver" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      result(SystemDnsReader.firstResolver())
+    }
+  }
+
+  static func firstResolver() -> String? {
+    var state = __res_9_state()
+    guard res_9_ninit(&state) == 0 else { return nil }
+    defer { res_9_ndestroy(&state) }
+    var servers = [res_9_sockaddr_union](
+      repeating: res_9_sockaddr_union(), count: Int(MAXNS)
+    )
+    let count = Int(res_9_getservers(&state, &servers, Int32(servers.count)))
+    for index in 0..<max(0, min(count, servers.count)) {
+      var server = servers[index]
+      let isV6 = Int32(server.sin.sin_family) == AF_INET6
+      let length = socklen_t(
+        isV6 ? MemoryLayout<sockaddr_in6>.size : MemoryLayout<sockaddr_in>.size
+      )
+      var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+      let named = withUnsafePointer(to: &server) { union in
+        union.withMemoryRebound(to: sockaddr.self, capacity: 1) { address in
+          getnameinfo(
+            address, length, &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST
+          )
+        }
+      }
+      if named == 0 {
+        let text = String(cString: host)
+        if !text.isEmpty { return text }
+      }
+    }
+    return nil
   }
 }
 

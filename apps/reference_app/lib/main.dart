@@ -36,6 +36,7 @@ import 'src/intelligence/device_bindings.dart';
 import 'src/intelligence/foresight_card.dart';
 import 'src/intelligence/intelligence_boot.dart';
 import 'src/intelligence/intelligence_hub.dart';
+import 'src/intelligence/system_dns.dart';
 import 'src/import_manifest_sheet.dart';
 import 'src/join_channel_sheet.dart';
 import 'src/lane_governor.dart';
@@ -59,6 +60,11 @@ export 'src/live_call_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // This device's own DNS resolver, from the platform's system API — a
+  // read, not a probe; the answer joins the door's candidate list when
+  // the letter's lanes open. Not awaited: nothing before the first Send
+  // needs it, and a missing channel (desktop) just leaves it null.
+  unawaited(systemDns.refresh());
   // Boot the intelligence circuit before the first frame: both brains
   // restored from disk, fabric place-aware, director watching. The device
   // binding seam supplies the real link radio when present; it is null in
@@ -343,6 +349,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) unawaited(_call.hangUp());
+    // Back from the background: the network under us may have changed.
+    if (state == AppLifecycleState.resumed) unawaited(systemDns.refresh());
   }
 
   /// Binds a chat thread to the live call's lanes the moment its session

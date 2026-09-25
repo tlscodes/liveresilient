@@ -35,6 +35,7 @@ import 'package:signaling/signaling.dart';
 import 'call_memory.dart';
 import 'intelligence/device_bindings.dart' show systemDnsResolverBinding;
 import 'intelligence/intelligence_hub.dart';
+import 'intelligence/system_dns.dart' show systemDns;
 import 'live_quality_feed.dart';
 import 'ui/network_truth.dart';
 import 'media_adaptation_driver.dart';
@@ -240,10 +241,11 @@ ResilientLaneEndpoints defaultBorderRelayEndpoints({
   final valveDomain = txtQueryValveDomain;
   // A pinned resolver list (the rig build) is never widened. Otherwise —
   // the production default — the system resolver /etc/resolv.conf found,
-  // plus this device's own DHCP-assigned resolver when a real platform
-  // binding names one (see systemDnsResolverBinding; unset today, so
-  // this changes nothing until a real build wires it), ahead of the
-  // public resolvers TxtQueryResolvers.candidates always appends.
+  // plus this device's own DHCP-assigned resolver as the platform's own
+  // system API last reported it (systemDns, refreshed at boot and on
+  // resume; null on desktop and in the gate, so nothing is added there),
+  // ahead of the public resolvers TxtQueryResolvers.candidates always
+  // appends.
   final systemResolvers = TxtQueryResolvers.systemResolvers();
   return ResilientLaneEndpoints(
     relayUri: relay.relayUri,
@@ -259,6 +261,7 @@ ResilientLaneEndpoints defaultBorderRelayEndpoints({
                       ...systemResolvers,
                       ...systemDnsResolverBinding(
                         existingSystemResolvers: systemResolvers,
+                        probe: () => systemDns.current,
                       ),
                     ],
                   ),
