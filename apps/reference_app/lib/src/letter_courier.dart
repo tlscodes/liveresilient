@@ -214,24 +214,17 @@ TxtLetterProbe _narrowDoorProbe(
   Map<String, ({int wins, int attempts})> history,
   String? previousWinner,
 ) {
-  final all = probe.transports;
-  final prevIndex = previousWinner == null
-      ? -1
-      : all.indexWhere((t) => t.label == previousWinner);
-  if (prevIndex < 0) return probe;
-  double weight(int i) {
-    final h = history[all[i].label];
-    return (h == null || h.attempts == 0) ? -1 : h.wins / h.attempts;
-  }
-
-  var bestRival = -1;
-  for (var i = 0; i < all.length; i++) {
-    if (i == prevIndex) continue;
-    if (bestRival == -1 || weight(i) > weight(bestRival)) bestRival = i;
-  }
+  // One implementation of the rule, the one letter_rung_ladder_test pins.
+  final chosen = DoorResolverLadder.narrow(
+    probe.transports,
+    (t) => t.label,
+    history,
+    previousWinner,
+  );
+  if (identical(chosen, probe.transports)) return probe;
   return TxtLetterProbe(
     domain: probe.domain,
-    transports: [all[prevIndex], if (bestRival >= 0) all[bestRival]],
+    transports: chosen,
     timeout: probe.timeout,
   );
 }
@@ -855,7 +848,7 @@ class LetterCourier {
           (throughDoor && session != null
                   ? '${payload.length} B · through the door · session $session'
                   : '${payload.length} B · via ${_short(best)}') +
-              (rung == null ? '' : ' · ${rung.name}'),
+              (rung == null ? '' : ' · ${rung.bannerName}'),
         );
         return LetterState.arrived;
       case DeliveryOutcome.queuedForLater:
@@ -1018,7 +1011,7 @@ class LetterCourier {
         ? ''
         : rung == LetterLadderRung.closed
         ? ' · closed · next probe in ${budget.refreshEvery.inSeconds}s'
-        : ' · ${rung.name}';
+        : ' · ${rung.bannerName}';
     _set(
       LetterState.queued,
       '${letter.bytes.length} B · door down · parked in the queue · '
@@ -1138,6 +1131,9 @@ class LetterCourier {
         'door up · draining ${head.id} via ${_short(s.bestLaneId)} '
         '${_scores(s)}',
       );
+      // The rung left from the Send that parked it (often "closed") would
+      // otherwise ride onto this letter's arrived banner.
+      await _updateLadder(s);
       await _carry(lanes, head, s.bestLaneId, fromQueue: true);
     } finally {
       if (!_disposed) busy.value = false;

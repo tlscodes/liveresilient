@@ -14,7 +14,8 @@ import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:flutter/foundation.dart';
 
 import '../letter_rung_ladder.dart' show DoorResolverLadder;
-import '../letter_status_ladder.dart' show LetterLadderStatus;
+import '../letter_status_ladder.dart'
+    show LetterLadderRungBanner, LetterLadderStatus;
 import 'connectivity_playbook.dart';
 import 'intelligence_hub.dart';
 
@@ -310,7 +311,7 @@ class IntelligenceDirector extends ChangeNotifier {
       if (attempts > 0) parts.add('door $wins/$attempts');
     }
     final rung = letterLadder?.value?.rung;
-    if (rung != null) parts.add(rung.name);
+    if (rung != null) parts.add(rung.bannerName);
     return parts.isEmpty ? null : '· ${parts.join(' · ')}';
   }
 

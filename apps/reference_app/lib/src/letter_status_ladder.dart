@@ -43,6 +43,19 @@ enum LetterLadderRung {
   closed,
 }
 
+/// The one word the banner and the director both show for a rung — a
+/// single vocabulary, so the two never disagree.
+extension LetterLadderRungBanner on LetterLadderRung {
+  String get bannerName => switch (this) {
+    LetterLadderRung.normal => 'normal',
+    LetterLadderRung.limited => 'limited',
+    LetterLadderRung.weak => 'weak',
+    LetterLadderRung.withCourier => 'configured',
+    LetterLadderRung.halfClosed => 'half',
+    LetterLadderRung.closed => 'closed',
+  };
+}
+
 /// One classified reading.
 class LetterLadderStatus {
   const LetterLadderStatus(this.rung, {this.detail = ''});
@@ -55,7 +68,8 @@ class LetterLadderStatus {
   final String detail;
 
   @override
-  String toString() => detail.isEmpty ? rung.name : '${rung.name} · $detail';
+  String toString() =>
+      detail.isEmpty ? rung.bannerName : '${rung.bannerName} · $detail';
 }
 
 bool _hasPath(LaneStatus lane) => lane.eligible && lane.score > -1.0;

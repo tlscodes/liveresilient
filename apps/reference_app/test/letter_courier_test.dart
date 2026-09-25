@@ -314,6 +314,40 @@ void main() {
       expect(probeCalls, 1); // not a scanner: exactly this Send's probe
       await courier.dispose();
     });
+
+    test('a letter drained after "closed" does not carry "closed" onto its '
+        'arrived banner', () async {
+      final clock = ManualClock();
+      final lanes = DoorProbingLanes()
+        ..doorUp = true
+        ..answer = () => const TxtProbeOutcome(
+          groupId: 'g',
+          answers: [
+            TxtProbeAnswer(index: 0, label: 'udp53:8.8.8.8:53', nonce: 'aa'),
+          ],
+          winnerIndex: null,
+        );
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        now: () => clock.now,
+        openLanes: () async => lanes,
+        wait: clock.wait,
+        schedulePeriodic: clock.schedule,
+      );
+
+      expect(
+        await courier.send(Uint8List.fromList([1, 2, 3]), kind: 'typed'),
+        LetterState.queued,
+      );
+      expect(courier.status.value!.detail, contains('closed'));
+
+      await clock.tick(); // the watch drains; the door delivers
+
+      expect(courier.status.value!.state, LetterState.arrived);
+      expect(courier.status.value!.detail, isNot(contains('closed')));
+      await courier.dispose();
+    });
   });
 
   group('the durable queue behind a down door (scripted lanes, no network)', () {
