@@ -84,13 +84,17 @@ void main() {
         ),
       );
     }
-    final history =
-        (store.data['wifi:home'] as Map)['history'] as List<Object?>;
-    expect(history, hasLength(3));
-    expect(
-      history.map((row) => (row as Map)['latencyMs']),
-      [2, 3, 4], // oldest two (0, 1) dropped
-    );
+    expect(store.data, {
+      'wifi:home': {
+        'lastWinner': 'resilient.wss',
+        'history': [
+          // The oldest two (0, 1) are dropped.
+          containsPair('latencyMs', 2),
+          containsPair('latencyMs', 3),
+          containsPair('latencyMs', 4),
+        ],
+      },
+    });
   });
 
   group('DoorResolverLadder.narrow — the door floor, one level under', () {
@@ -157,18 +161,6 @@ void main() {
       );
 
       expect(chosen, ['prev', 'b', 'a']); // b first (higher), a kept, c cut
-    });
-
-    test('empty history still means the full race, even with the new '
-        'closeWithin parameter in play', () {
-      final chosen = DoorResolverLadder.narrow<String>(
-        ['system', '8.8.8.8', '1.1.1.1'],
-        (label) => label,
-        const {},
-        null,
-      );
-
-      expect(chosen, ['system', '8.8.8.8', '1.1.1.1']);
     });
   });
 

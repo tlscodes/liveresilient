@@ -53,33 +53,33 @@ File _ladderRatioFile(Directory dir) =>
 /// The door's win ratio on [networkLabel] the last time a candidate was
 /// actually staged, or null — a fresh network, or one never promoted on.
 double? _readLadderRatio(Directory dir, String networkLabel) {
+  if (_readLadderRatios(dir)[networkLabel] case final num ratio) {
+    return ratio.toDouble();
+  }
+  return null;
+}
+
+/// Every network's ratio at its last promotion; a missing or corrupt file
+/// reads as empty, so it never blocks staging (see the caller).
+Map<String, Object?> _readLadderRatios(Directory dir) {
   final file = _ladderRatioFile(dir);
   try {
-    if (!file.existsSync()) return null;
-    final decoded = jsonDecode(file.readAsStringSync());
-    if (decoded is! Map) return null;
-    final value = decoded[networkLabel];
-    return value is num ? value.toDouble() : null;
+    if (!file.existsSync()) return {};
+    if (jsonDecode(file.readAsStringSync()) case final Map all) {
+      return Map<String, Object?>.from(all);
+    }
   } catch (_) {
-    return null; // A corrupt file never blocks staging; see the caller.
+    // Corrupt: start over rather than block staging.
   }
+  return {};
 }
 
 void _writeLadderRatio(Directory dir, String networkLabel, double ratio) {
   final file = _ladderRatioFile(dir)..parent.createSync(recursive: true);
-  var all = <String, Object?>{};
-  try {
-    if (file.existsSync()) {
-      final decoded = jsonDecode(file.readAsStringSync());
-      if (decoded is Map) all = Map<String, Object?>.from(decoded);
-    }
-  } catch (_) {
-    all = {};
-  }
-  all[networkLabel] = ratio;
-  final tmp = File('${file.path}.tmp');
-  tmp.writeAsStringSync(jsonEncode(all), flush: true);
-  tmp.renameSync(file.path);
+  final all = {..._readLadderRatios(dir), networkLabel: ratio};
+  File('${file.path}.tmp')
+    ..writeAsStringSync(jsonEncode(all), flush: true)
+    ..renameSync(file.path);
 }
 
 Map<String, Object?> _brainSnapshot(IntelligenceHub hub) => {

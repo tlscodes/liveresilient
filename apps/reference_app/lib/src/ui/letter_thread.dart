@@ -37,45 +37,18 @@ class LetterThreadPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text(letterConversationTitle)),
-    body: ValueListenableBuilder<List<LetterRecord>>(
-      valueListenable: ledger.records,
-      builder: (context, records, _) =>
-          ValueListenableBuilder<List<QueuedLetter>>(
-            valueListenable:
-                pending ?? const _Always<List<QueuedLetter>>(<QueuedLetter>[]),
-            builder: (context, parked, _) =>
-                ValueListenableBuilder<ConnectivitySnapshot?>(
-                  valueListenable:
-                      lanes ?? const _Always<ConnectivitySnapshot?>(null),
-                  builder: (context, snapshot, _) =>
-                      ValueListenableBuilder<LetterLadderStatus?>(
-                        valueListenable:
-                            ladder ?? const _Always<LetterLadderStatus?>(null),
-                        builder: (context, ladderStatus, _) => LetterThread(
-                          records: records,
-                          pending: parked,
-                          lanes: snapshot,
-                          ladder: ladderStatus,
-                        ),
-                      ),
-                ),
-          ),
+    // One rebuild on any of the four sources; an absent source is simply
+    // not listened to.
+    body: ListenableBuilder(
+      listenable: Listenable.merge([ledger.records, pending, lanes, ladder]),
+      builder: (context, _) => LetterThread(
+        records: ledger.records.value,
+        pending: pending?.value ?? const [],
+        lanes: lanes?.value,
+        ladder: ladder?.value,
+      ),
     ),
   );
-}
-
-/// A constant listenable, for the optional inputs.
-class _Always<T> implements ValueListenable<T> {
-  const _Always(this.value);
-
-  @override
-  final T value;
-
-  @override
-  void addListener(VoidCallback listener) {}
-
-  @override
-  void removeListener(VoidCallback listener) {}
 }
 
 /// One line per lane, as the fabric last saw it: `relay −1.05 down`,

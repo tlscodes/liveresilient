@@ -86,8 +86,7 @@ List<HostPort> systemDnsResolverBinding({
     return const <HostPort>[];
   }
   try {
-    final found = probe();
-    return found == null ? const <HostPort>[] : <HostPort>[found];
+    return <HostPort>[?probe()];
   } catch (_) {
     return const <HostPort>[];
   }

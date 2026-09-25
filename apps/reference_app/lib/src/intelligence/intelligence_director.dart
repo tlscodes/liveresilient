@@ -300,15 +300,19 @@ class IntelligenceDirector extends ChangeNotifier {
   /// only when no round has ever been recorded yet. Null when there is
   /// no ladder, or nothing attempted anywhere yet.
   Future<String?> _doorLadderNote() async {
-    final parts = <String>[];
     final ladder = _doorResolverLadder;
-    if (ladder != null) {
-      final label = await ladder.lastNetwork() ?? _hub.resolver.lastKnownLabel;
-      final t = DoorResolverLadder.totals(await ladder.history(label));
-      if (t.attempts > 0) parts.add('door ${t.wins}/${t.attempts}');
-    }
-    final rung = letterLadder?.value?.rung;
-    if (rung != null) parts.add(rung.bannerName);
+    final door = ladder == null
+        ? null
+        : DoorResolverLadder.totals(
+            await ladder.history(
+              await ladder.lastNetwork() ?? _hub.resolver.lastKnownLabel,
+            ),
+          );
+    final parts = [
+      if (door case (:final wins, :final attempts, ratio: _) when attempts > 0)
+        'door $wins/$attempts',
+      if (letterLadder?.value?.rung case final rung?) rung.bannerName,
+    ];
     return parts.isEmpty ? null : '· ${parts.join(' · ')}';
   }
 

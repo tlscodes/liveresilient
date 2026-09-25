@@ -84,8 +84,6 @@ const double letterDeadAtOrBelow = -1.0;
 bool letterLaneHasPath(LaneStatus lane) =>
     lane.eligible && lane.score > letterDeadAtOrBelow;
 
-bool _hasPath(LaneStatus lane) => letterLaneHasPath(lane);
-
 /// Classifies [snapshot] — plus [lastProbe] (the most recent door probe
 /// this courier ran, or null when none ran this round) and
 /// [doorHistory] (the door ladder's own wins/attempts, as
@@ -102,31 +100,31 @@ LetterLadderStatus classifyLetterLadder({
     for (final lane in snapshot.lanes)
       if (lane.id != ResilientLaneIds.txtQuery) lane,
   ];
-  final nonDoorUp = nonDoor.where(_hasPath).length;
+  final nonDoorUp = nonDoor.where(letterLaneHasPath).length;
   final liveReachable = nonDoorUp > 0;
-  final slowRelay = nonDoor.any((l) => _hasPath(l) && l.score < 0.15);
-
+  final slowRelay = nonDoor.any((l) => letterLaneHasPath(l) && l.score < 0.15);
   final doorReliability = DoorResolverLadder.totals(doorHistory).ratio;
 
-  if (lastProbe != null && !lastProbe.reachedServer) {
-    return LetterLadderStatus(
+  // Worst rung first: the first pattern that holds is the reading.
+  return switch ((lastProbe?.reachedServer, doorReliability)) {
+    (false, _) => LetterLadderStatus(
       LetterLadderRung.closed,
       detail:
           '$queueWaiting waiting · next probe in '
           '${nextProbeIn.inSeconds}s',
-    );
-  }
-  if (doorReliability != null && doorReliability > 0 && doorReliability < 1) {
-    return const LetterLadderStatus(LetterLadderRung.halfClosed);
-  }
-  if (!liveReachable && lastProbe?.reachedServer == true) {
-    return const LetterLadderStatus(LetterLadderRung.withCourier);
-  }
-  if (!liveReachable || slowRelay) {
-    return const LetterLadderStatus(LetterLadderRung.weak);
-  }
-  if (nonDoorUp < nonDoor.length) {
-    return const LetterLadderStatus(LetterLadderRung.limited);
-  }
-  return const LetterLadderStatus(LetterLadderRung.normal);
+    ),
+    (_, final ratio?) when ratio > 0 && ratio < 1 => const LetterLadderStatus(
+      LetterLadderRung.halfClosed,
+    ),
+    (true, _) when !liveReachable => const LetterLadderStatus(
+      LetterLadderRung.withCourier,
+    ),
+    _ when !liveReachable || slowRelay => const LetterLadderStatus(
+      LetterLadderRung.weak,
+    ),
+    _ when nonDoorUp < nonDoor.length => const LetterLadderStatus(
+      LetterLadderRung.limited,
+    ),
+    _ => const LetterLadderStatus(LetterLadderRung.normal),
+  };
 }

@@ -161,27 +161,34 @@ class _FabricLanes implements LetterLanes, LetterDoorProbe {
     final lane = valve;
     if (lane == null) return null;
     var probe = TxtLetterProbe.forLane(lane);
-    // The fixed race is untouched; this only widens it when none of the
-    // door's usual public resolvers made it into today's candidate set.
-    final widened = withFallbackIfDoorAbsent(probe.transports);
-    if (!identical(widened, probe.transports)) {
+    // The fixed race is untouched: widened only when none of the door's
+    // usual public resolvers made it into today's candidate set, then —
+    // on a history-bearing network — narrowed to the previous winner and
+    // its close rivals by win rate (DoorResolverLadder.narrow, the one
+    // rule letter_rung_ladder_test pins). A previous winner absent from
+    // today's candidates falls back to the full race, unchanged.
+    var transports = withFallbackIfDoorAbsent(probe.transports);
+    final ladder = doorResolverLadder;
+    final label = ladder == null
+        ? null
+        : (await networkResolver?.resolveNetworkLabel()) ?? 'unknown';
+    if (ladder != null && label != null) {
+      final history = await ladder.history(label);
+      if (history.isNotEmpty) {
+        transports = DoorResolverLadder.narrow(
+          transports,
+          (t) => t.label,
+          history,
+          await ladder.previousWinner(label),
+        );
+      }
+    }
+    if (!identical(transports, probe.transports)) {
       probe = TxtLetterProbe(
         domain: probe.domain,
-        transports: widened,
+        transports: transports,
         timeout: probe.timeout,
       );
-    }
-    final ladder = doorResolverLadder;
-    String? label;
-    if (ladder != null) {
-      label =
-          await (networkResolver?.resolveNetworkLabel() ??
-              Future.value('unknown'));
-      final history = await ladder.history(label!);
-      if (history.isNotEmpty) {
-        final previous = await ladder.previousWinner(label);
-        probe = _narrowDoorProbe(probe, history, previous);
-      }
     }
     final outcome = await probe.run();
     final w = outcome.winnerIndex;
@@ -205,30 +212,17 @@ class _FabricLanes implements LetterLanes, LetterDoorProbe {
   }
 }
 
-/// History-bearing network: race the previous winner, then its rivals
-/// ordered by win rate — one or, when two rivals' win rates sit close
-/// together, both, "the clear straggler, no". A previous winner absent
-/// from today's candidate list (the resolver set changed since) falls
-/// back to the full race, unchanged.
-TxtLetterProbe _narrowDoorProbe(
-  TxtLetterProbe probe,
-  Map<String, ({int wins, int attempts})> history,
-  String? previousWinner,
-) {
-  // One implementation of the rule, the one letter_rung_ladder_test pins.
-  final chosen = DoorResolverLadder.narrow(
-    probe.transports,
-    (t) => t.label,
-    history,
-    previousWinner,
-  );
-  if (identical(chosen, probe.transports)) return probe;
-  return TxtLetterProbe(
-    domain: probe.domain,
-    transports: chosen,
-    timeout: probe.timeout,
-  );
-}
+/// The rung word every letter banner ends with — the same [bannerName]
+/// the Director says. With [nextProbeIn], a closed rung also names the
+/// watch's next probe: a reading of its existing schedule, never a
+/// reason to run one sooner.
+String _rungSuffix(LetterLadderStatus? status, {Duration? nextProbeIn}) =>
+    switch ((status?.rung, nextProbeIn)) {
+      (null, _) => '',
+      (LetterLadderRung.closed, final next?) =>
+        ' · closed · next probe in ${next.inSeconds}s',
+      (final rung?, _) => ' · ${rung.bannerName}',
+    };
 
 /// Carries letters over the app's own fallback lanes and reports each
 /// one's state through [status] (see [LetterState]) and each act through
@@ -589,13 +583,14 @@ class LetterCourier {
     final measurement = _installMeasurement;
     final needsNetworkLabel =
         ladder != null || measurement != null || _callHistory != null;
-    final networkLabel = !needsNetworkLabel
-        ? null
-        : await (_networkResolver?.resolveNetworkLabel() ??
-              Future.value('unknown'));
+    final networkLabel = needsNetworkLabel
+        ? (await _networkResolver?.resolveNetworkLabel()) ?? 'unknown'
+        : null;
     final previousWinner = ladder == null || networkLabel == null
         ? null
         : await ladder.previousWinner(networkLabel);
+    bool winnerReady(ConnectivitySnapshot s) =>
+        previousWinner != null && _hasPathFor(s, previousWinner);
 
     // Select: refresh until the previous winner has a path again, or
     // some lane ranks first with a positive score. A live lane wins as
@@ -608,9 +603,7 @@ class LetterCourier {
       await lanes.refresh();
       refreshes++;
       s = _snap(lanes);
-      final winnerReady =
-          previousWinner != null && _hasPathFor(s, previousWinner);
-      if (winnerReady || _bestIsUsable(s) || !_now().isBefore(selectUntil)) {
+      if (winnerReady(s) || _bestIsUsable(s) || !_now().isBefore(selectUntil)) {
         break;
       }
       await _wait(budget.refreshEvery);
@@ -618,14 +611,13 @@ class LetterCourier {
     if (!_liveCallReachable(s)) {
       _set(LetterState.liveCallUnavailable, _scores(s));
     }
-    final winnerReady =
-        previousWinner != null && _hasPathFor(s, previousWinner);
-    final best = winnerReady
+    final viaWinner = winnerReady(s);
+    final best = viaWinner
         ? previousWinner
         : (_bestIsUsable(s) ? s.bestLaneId : null);
     note(
       'selected best=$best refreshes=$refreshes '
-      '${winnerReady ? 'previous winner · ' : ''}${_scores(s)}',
+      '${viaWinner ? 'previous winner · ' : ''}${_scores(s)}',
     );
     final attemptStart = _now();
     final letter = QueuedLetter(
@@ -845,14 +837,10 @@ class LetterCourier {
         final throughDoor = best == ResilientLaneIds.txtQuery;
         if (fromQueue) await queue.remove(letter.id);
         _record(letter, best, throughDoor ? session : null);
-        final rung = ladderStatus.value?.rung;
-        _set(
-          LetterState.arrived,
-          (throughDoor && session != null
-                  ? '${payload.length} B · through the door · session $session'
-                  : '${payload.length} B · via ${_short(best)}') +
-              (rung == null ? '' : ' · ${rung.bannerName}'),
-        );
+        final carried = throughDoor && session != null
+            ? '${payload.length} B · through the door · session $session'
+            : '${payload.length} B · via ${_short(best)}';
+        _set(LetterState.arrived, '$carried${_rungSuffix(ladderStatus.value)}');
         return LetterState.arrived;
       case DeliveryOutcome.queuedForLater:
         // The fabric parked it in memory; the durable queue takes custody.
@@ -995,7 +983,7 @@ class LetterCourier {
       LetterState.arrived,
       '${whole.length} B · $n letters, $partsInFlight at a time · '
       '${throughDoor ? 'through the door · id ${idHex(id)}' : 'via ${_short(best)}'}'
-      '${ladderStatus.value == null ? '' : ' · ${ladderStatus.value!.rung.bannerName}'}',
+      '${_rungSuffix(ladderStatus.value)}',
     );
     return LetterState.arrived;
   }
@@ -1008,18 +996,13 @@ class LetterCourier {
       );
       return LetterState.notDelivered;
     }
-    final rung = ladderStatus.value?.rung;
     // Rung 6 (closed) alone names the next probe — a reading of the
     // watch's own schedule, never a reason to run one sooner.
-    final rungNote = rung == null
-        ? ''
-        : rung == LetterLadderRung.closed
-        ? ' · closed · next probe in ${budget.refreshEvery.inSeconds}s'
-        : ' · ${rung.bannerName}';
     _set(
       LetterState.queued,
       '${letter.bytes.length} B · door down · parked in the queue · '
-      '${queue.waiting} waiting$rungNote',
+      '${queue.waiting} waiting'
+      '${_rungSuffix(ladderStatus.value, nextProbeIn: budget.refreshEvery)}',
     );
     _startWatch();
     return LetterState.queued;

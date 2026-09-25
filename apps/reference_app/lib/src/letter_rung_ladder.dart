@@ -15,6 +15,18 @@ import 'package:connection_orchestrator/connection_orchestrator.dart'
 import 'intelligence/device_bindings.dart' show buildStorageDirectory;
 import 'intelligence/disk_json_storage.dart';
 
+/// One JSON file beside the intelligence hub's own, so a build with no
+/// platform storage plugin still gets the SAME fallback folder
+/// `bootIntelligence` resolves to (see `letterQueueDirectory`, which
+/// mirrors the identical fallback for the same reason).
+DiskJsonStorage _intelligenceFile(String fileName) => DiskJsonStorage(
+  directoryFactory:
+      buildStorageDirectory() ??
+      () =>
+          Directory('${Directory.systemTemp.path}/voice_call_kit_intelligence'),
+  fileName: fileName,
+);
+
 /// Splits a [NetworkNameResolver] label ("cellular:mci", "wifi:home",
 /// "ethernet", "offline", "unresolved") into (networkType, operator).
 /// Only cellular carries an operator name; every other type's second
@@ -69,55 +81,51 @@ class LetterRungLadder {
   /// platform storage plugin still gets the SAME fallback folder
   /// `bootIntelligence` resolves to (see `letterQueueDirectory`, which
   /// mirrors the identical fallback for the same reason).
-  factory LetterRungLadder.disk() {
-    final factory =
-        buildStorageDirectory() ??
-        (() => Directory(
-          '${Directory.systemTemp.path}/voice_call_kit_intelligence',
-        ));
-    return LetterRungLadder(
-      DiskJsonStorage(
-        directoryFactory: factory,
-        fileName: 'letter_rung_ladder.json',
-      ),
-    );
-  }
+  factory LetterRungLadder.disk() =>
+      LetterRungLadder(_intelligenceFile('letter_rung_ladder.json'));
 
   final PersistentStorage _storage;
   final int maxHistoryPerNetwork;
 
   /// The rung that last DELIVERED a letter on [networkLabel], or null —
   /// a fresh network, or one where every past attempt queued.
-  Future<String?> previousWinner(String networkLabel) async {
-    final data = await _storage.load();
-    final entry = data[networkLabel];
-    return entry is Map ? entry['lastWinner'] as String? : null;
-  }
+  Future<String?> previousWinner(String networkLabel) async =>
+      _lastWinnerOf(await _storage.load(), networkLabel);
 
   /// Appends [attempt] to [networkLabel]'s history and, only when it
   /// delivered, updates the stored winner. A queued attempt is recorded
   /// but never becomes the next Send's previous winner.
   Future<void> record(String networkLabel, LetterRungAttempt attempt) async {
     final data = await _storage.load();
-    final raw = data[networkLabel];
-    final entry = raw is Map
-        ? Map<String, Object?>.from(raw)
-        : <String, Object?>{};
-    final history = entry['history'] is List
-        ? List<Object?>.from(entry['history'] as List)
-        : <Object?>[];
+    final entry = _asMap(data[networkLabel]);
+    final history = switch (entry['history']) {
+      final List rows => List<Object?>.from(rows),
+      _ => <Object?>[],
+    };
     history.add(attempt.toJson());
     if (history.length > maxHistoryPerNetwork) {
       history.removeRange(0, history.length - maxHistoryPerNetwork);
     }
-    entry['history'] = history;
-    if (attempt.outcome == LetterRungOutcome.delivered) {
-      entry['lastWinner'] = attempt.rung;
-    }
-    data[networkLabel] = entry;
+    data[networkLabel] = {
+      ...entry,
+      'history': history,
+      if (attempt.outcome == LetterRungOutcome.delivered)
+        'lastWinner': attempt.rung,
+    };
     await _storage.save(data);
   }
 }
+
+/// A stored per-network entry as a mutable map; absent or corrupt → empty.
+Map<String, Object?> _asMap(Object? raw) =>
+    raw is Map ? Map<String, Object?>.from(raw) : <String, Object?>{};
+
+/// The `lastWinner` stored under [networkLabel], or null.
+String? _lastWinnerOf(Map<String, Object?> data, String networkLabel) =>
+    switch (data[networkLabel]) {
+      {'lastWinner': final String winner} => winner,
+      _ => null,
+    };
 
 /// One level under [LetterRungLadder]: per-network memory of which of the
 /// DNS valve's OWN resolvers actually wins, so a history-bearing network
@@ -127,19 +135,8 @@ class DoorResolverLadder {
   DoorResolverLadder(this._storage);
 
   /// Same storage folder as [LetterRungLadder.disk], a sibling file.
-  factory DoorResolverLadder.disk() {
-    final factory =
-        buildStorageDirectory() ??
-        (() => Directory(
-          '${Directory.systemTemp.path}/voice_call_kit_intelligence',
-        ));
-    return DoorResolverLadder(
-      DiskJsonStorage(
-        directoryFactory: factory,
-        fileName: 'letter_door_resolvers.json',
-      ),
-    );
-  }
+  factory DoorResolverLadder.disk() =>
+      DoorResolverLadder(_intelligenceFile('letter_door_resolvers.json'));
 
   final PersistentStorage _storage;
 
@@ -150,12 +147,8 @@ class DoorResolverLadder {
   static ({int wins, int attempts, double? ratio}) totals(
     Map<String, ({int wins, int attempts})> history,
   ) {
-    var wins = 0;
-    var attempts = 0;
-    for (final h in history.values) {
-      wins += h.wins;
-      attempts += h.attempts;
-    }
+    final wins = history.values.fold(0, (sum, h) => sum + h.wins);
+    final attempts = history.values.fold(0, (sum, h) => sum + h.attempts);
     return (
       wins: wins,
       attempts: attempts,
@@ -172,8 +165,10 @@ class DoorResolverLadder {
   /// null before the first one — so nightly judges the network the
   /// letters actually used, not whatever the phone is on at night.
   Future<String?> lastNetwork() async {
-    final value = (await _storage.load())[_lastNetworkKey];
-    return value is String ? value : null;
+    if ((await _storage.load())[_lastNetworkKey] case final String label) {
+      return label;
+    }
+    return null;
   }
 
   /// The previous winner still always races (this rung's whole point is
@@ -216,15 +211,16 @@ class DoorResolverLadder {
     ]..sort((a, b) => weight(b).compareTo(weight(a)));
     if (rivals.isEmpty) return [all[prevIndex]];
 
+    // The top rival always races; the ones after it only while they sit
+    // within closeWithin of it. An untested top rival (weight -1) keeps
+    // no one behind it.
     final top = rivals.first;
-    final kept = [top];
-    if (weight(top) > -1) {
-      for (final i in rivals.skip(1)) {
-        if (weight(top) - weight(i) > closeWithin) break;
-        kept.add(i);
-      }
-    }
-    return [all[prevIndex], for (final i in kept) all[i]];
+    final close = weight(top) > -1
+        ? rivals
+              .skip(1)
+              .takeWhile((i) => weight(top) - weight(i) <= closeWithin)
+        : const <int>[];
+    return [all[prevIndex], all[top], for (final i in close) all[i]];
   }
 
   /// wins/attempts per resolver label attempted so far on [networkLabel].
@@ -234,29 +230,22 @@ class DoorResolverLadder {
     String networkLabel,
   ) async {
     final data = await _storage.load();
-    final entry = data[networkLabel];
-    if (entry is! Map) return const {};
-    final resolvers = entry['resolvers'];
-    if (resolvers is! Map) return const {};
-    final result = <String, ({int wins, int attempts})>{};
-    for (final key in resolvers.keys) {
-      final counts = resolvers[key];
-      if (counts is Map) {
-        result[key as String] = (
-          wins: counts['wins'] as int? ?? 0,
-          attempts: counts['attempts'] as int? ?? 0,
-        );
-      }
+    if (data[networkLabel] case {'resolvers': final Map resolvers}) {
+      return {
+        for (final MapEntry(:key, :value) in resolvers.entries)
+          if (value case final Map counts)
+            key as String: (
+              wins: counts['wins'] as int? ?? 0,
+              attempts: counts['attempts'] as int? ?? 0,
+            ),
+      };
     }
-    return result;
+    return const {};
   }
 
   /// The resolver that most recently won on [networkLabel], or null.
-  Future<String?> previousWinner(String networkLabel) async {
-    final data = await _storage.load();
-    final entry = data[networkLabel];
-    return entry is Map ? entry['lastWinner'] as String? : null;
-  }
+  Future<String?> previousWinner(String networkLabel) async =>
+      _lastWinnerOf(await _storage.load(), networkLabel);
 
   /// One probe round: [asked] is every resolver label actually raced;
   /// [winner] is the one the server logged first, or null when none
@@ -268,28 +257,20 @@ class DoorResolverLadder {
     String? winner,
   }) async {
     final data = await _storage.load();
-    final raw = data[networkLabel];
-    final entry = raw is Map
-        ? Map<String, Object?>.from(raw)
-        : <String, Object?>{};
-    final rawResolvers = entry['resolvers'];
-    final resolvers = rawResolvers is Map
-        ? Map<String, Object?>.from(rawResolvers)
-        : <String, Object?>{};
+    final entry = _asMap(data[networkLabel]);
+    final resolvers = _asMap(entry['resolvers']);
     for (final label in asked) {
-      final rawCounts = resolvers[label];
-      final counts = rawCounts is Map
-          ? Map<String, Object?>.from(rawCounts)
-          : <String, Object?>{'wins': 0, 'attempts': 0};
-      counts['attempts'] = (counts['attempts'] as int? ?? 0) + 1;
-      if (label == winner) {
-        counts['wins'] = (counts['wins'] as int? ?? 0) + 1;
-      }
-      resolvers[label] = counts;
+      final counts = _asMap(resolvers[label]);
+      resolvers[label] = {
+        'attempts': (counts['attempts'] as int? ?? 0) + 1,
+        'wins': (counts['wins'] as int? ?? 0) + (label == winner ? 1 : 0),
+      };
     }
-    entry['resolvers'] = resolvers;
-    if (winner != null) entry['lastWinner'] = winner;
-    data[networkLabel] = entry;
+    data[networkLabel] = {
+      ...entry,
+      'resolvers': resolvers,
+      'lastWinner': ?winner,
+    };
     data[_lastNetworkKey] = networkLabel;
     await _storage.save(data);
   }
@@ -312,19 +293,9 @@ class InstallLetterMeasurement {
 
   /// Same storage folder as [LetterRungLadder.disk] and
   /// [DoorResolverLadder.disk], a sibling file.
-  factory InstallLetterMeasurement.disk() {
-    final factory =
-        buildStorageDirectory() ??
-        (() => Directory(
-          '${Directory.systemTemp.path}/voice_call_kit_intelligence',
-        ));
-    return InstallLetterMeasurement(
-      DiskJsonStorage(
-        directoryFactory: factory,
-        fileName: 'letter_install_measurement.json',
-      ),
-    );
-  }
+  factory InstallLetterMeasurement.disk() => InstallLetterMeasurement(
+    _intelligenceFile('letter_install_measurement.json'),
+  );
 
   final PersistentStorage _storage;
 
@@ -395,19 +366,8 @@ class PersistedMeasurementConsent implements LetterMeasurementConsent {
 
   /// Same storage folder as [InstallLetterMeasurement.disk], a sibling
   /// file.
-  static Future<PersistedMeasurementConsent> disk() {
-    final factory =
-        buildStorageDirectory() ??
-        (() => Directory(
-          '${Directory.systemTemp.path}/voice_call_kit_intelligence',
-        ));
-    return load(
-      DiskJsonStorage(
-        directoryFactory: factory,
-        fileName: 'letter_measurement_consent.json',
-      ),
-    );
-  }
+  static Future<PersistedMeasurementConsent> disk() =>
+      load(_intelligenceFile('letter_measurement_consent.json'));
 
   /// Updates the in-memory flag immediately; the disk write follows in
   /// the background, so the very next Send already sees the new value.

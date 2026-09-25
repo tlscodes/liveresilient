@@ -712,12 +712,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         diagnosticsSource: _chartedQualityLabel ?? demoQualitySourceLabel,
         appVersion: 'reference v3',
         measurementConsentGranted: widget.measurementConsent?.granted ?? false,
-        onMeasurementConsentChanged: widget.measurementConsent == null
-            ? null
-            : (value) {
-                unawaited(widget.measurementConsent!.setGranted(value));
-                setState(() {});
-              },
+        onMeasurementConsentChanged: switch (widget.measurementConsent) {
+          null => null,
+          final consent => (value) {
+            unawaited(consent.setGranted(value));
+            setState(() {});
+          },
+        },
       ),
     ];
     return Scaffold(
