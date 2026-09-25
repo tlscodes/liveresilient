@@ -321,6 +321,29 @@ class TxtLetterCourier {
   }
 }
 
+/// Adds the secondary IPs from [TxtQueryResolvers.publicResolversFallback]
+/// — ONLY when none of [TxtQueryResolvers.publicResolvers] (8.8.8.8,
+/// 1.1.1.1, 9.9.9.9) is already racing in [transports]. The system
+/// resolver and every other candidate already in [transports] are
+/// returned unchanged; no address outside that fixed six-IP set is
+/// ever added. A pure function — it schedules nothing and disposes
+/// nothing, so a caller with no absence to fix pays only one pass over
+/// [transports].
+List<TxtQueryTransport> withFallbackIfDoorAbsent(
+  List<TxtQueryTransport> transports,
+) {
+  final hasDoor = transports.any(
+    (t) =>
+        TxtQueryResolvers.publicResolvers.any((r) => t.label.contains(r.host)),
+  );
+  if (hasDoor) return transports;
+  return [
+    ...transports,
+    for (final resolver in TxtQueryResolvers.publicResolversFallback)
+      Udp53QueryTransport(resolver),
+  ];
+}
+
 String _hex(List<int> b) =>
     b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
 

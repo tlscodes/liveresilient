@@ -21,7 +21,8 @@ import 'package:adaptive_transport/adaptive_transport.dart'
         TxtProbeOutcome,
         TxtQueryLane,
         TxtQueryWire,
-        WebSocketRelayLane;
+        WebSocketRelayLane,
+        withFallbackIfDoorAbsent;
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show
         CallHistoryRecord,
@@ -159,6 +160,16 @@ class _FabricLanes implements LetterLanes, LetterDoorProbe {
     final lane = valve;
     if (lane == null) return null;
     var probe = TxtLetterProbe.forLane(lane);
+    // The fixed race is untouched; this only widens it when none of the
+    // door's usual public resolvers made it into today's candidate set.
+    final widened = withFallbackIfDoorAbsent(probe.transports);
+    if (!identical(widened, probe.transports)) {
+      probe = TxtLetterProbe(
+        domain: probe.domain,
+        transports: widened,
+        timeout: probe.timeout,
+      );
+    }
     final ladder = doorResolverLadder;
     String? label;
     if (ladder != null) {

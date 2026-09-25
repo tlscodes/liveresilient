@@ -234,6 +234,76 @@ void main() {
     },
   );
 
+  group('withFallbackIfDoorAbsent', () {
+    test('adds the three secondary IPs when no door resolver is racing', () {
+      final transports = [_Resolver('system', _Server())];
+
+      final widened = withFallbackIfDoorAbsent(transports);
+
+      expect(widened, hasLength(4));
+      expect(widened.first.label, 'system');
+      expect(widened.skip(1).map((t) => t.label), [
+        'udp53:8.8.4.4:53',
+        'udp53:1.0.0.1:53',
+        'udp53:149.112.112.112:53',
+      ]);
+    });
+
+    test('leaves the race untouched when a door resolver is already in it', () {
+      final lane = TxtQueryLane.forValve(
+        TxtQueryValve(
+          domain: _domain,
+          resolvers: TxtQueryResolvers.candidates(
+            system: const [HostPort(host: '10.1.2.3', port: 53)],
+          ),
+        ),
+      );
+      final probe = TxtLetterProbe.forLane(lane); // already has 8.8.8.8
+
+      final widened = withFallbackIfDoorAbsent(probe.transports);
+
+      expect(widened, same(probe.transports)); // unchanged, no copy either
+    });
+
+    test('adds no address outside the fixed six-IP set', () {
+      final widened = withFallbackIfDoorAbsent([
+        _Resolver('system', _Server()),
+      ]);
+      final labels = widened.map((t) => t.label).toSet();
+      expect(labels, {
+        'system',
+        'udp53:8.8.4.4:53',
+        'udp53:1.0.0.1:53',
+        'udp53:149.112.112.112:53',
+      });
+    });
+  });
+
+  test(
+    'a forged reply naming a nonce this run never sent cannot win',
+    () async {
+      final server = _Server();
+      // The real resolver actually reaches the server; the forger never
+      // does — it only sees the query go by (as an in-path censor could)
+      // and answers on its own, claiming to be first with a nonce it
+      // invented. It cannot know the real nonces: they are random and
+      // never sent to it.
+      final real = _Resolver('8.8.8.8', server, up: 5);
+      final forger = _Forger();
+      final probe = TxtLetterProbe(domain: _domain, transports: [forger, real]);
+
+      final out = await probe.run();
+
+      // The forger answered — its reply parses — but names a nonce
+      // outside this run's own set, so it never becomes the winner.
+      expect(out.answers[0].winnerNonce, isNotNull);
+      expect(out.winnerIndex, isNot(0));
+      // The honest resolver, which actually reached the server, wins.
+      expect(out.winnerIndex, 1);
+      expect(out.reachedServer, isTrue);
+    },
+  );
+
   test('a reply for another group is not a winner', () async {
     final server = _Server();
     final a = _Resolver('stale', server);
@@ -269,6 +339,41 @@ class _Poison implements TxtQueryTransport {
       0x31,
       ...List.filled(8, 9),
       ...List.filled(8, 1),
+      1,
+    ];
+    return TxtQueryWire.buildDnsAnswerPacket(
+      q.txid,
+      q.name,
+      TxtQueryWire.frameDown(down),
+    );
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// An in-path forger: it sees the query go by (the group is right there in
+/// the name) and answers on its own — it never reaches the real server —
+/// claiming to be first with a nonce of its own invention. It cannot name
+/// a nonce this run actually sent: those are random and never told to it.
+class _Forger implements TxtQueryTransport {
+  @override
+  String get label => 'forger';
+
+  @override
+  Future<Uint8List> exchange(
+    Uint8List query,
+    int txid,
+    Duration timeout,
+  ) async {
+    final q = TxtQueryWire.parseDnsQueryPacket(query);
+    final chunk = TxtQueryWire.parseQueryName(q.name, _domain);
+    final payload = TxtQueryWire.reassemble([chunk]);
+    final group = payload.sublist(4, 12);
+    final down = [
+      0x50, 0x52, 0x42, 0x31, // "PRB1"
+      ...group,
+      ...List.filled(8, 0x42), // a nonce this run never generated
       1,
     ];
     return TxtQueryWire.buildDnsAnswerPacket(
