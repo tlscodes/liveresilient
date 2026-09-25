@@ -39,6 +39,7 @@ import 'package:adaptive_transport/adaptive_transport.dart'
         HttpLongPollLane,
         TxtLetterProbe,
         TxtQueryLane,
+        TxtQueryResolvers,
         TxtQueryWire,
         TxtQueryValve,
         WebSocketRelayLane;
@@ -66,6 +67,9 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
 import 'package:reference_app/src/datagram_lane_port.dart';
+import 'package:reference_app/src/intelligence/device_bindings.dart'
+    show systemDnsResolverBinding;
+import 'package:reference_app/src/intelligence/system_dns.dart' show systemDns;
 import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_parts.dart';
 import 'package:reference_app/src/photo_letter_picker.dart'
@@ -1420,8 +1424,27 @@ class JourneyPeer extends LetterComposer {
     // so at one refresh every 12 s the default would let five unanswered
     // probes declare the valve DOWN — terminally — inside the 60 s window,
     // before it had a chance to rank first.
+    // A pinned job list is used as-is. An empty one gets the app's own
+    // candidate order, with this device's resolver (the SystemDns read,
+    // null off-device) ahead of the public list — as call_session does.
+    final List<HostPort> resolvers;
+    if (config.resolvers.isNotEmpty) {
+      resolvers = config.resolvers;
+    } else {
+      await systemDns.refresh();
+      final system = TxtQueryResolvers.systemResolvers();
+      resolvers = TxtQueryResolvers.candidates(
+        system: [
+          ...system,
+          ...systemDnsResolverBinding(
+            existingSystemResolvers: system,
+            probe: () => systemDns.current,
+          ),
+        ],
+      );
+    }
     final valve = TxtQueryLane.forValve(
-      TxtQueryValve(domain: config.zone, resolvers: config.resolvers),
+      TxtQueryValve(domain: config.zone, resolvers: resolvers),
       failThreshold: 20,
     );
     final relayUri = endpoints.relayUri;
@@ -1449,8 +1472,7 @@ class JourneyPeer extends LetterComposer {
         'ids': ids,
         'zone': config.zone,
         'resolvers': [
-          for (final resolver in config.resolvers)
-            '${resolver.host}:${resolver.port}',
+          for (final resolver in resolvers) '${resolver.host}:${resolver.port}',
         ],
         'best_lane_id': fabric.snapshot.bestLaneId,
         'mode': fabric.snapshot.mode.name,
