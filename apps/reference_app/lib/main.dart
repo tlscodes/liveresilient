@@ -327,6 +327,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _chat.addListener(_onChanged);
     // A delivered letter is a row in the Chats list the moment it lands.
     _letterCourier.ledger.records.addListener(_onChanged);
+    // The director narrates the letter's rung beside the door ladder.
+    widget.intelligence?.director.letterLadder = _letterCourier.ladderStatus;
     _letterCourier.queue.pending.addListener(_onChanged);
     unawaited(_letterCourier.restore());
   }

@@ -14,6 +14,7 @@ import 'package:connection_orchestrator/connection_orchestrator.dart';
 import 'package:flutter/foundation.dart';
 
 import '../letter_rung_ladder.dart' show DoorResolverLadder;
+import '../letter_status_ladder.dart' show LetterLadderStatus;
 import 'connectivity_playbook.dart';
 import 'intelligence_hub.dart';
 
@@ -110,6 +111,10 @@ class IntelligenceDirector extends ChangeNotifier {
   /// already written by [LetterCourier]. Null adds no narration line —
   /// this never proposes a path, only describes one already on disk.
   final DoorResolverLadder? _doorResolverLadder;
+
+  /// The letter courier's own rung, bound after boot (the courier is born
+  /// later, in the home page). Read for the sentence only — never acted on.
+  ValueListenable<LetterLadderStatus?>? letterLadder;
 
   /// Minimum spacing between self-healing refresh actions, so a flapping
   /// path cannot make the director thrash.
@@ -292,19 +297,21 @@ class IntelligenceDirector extends ChangeNotifier {
   /// current network — never a suggestion, only what already happened.
   /// Null when there is no ladder, or nothing attempted here yet.
   Future<String?> _doorLadderNote() async {
+    final parts = <String>[];
     final ladder = _doorResolverLadder;
-    if (ladder == null) return null;
-    final label = _hub.resolver.lastKnownLabel;
-    final history = await ladder.history(label);
-    if (history.isEmpty) return null;
-    var wins = 0;
-    var attempts = 0;
-    for (final h in history.values) {
-      wins += h.wins;
-      attempts += h.attempts;
+    if (ladder != null) {
+      final history = await ladder.history(_hub.resolver.lastKnownLabel);
+      var wins = 0;
+      var attempts = 0;
+      for (final h in history.values) {
+        wins += h.wins;
+        attempts += h.attempts;
+      }
+      if (attempts > 0) parts.add('door $wins/$attempts');
     }
-    if (attempts == 0) return null;
-    return '· door $wins/$attempts here';
+    final rung = letterLadder?.value?.rung;
+    if (rung != null) parts.add(rung.name);
+    return parts.isEmpty ? null : '· ${parts.join(' · ')}';
   }
 
   @override

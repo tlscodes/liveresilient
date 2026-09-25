@@ -10,7 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/intelligence/foresight_card.dart';
 import 'package:reference_app/src/intelligence/intelligence_boot.dart';
 import 'package:reference_app/src/intelligence/intelligence_director.dart';
+import 'package:reference_app/src/intelligence/disk_json_storage.dart';
 import 'package:reference_app/src/intelligence/network_name_resolver.dart';
+import 'package:reference_app/src/letter_rung_ladder.dart';
+import 'package:reference_app/src/letter_status_ladder.dart';
 
 class _ToggleChannel implements TransportChannel {
   _ToggleChannel(this.name);
@@ -71,6 +74,39 @@ void main() {
 
     expect(stack.director.advisory.level, AdvisoryLevel.calm);
     expect(stack.director.advisory.detail.toLowerCase(), contains('connected'));
+    await stack.dispose();
+  });
+
+  test('narration names the door ladder AND the letter rung — words only, '
+      'no new strategy', () async {
+    final stack = await boot(_ToggleChannel('net'));
+    final door = DoorResolverLadder(
+      DiskJsonStorage(
+        directoryFactory: () => tempDir,
+        fileName: 'letter_door_resolvers.json',
+      ),
+    );
+    for (var i = 0; i < 10; i++) {
+      await door.record(
+        'wifi:TestNet',
+        asked: ['udp53:8.8.8.8:53'],
+        winner: i < 8 ? 'udp53:8.8.8.8:53' : null,
+      );
+    }
+    stack.director.letterLadder = ValueNotifier<LetterLadderStatus?>(
+      const LetterLadderStatus(LetterLadderRung.closed),
+    );
+    final strategiesBefore = stack.director.decisions.length;
+
+    await stack.fabric.refresh();
+    for (var i = 0; i < 20; i++) {
+      if (stack.director.advisory.detail.contains('closed')) break;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    expect(stack.director.advisory.detail, contains('door 8/10 · closed'));
+    // Healthy lane: no repair action was taken because of the sentence.
+    expect(stack.director.decisions.length, strategiesBefore);
     await stack.dispose();
   });
 
