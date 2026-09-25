@@ -67,7 +67,13 @@ Future<void> main() async {
     localLinkLane: buildLocalLinkLane(),
     storageDirFactory: buildStorageDirectory(),
   );
-  runApp(MyApp(intelligence: intelligence));
+  // Off until the person opts in from Settings — read once, at boot,
+  // because the letter courier needs a synchronous granted check on
+  // every Send.
+  final measurementConsent = await PersistedMeasurementConsent.disk();
+  runApp(
+    MyApp(intelligence: intelligence, measurementConsent: measurementConsent),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -79,10 +85,16 @@ class MyApp extends StatefulWidget {
     this.attachmentPicker,
     this.photoPicker,
     this.voiceNoteSource,
+    this.measurementConsent,
   });
 
   /// Null only in widget tests that exercise screens in isolation.
   final IntelligenceStack? intelligence;
+
+  /// The letter's once-per-install measurement opt-in — null in widget
+  /// tests, where the Settings toggle is simply absent (see
+  /// [SettingsScreen.onMeasurementConsentChanged]).
+  final PersistedMeasurementConsent? measurementConsent;
 
   /// Builds the call tab's session. Null uses the dev relay entry point
   /// ([devConnectWithStartupManifest]); widget tests inject a fake so a tap
@@ -137,6 +149,7 @@ class _MyAppState extends State<MyApp> {
         voiceNoteSource: widget.voiceNoteSource,
         themeMode: _themeMode,
         onThemeMode: (mode) => setState(() => _themeMode = mode),
+        measurementConsent: widget.measurementConsent,
       ),
     );
   }
@@ -156,9 +169,13 @@ class HomePage extends StatefulWidget {
     this.voiceNoteSource,
     this.themeMode = ThemeMode.system,
     this.onThemeMode,
+    this.measurementConsent,
   });
 
   final IntelligenceStack? intelligence;
+
+  /// See [MyApp.measurementConsent].
+  final PersistedMeasurementConsent? measurementConsent;
 
   /// See [MyApp.oobImport]: null means this build cannot verify a manifest, so
   /// the import control is not offered at all.
@@ -225,6 +242,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     networkResolver: widget.intelligence?.hub.resolver,
     rungLadder: LetterRungLadder.disk(),
     doorResolverLadder: DoorResolverLadder.disk(),
+    // Off until Settings says otherwise; null in widget tests, which
+    // InstallLetterMeasurement.recordOnce already treats as withheld.
+    measurementConsent: widget.measurementConsent,
+    installMeasurement: InstallLetterMeasurement.disk(),
+    // The SAME store nightly_evolution replays — null in widget tests.
+    callHistory: widget.intelligence?.hub.history,
   );
 
   late final ChatDemoController _chat = ChatDemoController(
@@ -685,6 +708,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         diagnosticsSeed: seededDemoHistory(),
         diagnosticsSource: _chartedQualityLabel ?? demoQualitySourceLabel,
         appVersion: 'reference v3',
+        measurementConsentGranted: widget.measurementConsent?.granted ?? false,
+        onMeasurementConsentChanged: widget.measurementConsent == null
+            ? null
+            : (value) {
+                unawaited(widget.measurementConsent!.setGranted(value));
+                setState(() {});
+              },
       ),
     ];
     return Scaffold(

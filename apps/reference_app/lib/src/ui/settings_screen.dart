@@ -25,6 +25,8 @@ class SettingsScreen extends StatelessWidget {
     this.diagnosticsSource = 'loopback demo',
     this.appVersion = 'dev',
     this.privacyLine = 'E2E media · no telemetry without opt-in',
+    this.measurementConsentGranted = false,
+    this.onMeasurementConsentChanged,
   });
 
   /// Currently selected theme mode (owned by the app shell).
@@ -45,9 +47,18 @@ class SettingsScreen extends StatelessWidget {
   final String appVersion;
   final String privacyLine;
 
+  /// Current state of the letter's once-per-install measurement opt-in —
+  /// separate from the mesh lane's own consent, which lives elsewhere.
+  final bool measurementConsentGranted;
+
+  /// Null hides the toggle entirely rather than showing one that cannot
+  /// do anything: absent is honest, present-and-inert is not.
+  final ValueChanged<bool>? onMeasurementConsentChanged;
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -111,6 +122,41 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
+          if (onMeasurementConsentChanged != null) ...[
+            const SizedBox(height: AppSpacing.s24),
+            const _SectionHeader('Privacy'),
+            _SectionCard(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Measure the first letter',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        Text(
+                          'One anonymous row, once: network type, '
+                          'carrier, which path worked. No letter text, '
+                          'no id — separate from nearby-connectivity '
+                          'consent.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: measurementConsentGranted,
+                    onChanged: onMeasurementConsentChanged,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

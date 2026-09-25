@@ -98,6 +98,36 @@ void main() {
       expect(replay.lastScoredCount, 3);
     });
 
+    test('a letter-shaped delivered record raises the score, a queued '
+        'one lowers it', () {
+      CallHistoryRecord letter(String outcome) => CallHistoryRecord(
+        startedUtcMs: 1,
+        connectMs: 300,
+        recoveries: 0,
+        dropsToFloor: 0,
+        networkIdentityHash: 'net-a',
+        endReason: outcome,
+        rung: 'resilient.dns-valve',
+        resolver: 'udp53:8.8.8.8:53',
+      );
+
+      final delivered = CallHistoryReplay(
+        records: [letter('delivered'), letter('delivered')],
+      );
+      final queued = CallHistoryReplay(
+        records: [letter('queued'), letter('queued')],
+      );
+
+      final deliveredScore = delivered.scoreEpoch(_freshBrains());
+      final queuedScore = queued.scoreEpoch(_freshBrains());
+
+      expect(delivered.lastScoredCount, 2);
+      expect(queued.lastScoredCount, 2);
+      expect(deliveredScore, 1.0); // error 0 -> 1/(1+0)
+      expect(queuedScore, 0.5); // error 1 -> 1/(1+1)
+      expect(deliveredScore, greaterThan(queuedScore));
+    });
+
     test('single call per network scores nothing (vacuous round)', () {
       final replay = CallHistoryReplay(
         records: [

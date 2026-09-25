@@ -14,6 +14,7 @@ import 'package:adaptive_transport/adaptive_transport.dart'
     show HostPort, TxtQueryLane, TxtQueryValve;
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show
+        CallHistoryStore,
         ConnectivitySnapshot,
         DeliveryOutcome,
         FabricMode,
@@ -219,6 +220,37 @@ void main() {
         expect(state, LetterState.queued);
         expect(await ladder.previousWinner('test-net'), isNull);
         expect(lanes.delivered, isEmpty); // never even offered to the fabric
+        await courier.dispose();
+      },
+    );
+
+    test(
+      'an arrived letter appends one call-history-shaped row — no text',
+      () async {
+        final lanes = ScriptedLanes()..doorUp = true;
+        final history = CallHistoryStore();
+        final courier = LetterCourier(
+          endpoints: () => throw StateError('scripted lanes, never assembled'),
+          budget: fast,
+          openLanes: () async => lanes,
+          networkResolver: const _FixedNetwork('test-net'),
+          callHistory: history,
+        );
+
+        final state = await courier.send(
+          Uint8List.fromList('secret letter body'.codeUnits),
+          kind: 'typed',
+        );
+
+        expect(state, LetterState.arrived);
+        expect(history.records, hasLength(1));
+        final row = history.records.single;
+        expect(row.rung, ResilientLaneIds.txtQuery);
+        expect(row.endReason, 'delivered');
+        expect(row.networkIdentityHash, isNot('test-net')); // hashed, not raw
+        expect(row.connectMs, greaterThanOrEqualTo(0));
+        // No letter text or byte survives into the row.
+        expect(history.toJson().toString(), isNot(contains('secret letter')));
         await courier.dispose();
       },
     );

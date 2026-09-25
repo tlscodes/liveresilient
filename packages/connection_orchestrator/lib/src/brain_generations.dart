@@ -51,6 +51,16 @@ class CallHistoryReplay {
     var errorSum = 0.0;
     var count = 0;
     for (final record in _records) {
+      if (record.rung != null) {
+        // A letter-shaped row (LetterCourier): the outcome itself is the
+        // signal, not a connect-time prediction. 'delivered' scores as
+        // if predicted perfectly (error 0); anything else ('queued')
+        // scores as the worst case (error 1) — a rising delivered ratio
+        // raises the epoch score, a rising queued ratio lowers it.
+        errorSum += record.endReason == 'delivered' ? 0.0 : 1.0;
+        count += 1;
+        continue;
+      }
       final connect = record.connectMs;
       if (connect <= 0) continue;
       final prior = priorConnects.putIfAbsent(

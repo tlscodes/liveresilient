@@ -24,11 +24,14 @@ import 'package:adaptive_transport/adaptive_transport.dart'
         WebSocketRelayLane;
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show
+        CallHistoryRecord,
+        CallHistoryStore,
         ConnectionFabric,
         ConnectivitySnapshot,
         DeliveryOutcome,
         LaneStatus,
         FabricMode,
+        NetworkAtlas,
         ResilientFallbackLanes,
         ResilientLaneEndpoints,
         ResilientLaneIds;
@@ -238,6 +241,7 @@ class LetterCourier {
     this._doorResolverLadder,
     this._measurementConsent,
     this._installMeasurement,
+    this._callHistory,
     Future<void> Function(Duration)? wait,
     Timer Function(Duration period, void Function() tick)? schedulePeriodic,
   }) : _now = now ?? DateTime.now,
@@ -287,6 +291,12 @@ class LetterCourier {
   /// The once-per-install-lifetime measurement; null keeps every Send
   /// exactly as it is today, nothing extra written anywhere.
   final InstallLetterMeasurement? _installMeasurement;
+
+  /// The SAME call-history store nightly_evolution replays — every
+  /// delivered or queued letter appends one call-history-shaped row
+  /// (identityHash, rung, resolver, rtt, outcome; never letter text).
+  /// Null keeps letters out of that history entirely.
+  final CallHistoryStore? _callHistory;
 
   /// The select loop's pause and the watch's period, both injectable so
   /// tests advance a clock instead of sleeping.
@@ -539,7 +549,9 @@ class LetterCourier {
     // ranks first, every time.
     final ladder = _rungLadder;
     final measurement = _installMeasurement;
-    final networkLabel = ladder == null && measurement == null
+    final needsNetworkLabel =
+        ladder != null || measurement != null || _callHistory != null;
+    final networkLabel = !needsNetworkLabel
         ? null
         : await (_networkResolver?.resolveNetworkLabel() ??
               Future.value('unknown'));
@@ -616,6 +628,12 @@ class LetterCourier {
             rttMs: rttMs,
             delivered: false,
           );
+          _recordCallHistory(
+            networkLabel,
+            best,
+            rttMs: rttMs,
+            delivered: false,
+          );
           return _park(letter);
         }
         doorResolver = probe.answers[probe.winnerIndex!].label;
@@ -643,7 +661,42 @@ class LetterCourier {
       rttMs: rttMs,
       delivered: result == LetterState.arrived,
     );
+    _recordCallHistory(
+      networkLabel,
+      best,
+      resolver: doorResolver,
+      rttMs: rttMs,
+      delivered: result == LetterState.arrived,
+    );
     return result;
+  }
+
+  /// Every delivered or queued letter appends one call-history-shaped
+  /// row — identityHash, rung, resolver, rtt, outcome — to the SAME
+  /// store [nightly_evolution.dart]'s champion/challenger replay reads.
+  /// No letter text, no bundle id. A no-op when [_callHistory] or
+  /// [networkLabel] is absent.
+  void _recordCallHistory(
+    String? networkLabel,
+    String rung, {
+    String? resolver,
+    required int rttMs,
+    required bool delivered,
+  }) {
+    final store = _callHistory;
+    if (store == null || networkLabel == null) return;
+    store.add(
+      CallHistoryRecord(
+        startedUtcMs: _now().millisecondsSinceEpoch,
+        connectMs: rttMs,
+        recoveries: 0,
+        dropsToFloor: 0,
+        networkIdentityHash: NetworkAtlas.identityHash(networkLabel),
+        endReason: delivered ? 'delivered' : 'queued',
+        rung: rung,
+        resolver: resolver,
+      ),
+    );
   }
 
   /// The once-per-install-lifetime measurement's call site: same rung,

@@ -27,6 +27,8 @@ class CallHistoryRecord {
     required this.networkIdentityHash,
     required this.endReason,
     this.qualityTimeline = const [],
+    this.rung,
+    this.resolver,
   });
 
   /// Call start, UTC wall-clock ms as supplied by the caller.
@@ -50,6 +52,15 @@ class CallHistoryRecord {
 
   final List<QualitySample> qualityTimeline;
 
+  /// Set only for a letter-shaped row (see `LetterCourier`); null for a
+  /// real call. [CallHistoryReplay.scoreEpoch] uses its presence to pick
+  /// the outcome-scored path over the connect-time-prediction one.
+  final String? rung;
+
+  /// The door's winning transport label, for a letter that went
+  /// through it; null otherwise (including every real call).
+  final String? resolver;
+
   Map<String, Object?> toJson() => {
     'startedUtcMs': startedUtcMs,
     'connectMs': connectMs,
@@ -58,6 +69,8 @@ class CallHistoryRecord {
     'networkIdentityHash': networkIdentityHash,
     'endReason': endReason,
     'qualityTimeline': [for (final s in qualityTimeline) s.toJson()],
+    'rung': rung,
+    'resolver': resolver,
   };
 
   /// Parses one serialized record; returns null when the shape is corrupt
@@ -92,6 +105,8 @@ class CallHistoryRecord {
         timeline.add(QualitySample(tMs: tMs, score: score.toDouble()));
       }
     }
+    final rung = raw['rung'];
+    final resolver = raw['resolver'];
     return CallHistoryRecord(
       startedUtcMs: startedUtcMs,
       connectMs: connectMs,
@@ -100,6 +115,8 @@ class CallHistoryRecord {
       networkIdentityHash: networkIdentityHash,
       endReason: endReason,
       qualityTimeline: timeline,
+      rung: rung is String ? rung : null,
+      resolver: resolver is String ? resolver : null,
     );
   }
 }
