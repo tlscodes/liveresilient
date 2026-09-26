@@ -40,6 +40,7 @@ import 'src/intelligence/system_dns.dart';
 import 'src/import_manifest_sheet.dart';
 import 'src/join_channel_sheet.dart';
 import 'src/lane_governor.dart';
+import 'src/letter_card.dart';
 import 'src/letter_composer.dart';
 import 'src/letter_courier.dart';
 import 'src/letter_ledger.dart';
@@ -254,6 +255,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     installMeasurement: InstallLetterMeasurement.disk(),
     // The SAME store nightly_evolution replays — null in widget tests.
     callHistory: widget.intelligence?.hub.history,
+    // One lab card per Send (counts and ids only) in letter_cards.jsonl,
+    // beside the brains' files; best effort, never throws.
+    cardSink: LetterCardLog.disk(),
   );
 
   late final ChatDemoController _chat = ChatDemoController(

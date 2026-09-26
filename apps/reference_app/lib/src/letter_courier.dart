@@ -41,6 +41,7 @@ import 'package:device_link/device_link.dart'
 import 'package:flutter/foundation.dart';
 
 import 'intelligence/network_name_resolver.dart' show NetworkNameResolver;
+import 'letter_card.dart';
 import 'letter_composer.dart';
 import 'letter_parts.dart';
 import 'letter_status_ladder.dart';
@@ -242,6 +243,7 @@ class LetterCourier {
     this._measurementConsent,
     this._installMeasurement,
     this._callHistory,
+    this._cardSink,
     Future<void> Function(Duration)? wait,
     Timer Function(Duration period, void Function() tick)? schedulePeriodic,
   }) : _now = now ?? DateTime.now,
@@ -297,6 +299,10 @@ class LetterCourier {
   /// (identityHash, rung, resolver, rtt, outcome; never letter text).
   /// Null keeps letters out of that history entirely.
   final CallHistoryStore? _callHistory;
+
+  /// One lab measurement card per Send (letter_card.dart): counts and ids
+  /// only, never letter text. Null keeps every Send exactly as today.
+  final LetterCardSink? _cardSink;
 
   /// The select loop's pause and the watch's period, both injectable so
   /// tests advance a clock instead of sleeping.
@@ -635,12 +641,15 @@ class LetterCourier {
       return _park(letter);
     }
     String? doorResolver;
+    // Kept past the race for the letter's card: its labels are the
+    // resolvers this Send raced. Never a second probe.
+    TxtProbeOutcome? probe;
     if (best == ResilientLaneIds.txtQuery && lanes is LetterDoorProbe) {
       // The door carries it: race three resolvers first. The winner is the
       // nonce our responder logged first, not the first answer home; none
       // logged means none of them reaches us now, so the letter waits.
       _set(LetterState.queued, '${payload.length} B · racing 3 resolvers');
-      final probe = await (lanes as LetterDoorProbe).probeDoor();
+      probe = await (lanes as LetterDoorProbe).probeDoor();
       if (probe != null) {
         note('probe ${probe.describe()}');
         await _updateLadder(s, probe: probe, networkLabel: networkLabel);
@@ -666,7 +675,14 @@ class LetterCourier {
             rttMs: rttMs,
             delivered: false,
           );
-          return _park(letter);
+          final parked = await _park(letter);
+          _recordCard(
+            bytes: payload.length,
+            state: LetterState.queued,
+            bestLane: best,
+            probe: probe,
+          );
+          return parked;
         }
         doorResolver = probe.answers[probe.winnerIndex!].label;
       }
@@ -700,7 +716,49 @@ class LetterCourier {
       rttMs: rttMs,
       delivered: result == LetterState.arrived,
     );
+    _recordCard(
+      bytes: payload.length,
+      state: result,
+      bestLane: best,
+      session: best == ResilientLaneIds.txtQuery ? lanes.doorSessionId : null,
+      probe: probe,
+      winner: doorResolver,
+    );
     return result;
+  }
+
+  /// The letter's lab measurement card (letter_card.dart): counts and ids
+  /// only. [state] is normalized to sentLive / queued / notDelivered; the
+  /// rung is the six-rung reading already on [ladderStatus]. A no-op when
+  /// no [_cardSink] was wired in; never throws into the Send.
+  void _recordCard({
+    required int bytes,
+    required LetterState state,
+    required String? bestLane,
+    String? session,
+    TxtProbeOutcome? probe,
+    String? winner,
+  }) {
+    final sink = _cardSink;
+    if (sink == null) return;
+    final winnerIndex = probe?.winnerIndex;
+    unawaited(
+      sink.append(
+        LetterCard(
+          at: _now(),
+          source: 'phone',
+          session: session,
+          bytes: bytes,
+          outcome: normalizeLetterOutcome(state.name),
+          bestLane: bestLane,
+          resolvers: [for (final a in probe?.answers ?? const []) a.label],
+          winner:
+              winner ??
+              (winnerIndex == null ? null : probe!.answers[winnerIndex].label),
+          rung: ladderStatus.value?.rung.name,
+        ),
+      ),
+    );
   }
 
   /// Every delivered or queued letter appends one call-history-shaped

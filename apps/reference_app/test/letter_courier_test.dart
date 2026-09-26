@@ -8,6 +8,7 @@
 // clock is turned by hand — so the queue's exactly-once is proven without
 // a socket and without a sleep.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:adaptive_transport/adaptive_transport.dart'
@@ -24,6 +25,7 @@ import 'package:connection_orchestrator/connection_orchestrator.dart'
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/intelligence/disk_json_storage.dart';
 import 'package:reference_app/src/intelligence/network_name_resolver.dart';
+import 'package:reference_app/src/letter_card.dart';
 import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_courier.dart';
 import 'package:reference_app/src/letter_parts.dart';
@@ -898,6 +900,103 @@ void main() {
       );
     });
   });
+
+  group('the per-letter lab card (scripted lanes, no network)', () {
+    test('a sentLive letter writes exactly one sentLive card', () async {
+      final lanes = DoorProbingLanes()
+        ..doorUp = true
+        ..answer = () => const TxtProbeOutcome(
+          groupId: 'g1',
+          answers: [
+            TxtProbeAnswer(index: 0, label: 'res-a', nonce: 'aa'),
+            TxtProbeAnswer(index: 1, label: 'res-b', nonce: 'bb'),
+          ],
+          winnerIndex: 1,
+        );
+      final cards = RecordingCardSink();
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList('secret letter body'.codeUnits),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.arrived);
+      expect(cards.cards, hasLength(1));
+      final card = cards.cards.single.toJson();
+      expect(card['outcome'], 'sentLive');
+      expect(card['best_lane'], ResilientLaneIds.txtQuery);
+      expect(card['bytes'], 'secret letter body'.length);
+      expect(card['session'], 'ABC123');
+      expect(card['resolvers'], ['res-a', 'res-b']);
+      expect(card['winner'], 'res-b');
+      expect(card['source'], 'phone');
+      expect(card['lab'], isTrue);
+      // Counts and ids only: no letter text survives into the card.
+      expect(jsonEncode(card), isNot(contains('secret letter')));
+      await courier.dispose();
+    });
+
+    test('a queuedForLater letter writes exactly one queued card', () async {
+      final lanes = ScriptedLanes()
+        ..doorUp = true
+        ..outcome = DeliveryOutcome.queuedForLater;
+      final cards = RecordingCardSink();
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.queued);
+      expect(cards.cards, hasLength(1));
+      final card = cards.cards.single.toJson();
+      expect(card['outcome'], 'queued');
+      expect(card['best_lane'], ResilientLaneIds.txtQuery);
+      expect(card['bytes'], 3);
+      expect(card['resolvers'], isEmpty);
+      await courier.dispose();
+    });
+
+    test('the card\'s JSON key order is pinned byte for byte', () {
+      final card = LetterCard(
+        at: DateTime.utc(2026, 9, 26, 12),
+        source: 'mac',
+        session: 'S1',
+        bytes: 42,
+        outcome: 'queued',
+        bestLane: 'lane-x',
+        resolvers: const ['res-a'],
+        winner: 'res-a',
+      );
+      expect(
+        jsonEncode(card.toJson()),
+        '{"event":"letter_card","v":1,"at":"2026-09-26T12:00:00.000Z",'
+        '"source":"mac","session":"S1","bytes":42,"outcome":"queued",'
+        '"best_lane":"lane-x","resolvers":["res-a"],"winner":"res-a",'
+        '"rung":null,"lab":true}',
+      );
+    });
+  });
+}
+
+/// Records every card the courier appends; no disk.
+class RecordingCardSink implements LetterCardSink {
+  final List<LetterCard> cards = [];
+
+  @override
+  Future<void> append(LetterCard card) async => cards.add(card);
 }
 
 /// A lane set the test scripts: which lane is up decides the snapshot,

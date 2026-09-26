@@ -38,6 +38,7 @@ import 'package:adaptive_transport/adaptive_transport.dart'
         HostPort,
         HttpLongPollLane,
         TxtLetterProbe,
+        TxtProbeOutcome,
         TxtQueryLane,
         TxtQueryResolvers,
         TxtQueryWire,
@@ -70,6 +71,7 @@ import 'package:reference_app/src/datagram_lane_port.dart';
 import 'package:reference_app/src/intelligence/device_bindings.dart'
     show systemDnsResolverBinding;
 import 'package:reference_app/src/intelligence/system_dns.dart' show systemDns;
+import 'package:reference_app/src/letter_card.dart';
 import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_parts.dart';
 import 'package:reference_app/src/photo_letter_picker.dart'
@@ -101,6 +103,37 @@ const int journeyConnectBudgetS = int.fromEnvironment(
 /// The whole screen, so the peer can photograph what it shows (the letter
 /// on screen is evidence only if the Mac can see it).
 final GlobalKey journeyScreenKey = GlobalKey();
+
+/// The rig peer's lab card for one letter (letter_card.dart): counts and
+/// ids only, never letter text or wire bytes. [outcome] is the fabric's
+/// outcome name (sentLive / queuedForLater / rejected / ...), normalized
+/// here; [resolvers] and [winner] are the labels of the probe this letter
+/// already raced. The peer has no ladder, so the rung is always null.
+LetterCard peerLetterCard({
+  required DateTime at,
+  required String source,
+  required int bytes,
+  required String outcome,
+  String? session,
+  String? bestLane,
+  TxtProbeOutcome? probe,
+}) {
+  final winnerIndex = probe?.winnerIndex;
+  return LetterCard(
+    at: at,
+    source: source,
+    session: session,
+    bytes: bytes,
+    outcome: normalizeLetterOutcome(outcome),
+    bestLane: bestLane,
+    resolvers: [for (final a in probe?.answers ?? const []) a.label],
+    winner: winnerIndex == null ? null : probe!.answers[winnerIndex].label,
+  );
+}
+
+/// Where the peer's cards land on the device: the same letter_cards.jsonl
+/// the app writes, beside the brains' files (buildStorageDirectory).
+final LetterCardLog _peerCardLog = LetterCardLog.disk();
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1550,6 +1583,18 @@ class JourneyPeer extends LetterComposer {
           'reason': 'probe_no_nonce_logged',
           'group': outcome.groupId,
         }, run: job.run);
+        await _emitCard(
+          job,
+          peerLetterCard(
+            at: DateTime.now(),
+            source: config.chatSource,
+            bytes: letterPayload.length,
+            outcome: 'queuedForLater',
+            session: valve.lastSessionId,
+            bestLane: fabric.snapshot.bestLaneId,
+            probe: outcome,
+          ),
+        );
         return;
       }
       await _carryOverValve(
@@ -1562,6 +1607,7 @@ class JourneyPeer extends LetterComposer {
         letterPayload,
         letterKind,
         letterSubmitted,
+        outcome,
       );
     } finally {
       // dispose() closes the snapshot stream and nothing else — the fabric
@@ -1793,6 +1839,7 @@ class JourneyPeer extends LetterComposer {
     Uint8List payload,
     String letterKind,
     bool letterSubmitted,
+    TxtProbeOutcome probe,
   ) async {
     final remaining = deadline.difference(DateTime.now());
     final budget = remaining < const Duration(seconds: 1)
@@ -1984,6 +2031,18 @@ class JourneyPeer extends LetterComposer {
           'grounds': fabric.lastPlan?.explanation?.grounds,
         },
       }, run: job.run);
+      await _emitCard(
+        job,
+        peerLetterCard(
+          at: DateTime.now(),
+          source: config.chatSource,
+          bytes: payload.length,
+          outcome: outcome.name,
+          session: sessionId,
+          bestLane: bestAtSend,
+          probe: probe,
+        ),
+      );
     } on TimeoutException {
       _note('dns valve gave_up after ${budget.inSeconds}s');
       _setLetter(
@@ -2013,6 +2072,14 @@ class JourneyPeer extends LetterComposer {
     } finally {
       heartbeat.cancel();
     }
+  }
+
+  /// One letter's lab card, two ways: to the hub as a `letter_card`
+  /// event (appended verbatim, no hub change) and to the on-device
+  /// letter_cards.jsonl. Both best effort.
+  Future<void> _emitCard(JourneyJob job, LetterCard card) async {
+    await _report('letter_card', card.toJson(), run: job.run);
+    await _peerCardLog.append(card);
   }
 
   /// The parts of one letter over the fabric: up to three delivers at

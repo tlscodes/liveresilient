@@ -16,6 +16,8 @@ import 'dart:math';
 
 // Uint8List arrives with services.dart, imported here for the
 // PlatformException the iOS picker throws, so dart:typed_data is not listed.
+import 'package:adaptive_transport/adaptive_transport.dart'
+    show TxtProbeAnswer, TxtProbeOutcome;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1377,6 +1379,81 @@ void main() {
         photoLetterFallbackChannel.name,
         'com.tlscodes.reference_app/photo_letter_fallback',
       );
+    });
+  });
+
+  group('the peer\'s per-letter lab card', () {
+    const probe = TxtProbeOutcome(
+      groupId: 'g1',
+      answers: [
+        TxtProbeAnswer(index: 0, label: 'res-a', nonce: 'aa'),
+        TxtProbeAnswer(index: 1, label: 'res-b', nonce: 'bb'),
+      ],
+      winnerIndex: 0,
+    );
+
+    test('sentLive over the valve: labels, winner, session, no rung', () {
+      final card = peerLetterCard(
+        at: DateTime.utc(2026, 9, 26, 12),
+        source: 'mac',
+        bytes: 96,
+        outcome: 'sentLive',
+        session: 'S1',
+        bestLane: 'txt-query',
+        probe: probe,
+      ).toJson();
+      expect(card, {
+        'event': 'letter_card',
+        'v': 1,
+        'at': '2026-09-26T12:00:00.000Z',
+        'source': 'mac',
+        'session': 'S1',
+        'bytes': 96,
+        'outcome': 'sentLive',
+        'best_lane': 'txt-query',
+        'resolvers': ['res-a', 'res-b'],
+        'winner': 'res-a',
+        'rung': null,
+        'lab': true,
+      });
+      expect(card.keys.toList(), [
+        'event',
+        'v',
+        'at',
+        'source',
+        'session',
+        'bytes',
+        'outcome',
+        'best_lane',
+        'resolvers',
+        'winner',
+        'rung',
+        'lab',
+      ]);
+    });
+
+    test('the fabric\'s vocabulary is normalized', () {
+      String outcomeOf(String name) => peerLetterCard(
+        at: DateTime.utc(2026),
+        source: 'phone',
+        bytes: 1,
+        outcome: name,
+      ).outcome;
+      expect(outcomeOf('queuedForLater'), 'queued');
+      expect(outcomeOf('sentLive'), 'sentLive');
+      expect(outcomeOf('rejected'), 'notDelivered');
+    });
+
+    test('no probe: resolvers empty, winner null', () {
+      final card = peerLetterCard(
+        at: DateTime.utc(2026),
+        source: 'phone',
+        bytes: 3,
+        outcome: 'queuedForLater',
+      ).toJson();
+      expect(card['resolvers'], isEmpty);
+      expect(card['winner'], isNull);
+      expect(card['session'], isNull);
     });
   });
 }
