@@ -936,6 +936,8 @@ void main() {
       expect(card['resolvers'], ['res-a', 'res-b']);
       expect(card['winner'], 'res-b');
       expect(card['source'], 'phone');
+      // The existing ladder's reading is written when a status exists.
+      expect(card['rung'], LetterLadderRung.withCourier.name);
       expect(card['lab'], isTrue);
       // Counts and ids only: no letter text survives into the card.
       expect(jsonEncode(card), isNot(contains('secret letter')));
@@ -966,28 +968,88 @@ void main() {
       expect(card['best_lane'], ResilientLaneIds.txtQuery);
       expect(card['bytes'], 3);
       expect(card['resolvers'], isEmpty);
+      expect(card['rung'], LetterLadderRung.weak.name);
       await courier.dispose();
     });
 
-    test('the card\'s JSON key order is pinned byte for byte', () {
+    test('a closed door writes a queued card with rung closed', () async {
+      final lanes = DoorProbingLanes()
+        ..doorUp = true
+        ..answer = () => const TxtProbeOutcome(
+          groupId: 'g',
+          answers: [
+            TxtProbeAnswer(index: 0, label: 'udp53:8.8.8.8:53', nonce: 'aa'),
+          ],
+          winnerIndex: null,
+        );
+      final cards = RecordingCardSink();
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.queued);
+      expect(cards.cards, hasLength(1));
+      final card = cards.cards.single.toJson();
+      expect(card['outcome'], 'queued');
+      expect(card['rung'], LetterLadderRung.closed.name);
+      expect(card['resolvers'], ['udp53:8.8.8.8:53']);
+      expect(card['winner'], isNull);
+      await courier.dispose();
+    });
+
+    // Rung-absent is unreachable through send() (the ladder is always
+    // refreshed first), so the null rung is pinned at the model level.
+    test('rung present: the JSON carries the ladder name in place', () {
       final card = LetterCard(
         at: DateTime.utc(2026, 9, 26, 12),
-        source: 'mac',
+        source: 'phone',
         session: 'S1',
         bytes: 42,
-        outcome: 'queued',
+        outcome: 'sentLive',
         bestLane: 'lane-x',
         resolvers: const ['res-a'],
         winner: 'res-a',
+        rung: 'normal',
       );
       expect(
         jsonEncode(card.toJson()),
         '{"event":"letter_card","v":1,"at":"2026-09-26T12:00:00.000Z",'
-        '"source":"mac","session":"S1","bytes":42,"outcome":"queued",'
+        '"source":"phone","session":"S1","bytes":42,"outcome":"sentLive",'
         '"best_lane":"lane-x","resolvers":["res-a"],"winner":"res-a",'
-        '"rung":null,"lab":true}',
+        '"rung":"normal","lab":true}',
       );
     });
+
+    test(
+      'the card\'s JSON key order is pinned byte for byte (rung absent)',
+      () {
+        final card = LetterCard(
+          at: DateTime.utc(2026, 9, 26, 12),
+          source: 'mac',
+          session: 'S1',
+          bytes: 42,
+          outcome: 'queued',
+          bestLane: 'lane-x',
+          resolvers: const ['res-a'],
+          winner: 'res-a',
+        );
+        expect(
+          jsonEncode(card.toJson()),
+          '{"event":"letter_card","v":1,"at":"2026-09-26T12:00:00.000Z",'
+          '"source":"mac","session":"S1","bytes":42,"outcome":"queued",'
+          '"best_lane":"lane-x","resolvers":["res-a"],"winner":"res-a",'
+          '"rung":null,"lab":true}',
+        );
+      },
+    );
   });
 }
 

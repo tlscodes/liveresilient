@@ -1454,6 +1454,7 @@ void main() {
       expect(card['resolvers'], isEmpty);
       expect(card['winner'], isNull);
       expect(card['session'], isNull);
+      expect(card['rung'], isNull); // the peer has no ladder
     });
   });
 }
