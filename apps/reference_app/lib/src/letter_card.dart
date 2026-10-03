@@ -9,8 +9,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'intelligence/device_bindings.dart' show buildStorageDirectory;
-
 /// The three outcome words a card may carry. The fabric's
 /// `queuedForLater` and the app's `queued` read "queued"; `sentLive` and
 /// the app's `arrived` read "sentLive"; anything else is "notDelivered".
@@ -74,19 +72,30 @@ abstract interface class LetterCardSink {
   Future<void> append(LetterCard card);
 }
 
+/// On iOS the container's tmp folder sits beside Documents, so the persistent
+/// Documents folder is tmp's parent. Elsewhere the card stays in system temp.
+Directory letterCardDirectory({
+  required String systemTempPath,
+  required bool isIOS,
+}) {
+  final tmp = systemTempPath.replaceAll(RegExp(r'/+$'), '');
+  final base = isIOS
+      ? '${tmp.substring(0, tmp.lastIndexOf('/'))}/Documents'
+      : tmp;
+  return Directory('$base/voice_call_kit_intelligence');
+}
+
 /// Best-effort on-device appender: one `jsonEncode(card)` line per card
 /// in `letter_cards.jsonl`, beside the brains' files. Never throws — disk
 /// trouble must never break a Send.
 class LetterCardLog implements LetterCardSink {
   LetterCardLog(this._directoryFactory, {this.fileName = 'letter_cards.jsonl'});
 
-  /// The brains' Documents home on a phone ([buildStorageDirectory]), and
-  /// the same system-temp folder they fall back to elsewhere — the
-  /// convention letterQueueDirectory() already follows.
   factory LetterCardLog.disk() => LetterCardLog(
-    () =>
-        buildStorageDirectory()?.call() ??
-        Directory('${Directory.systemTemp.path}/voice_call_kit_intelligence'),
+    () => letterCardDirectory(
+      systemTempPath: Directory.systemTemp.path,
+      isIOS: Platform.isIOS,
+    ),
   );
 
   final Directory Function() _directoryFactory;
