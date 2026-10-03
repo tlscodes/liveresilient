@@ -357,13 +357,35 @@ class LetterCourier {
         ? const <String, ({int wins, int attempts})>{}
         : await doorLadder.history(networkLabel);
     if (_disposed) return;
-    ladderStatus.value = classifyLetterLadder(
-      snapshot: s,
-      lastProbe: probe,
-      doorHistory: history,
-      queueWaiting: queue.waiting,
-      nextProbeIn: budget.refreshEvery,
+    ladderStatus.value = _applyDegradedLatch(
+      classifyLetterLadder(
+        snapshot: s,
+        lastProbe: probe,
+        doorHistory: history,
+        queueWaiting: queue.waiting,
+        nextProbeIn: budget.refreshEvery,
+      ),
     );
+  }
+
+  /// Hysteresis. Once a deliver has outrun [LetterCourierBudget.carry] —
+  /// a "gave up" / late verdict — this courier instance never reports a
+  /// rung better than weak again: a degraded run stays marked degraded,
+  /// so a healthy IMMEDIATE reply right after does not erase it. No new
+  /// rung, no new number — it reuses [LetterLadderRung.weak] with reason
+  /// 'late'. Lifetime is this courier instance (the app process); a fresh
+  /// process starts clean.
+  bool _degradedLatch = false;
+
+  LetterLadderStatus _applyDegradedLatch(LetterLadderStatus next) =>
+      _degradedLatch && next.rung.index < LetterLadderRung.weak.index
+      ? const LetterLadderStatus(LetterLadderRung.weak, reason: 'late')
+      : next;
+
+  void _markDegraded() {
+    _degradedLatch = true;
+    final current = ladderStatus.value;
+    if (current != null) ladderStatus.value = _applyDegradedLatch(current);
   }
 
   LetterLanes? _lanes;
@@ -637,7 +659,13 @@ class LetterCourier {
     if (best == null) {
       // Every call lane negative and the door down: nothing to carry it
       // now. Parked here, not offered to the fabric, so the one deliver
-      // it gets is the watch's.
+      // it gets is the watch's. The decision (closed → queued) and its
+      // reason go on the card too, from the rung just computed above.
+      _recordCard(
+        bytes: payload.length,
+        state: LetterState.queued,
+        bestLane: null,
+      );
       return _park(letter);
     }
     String? doorResolver;
@@ -742,23 +770,26 @@ class LetterCourier {
     final sink = _cardSink;
     if (sink == null) return;
     final winnerIndex = probe?.winnerIndex;
-    unawaited(
-      sink.append(
-        LetterCard(
-          at: _now(),
-          source: 'phone',
-          session: session,
-          bytes: bytes,
-          outcome: normalizeLetterOutcome(state.name),
-          bestLane: bestLane,
-          resolvers: [for (final a in probe?.answers ?? const []) a.label],
-          winner:
-              winner ??
-              (winnerIndex == null ? null : probe!.answers[winnerIndex].label),
-          rung: ladderStatus.value?.rung.name,
-        ),
-      ),
+    final card = LetterCard(
+      at: _now(),
+      source: 'phone',
+      session: session,
+      bytes: bytes,
+      outcome: normalizeLetterOutcome(state.name),
+      bestLane: bestLane,
+      resolvers: [for (final a in probe?.answers ?? const []) a.label],
+      winner:
+          winner ??
+          (winnerIndex == null ? null : probe!.answers[winnerIndex].label),
+      rung: ladderStatus.value?.rung.name,
+      reason: ladderStatus.value?.reason,
     );
+    // Best-effort, like the card log itself: a sink that throws
+    // synchronously (disk full on the first touch) or whose append future
+    // errors must never break — or leak an uncaught error into — a Send.
+    try {
+      unawaited(sink.append(card).catchError((Object _) {}));
+    } catch (_) {}
   }
 
   /// Every delivered or queued letter appends one call-history-shaped
@@ -881,6 +912,9 @@ class LetterCourier {
         LetterState.notDelivered,
         'gave up after ${budget.carry.inSeconds}s · ${_scores(_snap(lanes))}',
       );
+      // The carry outran its budget: this run degraded. Latch it so a
+      // later healthy reply cannot raise the rung back above weak.
+      _markDegraded();
       unawaited(_settleLate(inner, lanes, letter, best, fromQueue: fromQueue));
       return LetterState.notDelivered;
     } on Object catch (error) {

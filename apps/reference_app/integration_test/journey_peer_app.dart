@@ -108,7 +108,8 @@ final GlobalKey journeyScreenKey = GlobalKey();
 /// ids only, never letter text or wire bytes. [outcome] is the fabric's
 /// outcome name (sentLive / queuedForLater / rejected / ...), normalized
 /// here; [resolvers] and [winner] are the labels of the probe this letter
-/// already raced. The peer has no ladder, so the rung is always null.
+/// already raced. The peer has no ladder, so the rung and its reason are
+/// always null.
 LetterCard peerLetterCard({
   required DateTime at,
   required String source,

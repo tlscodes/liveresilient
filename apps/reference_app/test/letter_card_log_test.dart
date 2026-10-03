@@ -6,16 +6,21 @@ import 'package:reference_app/src/intelligence/device_bindings.dart'
     show intelligenceStorageDirectory;
 import 'package:reference_app/src/letter_card.dart';
 
-LetterCard _card({required String outcome, String? rung, String? session}) =>
-    LetterCard(
-      at: DateTime.utc(2026, 10, 3, 18, 22, 33),
-      source: 'phone',
-      session: session,
-      bytes: 107,
-      outcome: outcome,
-      bestLane: 'resilient.wss',
-      rung: rung,
-    );
+LetterCard _card({
+  required String outcome,
+  String? rung,
+  String? reason,
+  String? session,
+}) => LetterCard(
+  at: DateTime.utc(2026, 10, 3, 18, 22, 33),
+  source: 'phone',
+  session: session,
+  bytes: 107,
+  outcome: outcome,
+  bestLane: 'resilient.wss',
+  rung: rung,
+  reason: reason,
+);
 
 void main() {
   group('disk() shares the one intelligence folder', () {
@@ -74,23 +79,27 @@ void main() {
             .map((line) => jsonDecode(line) as Map<String, Object?>)
             .toList();
 
-    test('a sentLive card with a rung writes that rung', () async {
+    test('a sentLive card with a rung and reason writes both', () async {
       final log = LetterCardLog(() => dir);
-      await log.append(_card(outcome: 'sentLive', rung: 'weak'));
+      await log.append(
+        _card(outcome: 'sentLive', rung: 'weak', reason: 'slow'),
+      );
       final lines = readLines();
       expect(lines, hasLength(1));
       expect(lines.single['outcome'], 'sentLive');
       expect(lines.single['rung'], 'weak');
+      expect(lines.single['reason'], 'slow');
       expect(lines.single['lab'], true);
     });
 
-    test('a queued card with no rung writes rung null', () async {
+    test('a queued card with no rung writes rung and reason null', () async {
       final log = LetterCardLog(() => dir);
       await log.append(_card(outcome: 'queued'));
       final lines = readLines();
       expect(lines, hasLength(1));
       expect(lines.single['outcome'], 'queued');
       expect(lines.single['rung'], isNull);
+      expect(lines.single['reason'], isNull);
     });
 
     test('later cards append after earlier ones, never overwrite', () async {

@@ -31,10 +31,11 @@ class LetterCard {
     this.resolvers = const <String>[],
     this.winner,
     this.rung,
+    this.reason,
   });
 
   static const String event = 'letter_card';
-  static const int version = 1;
+  static const int version = 2;
 
   final DateTime at;
 
@@ -52,6 +53,11 @@ class LetterCard {
   final String? winner;
   final String? rung;
 
+  /// One word for WHY this run's [rung] was what it was, from the ladder's
+  /// own fabric predicate (letter_status_ladder.dart). Null on a writer
+  /// with no ladder (the rig peer), exactly like [rung].
+  final String? reason;
+
   /// Key order is part of the schema — both writers depend on it.
   Map<String, Object?> toJson() => <String, Object?>{
     'event': event,
@@ -65,6 +71,7 @@ class LetterCard {
     'resolvers': List<String>.of(resolvers),
     'winner': winner,
     'rung': rung,
+    'reason': reason,
     'lab': true,
   };
 }

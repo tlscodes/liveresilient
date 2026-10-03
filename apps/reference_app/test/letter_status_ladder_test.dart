@@ -48,6 +48,7 @@ typedef _Case = ({
   TxtProbeOutcome? probe,
   Map<String, ({int wins, int attempts})> history,
   LetterLadderRung rung,
+  String reason,
 });
 
 void main() {
@@ -62,6 +63,7 @@ void main() {
       probe: null,
       history: const {},
       rung: LetterLadderRung.normal,
+      reason: 'ok',
     ),
     (
       name: 'limited: one non-door lane is dead, the other still healthy',
@@ -73,21 +75,12 @@ void main() {
       probe: null,
       history: const {},
       rung: LetterLadderRung.limited,
+      reason: 'down',
     ),
     (
-      name: 'weak: no live lane at all, no probe confirmation this round',
-      lanes: [
-        lane(ResilientLaneIds.webSocketRelay, -1.05),
-        lane(ResilientLaneIds.httpLongPoll, -1.10),
-        lane(ResilientLaneIds.txtQuery, -1.15),
-      ],
-      probe: null,
-      history: const {},
-      rung: LetterLadderRung.weak,
-    ),
-    (
+      // The owner's real run: wss alive but below 0.15 — WHY it was weak.
       name:
-          'weak: a live lane is up but slow (below the 0.15 freshness '
+          'weak/slow: a live lane is up but slow (below the 0.15 freshness '
           'ceiling)',
       lanes: [
         lane(ResilientLaneIds.webSocketRelay, 0.05), // alive, not healthy
@@ -96,6 +89,35 @@ void main() {
       probe: null,
       history: const {},
       rung: LetterLadderRung.weak,
+      reason: 'slow',
+    ),
+    (
+      // No live lane, but the door still has a path (score-eligible),
+      // just not freshly proven by a probe this round.
+      name: 'weak/dead: no live lane, the door still has a path, no probe',
+      lanes: [
+        lane(ResilientLaneIds.webSocketRelay, -1.05),
+        lane(ResilientLaneIds.httpLongPoll, -1.10),
+        lane(ResilientLaneIds.txtQuery, 0.6),
+      ],
+      probe: null,
+      history: const {},
+      rung: LetterLadderRung.weak,
+      reason: 'dead',
+    ),
+    (
+      // Nothing has a path — not even the door: the reading is closed,
+      // not weak (every lane at or below letterDeadAtOrBelow).
+      name: 'closed/dead: every lane is dead, the door included, no probe',
+      lanes: [
+        lane(ResilientLaneIds.webSocketRelay, -1.05),
+        lane(ResilientLaneIds.httpLongPoll, -1.10),
+        lane(ResilientLaneIds.txtQuery, -1.15),
+      ],
+      probe: null,
+      history: const {},
+      rung: LetterLadderRung.closed,
+      reason: 'dead',
     ),
     (
       name: 'withCourier: no live lane, but this round the door answered',
@@ -107,6 +129,7 @@ void main() {
       probe: reached,
       history: const {},
       rung: LetterLadderRung.withCourier,
+      reason: 'door',
     ),
     (
       name: 'halfClosed: the door history is a mix of hits and misses',
@@ -117,10 +140,11 @@ void main() {
       probe: reached,
       history: const {'udp53:8.8.8.8:53': (wins: 3, attempts: 10)},
       rung: LetterLadderRung.halfClosed,
+      reason: 'mixed',
     ),
   ];
 
-  for (final (:name, :lanes, :probe, :history, :rung) in cases) {
+  for (final (:name, :lanes, :probe, :history, :rung, :reason) in cases) {
     test(name, () {
       final status = classifyLetterLadder(
         snapshot: snap(lanes),
@@ -128,6 +152,8 @@ void main() {
         doorHistory: history,
       );
       expect(status.rung, rung);
+      // The one-word WHY, from the same fabric predicate that chose the rung.
+      expect(status.reason, reason);
     });
   }
 
@@ -143,6 +169,9 @@ void main() {
       nextProbeIn: const Duration(seconds: 12),
     );
     expect(status.rung, LetterLadderRung.closed);
+    // Closed because this round's probe logged no nonce — distinct from
+    // the all-dead 'dead' closed above.
+    expect(status.reason, 'nonce');
     expect(
       status.detail,
       stringContainsInOrder(['3 waiting', 'next probe in 12s']),

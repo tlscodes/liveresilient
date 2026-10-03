@@ -938,6 +938,8 @@ void main() {
       expect(card['source'], 'phone');
       // The existing ladder's reading is written when a status exists.
       expect(card['rung'], LetterLadderRung.withCourier.name);
+      // ...and WHY: the door answered this round, no live lane.
+      expect(card['reason'], 'door');
       expect(card['lab'], isTrue);
       // Counts and ids only: no letter text survives into the card.
       expect(jsonEncode(card), isNot(contains('secret letter')));
@@ -969,6 +971,8 @@ void main() {
       expect(card['bytes'], 3);
       expect(card['resolvers'], isEmpty);
       expect(card['rung'], LetterLadderRung.weak.name);
+      // WHY weak: no live lane, but the door still had a path (no probe).
+      expect(card['reason'], 'dead');
       await courier.dispose();
     });
 
@@ -1000,6 +1004,8 @@ void main() {
       final card = cards.cards.single.toJson();
       expect(card['outcome'], 'queued');
       expect(card['rung'], LetterLadderRung.closed.name);
+      // WHY closed: this round's probe logged no nonce anywhere.
+      expect(card['reason'], 'nonce');
       expect(card['resolvers'], ['udp53:8.8.8.8:53']);
       expect(card['winner'], isNull);
       await courier.dispose();
@@ -1007,7 +1013,7 @@ void main() {
 
     // Rung-absent is unreachable through send() (the ladder is always
     // refreshed first), so the null rung is pinned at the model level.
-    test('rung present: the JSON carries the ladder name in place', () {
+    test('rung present: the JSON carries the ladder name and reason', () {
       final card = LetterCard(
         at: DateTime.utc(2026, 9, 26, 12),
         source: 'phone',
@@ -1018,18 +1024,19 @@ void main() {
         resolvers: const ['res-a'],
         winner: 'res-a',
         rung: 'normal',
+        reason: 'ok',
       );
       expect(
         jsonEncode(card.toJson()),
-        '{"event":"letter_card","v":1,"at":"2026-09-26T12:00:00.000Z",'
+        '{"event":"letter_card","v":2,"at":"2026-09-26T12:00:00.000Z",'
         '"source":"phone","session":"S1","bytes":42,"outcome":"sentLive",'
         '"best_lane":"lane-x","resolvers":["res-a"],"winner":"res-a",'
-        '"rung":"normal","lab":true}',
+        '"rung":"normal","reason":"ok","lab":true}',
       );
     });
 
     test(
-      'the card\'s JSON key order is pinned byte for byte (rung absent)',
+      'the card\'s JSON key order is pinned byte for byte (rung/reason absent)',
       () {
         final card = LetterCard(
           at: DateTime.utc(2026, 9, 26, 12),
@@ -1043,13 +1050,170 @@ void main() {
         );
         expect(
           jsonEncode(card.toJson()),
-          '{"event":"letter_card","v":1,"at":"2026-09-26T12:00:00.000Z",'
+          '{"event":"letter_card","v":2,"at":"2026-09-26T12:00:00.000Z",'
           '"source":"mac","session":"S1","bytes":42,"outcome":"queued",'
           '"best_lane":"lane-x","resolvers":["res-a"],"winner":"res-a",'
-          '"rung":null,"lab":true}',
+          '"rung":null,"reason":null,"lab":true}',
         );
       },
     );
+
+    // ---- The ladder now DECIDES the winner; the card reads WHY (one
+    // word), one branch per test, existing fakes, no socket. ----
+
+    test('B1 a lane above threshold wins; rung/reason from the ladder '
+        '(limited/down)', () async {
+      final lanes = ScriptedLanes()..liveUp = true; // wss up, https dead
+      final cards = RecordingCardSink();
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.arrived);
+      final card = cards.cards.single.toJson();
+      expect(card['best_lane'], ResilientLaneIds.webSocketRelay);
+      expect(card['rung'], LetterLadderRung.limited.name);
+      expect(card['reason'], 'down');
+      await courier.dispose();
+    });
+
+    test('B2 wss+https dead, the door alive: the door carries it '
+        '(weak/dead, no live lane, no fresh probe)', () async {
+      final lanes = ScriptedLanes()
+        ..doorUp = true
+        ..doorFresh = true; // the door sits at -0.14, above every dead lane
+      final cards = RecordingCardSink();
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.arrived);
+      final card = cards.cards.single.toJson();
+      expect(card['best_lane'], ResilientLaneIds.txtQuery);
+      expect(card['rung'], LetterLadderRung.weak.name);
+      expect(card['reason'], 'dead');
+      await courier.dispose();
+    });
+
+    test('B3 all three closed: queued + parked, best_lane null, '
+        'closed/dead, nothing delivered', () async {
+      final clock = ManualClock();
+      final store = MemoryLetterQueueStore();
+      final cards = RecordingCardSink();
+      final lanes = ScriptedLanes(); // every lane dead by default
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        now: () => clock.now,
+        queue: LetterQueue(store),
+        openLanes: () async => lanes,
+        wait: clock.wait,
+        schedulePeriodic: clock.schedule,
+        cardSink: cards,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.queued);
+      expect(courier.queue.length, 1); // parked, waiting on the watch
+      expect(store.contents, isNotEmpty); // durably stored (cc7ffd4 queue)
+      expect(lanes.delivered, isEmpty); // never even offered to the fabric
+      final card = cards.cards.single.toJson();
+      expect(card['outcome'], 'queued');
+      expect(card['best_lane'], isNull);
+      expect(card['rung'], LetterLadderRung.closed.name);
+      expect(card['reason'], 'dead');
+      await courier.dispose();
+    });
+
+    test('B4 latch: a deliver that gave up pins the rung at weak/late, and '
+        'a later healthy reply does not raise it', () async {
+      const slow = LetterCourierBudget(
+        select: Duration(milliseconds: 300),
+        carry: Duration(milliseconds: 50),
+        refreshEvery: Duration(milliseconds: 50),
+      );
+      final cards = RecordingCardSink();
+      final lanes = ScriptedLanes()..liveUp = true; // wss up -> limited
+      lanes.holdDeliver = Completer<DeliveryOutcome>();
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: slow,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+
+      // First send: the deliver never answers inside carry -> "gave up".
+      final first = await courier.send(
+        Uint8List.fromList('one'.codeUnits),
+        kind: 'typed',
+      );
+      expect(first, LetterState.notDelivered);
+      // The latch fired: the current reading drops to weak/late.
+      expect(courier.ladderStatus.value!.rung, LetterLadderRung.weak);
+      expect(courier.ladderStatus.value!.reason, 'late');
+
+      // The late answer is healthy — it must NOT lift the rung back.
+      lanes.holdDeliver!.complete(DeliveryOutcome.sentLive);
+      await Future<void>.delayed(Duration.zero);
+      expect(courier.ladderStatus.value!.rung, LetterLadderRung.weak);
+
+      // A fresh, immediately-healthy send: still weak on the card, not
+      // limited — the degraded run stays marked degraded.
+      lanes.holdDeliver = null;
+      final second = await courier.send(
+        Uint8List.fromList('two'.codeUnits),
+        kind: 'typed',
+      );
+      expect(second, LetterState.arrived);
+      final card = cards.cards.last.toJson();
+      expect(card['rung'], LetterLadderRung.weak.name);
+      expect(card['reason'], 'late');
+      await courier.dispose();
+    });
+
+    test('the decision journal is best effort: a card sink that throws '
+        'never breaks the Send (sync throw and async error)', () async {
+      for (final sink in <LetterCardSink>[
+        _ThrowingCardSink(),
+        _FutureErrorCardSink(),
+      ]) {
+        final lanes = ScriptedLanes()..liveUp = true;
+        final courier = LetterCourier(
+          endpoints: () => throw StateError('scripted lanes, never assembled'),
+          budget: fast,
+          openLanes: () async => lanes,
+          cardSink: sink,
+        );
+
+        final state = await courier.send(
+          Uint8List.fromList([1, 2, 3]),
+          kind: 'typed',
+        );
+
+        expect(state, LetterState.arrived);
+        await courier.dispose();
+      }
+    });
   });
 }
 
@@ -1059,6 +1223,22 @@ class RecordingCardSink implements LetterCardSink {
 
   @override
   Future<void> append(LetterCard card) async => cards.add(card);
+}
+
+/// A sink whose disk is "full": [append] throws SYNCHRONOUSLY the moment
+/// it is called — the arrow body runs before any future is returned, so
+/// the throw escapes into the caller unless the courier guards it.
+class _ThrowingCardSink implements LetterCardSink {
+  @override
+  Future<void> append(LetterCard card) => throw StateError('disk full (sync)');
+}
+
+/// A sink whose append future completes with an error (async disk fault):
+/// becomes an uncaught zone error unless the courier swallows it.
+class _FutureErrorCardSink implements LetterCardSink {
+  @override
+  Future<void> append(LetterCard card) async =>
+      throw StateError('disk full (async)');
 }
 
 /// A lane set the test scripts: which lane is up decides the snapshot,

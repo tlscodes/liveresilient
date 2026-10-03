@@ -23,12 +23,13 @@ enum LetterLadderRung {
   /// (one is down) — the letter still has a healthy path.
   limited,
 
-  /// No live-call-capable lane has a path, and this round's own probe
-  /// did not confirm the door either (it may be score-eligible, just
-  /// not freshly proven) — or a live lane is up but degraded (its
-  /// score is below the "freshly answering door" ceiling this codebase
-  /// already documents, 0.15 — see letter_courier.dart's
-  /// `_deadAtOrBelow` note on a fresh door sitting at 0.01–0.15).
+  /// No live-call-capable lane has a path, but the door still does
+  /// (score-eligible, just not freshly proven this round, reason 'dead')
+  /// — or a live lane is up but degraded, its score below the "freshly
+  /// answering door" ceiling this codebase already documents, 0.15 (see
+  /// letter_courier.dart's `_deadAtOrBelow` note on a fresh door sitting
+  /// at 0.01–0.15, reason 'slow'). When nothing — not even the door —
+  /// has a path, the reading is [closed], not weak.
   weak,
 
   /// No live-call-capable lane has a path, but THIS round's own probe
@@ -40,8 +41,9 @@ enum LetterLadderRung {
   /// this network: it answers, just not every time.
   halfClosed,
 
-  /// This round's own probe found no nonce logged anywhere; the letter
-  /// is queued.
+  /// This round's own probe found no nonce logged anywhere (reason
+  /// 'nonce'), or no lane at all has a path — not even the door (reason
+  /// 'dead'). Either way the letter is queued.
   closed,
 }
 
@@ -60,9 +62,16 @@ extension LetterLadderRungBanner on LetterLadderRung {
 
 /// One classified reading.
 class LetterLadderStatus {
-  const LetterLadderStatus(this.rung, {this.detail = ''});
+  const LetterLadderStatus(this.rung, {this.reason = '', this.detail = ''});
 
   final LetterLadderRung rung;
+
+  /// One word, drawn from the same fabric predicate that chose [rung] —
+  /// why this reading is what it is, never a sentence and never a new
+  /// metric: 'ok' / 'down' / 'slow' / 'dead' / 'door' / 'mixed' / 'nonce',
+  /// plus 'late' when the courier's degraded latch pulls a later healthy
+  /// reading back down. Empty only on a default-constructed status.
+  final String reason;
 
   /// Populated only for [LetterLadderRung.closed]: queue size and when
   /// the existing watch will probe again — never a reason to probe
@@ -104,27 +113,49 @@ LetterLadderStatus classifyLetterLadder({
   final liveReachable = nonDoorUp > 0;
   final slowRelay = nonDoor.any((l) => letterLaneHasPath(l) && l.score < 0.15);
   final doorReliability = DoorResolverLadder.totals(doorHistory).ratio;
+  // The door's own score, read through the same line every ranking uses:
+  // at or below [letterDeadAtOrBelow] the valve's own health is 0 — its
+  // own failed sends, the same evidence class as a probe miss, no new
+  // probe of its own.
+  final doorHasPath = snapshot.lanes.any(
+    (l) => l.id == ResilientLaneIds.txtQuery && letterLaneHasPath(l),
+  );
+  final queueDetail =
+      '$queueWaiting waiting · next probe in ${nextProbeIn.inSeconds}s';
 
-  // Worst rung first: the first pattern that holds is the reading.
+  // Worst rung first: the first pattern that holds is the reading. The
+  // one-word [LetterLadderStatus.reason] on each arm names the fabric
+  // predicate that fired — the same score, read once, never a new metric.
   return switch ((lastProbe?.reachedServer, doorReliability)) {
+    // This round's own probe found no nonce logged anywhere.
     (false, _) => LetterLadderStatus(
       LetterLadderRung.closed,
-      detail:
-          '$queueWaiting waiting · next probe in '
-          '${nextProbeIn.inSeconds}s',
+      reason: 'nonce',
+      detail: queueDetail,
+    ),
+    // No live lane has a path AND the door has none either: nothing is
+    // reachable right now, so the letter is parked — closed, not "weak".
+    _ when !liveReachable && !doorHasPath => LetterLadderStatus(
+      LetterLadderRung.closed,
+      reason: 'dead',
+      detail: queueDetail,
     ),
     (_, final ratio?) when ratio > 0 && ratio < 1 => const LetterLadderStatus(
       LetterLadderRung.halfClosed,
+      reason: 'mixed',
     ),
     (true, _) when !liveReachable => const LetterLadderStatus(
       LetterLadderRung.withCourier,
+      reason: 'door',
     ),
-    _ when !liveReachable || slowRelay => const LetterLadderStatus(
+    _ when !liveReachable || slowRelay => LetterLadderStatus(
       LetterLadderRung.weak,
+      reason: !liveReachable ? 'dead' : 'slow',
     ),
     _ when nonDoorUp < nonDoor.length => const LetterLadderStatus(
       LetterLadderRung.limited,
+      reason: 'down',
     ),
-    _ => const LetterLadderStatus(LetterLadderRung.normal),
+    _ => const LetterLadderStatus(LetterLadderRung.normal, reason: 'ok'),
   };
 }
