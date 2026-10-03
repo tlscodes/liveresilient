@@ -2,6 +2,8 @@
 /// radio binding is injected.
 library;
 
+import 'dart:io';
+
 import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/intelligence/device_bindings.dart';
@@ -80,6 +82,92 @@ void main() {
         systemDnsResolverBinding(probe: () => throw StateError('no radio')),
         isEmpty,
       );
+    });
+  });
+
+  group('intelligenceStorageBase', () {
+    const iosTmp = '/private/var/mobile/Containers/Data/Application/AB12/tmp/';
+    const iosDocs =
+        '/private/var/mobile/Containers/Data/Application/AB12/Documents'
+        '/voice_call_kit_intelligence';
+
+    test("iOS: Documents is tmp's sibling, HOME is irrelevant", () {
+      for (final env in const [
+        <String, String>{},
+        <String, String>{'HOME': ''},
+        <String, String>{'HOME': '/elsewhere'},
+      ]) {
+        expect(
+          intelligenceStorageBase(
+            isIOS: true,
+            isAndroid: false,
+            systemTempPath: iosTmp,
+            environment: env,
+          ),
+          iosDocs,
+        );
+      }
+    });
+
+    test('Android: HOME/Documents when set, null without HOME, and the iOS '
+        'sibling trick is never applied', () {
+      expect(
+        intelligenceStorageBase(
+          isAndroid: true,
+          isIOS: false,
+          systemTempPath: '/data/user/0/pkg/cache',
+          environment: const {'HOME': '/data/user/0/pkg'},
+        ),
+        '/data/user/0/pkg/Documents/voice_call_kit_intelligence',
+      );
+      // No HOME: null — NOT the cache dir's sibling Documents.
+      expect(
+        intelligenceStorageBase(
+          isAndroid: true,
+          isIOS: false,
+          systemTempPath: '/data/user/0/pkg/cache',
+          environment: const {},
+        ),
+        isNull,
+      );
+    });
+
+    test('desktop/test: always null, whatever the tmp or HOME', () {
+      expect(
+        intelligenceStorageBase(
+          isIOS: false,
+          isAndroid: false,
+          systemTempPath: '/tmp/host',
+          environment: const {'HOME': '/home/me'},
+        ),
+        isNull,
+      );
+      // Pins bootIntelligence's system-temp default on the host.
+      expect(buildStorageDirectory(), isNull);
+    });
+
+    test('card and parked-letter queue share one base', () {
+      expect(
+        letterQueueDirectory().parent.path,
+        intelligenceStorageDirectory().path,
+      );
+    });
+
+    test('the factory creates the iOS Documents folder on first call', () {
+      final root = Directory.systemTemp.createTempSync('intel_base_test');
+      try {
+        final base = intelligenceStorageBase(
+          isIOS: true,
+          isAndroid: false,
+          systemTempPath: '${root.path}/tmp',
+          environment: const {},
+        );
+        expect(base, '${root.path}/Documents/voice_call_kit_intelligence');
+        final dir = Directory(base!)..createSync(recursive: true);
+        expect(dir.existsSync(), isTrue);
+      } finally {
+        root.deleteSync(recursive: true);
+      }
     });
   });
 }

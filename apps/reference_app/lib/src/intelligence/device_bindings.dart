@@ -92,30 +92,68 @@ List<HostPort> systemDnsResolverBinding({
   }
 }
 
-/// Where the intelligence brains persist their JSON files.
+/// Where the intelligence brains persist their JSON files — pure and
+/// injectable, so the path logic is unit-testable with real path strings
+/// and no disk access.
 ///
-/// On iOS/Android the app sandbox exposes its own home; `Documents` under
-/// it is the OS-backed persistent store (survives relaunches and, on iOS,
-/// is not purgeable the way tmp is) — reachable from pure Dart via
-/// `Platform.environment['HOME']`, zero plugin dependencies, so the gate
-/// build stays plugin-free (the brief's CI-safety rule). Everywhere else
-/// (tests, desktop dev) returns `null` and `bootIntelligence` keeps its
-/// system-temp default.
+/// iOS: the app container's `Documents` is the OS-backed persistent store
+/// (survives relaunches, not purgeable the way `tmp` is). It is the sibling
+/// of the container's temp folder, so it is derived from [systemTempPath] —
+/// `NSTemporaryDirectory()` is always set, whereas `HOME` is empty under
+/// some launchers (e.g. `devicectl`), which used to drop the whole brains
+/// folder — queue included — into purgeable `tmp`.
+/// Android: unchanged — `$HOME/Documents`, or `null` when `HOME` is unset.
+/// The cache dir's persistent sibling is `files`, NOT `Documents`, so the
+/// iOS sibling trick must not be applied here.
+/// Everywhere else (tests, desktop dev): `null`, so `bootIntelligence`
+/// keeps its system-temp default. Pure Dart, zero plugins (CI-safety rule).
+String? intelligenceStorageBase({
+  required bool isIOS,
+  required bool isAndroid,
+  required String systemTempPath,
+  required Map<String, String> environment,
+}) {
+  if (isIOS) {
+    final tmp = systemTempPath.replaceAll(RegExp(r'/+$'), '');
+    final cut = tmp.lastIndexOf('/');
+    if (cut <= 0) return null;
+    return '${tmp.substring(0, cut)}/Documents/voice_call_kit_intelligence';
+  }
+  if (isAndroid) {
+    final home = environment['HOME'];
+    if (home == null || home.isEmpty) return null;
+    return '$home/Documents/voice_call_kit_intelligence';
+  }
+  return null;
+}
+
+/// The directory factory `bootIntelligence` injects: the persistent base on
+/// a phone (created on first use), or `null` when this build has none.
 Directory Function()? buildStorageDirectory() {
-  if (!Platform.isIOS && !Platform.isAndroid) return null;
-  final home = Platform.environment['HOME'];
-  if (home == null || home.isEmpty) return null;
-  final docs = Directory('$home/Documents/voice_call_kit_intelligence');
+  final base = intelligenceStorageBase(
+    isIOS: Platform.isIOS,
+    isAndroid: Platform.isAndroid,
+    systemTempPath: Directory.systemTemp.path,
+    environment: Platform.environment,
+  );
+  if (base == null) return null;
+  final docs = Directory(base);
   return () => docs..createSync(recursive: true);
 }
 
-/// Where a letter parked behind a down door waits between runs: the same
-/// OS-backed Documents home the brains use on a phone, and the same
-/// system-temp folder they fall back to elsewhere — which outlives a
-/// process restart (the case that matters), not a reboot. No plugin.
-Directory letterQueueDirectory() {
-  final base =
-      buildStorageDirectory()?.call() ??
-      Directory('${Directory.systemTemp.path}/voice_call_kit_intelligence');
-  return Directory('${base.path}/letters')..createSync(recursive: true);
-}
+/// The one folder every intelligence file shares: the persistent base on a
+/// phone, the system-temp folder elsewhere (the same default
+/// `bootIntelligence` falls back to). Single source of truth for the
+/// brains, the parked-letter queue and the per-letter measurement card.
+Directory intelligenceStorageDirectory() =>
+    buildStorageDirectory()?.call() ??
+    Directory('${Directory.systemTemp.path}/voice_call_kit_intelligence');
+
+/// Where a letter parked behind a down door waits between runs: a `letters`
+/// subfolder of [intelligenceStorageDirectory], created on first use. On a
+/// phone this is the OS-backed Documents home (no `HOME` dependency), so a
+/// parked letter outlives a process restart instead of landing in
+/// purgeable `tmp`. No plugin.
+Directory letterQueueDirectory() =>
+    Directory('${intelligenceStorageDirectory().path}/letters')
+      ..createSync(recursive: true);

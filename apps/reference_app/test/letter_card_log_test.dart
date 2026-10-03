@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:reference_app/src/intelligence/device_bindings.dart'
+    show intelligenceStorageDirectory;
 import 'package:reference_app/src/letter_card.dart';
 
 LetterCard _card({required String outcome, String? rung, String? session}) =>
@@ -16,26 +18,43 @@ LetterCard _card({required String outcome, String? rung, String? session}) =>
     );
 
 void main() {
-  group('card directory', () {
-    test('on iOS the card lives in Documents, beside tmp', () {
-      final dir = letterCardDirectory(
-        systemTempPath: '/var/mobile/Containers/Data/Application/AB12/tmp/',
-        isIOS: true,
+  group('disk() shares the one intelligence folder', () {
+    late File target;
+    String? original;
+
+    setUp(() {
+      target = File(
+        '${intelligenceStorageDirectory().path}/letter_cards.jsonl',
       );
-      expect(
-        dir.path,
-        '/var/mobile/Containers/Data/Application/AB12/Documents'
-        '/voice_call_kit_intelligence',
-      );
+      original = target.existsSync() ? target.readAsStringSync() : null;
     });
 
-    test('off iOS the card stays in the system temp folder', () {
-      final dir = letterCardDirectory(
-        systemTempPath: '/tmp/host',
-        isIOS: false,
-      );
-      expect(dir.path, '/tmp/host/voice_call_kit_intelligence');
+    tearDown(() {
+      // Non-destructive: restore the folder exactly as the test found it.
+      if (original != null) {
+        target.writeAsStringSync(original!);
+      } else if (target.existsSync()) {
+        target.deleteSync();
+      }
     });
+
+    test(
+      'disk() writes letter_cards.jsonl into intelligenceStorageDirectory',
+      () async {
+        await LetterCardLog.disk().append(
+          _card(outcome: 'sentLive', rung: 'weak', session: 'DISK1'),
+        );
+        expect(target.existsSync(), isTrue);
+        final mine = target
+            .readAsLinesSync()
+            .map((line) => jsonDecode(line) as Map<String, Object?>)
+            .where((m) => m['session'] == 'DISK1')
+            .toList();
+        expect(mine, hasLength(1));
+        expect(mine.single['outcome'], 'sentLive');
+        expect(mine.single['lab'], true);
+      },
+    );
   });
 
   group('card writer', () {
