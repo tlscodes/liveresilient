@@ -1219,9 +1219,10 @@ void main() {
   // ---- Adversarial challenge matrix (test-only hardening, HEAD 565ebde).
   // Each case subjects the deciding send path (letter_courier.dart send ->
   // letter_status_ladder.dart classify) to a pressure the B1-B4 branch
-  // tests do not. Hard assertions pin current behaviour; three cases
-  // (C4, C5, and the skipped C11) pin behaviour the design flags as a
-  // candidate defect for the owner. Existing fakes only, no socket. ----
+  // tests do not. Hard assertions pin current behaviour; two cases
+  // (C4 and C5) pin behaviour the design flags as a candidate defect for
+  // the owner. C11 now passes: the multi-part give-up latches weak/late,
+  // symmetric with B4. Existing fakes only, no socket. ----
   group('adversarial challenge matrix — the deciding send under pressure', () {
     const slow = LetterCourierBudget(
       select: Duration(milliseconds: 300),
@@ -1825,39 +1826,32 @@ void main() {
       expect(c.reason, 'mixed');
     });
 
-    test(
-      'C11 a multi-part letter that exhausts its retries does NOT latch '
-      'degraded the way a single-part give-up does',
-      () async {
-        // _carryParts (L997-1037) retries each lost index via `continue` and
-        // never calls _markDegraded; only the single-part _carry timeout
-        // (L917) latches. A >maxPayloadBytes letter that times out on every
-        // part therefore ends notDelivered with NO weak/late latch —
-        // asymmetric with B4's single-part give-up. Recorded as a found
-        // defect; no production change this cycle, so the case is skipped.
-        final lanes = ScriptedLanes()
-          ..liveUp = true
-          ..holdAll = true; // every part hangs; each attempt times out
-        final courier = LetterCourier(
-          endpoints: () => throw StateError('scripted lanes, never assembled'),
-          budget: slow,
-          openLanes: () async => lanes,
-        );
-        final state = await courier.send(
-          Uint8List(TxtQueryLane.maxPayloadBytes + 1),
-          kind: 'photo',
-        );
-        expect(state, LetterState.notDelivered);
-        // The defect: a single-part give-up would read weak/late here.
-        expect(courier.ladderStatus.value!.reason, isNot('late'));
-        await courier.dispose();
-      },
-      skip:
-          'found defect: _carryParts timeout path never calls '
-          '_markDegraded (only single-part _carry at L917 latches); a '
-          'multi-part give-up ends with no weak/late latch, asymmetric with '
-          'single-part. Owner to decide whether the latch should cover parts.',
-    );
+    test('C11 a multi-part letter that exhausts its retries latches weak/late '
+        'like a single-part give-up', () async {
+      // _carryParts now carries an `outranBudget` flag from the per-part
+      // timeout branch to the whole-letter give-up, which calls
+      // _markDegraded once — symmetric with the single-part _carry (L917).
+      // A >maxPayloadBytes letter that times out on every part ends
+      // notDelivered AND latched weak/late, matching B4.
+      final lanes = ScriptedLanes()
+        ..liveUp = true
+        ..holdAll = true; // every part hangs; each attempt times out
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: slow,
+        openLanes: () async => lanes,
+      );
+      final state = await courier.send(
+        Uint8List(TxtQueryLane.maxPayloadBytes + 1),
+        kind: 'photo',
+      );
+      expect(state, LetterState.notDelivered);
+      // The latch fired: the current reading drops to weak/late, the way
+      // a single-part give-up does in B4.
+      expect(courier.ladderStatus.value!.rung, LetterLadderRung.weak);
+      expect(courier.ladderStatus.value!.reason, 'late');
+      await courier.dispose();
+    });
   });
 }
 

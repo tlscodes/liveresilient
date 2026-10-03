@@ -983,6 +983,10 @@ class LetterCourier {
     var landed = 0;
     var doorDown = false;
     String? fatal;
+    // Set when at least one part outran budget.carry before the letter
+    // gave up — the degraded signal, carried to the give-up site so the
+    // latch fires once, symmetric with the single-part _carry (L917).
+    var outranBudget = false;
     final inFlight = <Future<void>>{};
 
     void progress() {
@@ -1005,6 +1009,7 @@ class LetterCourier {
               .deliver(parts[i], bundleId: bundleId)
               .timeout(budget.carry);
         } on TimeoutException {
+          outranBudget = true;
           note('letter ${i + 1}/$n gave up (try ${attempts[i]}) — again');
           continue;
         } on Object catch (error) {
@@ -1066,6 +1071,9 @@ class LetterCourier {
     if (fatal != null) {
       if (fromQueue) queue.release(letter.id);
       _set(LetterState.notDelivered, fatal!);
+      // The letter gave up after at least one part outran budget.carry:
+      // this run degraded — latch it once, like the single-part _carry.
+      if (outranBudget) _markDegraded();
       return LetterState.notDelivered;
     }
     if (fromQueue) await queue.remove(letter.id);
