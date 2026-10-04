@@ -338,8 +338,53 @@ class LetterCourier {
   final ValueNotifier<LetterLadderStatus?> ladderStatus =
       ValueNotifier<LetterLadderStatus?>(null);
 
+  /// Cycle B: consecutive failed carries per lane. Two in a row evict the
+  /// lane from selection until its next healthy answer (arrived, or a
+  /// door probe our responder logged). A lane that loses its path starts
+  /// over: its strikes and eviction are cleared.
+  final Map<String, int> _strikes = <String, int>{};
+  final Set<String> _evicted = <String>{};
+
+  void _strike(String laneId, {required bool healthy}) {
+    if (healthy) {
+      _strikes.remove(laneId);
+      _evicted.remove(laneId);
+      return;
+    }
+    final n = (_strikes[laneId] ?? 0) + 1;
+    _strikes[laneId] = n;
+    if (n >= 2) _evicted.add(laneId);
+  }
+
+  /// The fabric's best lane, unless evicted; then the next lane, best
+  /// first, that has a path and is not evicted; null when none.
+  String? _pick(ConnectivitySnapshot raw) {
+    final best = raw.bestLaneId;
+    if (best == null || !_evicted.contains(best)) return best;
+    for (final lane in raw.lanes) {
+      if (_hasPath(lane) && !_evicted.contains(lane.id)) return lane.id;
+    }
+    return null;
+  }
+
   ConnectivitySnapshot _snap(LetterLanes source) {
-    final s = source.snapshot;
+    final raw = source.snapshot;
+    for (final lane in raw.lanes) {
+      if (!_hasPath(lane)) {
+        _strikes.remove(lane.id);
+        _evicted.remove(lane.id);
+      }
+    }
+    final bestLaneId = _pick(raw);
+    final s = bestLaneId == raw.bestLaneId
+        ? raw
+        : ConnectivitySnapshot(
+            mode: raw.mode,
+            lanes: raw.lanes,
+            bestLaneId: bestLaneId,
+            pendingBundles: raw.pendingBundles,
+            atMs: raw.atMs,
+          );
     if (!_disposed) laneSnapshot.value = s;
     return s;
   }
@@ -633,8 +678,11 @@ class LetterCourier {
     final previousWinner = ladder == null || networkLabel == null
         ? null
         : await ladder.previousWinner(networkLabel);
+    // An evicted previous winner is not offered ahead of the ranking.
     bool winnerReady(ConnectivitySnapshot s) =>
-        previousWinner != null && _hasPathFor(s, previousWinner);
+        previousWinner != null &&
+        !_evicted.contains(previousWinner) &&
+        _hasPathFor(s, previousWinner);
 
     // Select: refresh until the previous winner has a path again, or
     // some lane ranks first with a positive score. A live lane wins as
@@ -698,6 +746,8 @@ class LetterCourier {
         note('probe ${probe.describe()}');
         await _updateLadder(s, probe: probe, networkLabel: networkLabel);
         if (!probe.reachedServer) {
+          // A probe miss is one strike for the door (cycle B).
+          _strike(best, healthy: false);
           final rttMs = _now().difference(attemptStart).inMilliseconds;
           _recordRung(
             networkLabel,
@@ -728,6 +778,8 @@ class LetterCourier {
           );
           return parked;
         }
+        // Only a probe win reaches here: a healthy answer clears strikes.
+        _strike(best, healthy: probe.reachedServer);
         doorResolver = probe.answers[probe.winnerIndex!].label;
       }
     }
@@ -736,6 +788,7 @@ class LetterCourier {
       '${payload.length} B · $chunks chunks · via ${_short(best)}',
     );
     final result = await _carry(lanes, letter, best, fromQueue: false);
+    _strike(best, healthy: result == LetterState.arrived);
     final rttMs = _now().difference(attemptStart).inMilliseconds;
     _recordRung(
       networkLabel,
