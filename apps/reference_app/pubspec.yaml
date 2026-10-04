@@ -86,6 +86,10 @@ dependencies:
   wakelock_plus: ^1.8.0
   cryptography: ^2.9.0
   record: ^7.1.1
+  # The letter queue's at-rest key lives in the device keystore.
+  security:
+    path: ../../packages/security
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:

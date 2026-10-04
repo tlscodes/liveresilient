@@ -11,8 +11,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show Random;
 
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:security/security.dart' show KeyMaterialStore;
 
 /// One letter waiting behind the door.
 @immutable
@@ -123,6 +126,127 @@ class FileLetterQueueStore implements LetterQueueStore {
       jsonEncode([for (final letter in letters) letter.toJson()]),
       flush: true,
     );
+    await tmp.rename(_file.path);
+  }
+}
+
+/// The same waiting list, sealed at rest: AES-256-GCM over the JSON, the
+/// key held only in the device keystore under [keyHandle] (Keychain on
+/// iOS/macOS, Keystore on Android). The file on disk is magic + nonce +
+/// ciphertext + tag — no letter text, no JSON. Without the key nothing is
+/// read: a sealed file whose key is gone loads as an empty queue.
+///
+/// A plain [FileLetterQueueStore] file left by an older build is moved in
+/// once — loaded, sealed, then deleted — so no raw JSON stays behind. When
+/// the keystore itself fails (an unsigned desktop host), the list is kept
+/// in memory for this process only and never written in the clear.
+class SealedFileLetterQueueStore implements LetterQueueStore {
+  SealedFileLetterQueueStore(this._directory, this._keys)
+    : _file = File('${_directory.path}${Platform.pathSeparator}$fileName');
+
+  static const String fileName = 'letter_queue.sealed';
+  static const String keyHandle = 'letter-queue.v1';
+  static final List<int> _magic = utf8.encode('VLQ1');
+  static final AesGcm _cipher = AesGcm.with256bits();
+
+  final Directory _directory;
+  final KeyMaterialStore _keys;
+  final File _file;
+
+  /// Set once the keystore has failed: from then on, memory only.
+  List<QueuedLetter>? _volatile;
+
+  Future<SecretKey?> _key({required bool create}) async {
+    final existing = await _keys.read(keyHandle);
+    if (existing != null) return SecretKey(existing);
+    if (!create) return null;
+    final rng = Random.secure();
+    final fresh = Uint8List.fromList([
+      for (var i = 0; i < 32; i++) rng.nextInt(256),
+    ]);
+    await _keys.write(keyHandle, fresh);
+    return SecretKey(fresh);
+  }
+
+  @override
+  Future<List<QueuedLetter>> load() async {
+    final volatile = _volatile;
+    if (volatile != null) return List<QueuedLetter>.of(volatile);
+    final legacy = File(
+      '${_directory.path}${Platform.pathSeparator}'
+      '${FileLetterQueueStore.fileName}',
+    );
+    if (legacy.existsSync()) {
+      final moved = await FileLetterQueueStore(_directory).load();
+      await save(moved);
+      if (_volatile == null) await legacy.delete();
+      return moved;
+    }
+    if (!_file.existsSync()) return const [];
+    final SecretKey? key;
+    try {
+      key = await _key(create: false);
+    } on Object {
+      _volatile = <QueuedLetter>[];
+      return const [];
+    }
+    if (key == null) return const [];
+    final raw = await _file.readAsBytes();
+    const nonceLength = 12;
+    final head = _magic.length + nonceLength;
+    if (raw.length < head + 16 ||
+        !listEquals(raw.sublist(0, _magic.length), _magic)) {
+      return const [];
+    }
+    final List<int> clear;
+    try {
+      clear = await _cipher.decrypt(
+        SecretBox(
+          raw.sublist(head, raw.length - 16),
+          nonce: raw.sublist(_magic.length, head),
+          mac: Mac(raw.sublist(raw.length - 16)),
+        ),
+        secretKey: key,
+        aad: _magic,
+      );
+    } on SecretBoxAuthenticationError {
+      // Another key, or a torn file: nothing in it is ours to read.
+      return const [];
+    }
+    final decoded = jsonDecode(utf8.decode(clear));
+    if (decoded is! List) return const [];
+    return [
+      for (final entry in decoded)
+        if (entry is Map<String, Object?>) QueuedLetter.fromJson(entry),
+    ];
+  }
+
+  @override
+  Future<void> save(List<QueuedLetter> letters) async {
+    if (_volatile != null) {
+      _volatile = List<QueuedLetter>.of(letters);
+      return;
+    }
+    final SecretKey key;
+    try {
+      key = (await _key(create: true))!;
+    } on Object {
+      _volatile = List<QueuedLetter>.of(letters);
+      return;
+    }
+    final box = await _cipher.encrypt(
+      utf8.encode(jsonEncode([for (final l in letters) l.toJson()])),
+      secretKey: key,
+      aad: _magic,
+    );
+    await _file.parent.create(recursive: true);
+    final tmp = File('${_file.path}.tmp');
+    await tmp.writeAsBytes([
+      ..._magic,
+      ...box.nonce,
+      ...box.cipherText,
+      ...box.mac.bytes,
+    ], flush: true);
     await tmp.rename(_file.path);
   }
 }

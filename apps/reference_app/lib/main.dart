@@ -54,6 +54,7 @@ import 'src/ui/letter_sheet.dart';
 import 'src/ui/letter_thread.dart';
 import 'src/ui/network_truth.dart';
 import 'src/ui/settings_screen.dart';
+import 'src/letter_queue_keystore.dart';
 
 export 'src/call_demo_controller.dart';
 export 'src/chat_demo_controller.dart';
@@ -241,7 +242,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       callId: 'letter-${DateTime.now().millisecondsSinceEpoch}',
       role: CallRole.initiator,
     ),
-    queue: LetterQueue(FileLetterQueueStore(letterQueueDirectory())),
+    // Sealed at rest; the key never leaves the device keystore.
+    queue: LetterQueue(
+      SealedFileLetterQueueStore(letterQueueDirectory(), DeviceKeystore()),
+    ),
     // The startup ladder: the rung (and, under the door, the resolver)
     // that last delivered on THIS network is tried first, next open.
     // Null intelligence (widget tests) just means no resolver — the
