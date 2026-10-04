@@ -1,8 +1,11 @@
 // One case per rung of the six-state ladder, each the smallest
 // snapshot/probe/history combination that hits exactly that rung — no
 // fabric, no socket, no clock.
+import 'dart:async' show TimeoutException;
+import 'dart:io' show InternetAddress;
+
 import 'package:adaptive_transport/adaptive_transport.dart'
-    show TxtProbeAnswer, TxtProbeOutcome;
+    show ForgedAnswerException, TxtProbeAnswer, TxtProbeOutcome;
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show ConnectivitySnapshot, FabricMode, LaneStatus, ResilientLaneIds;
 import 'package:flutter_test/flutter_test.dart';
@@ -52,6 +55,40 @@ typedef _Case = ({
 });
 
 void main() {
+  group('a probe miss names a forged answer apart from silence', () {
+    TxtProbeOutcome missWith(Object error) => TxtProbeOutcome(
+      groupId: 'g',
+      answers: [
+        TxtProbeAnswer(index: 0, label: 'doh:x', nonce: 'aa', error: error),
+      ],
+      winnerIndex: null,
+    );
+    final lanes = [lane(ResilientLaneIds.txtQuery, 0.6)];
+
+    test('an answer of 10.0.0.1 reads closed/forged', () {
+      final status = classifyLetterLadder(
+        snapshot: snap(lanes),
+        lastProbe: missWith(
+          ForgedAnswerException(
+            'resolver.example',
+            InternetAddress('10.0.0.1'),
+          ),
+        ),
+      );
+      expect(status.rung, LetterLadderRung.closed);
+      expect(status.reason, 'forged');
+    });
+
+    test('a timeout stays closed/nonce, never forged', () {
+      final status = classifyLetterLadder(
+        snapshot: snap(lanes),
+        lastProbe: missWith(TimeoutException('no answer')),
+      );
+      expect(status.rung, LetterLadderRung.closed);
+      expect(status.reason, 'nonce');
+    });
+  });
+
   final cases = <_Case>[
     (
       name: 'normal: a live lane and the door both healthy',

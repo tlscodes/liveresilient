@@ -6,7 +6,9 @@ import 'package:adaptive_transport/adaptive_transport.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
-final Uri _endpoint = Uri.parse('https://dns.example/dns-query');
+// An address literal (documentation range, never dialled: the client is a
+// fake), as the built-in endpoints are — no name is looked up to reach it.
+final Uri _endpoint = Uri.parse('https://192.0.2.53/dns-query');
 
 /// A DNS message the size of a header, carrying [txid] in the first two
 /// bytes exactly where RFC 1035 puts it.
@@ -195,7 +197,7 @@ _FakeHttpClient _neverClosingClient() => _FakeHttpClient(
 void main() {
   group('DohQueryTransport', () {
     test('label names the endpoint host', () {
-      expect(DohQueryTransport(_endpoint).label, 'doh:dns.example');
+      expect(DohQueryTransport(_endpoint).label, 'doh:192.0.2.53');
       expect(
         DohQueryTransport(Uri.parse('https://1.1.1.1/dns-query')).label,
         'doh:1.1.1.1',
@@ -883,18 +885,73 @@ void main() {
       }
     });
 
-    test('the DoH endpoints name two of the three public resolvers', () {
+    test('the DoH endpoints are two public resolvers by address, never by '
+        'name', () {
       // The doc comment calls these the endpoints "matching publicResolvers".
       // Pinning the hosts is what makes that claim checkable, and records
       // that 9.9.9.9 deliberately has no DoH entry.
-      expect(
-        TxtQueryResolvers.publicDohEndpoints.map((e) => e.host).toList(),
-        <String>['cloudflare-dns.com', 'dns.google'],
-      );
+      final hosts = TxtQueryResolvers.publicDohEndpoints
+          .map((e) => e.host)
+          .toList();
+      expect(hosts, <String>['1.1.1.1', '8.8.8.8']);
+      expect(hosts, isNot(contains('cloudflare-dns.com')));
+      expect(hosts, isNot(contains('dns.google')));
       for (final endpoint in TxtQueryResolvers.publicDohEndpoints) {
+        expect(InternetAddress.tryParse(endpoint.host), isNotNull);
         expect(endpoint.scheme, 'https');
         expect(endpoint.path, '/dns-query');
       }
+    });
+
+    test('a private or reserved address is a forged answer; a public one is '
+        'not', () {
+      for (final forged in [
+        '10.0.0.1',
+        '192.168.1.1',
+        '127.0.0.1',
+        'fd00::1',
+      ]) {
+        expect(
+          isForgedAddress(InternetAddress(forged)),
+          isTrue,
+          reason: forged,
+        );
+      }
+      for (final real in ['8.8.8.8', '1.1.1.1', '2606:4700:4700::1111']) {
+        expect(isForgedAddress(InternetAddress(real)), isFalse, reason: real);
+      }
+    });
+
+    test('a hostname endpoint answered with 10.0.0.1 is refused as forged, '
+        'before any request', () async {
+      var opened = 0;
+      final transport = DohQueryTransport(
+        Uri.parse('https://resolver.example/dns-query'),
+        client: _FakeHttpClient((uri) async {
+          opened++;
+          throw StateError('must not connect');
+        }),
+        lookup: (host) async => [InternetAddress('10.0.0.1')],
+      );
+      await expectLater(
+        transport.exchange(Uint8List(12), 7, const Duration(seconds: 1)),
+        throwsA(isA<ForgedAnswerException>()),
+      );
+      expect(opened, 0);
+    });
+
+    test('a timeout stays a timeout, never a forged answer', () async {
+      final transport = DohQueryTransport(
+        Uri.parse('https://resolver.example/dns-query'),
+        client: _silentClient(),
+        lookup: (host) async => [InternetAddress('8.8.8.8')],
+      );
+      await expectLater(
+        transport.exchange(Uint8List(12), 7, const Duration(milliseconds: 30)),
+        throwsA(
+          allOf(isA<TimeoutException>(), isNot(isA<ForgedAnswerException>())),
+        ),
+      );
     });
 
     test('resolv.conf nameserver lines are kept in order', () {

@@ -148,19 +148,27 @@ class Udp53QueryTransport implements TxtQueryTransport {
 /// DNS over HTTPS, RFC 8484: the same DNS message, POSTed as
 /// `application/dns-message`.
 ///
-/// This is the path that keeps working where port 53 is filtered, and the
-/// only one that needs no resolver address at all — the endpoint is a
-/// hostname, so the platform resolver and its NAT64 synthesis handle
-/// reaching it on an IPv6-only network.
+/// This is the path that keeps working where port 53 is filtered. The
+/// built-in endpoints are address literals, so reaching them asks no
+/// resolver anything: a network that forges the answer for a resolver's
+/// NAME cannot redirect them. The price is an IPv6-only network, where an
+/// IPv4 literal gets no NAT64 synthesis. A caller-supplied hostname
+/// endpoint is still accepted; its name is looked up first and a forged
+/// answer is refused as [ForgedAnswerException].
 class DohQueryTransport implements TxtQueryTransport {
-  DohQueryTransport(this.endpoint, {HttpClient? client})
-    : _client = client ?? HttpClient();
+  DohQueryTransport(
+    this.endpoint, {
+    HttpClient? client,
+    Future<List<InternetAddress>> Function(String host)? lookup,
+  }) : _client = client ?? HttpClient(),
+       _lookup = lookup ?? InternetAddress.lookup;
 
   /// A resolver's RFC 8484 endpoint, for example
-  /// `https://cloudflare-dns.com/dns-query`.
+  /// `https://1.1.1.1/dns-query`.
   final Uri endpoint;
 
   final HttpClient _client;
+  final Future<List<InternetAddress>> Function(String host) _lookup;
   bool _disposed = false;
 
   static const String _dnsMessage = 'application/dns-message';
@@ -189,6 +197,16 @@ class DohQueryTransport implements TxtQueryTransport {
     final deadline = _ExchangeDeadline(timeout);
     HttpClientRequest? request;
     try {
+      if (InternetAddress.tryParse(endpoint.host) == null) {
+        final found = await deadline.guard(
+          _lookup(endpoint.host),
+          '$label lookup',
+        );
+        final forged = found.where(isForgedAddress);
+        if (forged.isNotEmpty) {
+          throw ForgedAnswerException(endpoint.host, forged.first);
+        }
+      }
       request = await deadline.guard<HttpClientRequest>(
         _client.postUrl(endpoint),
         '$label POST',
@@ -351,6 +369,43 @@ class _ExchangeDeadline {
   void cancel() => _timer.cancel();
 }
 
+/// A public name answered with an address no public service can have: the
+/// resolver did answer, and the answer is a forgery. Distinct from a
+/// [TimeoutException], which is no answer at all.
+class ForgedAnswerException implements Exception {
+  const ForgedAnswerException(this.host, this.address);
+  final String host;
+  final InternetAddress address;
+
+  @override
+  String toString() => 'forged answer for $host: ${address.address}';
+}
+
+/// True for an address that cannot belong to a public service: private,
+/// loopback, link-local, carrier-NAT, documentation, multicast or reserved.
+bool isForgedAddress(InternetAddress address) {
+  final b = address.rawAddress;
+  if (b.length == 4) {
+    final a = b[0], c = b[1];
+    return a == 0 ||
+        a == 10 ||
+        a == 127 ||
+        a >= 224 ||
+        (a == 100 && c >= 64 && c <= 127) ||
+        (a == 169 && c == 254) ||
+        (a == 172 && c >= 16 && c <= 31) ||
+        (a == 192 && c == 168) ||
+        (a == 192 && c == 0 && (b[2] == 0 || b[2] == 2)) ||
+        (a == 198 && (c == 18 || c == 19)) ||
+        (a == 198 && c == 51 && b[2] == 100) ||
+        (a == 203 && c == 0 && b[2] == 113);
+  }
+  final allZero = b.take(15).every((x) => x == 0);
+  return (allZero && b[15] <= 1) ||
+      (b[0] & 0xFE) == 0xFC ||
+      (b[0] == 0xFE && (b[1] & 0xC0) == 0x80);
+}
+
 /// Where the valve's queries can be aimed on this device.
 ///
 /// The list is ordered by how likely each entry is to work from inside a
@@ -385,10 +440,12 @@ abstract final class TxtQueryResolvers {
   ];
 
   /// RFC 8484 endpoints matching [publicResolvers], as the fallback for a
-  /// network that filters port 53.
+  /// network that filters port 53. Addressed by IP, never by name: each
+  /// service's certificate covers its address, and no name is resolved to
+  /// connect, so a forged answer for the service's name cannot reach them.
   static final List<Uri> publicDohEndpoints = <Uri>[
-    Uri.parse('https://cloudflare-dns.com/dns-query'),
-    Uri.parse('https://dns.google/dns-query'),
+    Uri.parse('https://1.1.1.1/dns-query'),
+    Uri.parse('https://8.8.8.8/dns-query'),
   ];
 
   /// The system resolvers named in `/etc/resolv.conf`, or an empty list.

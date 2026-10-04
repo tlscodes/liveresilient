@@ -8,7 +8,7 @@
 library;
 
 import 'package:adaptive_transport/adaptive_transport.dart'
-    show TxtProbeOutcome;
+    show ForgedAnswerException, TxtProbeOutcome;
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show ConnectivitySnapshot, LaneStatus, ResilientLaneIds;
 
@@ -127,10 +127,15 @@ LetterLadderStatus classifyLetterLadder({
   // one-word [LetterLadderStatus.reason] on each arm names the fabric
   // predicate that fired — the same score, read once, never a new metric.
   final status = switch ((lastProbe?.reachedServer, doorReliability)) {
-    // This round's own probe found no nonce logged anywhere.
+    // This round's own probe found no nonce logged anywhere. A resolver
+    // that answered with a forgery is named apart from one that was silent.
     (false, _) => LetterLadderStatus(
       LetterLadderRung.closed,
-      reason: 'nonce',
+      reason:
+          (lastProbe?.answers.any((a) => a.error is ForgedAnswerException) ??
+              false)
+          ? 'forged'
+          : 'nonce',
       detail: queueDetail,
     ),
     // No live lane has a path AND the door has none either: nothing is
