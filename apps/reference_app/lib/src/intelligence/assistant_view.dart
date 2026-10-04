@@ -32,9 +32,8 @@ class AssistantView extends StatelessWidget {
           ),
           AdvisoryLevel.critical => (Icons.error_outline, scheme.error),
         };
-        // Prefer the assistant's narration; fall back to the instant
-        // deterministic headline until narration arrives.
-        final body = a.detail.isNotEmpty ? a.detail : a.headline;
+        // The headline is the instant deterministic line; the assistant's
+        // narration goes under it once it arrives, never a second copy.
         return Card(
           key: const Key('assistant-view'),
           margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -53,8 +52,13 @@ class AssistantView extends StatelessWidget {
                         a.headline,
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
-                      const SizedBox(height: 2),
-                      Text(body, style: Theme.of(context).textTheme.bodyMedium),
+                      if (a.detail.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          a.detail,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
                       if (a.actionTaken != null) ...[
                         const SizedBox(height: 6),
                         Row(

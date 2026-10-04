@@ -117,7 +117,8 @@ class ConnectivityPlaybook {
     }
     return const PlaybookInsight(
       id: 'calm-baseline',
-      guidance: 'Connection is healthy and being watched ahead of time.',
+      // Adds to the headline ("Connection healthy"), never restates it.
+      guidance: 'Watched ahead of time, so a slowdown is caught early.',
     );
   }
 }
