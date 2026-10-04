@@ -1231,6 +1231,36 @@ void main() {
       expect(line.data, contains('${peer.photoLetter.value!.width}×'));
     });
 
+    testWidgets('a picked photo this host cannot draw keeps its preview row, '
+        'with no exception', (tester) async {
+      // What a Linux test engine does with an AVIF payload: the bytes are a
+      // valid letter and an undecodable picture. Reproduced on any host
+      // with bytes no codec accepts.
+      final peer = JourneyPeer();
+      await tester.pumpWidget(JourneyPeerApp(peer));
+      peer.photoLetter.value = PhotoLetter(
+        wire: Uint8List.fromList(List<int>.filled(64, 7)),
+        width: 512,
+        height: 512,
+        quality: 0,
+        sourceBytes: 634772,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const Key('journey-peer-photo-preview')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('journey-peer-photo-preview-undrawable')),
+        findsOneWidget,
+      );
+      final line = tester.widget<Text>(
+        find.byKey(const Key('journey-peer-photo-preview-text')),
+      );
+      expect(line.data, contains('512×512'));
+    });
+
     testWidgets('a photo failure raises its own banner, not the voice one', (
       tester,
     ) async {

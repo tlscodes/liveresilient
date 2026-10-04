@@ -455,6 +455,16 @@ class LetterPhotoPreview extends StatelessWidget {
                   height: 72,
                   fit: BoxFit.contain,
                   gaplessPlayback: true,
+                  // The payload may be an AVIF this host cannot draw (an
+                  // older OS, a Linux test engine). The letter still goes;
+                  // only its picture is missing, and the line beside it
+                  // still says what was picked.
+                  errorBuilder: (context, error, stack) => const SizedBox(
+                    key: Key('journey-peer-photo-preview-undrawable'),
+                    height: 72,
+                    width: 72,
+                    child: Icon(Icons.image_outlined, color: Colors.white70),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),

@@ -179,7 +179,18 @@ class LetterThread extends StatelessWidget {
           if (kind == 'photo')
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.memory(bytes, fit: BoxFit.contain),
+              child: Image.memory(
+                bytes,
+                fit: BoxFit.contain,
+                // A photo letter this host cannot draw (AVIF on an older
+                // OS) stays a row in the thread instead of an exception.
+                errorBuilder: (context, error, stack) => const SizedBox(
+                  key: Key('letter-thread-photo-undrawable'),
+                  height: 72,
+                  width: 72,
+                  child: Icon(Icons.image_outlined),
+                ),
+              ),
             ),
           if (kind == 'voice')
             Row(
