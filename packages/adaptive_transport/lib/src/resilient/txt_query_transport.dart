@@ -406,6 +406,19 @@ abstract final class TxtQueryResolvers {
     }
   }
 
+  /// A dotted quad with zero-padded octets (`001.001.001.001`) rewritten
+  /// as plain decimal: macOS's parser accepts the padding and glibc's
+  /// rejects it, so the same resolv.conf read differently per host.
+  /// Anything that is not four decimal octets passes through unchanged.
+  static String _decimalQuad(String text) {
+    final octets = text.split('.');
+    if (octets.length != 4 ||
+        octets.any((o) => !RegExp(r'^\d{1,3}$').hasMatch(o))) {
+      return text;
+    }
+    return octets.map((o) => int.parse(o).toString()).join('.');
+  }
+
   /// Reads `nameserver` lines out of a resolv.conf body.
   static List<HostPort> parseResolvConf(String body) {
     final found = <HostPort>[];
@@ -418,7 +431,7 @@ abstract final class TxtQueryResolvers {
       if (parts.length < 2 || parts.first.toLowerCase() != 'nameserver') {
         continue;
       }
-      final parsed = InternetAddress.tryParse(parts[1]);
+      final parsed = InternetAddress.tryParse(_decimalQuad(parts[1]));
       if (parsed == null) continue;
       // `tryParse` validates but keeps the spelling it was given, so one
       // address written two legal ways would pass as two resolvers. The

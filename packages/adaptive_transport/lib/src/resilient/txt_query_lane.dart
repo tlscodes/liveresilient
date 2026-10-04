@@ -398,9 +398,18 @@ class TxtQueryLane implements TransportChannel {
   /// milliseconds rather than the whole timeout.
   Duration _waitFor(TxtQueryTransport transport) {
     if (attemptsPerChunk <= 1) return _timeout;
-    return _rtos
-        .putIfAbsent(transport, () => TxtQueryRto(ceiling: _timeout))
-        .next;
+    return _rtos.putIfAbsent(transport, _newRto).next;
+  }
+
+  /// The RTO's default 300 ms floor must not exceed this lane's timeout:
+  /// a lane configured under it would otherwise throw on its first query,
+  /// so every send failed before a single packet left.
+  TxtQueryRto _newRto() {
+    const floor = Duration(milliseconds: 300);
+    return TxtQueryRto(
+      ceiling: _timeout,
+      floor: _timeout < floor ? _timeout : floor,
+    );
   }
 
   /// Sends one query name, waiting [wait] for the answer, and returns the
@@ -412,10 +421,7 @@ class TxtQueryLane implements TransportChannel {
     final packet = TxtQueryWire.buildDnsQueryPacket(txid, queryName);
     attempts += 1;
     final transport = currentTransport;
-    final rto = _rtos.putIfAbsent(
-      transport,
-      () => TxtQueryRto(ceiling: _timeout),
-    );
+    final rto = _rtos.putIfAbsent(transport, _newRto);
     final sent = DateTime.now();
     final Uint8List response;
     try {
