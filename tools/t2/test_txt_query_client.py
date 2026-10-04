@@ -68,10 +68,12 @@ class Responder(threading.Thread):
         self.txids: list[int] = []
         self.src_ports: list[int] = []
         self.names: list[str] = []
-        self._stop = threading.Event()
+        # Not `_stop`: threading.Thread owns that name as a method up to
+        # Python 3.12, and join() calls it.
+        self._halt = threading.Event()
 
     def stop(self) -> None:
-        self._stop.set()
+        self._halt.set()
         self.join(timeout=2.0)
         self.sock.close()
         self.other.close()
@@ -83,7 +85,7 @@ class Responder(threading.Thread):
             pass
 
     def run(self) -> None:
-        while not self._stop.is_set():
+        while not self._halt.is_set():
             try:
                 data, addr = self.sock.recvfrom(2048)
             except (TimeoutError, socket.timeout):
@@ -114,7 +116,7 @@ class Responder(threading.Thread):
                 )
             elif self.mode == "trickle":
                 for _ in range(self.trickle_count):
-                    if self._stop.is_set():
+                    if self._halt.is_set():
                         break
                     self._send(self.sock, GARBAGE, addr)
                     time.sleep(self.trickle_s)
