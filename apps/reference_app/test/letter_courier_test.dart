@@ -1421,42 +1421,47 @@ void main() {
       await courier.dispose();
     });
 
-    test('C4 partial door history (mixed) outranks a fully healthy live '
-        'network — pins current precedence (candidate defect)', () async {
-      // wss+https both healthy: without door history this reads normal/ok.
-      final doorStore = _MemoryStorage();
-      doorStore.data = <String, Object?>{
-        'test-net': <String, Object?>{
-          'resolvers': <String, Object?>{
-            'doh:a': <String, Object?>{'attempts': 4, 'wins': 1},
-            'udp53:x': <String, Object?>{'attempts': 2, 'wins': 0},
+    test(
+      'C4 mixed door history lowers the reason only; a healthy live '
+      'network keeps its rung (normal) and the winner (owner decision #1)',
+      () async {
+        // wss+https both healthy: without door history this reads normal/ok.
+        // Mixed door history (ratio 1/6) must NOT demote it — only the reason
+        // drops to 'mixed'; the winner stays the live lane.
+        final doorStore = _MemoryStorage();
+        doorStore.data = <String, Object?>{
+          'test-net': <String, Object?>{
+            'resolvers': <String, Object?>{
+              'doh:a': <String, Object?>{'attempts': 4, 'wins': 1},
+              'udp53:x': <String, Object?>{'attempts': 2, 'wins': 0},
+            },
           },
-        },
-      };
-      final cards = RecordingCardSink();
-      final lanes = ScriptedLanes()
-        ..liveUp = true
-        ..httpsUp = true;
-      final courier = LetterCourier(
-        endpoints: () => throw StateError('scripted lanes, never assembled'),
-        budget: fast,
-        openLanes: () async => lanes,
-        networkResolver: const _FixedNetwork('test-net'),
-        rungLadder: LetterRungLadder(_MemoryStorage()),
-        doorResolverLadder: DoorResolverLadder(doorStore),
-        cardSink: cards,
-      );
+        };
+        final cards = RecordingCardSink();
+        final lanes = ScriptedLanes()
+          ..liveUp = true
+          ..httpsUp = true;
+        final courier = LetterCourier(
+          endpoints: () => throw StateError('scripted lanes, never assembled'),
+          budget: fast,
+          openLanes: () async => lanes,
+          networkResolver: const _FixedNetwork('test-net'),
+          rungLadder: LetterRungLadder(_MemoryStorage()),
+          doorResolverLadder: DoorResolverLadder(doorStore),
+          cardSink: cards,
+        );
 
-      expect(
-        await courier.send(Uint8List.fromList([1, 2, 3]), kind: 'typed'),
-        LetterState.arrived,
-      );
-      final card = cards.cards.single.toJson();
-      expect(card['best_lane'], ResilientLaneIds.webSocketRelay); // live won
-      expect(card['rung'], LetterLadderRung.halfClosed.name); // ratio 1/6
-      expect(card['reason'], 'mixed');
-      await courier.dispose();
-    });
+        expect(
+          await courier.send(Uint8List.fromList([1, 2, 3]), kind: 'typed'),
+          LetterState.arrived,
+        );
+        final card = cards.cards.single.toJson();
+        expect(card['best_lane'], ResilientLaneIds.webSocketRelay); // live won
+        expect(card['rung'], LetterLadderRung.normal.name); // rung unchanged
+        expect(card['reason'], 'mixed'); // reason lowered (ratio 1/6)
+        await courier.dispose();
+      },
+    );
 
     test('C4-twin a door history of all-wins (1.0) or all-misses (0) does '
         'NOT demote a healthy live network — both read normal/ok', () async {
@@ -1498,9 +1503,8 @@ void main() {
       );
     });
 
-    test('C5 mixed door history is invisible on probe(): the same courier '
-        'reads limited/down there and halfClosed/mixed on Send '
-        '(candidate defect)', () async {
+    test('C5 probe() and Send read the SAME door history (owner decision '
+        '#2): both limited/mixed on the same snapshot', () async {
       final doorStore = _MemoryStorage();
       doorStore.data = <String, Object?>{
         'test-net': <String, Object?>{
@@ -1511,7 +1515,7 @@ void main() {
         },
       };
       final cards = RecordingCardSink();
-      final lanes = ScriptedLanes()..liveUp = true; // https dead
+      final lanes = ScriptedLanes()..liveUp = true; // https dead -> limited
       final courier = LetterCourier(
         endpoints: () => throw StateError('scripted lanes, never assembled'),
         budget: fast,
@@ -1522,19 +1526,19 @@ void main() {
         cardSink: cards,
       );
 
-      // probe() computes the rung WITHOUT the network label (L539): the
-      // door history is never read, so it sees only the live lane.
+      // probe() now resolves the same label Send uses, so it reads the mixed
+      // door history too: limited (https down) with the reason lowered.
       await courier.probe();
       expect(courier.ladderStatus.value!.rung, LetterLadderRung.limited);
-      expect(courier.ladderStatus.value!.reason, 'down');
+      expect(courier.ladderStatus.value!.reason, 'mixed');
 
-      // The Send path passes the label, reads the mixed history.
+      // The Send path reads the same history -> the card agrees with probe().
       expect(
         await courier.send(Uint8List.fromList([1, 2, 3]), kind: 'typed'),
         LetterState.arrived,
       );
       final card = cards.cards.single.toJson();
-      expect(card['rung'], LetterLadderRung.halfClosed.name);
+      expect(card['rung'], LetterLadderRung.limited.name);
       expect(card['reason'], 'mixed');
       await courier.dispose();
     });
@@ -1816,14 +1820,69 @@ void main() {
       expect(b.rung, LetterLadderRung.closed);
       expect(b.reason, 'nonce');
 
-      // Reached-server probe + mixed history -> mixed beats door (L143).
+      // Reached-server probe + mixed history over a healthy live lane: the
+      // live lane keeps its rung (normal), only the reason drops to 'mixed'
+      // (owner decision #1; parts a/b show 'closed' still outranks).
       final c = classifyLetterLadder(
         snapshot: liveUp(),
         lastProbe: reached,
         doorHistory: mixed,
       );
-      expect(c.rung, LetterLadderRung.halfClosed);
+      expect(c.rung, LetterLadderRung.normal);
       expect(c.reason, 'mixed');
+    });
+
+    test('probe() and the watch tick read the same door history as Send '
+        '(owner decision #2): a drained letter reads limited/mixed', () async {
+      // Shape of B3: all three lanes dead at Send -> queued + parked. Then a
+      // live lane comes up (https still down) and the watch drains it. The
+      // tick's ladder read must see the mixed door history, exactly as Send
+      // would, so the drained letter and a fresh probe() agree.
+      final clock = ManualClock();
+      final doorStore = _MemoryStorage();
+      doorStore.data = <String, Object?>{
+        'test-net': <String, Object?>{
+          'resolvers': <String, Object?>{
+            'doh:a': <String, Object?>{'attempts': 4, 'wins': 1},
+            'udp53:x': <String, Object?>{'attempts': 2, 'wins': 0},
+          },
+        },
+      };
+      final cards = RecordingCardSink();
+      final lanes = ScriptedLanes(); // every lane dead at first
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        now: () => clock.now,
+        queue: LetterQueue(MemoryLetterQueueStore()),
+        openLanes: () async => lanes,
+        wait: clock.wait,
+        schedulePeriodic: clock.schedule,
+        networkResolver: const _FixedNetwork('test-net'),
+        rungLadder: LetterRungLadder(_MemoryStorage()),
+        doorResolverLadder: DoorResolverLadder(doorStore),
+        cardSink: cards,
+      );
+
+      expect(
+        await courier.send(Uint8List.fromList([1, 2, 3]), kind: 'typed'),
+        LetterState.queued, // nothing reachable -> parked
+      );
+
+      // A live lane comes up; the watch's tick drains the parked letter.
+      lanes.liveUp = true; // https stays down -> limited
+      await clock.tick();
+
+      expect(lanes.delivered, hasLength(1)); // the tick carried it
+      // The tick's _updateLadder read the mixed door history, same as Send.
+      expect(courier.ladderStatus.value!.rung, LetterLadderRung.limited);
+      expect(courier.ladderStatus.value!.reason, 'mixed');
+
+      // A fresh probe() on the same courier reads the same snapshot+history.
+      await courier.probe();
+      expect(courier.ladderStatus.value!.rung, LetterLadderRung.limited);
+      expect(courier.ladderStatus.value!.reason, 'mixed');
+      await courier.dispose();
     });
 
     test('C11 a multi-part letter that exhausts its retries latches weak/late '

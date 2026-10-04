@@ -132,14 +132,19 @@ void main() {
       reason: 'door',
     ),
     (
-      name: 'halfClosed: the door history is a mix of hits and misses',
+      // Owner decision 2026-10-04: with a healthy live lane up, mixed door
+      // history keeps the live lane's rung (normal) and only lowers the
+      // reason to 'mixed' — it does not demote to halfClosed.
+      name:
+          'mixed over a healthy live lane: keeps normal, reason drops to '
+          'mixed',
       lanes: [
         lane(ResilientLaneIds.webSocketRelay, 0.9),
         lane(ResilientLaneIds.txtQuery, 0.6),
       ],
       probe: reached,
       history: const {'udp53:8.8.8.8:53': (wins: 3, attempts: 10)},
-      rung: LetterLadderRung.halfClosed,
+      rung: LetterLadderRung.normal,
       reason: 'mixed',
     ),
   ];
@@ -176,5 +181,113 @@ void main() {
       status.detail,
       stringContainsInOrder(['3 waiting', 'next probe in 12s']),
     );
+  });
+
+  // Owner decision 2026-10-04 — the three winner rules at the ladder level.
+  // Rule 1: a healthy live lane keeps its own rung; mixed door history only
+  // lowers the reason to 'mixed', never the rung, never past 'closed'.
+  const mixed = {'r': (wins: 3, attempts: 10)}; // ratio 0.3 -> mixed
+
+  group(
+    'winner rule 1: a live lane keeps its rung, mixed only lowers reason',
+    () {
+      test('two healthy non-door lanes -> normal, reason mixed', () {
+        final status = classifyLetterLadder(
+          snapshot: snap([
+            lane(ResilientLaneIds.webSocketRelay, 0.9),
+            lane(ResilientLaneIds.httpLongPoll, 0.9),
+            lane(ResilientLaneIds.txtQuery, 0.6),
+          ]),
+          doorHistory: mixed,
+        );
+        expect(status.rung, LetterLadderRung.normal);
+        expect(status.reason, 'mixed');
+      });
+
+      test('one non-door lane down -> limited, reason mixed', () {
+        final status = classifyLetterLadder(
+          snapshot: snap([
+            lane(ResilientLaneIds.webSocketRelay, 0.9),
+            lane(ResilientLaneIds.httpLongPoll, -1.10), // dead
+          ]),
+          doorHistory: mixed,
+        );
+        expect(status.rung, LetterLadderRung.limited);
+        expect(status.reason, 'mixed');
+      });
+
+      test('the one live lane is slow -> weak, reason mixed', () {
+        final status = classifyLetterLadder(
+          snapshot: snap([
+            lane(ResilientLaneIds.webSocketRelay, 0.10), // alive, below 0.15
+            lane(ResilientLaneIds.httpLongPoll, -1.10),
+          ]),
+          doorHistory: mixed,
+        );
+        expect(status.rung, LetterLadderRung.weak);
+        expect(status.reason, 'mixed');
+      });
+
+      test(
+        'a probe that logged no nonce still outranks mixed -> closed/nonce',
+        () {
+          final status = classifyLetterLadder(
+            snapshot: snap([
+              lane(ResilientLaneIds.webSocketRelay, 0.9),
+              lane(ResilientLaneIds.httpLongPoll, 0.9),
+              lane(ResilientLaneIds.txtQuery, 0.6),
+            ]),
+            lastProbe: notReached,
+            doorHistory: mixed,
+          );
+          expect(status.rung, LetterLadderRung.closed);
+          expect(status.reason, 'nonce');
+        },
+      );
+    },
+  );
+
+  // Rule 2: no live lane has a path -> the door decides the rung. Here mixed
+  // door history DOES set halfClosed (unchanged from before this decision),
+  // because there is no live lane whose rung it could merely modify.
+  group('winner rule 2: no live lane -> the door decides the rung', () {
+    test('mixed door history, no live lane -> halfClosed/mixed', () {
+      final status = classifyLetterLadder(
+        snapshot: snap([
+          lane(ResilientLaneIds.webSocketRelay, -1.05),
+          lane(ResilientLaneIds.httpLongPoll, -1.10),
+          lane(ResilientLaneIds.txtQuery, 0.6), // door still has a path
+        ]),
+        doorHistory: mixed,
+      );
+      expect(status.rung, LetterLadderRung.halfClosed);
+      expect(status.reason, 'mixed');
+    });
+
+    test('no live lane, empty door history -> weak/dead', () {
+      final status = classifyLetterLadder(
+        snapshot: snap([
+          lane(ResilientLaneIds.webSocketRelay, -1.05),
+          lane(ResilientLaneIds.httpLongPoll, -1.10),
+          lane(ResilientLaneIds.txtQuery, 0.6),
+        ]),
+      );
+      expect(status.rung, LetterLadderRung.weak);
+      expect(status.reason, 'dead');
+    });
+  });
+
+  // Rule 3: not even the door has a path -> closed/dead. The courier then
+  // parks the letter with best_lane null (pinned at the courier level by B3).
+  test('winner rule 3: all three lanes dead -> closed/dead', () {
+    final status = classifyLetterLadder(
+      snapshot: snap([
+        lane(ResilientLaneIds.webSocketRelay, -1.05),
+        lane(ResilientLaneIds.httpLongPoll, -1.10),
+        lane(ResilientLaneIds.txtQuery, -1.15),
+      ]),
+    );
+    expect(status.rung, LetterLadderRung.closed);
+    expect(status.reason, 'dead');
   });
 }

@@ -126,7 +126,7 @@ LetterLadderStatus classifyLetterLadder({
   // Worst rung first: the first pattern that holds is the reading. The
   // one-word [LetterLadderStatus.reason] on each arm names the fabric
   // predicate that fired — the same score, read once, never a new metric.
-  return switch ((lastProbe?.reachedServer, doorReliability)) {
+  final status = switch ((lastProbe?.reachedServer, doorReliability)) {
     // This round's own probe found no nonce logged anywhere.
     (false, _) => LetterLadderStatus(
       LetterLadderRung.closed,
@@ -140,10 +140,11 @@ LetterLadderStatus classifyLetterLadder({
       reason: 'dead',
       detail: queueDetail,
     ),
-    (_, final ratio?) when ratio > 0 && ratio < 1 => const LetterLadderStatus(
-      LetterLadderRung.halfClosed,
-      reason: 'mixed',
-    ),
+    // Only when NO live lane carries the letter does mixed door history set
+    // the rung itself (halfClosed). With a live lane up, mixed history is a
+    // reason modifier layered after the switch — never a rung of its own.
+    (_, final ratio?) when !liveReachable && ratio > 0 && ratio < 1 =>
+      const LetterLadderStatus(LetterLadderRung.halfClosed, reason: 'mixed'),
     (true, _) when !liveReachable => const LetterLadderStatus(
       LetterLadderRung.withCourier,
       reason: 'door',
@@ -158,4 +159,18 @@ LetterLadderStatus classifyLetterLadder({
     ),
     _ => const LetterLadderStatus(LetterLadderRung.normal, reason: 'ok'),
   };
+  // Owner decision 2026-10-04: a healthy live lane keeps the winner and its
+  // own rung; flaky/mixed door history (0 < ratio < 1) only lowers the
+  // reason word to 'mixed'. It never demotes a live lane's rung and never
+  // overrides a 'closed' reading — nonce / all-dead still outrank.
+  final mixedDoor =
+      doorReliability != null && doorReliability > 0 && doorReliability < 1;
+  if (liveReachable && mixedDoor && status.rung != LetterLadderRung.closed) {
+    return LetterLadderStatus(
+      status.rung,
+      reason: 'mixed',
+      detail: status.detail,
+    );
+  }
+  return status;
 }

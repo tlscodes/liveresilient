@@ -344,18 +344,38 @@ class LetterCourier {
     return s;
   }
 
+  /// The one network label every ladder read resolves through — Send,
+  /// probe() and the watch's tick all go through here, so the door history
+  /// they read agrees on the same snapshot. Null (no ladder / measurement /
+  /// call history configured) keeps today's behaviour: the door history is
+  /// not consulted.
+  Future<String?> _sendNetworkLabel() async {
+    final needs =
+        _rungLadder != null ||
+        _installMeasurement != null ||
+        _callHistory != null;
+    return needs
+        ? (await _networkResolver?.resolveNetworkLabel()) ?? 'unknown'
+        : null;
+  }
+
   /// Recomputes [ladderStatus] from [s] and, when the door raced this
   /// round, [probe]. [_doorResolverLadder]'s history is read, never
-  /// written, here.
+  /// written, here. When the caller passes no [networkLabel] (probe() and
+  /// the watch's tick), this resolves the same label Send uses, so all
+  /// three read the door history under the same key — the pre-send banner,
+  /// a drained letter and Send no longer disagree on the same snapshot.
   Future<void> _updateLadder(
     ConnectivitySnapshot s, {
     TxtProbeOutcome? probe,
     String? networkLabel,
   }) async {
     final doorLadder = _doorResolverLadder;
-    final history = (doorLadder == null || networkLabel == null)
+    final label =
+        networkLabel ?? (doorLadder == null ? null : await _sendNetworkLabel());
+    final history = (doorLadder == null || label == null)
         ? const <String, ({int wins, int attempts})>{}
-        : await doorLadder.history(networkLabel);
+        : await doorLadder.history(label);
     if (_disposed) return;
     ladderStatus.value = _applyDegradedLatch(
       classifyLetterLadder(
@@ -609,11 +629,7 @@ class LetterCourier {
     // ranks first, every time.
     final ladder = _rungLadder;
     final measurement = _installMeasurement;
-    final needsNetworkLabel =
-        ladder != null || measurement != null || _callHistory != null;
-    final networkLabel = needsNetworkLabel
-        ? (await _networkResolver?.resolveNetworkLabel()) ?? 'unknown'
-        : null;
+    final networkLabel = await _sendNetworkLabel();
     final previousWinner = ladder == null || networkLabel == null
         ? null
         : await ladder.previousWinner(networkLabel);
