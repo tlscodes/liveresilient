@@ -79,6 +79,27 @@ jobs:
           echo "CODEC2_LIB_PATH=$lib" >> "$GITHUB_ENV"
           echo "codec2 built: $lib"
 
+      # hamseda_codec's Opus tests open libopus through OPUS_LIB_PATH. Same
+      # source and flags as tools/phase5/native/make_opus.sh (1.5.2, OSCE on
+      # for NoLACE, DRED off), pinned by the tarball's sha256; a distribution
+      # package is a different library and fails the version test.
+      - name: Build libopus 1.5.2 (OSCE on, DRED off)
+        run: |
+          set -e
+          curl -fsSL -o /tmp/opus-1.5.2.tar.gz \
+            https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz
+          echo "65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1  /tmp/opus-1.5.2.tar.gz" \
+            | sha256sum -c --strict
+          tar -xzf /tmp/opus-1.5.2.tar.gz -C /tmp
+          cmake -S /tmp/opus-1.5.2 -B /tmp/opus_build -DCMAKE_BUILD_TYPE=Release \
+                -DOPUS_BUILD_SHARED_LIBRARY=ON -DOPUS_BUILD_PROGRAMS=OFF \
+                -DOPUS_BUILD_TESTING=OFF -DOPUS_OSCE=ON -DOPUS_DRED=OFF >/dev/null
+          cmake --build /tmp/opus_build -j 4 >/dev/null
+          lib="$(find /tmp/opus_build -name 'libopus.so*' -type f | head -1)"
+          [ -n "$lib" ] || { echo "::error::opus build produced no shared library"; exit 1; }
+          echo "OPUS_LIB_PATH=$lib" >> "$GITHUB_ENV"
+          echo "opus built: $lib"
+
       - name: Install the coverage formatter
         run: dart pub global activate coverage
 
