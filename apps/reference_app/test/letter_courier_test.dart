@@ -433,6 +433,9 @@ void main() {
         final rig = Rig();
         rig.lanes.doorUp = true;
         rig.lanes.holdAll = true;
+        // The id is the clock's epoch ms; the clock is a local DateTime, so
+        // the literal would differ per host time zone.
+        final id = 'letter-${rig.clock.now.millisecondsSinceEpoch}';
         final whole = Uint8List.fromList([
           for (var i = 0; i < 40000; i++) (i * 7) & 0xFF,
         ]);
@@ -440,11 +443,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         // Ten parts, but only three are ever in flight.
         expect(rig.lanes.held, hasLength(3));
-        expect(rig.lanes.held.map((h) => h.$1), [
-          'letter-1789898400000-p0',
-          'letter-1789898400000-p1',
-          'letter-1789898400000-p2',
-        ]);
+        expect(rig.lanes.held.map((h) => h.$1), ['$id-p0', '$id-p1', '$id-p2']);
         // Finish them out of order: p1 first, then p2, then p0.
         Future<void> finish(String suffix, DeliveryOutcome outcome) async {
           final h = rig.lanes.held.firstWhere((h) => h.$1.endsWith(suffix));
@@ -458,15 +457,12 @@ void main() {
         await finish('-p2', DeliveryOutcome.sentLive);
         // p0 is "lost": refused — only p0 is sent again, as p0-r1.
         await finish('-p0', DeliveryOutcome.rejected);
-        expect(
-          rig.lanes.held.map((h) => h.$1),
-          contains('letter-1789898400000-p0-r1'),
-        );
+        expect(rig.lanes.held.map((h) => h.$1), contains('$id-p0-r1'));
         expect(rig.lanes.held, hasLength(3));
         // Drain everything else in whatever order the window holds.
         while (rig.lanes.held.isNotEmpty) {
           await finish(
-            rig.lanes.held.last.$1.split('letter-1789898400000').last,
+            rig.lanes.held.last.$1.split(id).last,
             DeliveryOutcome.sentLive,
           );
         }

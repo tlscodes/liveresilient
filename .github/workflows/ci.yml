@@ -100,6 +100,27 @@ jobs:
           echo "OPUS_LIB_PATH=$lib" >> "$GITHUB_ENV"
           echo "opus built: $lib"
 
+      # The photo letter is an AVIF (one AV1 keyframe); its encoder opens
+      # libSvtAv1Enc through SVTAV1_LIB_PATH. Same release the Mac host links
+      # (4.2.0), pinned by its tag commit; without it the photo path falls
+      # back to JPEG and the AVIF assertions cannot be checked here.
+      - name: Build SVT-AV1 4.2.0 (encoder only)
+        run: |
+          set -e
+          sudo apt-get install -y -qq nasm
+          git clone -q --depth 1 --branch v4.2.0 \
+            https://gitlab.com/AOMediaCodec/SVT-AV1.git /tmp/svtav1_src
+          [ "$(git -C /tmp/svtav1_src rev-parse HEAD)" = 9292ec8e32bce26f781f277ec8739b53426c4300 ] \
+            || { echo "::error::SVT-AV1 v4.2.0 tag moved"; exit 1; }
+          cmake -S /tmp/svtav1_src -B /tmp/svtav1_build -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_SHARED_LIBS=ON -DBUILD_APPS=OFF -DBUILD_DEC=OFF \
+                -DBUILD_TESTING=OFF >/dev/null
+          cmake --build /tmp/svtav1_build -j 4 >/dev/null
+          lib="$(find /tmp/svtav1_src/Bin /tmp/svtav1_build -name 'libSvtAv1Enc.so*' -type f 2>/dev/null | head -1)"
+          [ -n "$lib" ] || { echo "::error::SVT-AV1 build produced no shared library"; exit 1; }
+          echo "SVTAV1_LIB_PATH=$lib" >> "$GITHUB_ENV"
+          echo "svt-av1 built: $lib"
+
       - name: Install the coverage formatter
         run: dart pub global activate coverage
 
