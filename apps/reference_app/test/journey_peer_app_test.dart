@@ -1404,7 +1404,7 @@ void main() {
       ).toJson();
       expect(card, {
         'event': 'letter_card',
-        'v': 2,
+        'v': 3,
         'at': '2026-09-26T12:00:00.000Z',
         'source': 'mac',
         'session': 'S1',
@@ -1415,6 +1415,7 @@ void main() {
         'winner': 'res-a',
         'rung': null,
         'reason': null,
+        'action': null,
         'lab': true,
       });
       expect(card.keys.toList(), [
@@ -1430,6 +1431,7 @@ void main() {
         'winner',
         'rung',
         'reason',
+        'action',
         'lab',
       ]);
     });
@@ -1458,6 +1460,7 @@ void main() {
       expect(card['session'], isNull);
       expect(card['rung'], isNull); // the peer has no ladder
       expect(card['reason'], isNull); // ...so no reason either
+      expect(card['action'], isNull); // ...and no delivery state
     });
   });
 }

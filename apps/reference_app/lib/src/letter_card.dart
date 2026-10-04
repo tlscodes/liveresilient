@@ -32,10 +32,11 @@ class LetterCard {
     this.winner,
     this.rung,
     this.reason,
+    this.action,
   });
 
   static const String event = 'letter_card';
-  static const int version = 2;
+  static const int version = 3;
 
   final DateTime at;
 
@@ -58,6 +59,12 @@ class LetterCard {
   /// with no ladder (the rig peer), exactly like [rung].
   final String? reason;
 
+  /// One word for what the send DID: "send" (delivered live on the chosen
+  /// lane), "queue" (parked in the queue), "hold" (neither — gave up or
+  /// not delivered without a park). Null on a writer with no delivery
+  /// state (the rig peer), exactly like [rung].
+  final String? action;
+
   /// Key order is part of the schema — both writers depend on it.
   Map<String, Object?> toJson() => <String, Object?>{
     'event': event,
@@ -72,6 +79,7 @@ class LetterCard {
     'winner': winner,
     'rung': rung,
     'reason': reason,
+    'action': action,
     'lab': true,
   };
 }

@@ -799,6 +799,11 @@ class LetterCourier {
           (winnerIndex == null ? null : probe!.answers[winnerIndex].label),
       rung: ladderStatus.value?.rung.name,
       reason: ladderStatus.value?.reason,
+      action: switch (state) {
+        LetterState.arrived => 'send',
+        LetterState.queued => 'queue',
+        _ => 'hold',
+      },
     );
     // Best-effort, like the card log itself: a sink that throws
     // synchronously (disk full on the first touch) or whose append future

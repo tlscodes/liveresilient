@@ -940,6 +940,9 @@ void main() {
       expect(card['rung'], LetterLadderRung.withCourier.name);
       // ...and WHY: the door answered this round, no live lane.
       expect(card['reason'], 'door');
+      // ...and WHAT the send did: delivered live on the chosen lane.
+      expect(card['action'], 'send');
+      expect(card['v'], 3);
       expect(card['lab'], isTrue);
       // Counts and ids only: no letter text survives into the card.
       expect(jsonEncode(card), isNot(contains('secret letter')));
@@ -973,6 +976,35 @@ void main() {
       expect(card['rung'], LetterLadderRung.weak.name);
       // WHY weak: no live lane, but the door still had a path (no probe).
       expect(card['reason'], 'dead');
+      // ...and WHAT: parked in the queue.
+      expect(card['action'], 'queue');
+      await courier.dispose();
+    });
+
+    test('a rejected delivery writes exactly one notDelivered card, '
+        'action hold', () async {
+      final lanes = ScriptedLanes()
+        ..doorUp = true
+        ..outcome = DeliveryOutcome.rejected;
+      final cards = RecordingCardSink();
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+
+      expect(state, LetterState.notDelivered);
+      expect(cards.cards, hasLength(1));
+      final card = cards.cards.single.toJson();
+      expect(card['outcome'], 'notDelivered');
+      // WHAT the send did: neither delivered nor parked — a hold.
+      expect(card['action'], 'hold');
       await courier.dispose();
     });
 
@@ -1028,10 +1060,10 @@ void main() {
       );
       expect(
         jsonEncode(card.toJson()),
-        '{"event":"letter_card","v":2,"at":"2026-09-26T12:00:00.000Z",'
+        '{"event":"letter_card","v":3,"at":"2026-09-26T12:00:00.000Z",'
         '"source":"phone","session":"S1","bytes":42,"outcome":"sentLive",'
         '"best_lane":"lane-x","resolvers":["res-a"],"winner":"res-a",'
-        '"rung":"normal","reason":"ok","lab":true}',
+        '"rung":"normal","reason":"ok","action":null,"lab":true}',
       );
     });
 
@@ -1050,10 +1082,10 @@ void main() {
         );
         expect(
           jsonEncode(card.toJson()),
-          '{"event":"letter_card","v":2,"at":"2026-09-26T12:00:00.000Z",'
+          '{"event":"letter_card","v":3,"at":"2026-09-26T12:00:00.000Z",'
           '"source":"mac","session":"S1","bytes":42,"outcome":"queued",'
           '"best_lane":"lane-x","resolvers":["res-a"],"winner":"res-a",'
-          '"rung":null,"reason":null,"lab":true}',
+          '"rung":null,"reason":null,"action":null,"lab":true}',
         );
       },
     );
@@ -1142,6 +1174,7 @@ void main() {
       expect(card['best_lane'], isNull);
       expect(card['rung'], LetterLadderRung.closed.name);
       expect(card['reason'], 'dead');
+      expect(card['action'], 'queue');
       await courier.dispose();
     });
 
