@@ -744,6 +744,19 @@ class LetterCourier {
       probe = await (lanes as LetterDoorProbe).probeDoor();
       if (probe != null) {
         note('probe ${probe.describe()}');
+        // The evidence, journaled before the carry: what was asked, what
+        // came back, and why the rest did not. Decides nothing; best
+        // effort like the card, never able to break the Send.
+        final Object? proofSink = _cardSink;
+        if (proofSink is LetterProofSink) {
+          try {
+            unawaited(
+              proofSink
+                  .appendProof(LetterProof.fromProbe(probe, at: _now()))
+                  .catchError((Object _) {}),
+            );
+          } catch (_) {}
+        }
         await _updateLadder(s, probe: probe, networkLabel: networkLabel);
         if (!probe.reachedServer) {
           // A probe miss is one strike for the door (cycle B).

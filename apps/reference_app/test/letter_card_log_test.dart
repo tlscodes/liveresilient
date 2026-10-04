@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:adaptive_transport/adaptive_transport.dart'
+    show ForgedAnswerException, TxtProbeAnswer, TxtProbeOutcome;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/intelligence/device_bindings.dart'
     show intelligenceStorageDirectory;
@@ -23,6 +26,67 @@ LetterCard _card({
 );
 
 void main() {
+  group('the proof line', () {
+    final at = DateTime.utc(2026, 10, 4, 20);
+    TxtProbeAnswer miss(int i, String label, Object? error) =>
+        TxtProbeAnswer(index: i, label: label, nonce: 'n$i', error: error);
+
+    test('names what was asked, what returned, and each miss by its cause', () {
+      final proof = LetterProof.fromProbe(
+        TxtProbeOutcome(
+          groupId: 'g7',
+          answers: [
+            const TxtProbeAnswer(
+              index: 0,
+              label: 'a',
+              nonce: 'n0',
+              winnerNonce: 'n0',
+              rank: 1,
+            ),
+            miss(1, 'b', TimeoutException('silent')),
+            miss(
+              2,
+              'c',
+              ForgedAnswerException('x', InternetAddress('10.0.0.1')),
+            ),
+            miss(3, 'd', const FormatException('garbled')),
+            miss(4, 'e', null),
+          ],
+          winnerIndex: 0,
+        ),
+        at: at,
+      );
+      expect(
+        jsonEncode(proof.toJson()),
+        '{"event":"letter_proof","v":1,"at":"2026-10-04T20:00:00.000Z",'
+        '"session":"g7","asked":["a","b","c","d","e"],"returned":["a"],'
+        '"failed":{"b":"timeout","c":"forged","d":"error","e":"timeout"},'
+        '"lab":true}',
+      );
+    });
+
+    test('is one more line in the same journal file as the cards', () async {
+      final dir = Directory.systemTemp.createTempSync('letter_proof_log');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final log = LetterCardLog(() => dir);
+      await log.appendProof(
+        LetterProof(
+          at: at,
+          session: 'g7',
+          asked: const ['a'],
+          returned: const [],
+          failed: const {'a': 'forged'},
+        ),
+      );
+      await log.append(_card(outcome: 'queued', reason: 'forged'));
+      final lines = File(
+        '${dir.path}/letter_cards.jsonl',
+      ).readAsLinesSync().map((l) => jsonDecode(l) as Map).toList();
+      expect(lines.map((l) => l['event']), ['letter_proof', 'letter_card']);
+      expect(lines.first['failed'], {'a': 'forged'});
+    });
+  });
+
   group('disk() shares the one intelligence folder', () {
     late File target;
     String? original;

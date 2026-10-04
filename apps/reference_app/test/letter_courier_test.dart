@@ -9,10 +9,17 @@
 // a socket and without a sleep.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show InternetAddress;
 import 'dart:typed_data';
 
 import 'package:adaptive_transport/adaptive_transport.dart'
-    show HostPort, TxtProbeAnswer, TxtProbeOutcome, TxtQueryLane, TxtQueryValve;
+    show
+        ForgedAnswerException,
+        HostPort,
+        TxtProbeAnswer,
+        TxtProbeOutcome,
+        TxtQueryLane,
+        TxtQueryValve;
 import 'package:connection_orchestrator/connection_orchestrator.dart'
     show
         CallHistoryStore,
@@ -942,6 +949,109 @@ void main() {
       expect(card['lab'], isTrue);
       // Counts and ids only: no letter text survives into the card.
       expect(jsonEncode(card), isNot(contains('secret letter')));
+      await courier.dispose();
+    });
+
+    test('the proof line is journaled before the carry: asked, returned, and '
+        'why the rest did not', () async {
+      final lanes = DoorProbingLanes()
+        ..doorUp = true
+        ..answer = () => TxtProbeOutcome(
+          groupId: 'g1',
+          answers: [
+            TxtProbeAnswer(
+              index: 0,
+              label: 'res-a',
+              nonce: 'aa',
+              error: TimeoutException('silent'),
+            ),
+            const TxtProbeAnswer(
+              index: 1,
+              label: 'res-b',
+              nonce: 'bb',
+              winnerNonce: 'bb',
+              rank: 1,
+            ),
+            TxtProbeAnswer(
+              index: 2,
+              label: 'res-c',
+              nonce: 'cc',
+              error: ForgedAnswerException('x', InternetAddress('10.0.0.1')),
+            ),
+          ],
+          winnerIndex: 1,
+        );
+      final journal = _ProofAndCardSink(() => lanes.delivered.length);
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        cardSink: journal,
+      );
+
+      final state = await courier.send(
+        Uint8List.fromList('secret letter body'.codeUnits),
+        kind: 'typed',
+      );
+
+      // The Send itself is what it was: carried by the door, one card.
+      expect(state, LetterState.arrived);
+      expect(lanes.delivered, hasLength(1));
+      expect(journal.order, ['proof', 'card']);
+      expect(journal.deliveredAtProof, 0, reason: 'written before the carry');
+      final proof = journal.proofs.single.toJson();
+      expect(proof['event'], 'letter_proof');
+      expect(proof['session'], 'g1');
+      expect(proof['asked'], ['res-a', 'res-b', 'res-c']);
+      expect(proof['returned'], ['res-b']);
+      expect(proof['failed'], {'res-a': 'timeout', 'res-c': 'forged'});
+      expect(proof['lab'], isTrue);
+      expect(jsonEncode(proof), isNot(contains('secret letter')));
+      await courier.dispose();
+    });
+
+    test('only the door proves: the live call reads unavailable and the '
+        'letter still goes through the door', () async {
+      final lanes = DoorProbingLanes()
+        ..doorUp = true
+        ..answer = () => const TxtProbeOutcome(
+          groupId: 'g1',
+          answers: [
+            TxtProbeAnswer(
+              index: 0,
+              label: 'res-a',
+              nonce: 'aa',
+              winnerNonce: 'aa',
+              rank: 1,
+            ),
+          ],
+          winnerIndex: 0,
+        );
+      final cards = RecordingCardSink();
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: fast,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+      final seen = <LetterState>[];
+      courier.status.addListener(() {
+        final s = courier.status.value;
+        if (s != null) seen.add(s.state);
+      });
+
+      await courier.probe();
+      expect(courier.status.value!.state, LetterState.liveCallUnavailable);
+
+      final state = await courier.send(
+        Uint8List.fromList([1, 2, 3]),
+        kind: 'typed',
+      );
+      expect(state, LetterState.arrived);
+      expect(seen, contains(LetterState.liveCallUnavailable));
+      final card = cards.cards.single.toJson();
+      expect(card['best_lane'], ResilientLaneIds.txtQuery);
+      expect(card['action'], 'send');
       await courier.dispose();
     });
 
@@ -2060,6 +2170,27 @@ class _FirstPartHangsLanes extends ScriptedLanes {
       return Completer<DeliveryOutcome>().future; // outruns budget.carry
     }
     return super.deliver(payload, bundleId: bundleId);
+  }
+}
+
+/// Records cards and proof lines in the order they arrive, and how many
+/// delivers the lanes had seen when the proof was written.
+class _ProofAndCardSink implements LetterCardSink, LetterProofSink {
+  _ProofAndCardSink(this._deliveredSoFar);
+
+  final int Function() _deliveredSoFar;
+  final List<String> order = [];
+  final List<LetterProof> proofs = [];
+  int? deliveredAtProof;
+
+  @override
+  Future<void> append(LetterCard card) async => order.add('card');
+
+  @override
+  Future<void> appendProof(LetterProof proof) async {
+    deliveredAtProof = _deliveredSoFar();
+    proofs.add(proof);
+    order.add('proof');
   }
 }
 

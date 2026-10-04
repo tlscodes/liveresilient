@@ -6,8 +6,12 @@
 // The app's courier (source "phone") and the rig peer (source "mac" or
 // "phone") both build the card here, so the field order is one list and
 // both writers produce byte-identical key order.
+import 'dart:async' show TimeoutException;
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:adaptive_transport/adaptive_transport.dart'
+    show ForgedAnswerException, TxtProbeOutcome;
 
 import 'intelligence/device_bindings.dart' show intelligenceStorageDirectory;
 
@@ -94,7 +98,7 @@ abstract interface class LetterCardSink {
 /// shares (see `intelligenceStorageDirectory`) — on iOS the OS-backed
 /// Documents home, system temp elsewhere. Never throws — disk trouble must
 /// never break a Send.
-class LetterCardLog implements LetterCardSink {
+class LetterCardLog implements LetterCardSink, LetterProofSink {
   LetterCardLog(this._directoryFactory, {this.fileName = 'letter_cards.jsonl'});
 
   factory LetterCardLog.disk() => LetterCardLog(intelligenceStorageDirectory);
@@ -103,12 +107,17 @@ class LetterCardLog implements LetterCardSink {
   final String fileName;
 
   @override
-  Future<void> append(LetterCard card) async {
+  Future<void> append(LetterCard card) => _line(card.toJson());
+
+  @override
+  Future<void> appendProof(LetterProof proof) => _line(proof.toJson());
+
+  Future<void> _line(Map<String, Object?> json) async {
     try {
       final dir = _directoryFactory();
       if (!dir.existsSync()) dir.createSync(recursive: true);
       await File('${dir.path}/$fileName').writeAsString(
-        '${jsonEncode(card.toJson())}\n',
+        '${jsonEncode(json)}\n',
         mode: FileMode.append,
         flush: true,
       );
@@ -116,4 +125,72 @@ class LetterCardLog implements LetterCardSink {
       // Telemetry is best effort: a failed append is dropped silently.
     }
   }
+}
+
+/// What a Send asked before it carried, one line in the same journal: the
+/// probe group it issued, every path it asked, which of them brought the
+/// group's proof back, and why each of the others did not. Written before
+/// the carry and read by nobody in the Send path — it records the evidence,
+/// it decides nothing. Ids and labels only; `lab: true` like the card.
+class LetterProof {
+  const LetterProof({
+    required this.at,
+    required this.session,
+    required this.asked,
+    required this.returned,
+    required this.failed,
+  });
+
+  /// Reads one finished probe. A path "returned" when the responder's
+  /// reply came back through it; a silent path is `timeout`, a forged
+  /// answer is `forged`, anything else is `error`.
+  factory LetterProof.fromProbe(TxtProbeOutcome probe, {required DateTime at}) {
+    return LetterProof(
+      at: at,
+      session: probe.groupId,
+      asked: [for (final a in probe.answers) a.label],
+      returned: [
+        for (final a in probe.answers)
+          if (a.answered) a.label,
+      ],
+      failed: {
+        for (final a in probe.answers)
+          if (!a.answered)
+            a.label: switch (a.error) {
+              ForgedAnswerException() => 'forged',
+              TimeoutException() || null => 'timeout',
+              _ => 'error',
+            },
+      },
+    );
+  }
+
+  static const String event = 'letter_proof';
+
+  final DateTime at;
+
+  /// The probe group's id — the one id every asked path carried.
+  final String session;
+  final List<String> asked;
+  final List<String> returned;
+
+  /// label → `timeout` | `forged` | `error`, for each path not in [returned].
+  final Map<String, String> failed;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'event': event,
+    'v': 1,
+    'at': at.toUtc().toIso8601String(),
+    'session': session,
+    'asked': List<String>.of(asked),
+    'returned': List<String>.of(returned),
+    'failed': Map<String, String>.of(failed),
+    'lab': true,
+  };
+}
+
+/// A sink that also takes the pre-carry proof line. Separate from
+/// [LetterCardSink] so a sink that only records cards stays valid.
+abstract interface class LetterProofSink {
+  Future<void> appendProof(LetterProof proof);
 }
