@@ -120,6 +120,10 @@ class LetterRungLadder {
 Map<String, Object?> _asMap(Object? raw) =>
     raw is Map ? Map<String, Object?>.from(raw) : <String, Object?>{};
 
+/// A stored count; anything that is not a whole number reads as zero, so a
+/// file of the wrong shape is a fresh memory and never an exception.
+int _count(Object? raw) => raw is int ? raw : 0;
+
 /// The `lastWinner` stored under [networkLabel], or null.
 String? _lastWinnerOf(Map<String, Object?> data, String networkLabel) =>
     switch (data[networkLabel]) {
@@ -235,8 +239,8 @@ class DoorResolverLadder {
         for (final MapEntry(:key, :value) in resolvers.entries)
           if (value case final Map counts)
             key as String: (
-              wins: counts['wins'] as int? ?? 0,
-              attempts: counts['attempts'] as int? ?? 0,
+              wins: _count(counts['wins']),
+              attempts: _count(counts['attempts']),
             ),
       };
     }
@@ -262,8 +266,8 @@ class DoorResolverLadder {
     for (final label in asked) {
       final counts = _asMap(resolvers[label]);
       resolvers[label] = {
-        'attempts': (counts['attempts'] as int? ?? 0) + 1,
-        'wins': (counts['wins'] as int? ?? 0) + (label == winner ? 1 : 0),
+        'attempts': _count(counts['attempts']) + 1,
+        'wins': _count(counts['wins']) + (label == winner ? 1 : 0),
       };
     }
     data[networkLabel] = {

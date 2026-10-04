@@ -1,6 +1,8 @@
 // The ladder's own memory, with no fabric and no network: a delivered
 // attempt becomes the next Send's previous winner, a queued one never
 // does, and history is capped so the file never grows without bound.
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/intelligence/disk_json_storage.dart';
 import 'package:reference_app/src/letter_rung_ladder.dart';
@@ -18,6 +20,73 @@ class _MemoryStorage implements PersistentStorage {
 }
 
 void main() {
+  // The same memory on a real file, through DiskJsonStorage — what
+  // LetterRungLadder.disk() and DoorResolverLadder.disk() stand on.
+  group('the two ladders on a real file', () {
+    late Directory dir;
+    DiskJsonStorage file(String name) =>
+        DiskJsonStorage(directoryFactory: () => dir, fileName: name);
+    LetterRungLadder rungs() => LetterRungLadder(file('rungs.json'));
+    DoorResolverLadder doors() => DoorResolverLadder(file('doors.json'));
+    const delivered = LetterRungAttempt(
+      rung: 'resilient.wss',
+      outcome: LetterRungOutcome.delivered,
+    );
+
+    setUp(() => dir = Directory.systemTemp.createTempSync('ladder_disk'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('no file: no winner, no history, and nothing throws', () async {
+      expect(await rungs().previousWinner('wifi:home'), isNull);
+      expect(await doors().previousWinner('wifi:home'), isNull);
+      expect(await doors().history('wifi:home'), isEmpty);
+    });
+
+    test('a healthy file: the winner survives a restart', () async {
+      await rungs().record('wifi:home', delivered);
+      await doors().record('wifi:home', asked: ['a', 'b'], winner: 'b');
+      // New instances: nothing is held in memory between them.
+      expect(await rungs().previousWinner('wifi:home'), 'resilient.wss');
+      expect(await doors().previousWinner('wifi:home'), 'b');
+    });
+
+    test('the network changed: the other network has no winner', () async {
+      await rungs().record('wifi:home', delivered);
+      await doors().record('wifi:home', asked: ['a'], winner: 'a');
+      expect(await rungs().previousWinner('cellular:mci'), isNull);
+      expect(await doors().previousWinner('cellular:mci'), isNull);
+      expect(await doors().history('cellular:mci'), isEmpty);
+    });
+
+    test('a file that is not JSON reads as a fresh memory and takes the '
+        'next record', () async {
+      File('${dir.path}/rungs.json').writeAsStringSync('{"wifi:home": {"la');
+      File('${dir.path}/doors.json').writeAsBytesSync([0, 159, 146, 150]);
+      expect(await rungs().previousWinner('wifi:home'), isNull);
+      expect(await doors().previousWinner('wifi:home'), isNull);
+      expect(await doors().history('wifi:home'), isEmpty);
+      await rungs().record('wifi:home', delivered);
+      await doors().record('wifi:home', asked: ['a'], winner: 'a');
+      expect(await rungs().previousWinner('wifi:home'), 'resilient.wss');
+      expect(await doors().previousWinner('wifi:home'), 'a');
+    });
+
+    test('valid JSON of the wrong shape never throws', () async {
+      const wrong =
+          '{"wifi:home": {"lastWinner": 7, "history": "x", '
+          '"resolvers": {"a": {"wins": "many", "attempts": 1.5}, "b": 3}}}';
+      File('${dir.path}/rungs.json').writeAsStringSync(wrong);
+      File('${dir.path}/doors.json').writeAsStringSync(wrong);
+      expect(await rungs().previousWinner('wifi:home'), isNull);
+      expect(await doors().previousWinner('wifi:home'), isNull);
+      await doors().history('wifi:home');
+      await rungs().record('wifi:home', delivered);
+      await doors().record('wifi:home', asked: ['a'], winner: 'a');
+      expect(await rungs().previousWinner('wifi:home'), 'resilient.wss');
+      expect(await doors().previousWinner('wifi:home'), 'a');
+    });
+  });
+
   test('a confirmed rung is stored as the next previous winner', () async {
     final ladder = LetterRungLadder(_MemoryStorage());
     expect(await ladder.previousWinner('wifi:home'), isNull);
