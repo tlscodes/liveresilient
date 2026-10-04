@@ -1911,6 +1911,61 @@ void main() {
       expect(courier.ladderStatus.value!.reason, 'late');
       await courier.dispose();
     });
+
+    test('C12 complement of C11: a multi-part letter that times out once then '
+        'lands on retry delivers and does NOT latch weak/late', () async {
+      // The mirror of C11/B4: here one part outruns budget.carry ONCE and
+      // then LANDS on retry, so the whole letter delivers (fatal == null).
+      // _markDegraded (letter_courier.dart L1092) is reachable only inside
+      // the `if (fatal != null)` give-up block, so it never fires. The run
+      // must read its normal live-lane rung (limited/down), not weak/late.
+      final cards = RecordingCardSink();
+      final lanes = _FirstPartHangsLanes()..liveUp = true; // wss up -> limited
+      final courier = LetterCourier(
+        endpoints: () => throw StateError('scripted lanes, never assembled'),
+        budget: slow,
+        openLanes: () async => lanes,
+        cardSink: cards,
+      );
+      final state = await courier.send(
+        Uint8List(TxtQueryLane.maxPayloadBytes + 1), // 2 parts
+        kind: 'photo',
+      );
+      expect(
+        state,
+        LetterState.arrived,
+        reason: courier.notes.value.join('\n'),
+      );
+      // p0 hung (timed out), p1 landed, p0-r1 is the retry that landed: the
+      // retry carries the same index under a fresh id.
+      expect(lanes.delivered.map((d) => d.$1), [
+        endsWith('-p0'),
+        endsWith('-p1'),
+        endsWith('-p0-r1'),
+      ]);
+      expect(
+        courier.notes.value,
+        contains(contains('letter 1/2 gave up (try 1)')),
+      );
+      expect(
+        courier.ledger.records.value.single.bytes,
+        hasLength(TxtQueryLane.maxPayloadBytes + 1),
+      );
+      // The latch did NOT fire: normal live-lane reading, not weak/late.
+      expect(courier.ladderStatus.value!.rung, LetterLadderRung.limited);
+      expect(courier.ladderStatus.value!.reason, 'down');
+      expect(courier.ladderStatus.value!.reason, isNot('late'));
+      expect(cards.cards.last.toJson()['rung'], LetterLadderRung.limited.name);
+      expect(cards.cards.last.toJson()['reason'], 'down');
+      // A second, immediately-healthy send still reads limited/down (B4's
+      // mirror: nothing was latched to carry over).
+      expect(
+        await courier.send(Uint8List.fromList([1]), kind: 'typed'),
+        LetterState.arrived,
+      );
+      expect(courier.ladderStatus.value!.reason, 'down');
+      await courier.dispose();
+    });
   });
 }
 
@@ -1954,6 +2009,28 @@ class _ThrottledLanes extends ScriptedLanes {
       pendingBundles: 0,
       atMs: 0,
     );
+  }
+}
+
+/// A [ScriptedLanes] whose FIRST deliver of part 0 hangs forever (the future
+/// never completes), so the carry timeout fires exactly once; every other
+/// deliver — the other part and the p0 retry — answers through the parent.
+/// The timeout does not cancel the hung future (letter_courier.dart L1026),
+/// exactly as on the rig: the part is simply retried under a fresh id.
+class _FirstPartHangsLanes extends ScriptedLanes {
+  bool hung = false;
+
+  @override
+  Future<DeliveryOutcome> deliver(
+    Uint8List payload, {
+    required String bundleId,
+  }) {
+    if (!hung && bundleId.endsWith('-p0')) {
+      hung = true;
+      delivered.add((bundleId, payload));
+      return Completer<DeliveryOutcome>().future; // outruns budget.carry
+    }
+    return super.deliver(payload, bundleId: bundleId);
   }
 }
 
