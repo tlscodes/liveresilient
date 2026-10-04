@@ -41,6 +41,7 @@ import 'ui/network_truth.dart';
 import 'media_adaptation_driver.dart';
 import 'path_health_monitor.dart';
 import 'degraded_mode_driver.dart';
+import 'peer_identity.dart' show sessionKeyId;
 import 'ws_connector.dart';
 
 /// One live call session plus the teardown of everything it owns.
@@ -276,6 +277,11 @@ CallSessionHandle buildWebRtcCallSession({
   required String callId,
   required CallRole role,
 
+  /// The key id this side signs its signalling envelopes with. Null takes
+  /// this install's own identity key id ([sessionKeyId]) — never a fixed
+  /// string shared by every install in the same role.
+  String? localKeyId,
+
   /// Maps a host name to an address, asynchronously, once per connection
   /// attempt (ticket 6). The name is an input the HTTP stack produces at
   /// connect time and a redirect can introduce a new one mid-flight, so this
@@ -436,7 +442,7 @@ CallSessionHandle buildWebRtcCallSession({
   );
   final client = SignalingClient(
     endpoint: endpoint,
-    localKeyId: '${role.name}-key',
+    localKeyId: localKeyId ?? sessionKeyId(),
     config: SignalingClientConfig(
       heartbeatInterval: signalingTiming.heartbeatInterval,
       livenessTimeout: signalingTiming.livenessTimeout,

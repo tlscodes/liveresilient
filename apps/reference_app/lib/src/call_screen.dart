@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import 'live_call_controller.dart' show validateCallKey;
+import 'peer_identity.dart' show PeerTrust, peerTrust;
 import 'theme.dart';
 import 'ui/network_truth.dart';
 import 'ui/path_card.dart';
@@ -253,6 +254,41 @@ class CallScreen extends StatelessWidget {
               const SizedBox(height: Spacing.s12),
               _CallIdCard(callId: callId!),
             ],
+            // Who is on the other end, as far as this install can tell:
+            // absent until the peer proved its key on this call. A changed
+            // key stays readable after the call it stopped.
+            ValueListenableBuilder<PeerTrust?>(
+              valueListenable: peerTrust,
+              builder: (context, trust, _) {
+                if (trust == null) return const SizedBox.shrink();
+                if (!_isActive && trust != PeerTrust.changed) {
+                  return const SizedBox.shrink();
+                }
+                final scheme = Theme.of(context).colorScheme;
+                final (icon, color) = switch (trust) {
+                  PeerTrust.verified => (Icons.verified_user, scheme.primary),
+                  PeerTrust.unverified => (Icons.lock_outline, scheme.outline),
+                  PeerTrust.changed => (Icons.gpp_bad, scheme.error),
+                };
+                return Padding(
+                  padding: const EdgeInsets.only(top: Spacing.s12),
+                  child: Row(
+                    key: Key('call-peer-trust-${trust.name}'),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, size: 18, color: color),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          trust.label,
+                          style: TextStyle(color: color),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             if (audioOnly) ...[
               const SizedBox(height: Spacing.s12),
               Chip(

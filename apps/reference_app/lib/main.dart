@@ -55,6 +55,7 @@ import 'src/ui/letter_thread.dart';
 import 'src/ui/network_truth.dart';
 import 'src/ui/settings_screen.dart';
 import 'src/letter_queue_keystore.dart';
+import 'src/peer_identity.dart';
 
 export 'src/call_demo_controller.dart';
 export 'src/chat_demo_controller.dart';
@@ -62,6 +63,11 @@ export 'src/live_call_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // This install's identity: its key is made here on the first launch and
+  // loaded on every later one. Before runApp, because a call's signalling
+  // id is read synchronously when the session is built. Never throws — a
+  // host with no keystore runs without an identity.
+  await bootAppIdentity();
   // This device's own DNS resolver, from the platform's system API — a
   // read, not a probe; the answer joins the door's candidate list when
   // the letter's lanes open. Not awaited: nothing before the first Send
@@ -366,6 +372,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// lanes is asynchronous (they wait for the media engine to start), so
   /// a generation token drops a late build if the call ended or a new one
   /// began meanwhile.
+  /// The live call's identity exchange; one per call, gone with it.
+  IdentityHandshake? _identityHandshake;
+
   void _syncLiveChat() {
     final handle = _call.handle;
     if (identical(handle, _liveChatHandle)) return;
@@ -378,6 +387,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       old.removeListener(_onChanged);
       old.dispose();
     }
+    // A reading belongs to one call: the next call starts unjudged. A
+    // "changed" reading stays on screen until a new call replaces it.
+    final oldHandshake = _identityHandshake;
+    _identityHandshake = null;
+    if (oldHandshake != null) unawaited(oldHandshake.dispose());
+    if (handle != null) peerTrust.value = null;
     final openChat = handle?.openChatPort;
     if (handle == null || openChat == null) return;
     unawaited(() async {
@@ -390,6 +405,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           await photoPort?.close();
           await videoPort?.close();
           return;
+        }
+        // The app's rule, for every call: the two installs exchange and
+        // pin identity keys on this call's own chat channel. A key that
+        // changed is never accepted silently — the call is stopped and
+        // the screen says why.
+        final identity = appIdentity;
+        final callId = _call.callId;
+        if (identity != null && callId != null) {
+          final handshake = IdentityHandshake(
+            port: chatPort,
+            identity: identity,
+            callId: callId,
+            onTrust: (reading) {
+              if (generation != _liveChatGeneration) return;
+              peerTrust.value = reading;
+              if (reading == PeerTrust.changed) unawaited(_call.hangUp());
+            },
+          );
+          _identityHandshake = handshake;
+          unawaited(handshake.start().catchError((Object _) {}));
         }
         final chat = ChatDemoController(
           callChannelPort: chatPort,
