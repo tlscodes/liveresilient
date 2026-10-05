@@ -812,19 +812,34 @@ void main() {
     // load this install's identity. Bounded, because a keychain that asks a
     // question nobody answers must not hang the run; and said out loud,
     // because the boot itself swallows its failure.
+    var bootTimedOut = false;
+    final bootWatch = Stopwatch()..start();
     await tester.runAsync(
       () => bootAppIdentity().timeout(
         const Duration(seconds: 20),
-        onTimeout: () {},
+        onTimeout: () {
+          bootTimedOut = true;
+        },
       ),
     );
     final booted = appIdentity;
     final ownInstall = booted == null
         ? null
         : await tester.runAsync(booted.installId);
+    final bootError = identityBootError;
+    final bootCause = booted != null
+        ? 'none'
+        : bootTimedOut
+        ? 'timeout'
+        : bootError == null
+        ? 'unknown'
+        : 'error:${bootError.runtimeType}:'
+              '${'$bootError'.replaceAll(RegExp(r'\s+'), '_')}';
     print(
       'JOURNEY_APP identity_boot '
       'identity=${booted == null ? 'absent' : 'present'} '
+      'cause=${bootCause.length > 240 ? bootCause.substring(0, 240) : bootCause} '
+      'ms=${bootWatch.elapsedMilliseconds} '
       'install=${ownInstall == null ? '-' : ownInstall.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}',
     );
     await tester.pumpWidget(

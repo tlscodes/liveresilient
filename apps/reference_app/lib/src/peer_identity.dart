@@ -177,16 +177,23 @@ final ValueNotifier<PeerSighting?> lastPeerSighting =
 /// Makes (first launch) or loads this install's identity. Never throws: a
 /// host without a keystore simply has no identity, and calls still work.
 Future<void> bootAppIdentity([AppIdentity? identity]) async {
+  identityBootError = null;
   try {
     final resolved = identity ?? AppIdentity.disk();
     _bootedKeyId = await resolved.store.localKeyId();
     await resolved.installId();
     appIdentity = resolved;
-  } catch (_) {
+  } catch (error) {
     appIdentity = null;
     _bootedKeyId = null;
+    identityBootError = error;
   }
 }
+
+/// Why the last [bootAppIdentity] left no identity; null when it made one
+/// or has not finished. The boot never throws, so this is the only place
+/// its failure can be read.
+Object? identityBootError;
 
 /// The key id this install signs its signalling envelopes with: the booted
 /// identity's own, or a one-off random id when there is no identity.
