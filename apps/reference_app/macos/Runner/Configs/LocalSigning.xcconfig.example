@@ -1,0 +1,13 @@
+// Copy to LocalSigning.xcconfig (untracked) on a Mac that has an
+// "Apple Development" certificate in its login keychain:
+//
+//   security find-identity -v -p codesigning
+//
+// DEVELOPMENT_TEAM is the certificate's organizational unit (OU), not the
+// id in parentheses after the name:
+//
+//   security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject
+//
+// Debug only. Release and Profile keep the project's own settings.
+CODE_SIGN_IDENTITY[config=Debug] = Apple Development
+DEVELOPMENT_TEAM[config=Debug] = YOURTEAMID

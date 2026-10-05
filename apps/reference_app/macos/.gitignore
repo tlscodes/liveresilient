@@ -5,3 +5,6 @@
 # Xcode-related
 **/dgph
 **/xcuserdata/
+
+# This Mac's own signing identity (see LocalSigning.xcconfig.example)
+Runner/Configs/LocalSigning.xcconfig

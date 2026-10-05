@@ -12,3 +12,9 @@ PRODUCT_BUNDLE_IDENTIFIER = com.voicecallkit.referenceApp
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.voicecallkit. All rights reserved.
+
+// Optional and untracked: a stable signing identity for this Mac's Debug
+// build (see LocalSigning.xcconfig.example). Without it the build is signed
+// ad hoc, every rebuild is a new app to the login keychain, and the keychain
+// asks for its password again on every run.
+#include? "LocalSigning.xcconfig"
