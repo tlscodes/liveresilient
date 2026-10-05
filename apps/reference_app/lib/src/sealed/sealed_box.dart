@@ -55,7 +55,16 @@ enum SealedKind {
   /// only for seconds when nobody is reading (measured: gone between 8 and
   /// 15 s), so a letter lands only while its recipient is listening. This
   /// tells a pinned peer that now is such a moment.
-  here(3);
+  here(3),
+
+  /// One piece of a photo, voice note or video: the letter's id, a two-byte
+  /// index, then the bytes. Each piece is its own sealed, signed box.
+  chunk(4),
+
+  /// "Of letter X I still lack these pieces": two-byte indexes; none means
+  /// all of them. The recipient asks, so the sender resends only what is
+  /// missing instead of the whole thing.
+  need(5);
 
   const SealedKind(this.wire);
   final int wire;

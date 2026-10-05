@@ -16,7 +16,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reference_app/src/intelligence/disk_json_storage.dart';
 import 'package:reference_app/src/peer_identity.dart';
 import 'package:reference_app/src/sealed/mailbox_door.dart';
+import 'package:reference_app/src/sealed/sealed_blob_store.dart';
 import 'package:reference_app/src/sealed/sealed_box.dart';
+import 'package:reference_app/src/sealed/sealed_content.dart';
 import 'package:reference_app/src/sealed/sealed_letters.dart';
 import 'package:security/security.dart';
 
@@ -58,6 +60,9 @@ class _Relay {
 
   int posts = 0;
 
+  /// Posts, counted from 1 over the relay's life, to accept and lose.
+  final Set<int> losePosts = <int>{};
+
   Uri uriFor(String install, String role) => Uri.parse(
     'http://127.0.0.1:${_server.port}/http?session=$install&role=$role',
   );
@@ -89,6 +94,8 @@ class _Relay {
       seen.add(bytes);
       if (loseNext > 0) {
         loseNext--;
+      } else if (losePosts.remove(posts)) {
+        // Lost.
       } else {
         final other = role == 'a' ? 'b' : 'a';
         (_held['$session:$other'] ??= []).add(bytes);
@@ -127,6 +134,7 @@ class _Install {
   final String name;
   final AppIdentity identity;
   final _MemoryStorage letters = _MemoryStorage();
+  final MemorySealedBlobStore blobs = MemorySealedBlobStore();
   final List<(String, Map<String, Object?>)> events = [];
   DateTime now = DateTime.utc(2026, 10, 5, 12);
 
@@ -152,6 +160,7 @@ class _Install {
     identity: identity,
     door: relay.door(),
     storage: letters,
+    blobs: blobs,
     clock: () => now,
     onEvent: (event, fields) => events.add((event, fields)),
   );
@@ -772,5 +781,323 @@ void main() {
       expect(phoneService.inbox.value.single.text, 'late');
       expect(macService.outbox.value.single.delivered, isTrue);
     });
+  });
+
+  group('what a letter says', () {
+    test('a text and a described photo survive the round trip', () {
+      final text = SealedContent.decode(
+        const SealedContent.text('سلام — hello').encode(),
+      );
+      expect(text.text, 'سلام — hello');
+      expect(text.media, isNull);
+      expect(text.kindLabel, 'text');
+
+      final sha = Uint8List.fromList(List<int>.generate(32, (i) => i));
+      final media = SealedContent.decode(
+        SealedContent.media(
+          SealedMedia(
+            kind: SealedMediaKind.voice,
+            contentType: 'audio/ogg',
+            size: 100000,
+            sha256: sha,
+            chunks: 3,
+            duration: const Duration(seconds: 30),
+            caption: 'thirty seconds',
+          ),
+        ).encode(),
+      ).media!;
+      expect(media.kind, SealedMediaKind.voice);
+      expect(media.contentType, 'audio/ogg');
+      expect(media.size, 100000);
+      expect(media.sha256, sha);
+      expect(media.chunks, 3);
+      expect(media.duration, const Duration(seconds: 30));
+      expect(media.caption, 'thirty seconds');
+    });
+
+    test('a body from before letters had types is still a text', () {
+      expect(
+        SealedContent.decode(_utf8('plain old text')).text,
+        'plain old text',
+      );
+    });
+
+    test('a description that lies about its pieces is not media', () {
+      final lying = SealedContent.media(
+        SealedMedia(
+          kind: SealedMediaKind.photo,
+          contentType: 'image/jpeg',
+          size: 100000,
+          sha256: Uint8List(32),
+          chunks: 1, // 100 000 bytes cannot be one piece
+        ),
+      ).encode();
+      expect(SealedContent.decode(lying).media, isNull);
+    });
+  });
+
+  group('a photo, a voice note, a video', () {
+    Uint8List bytesOf(int length, int seed) => Uint8List.fromList(
+      List<int>.generate(length, (i) => (i * 31 + seed * 7 + (i >> 8)) & 0xff),
+    );
+
+    test(
+      'cross whole, verified, and the receipt waits for the last piece',
+      () async {
+        final macService = open(mac);
+        final phoneService = open(phone);
+        final photo = bytesOf(130000, 1); // three pieces
+        final sent = await macService.sendMedia(
+          toInstall: await phone.id(),
+          kind: SealedMediaKind.photo,
+          contentType: 'image/jpeg',
+          bytes: photo,
+          caption: 'the harbour',
+        );
+        await macService.flush();
+        expect(sent.content.media!.chunks, 3);
+        expect(mac.of('tx').last['pieces_sent'], 3);
+        expect(
+          mac.blobs.blobs.keys.where((k) => k.startsWith('out.')),
+          hasLength(3),
+        );
+
+        await phoneService.pollOnce();
+        final got = phoneService.inbox.value.single;
+        expect(got.content.media!.kind, SealedMediaKind.photo);
+        expect(got.content.media!.caption, 'the harbour');
+        expect(got.media, photo);
+        expect(got.bytes, 130000);
+        final rx = phone.of('rx').single;
+        expect(rx['kind'], 'photo');
+        expect(rx['bytes'], 130000);
+        expect(rx['sent_at'], isNotNull);
+        expect(rx['opened_at'], isNotNull);
+
+        await macService.pollOnce();
+        final after = macService.outbox.value.single;
+        expect(after.state, SealedSentState.opened);
+        expect(after.text, contains('photo'));
+        expect(mac.of('receipt_rx').single['receipt_at'], isNotNull);
+        // The pieces are not kept once the receipt is here.
+        expect(
+          mac.blobs.blobs.keys.where((k) => k.startsWith('out.')),
+          isEmpty,
+        );
+
+        // The relay held boxes only, never the photo.
+        for (final body in relay.seen) {
+          expect(body.sublist(0, 5), sealedMagic);
+          expect(_contains(body, photo.sublist(1000, 1040)), isFalse);
+        }
+      },
+    );
+
+    test('the recipient was off when it was sent: everything goes again '
+        'when it says it is there', () async {
+      final macService = open(mac);
+      final phoneService = open(phone);
+      final voice = bytesOf(70000, 2); // two pieces
+      relay.loseNext = 3; // letter + both pieces: nobody was reading
+      await macService.sendMedia(
+        toInstall: await phone.id(),
+        kind: SealedMediaKind.voice,
+        contentType: 'audio/ogg',
+        bytes: voice,
+        duration: const Duration(seconds: 30),
+      );
+      await macService.flush();
+      final waiting = macService.outbox.value.single;
+      expect(waiting.state, SealedSentState.queuedNoReceipt);
+      expect(waiting.describe(mac.now), contains('no receipt'));
+
+      // The phone comes on. The Mac's clock has not moved.
+      await phoneService.announce();
+      await macService.pollOnce();
+      await macService.flush();
+      expect(mac.of('tx').last['pieces_sent'], 2, reason: 'pieces go again');
+
+      await phoneService.pollOnce();
+      expect(phoneService.inbox.value.single.media, voice);
+      expect(
+        phoneService.inbox.value.single.content.media!.duration,
+        const Duration(seconds: 30),
+      );
+      await macService.pollOnce();
+      expect(macService.outbox.value.single.state, SealedSentState.opened);
+    });
+
+    test(
+      'one piece lost: only that piece is asked for and sent again',
+      () async {
+        final macService = open(mac);
+        final phoneService = open(phone);
+        final video = bytesOf(200000, 3); // five pieces
+        relay.losePosts.add(relay.posts + 3); // letter, piece 0, [piece 1]
+        await macService.sendMedia(
+          toInstall: await phone.id(),
+          kind: SealedMediaKind.video,
+          contentType: 'video/mp4',
+          bytes: video,
+        );
+        await macService.flush();
+
+        await phoneService.pollOnce();
+        expect(phoneService.inbox.value, isEmpty, reason: 'not whole yet');
+        expect(
+          phone.of('receipt_tx'),
+          isEmpty,
+          reason: 'no receipt for a part',
+        );
+        expect(
+          phone.of('need_tx'),
+          isEmpty,
+          reason: 'pieces may still be coming',
+        );
+
+        // Quiet for a while: the phone asks for exactly what it lacks.
+        phone.now = phone.now.add(const Duration(seconds: 10));
+        await phoneService.pollOnce();
+        final need = phone.of('need_tx').single;
+        expect(need['missing'], 1);
+        expect(need['of'], 5);
+
+        final posts = relay.posts;
+        await macService.pollOnce();
+        expect(mac.of('need_rx').single['pieces_sent'], 1);
+        expect(relay.posts, posts + 1, reason: 'one piece, not five');
+
+        await phoneService.pollOnce();
+        expect(phoneService.inbox.value.single.media, video);
+        await macService.pollOnce();
+        expect(macService.outbox.value.single.delivered, isTrue);
+      },
+    );
+
+    test(
+      'half a letter survives a relaunch and is finished after it',
+      () async {
+        final macService = open(mac);
+        final photo = bytesOf(100000, 4); // three pieces
+        relay.losePosts.add(relay.posts + 4); // the last piece
+        await macService.sendMedia(
+          toInstall: await phone.id(),
+          kind: SealedMediaKind.photo,
+          contentType: 'image/jpeg',
+          bytes: photo,
+        );
+        await macService.flush();
+        final first = open(phone);
+        await first.pollOnce();
+        expect(first.inbox.value, isEmpty);
+        await first.dispose();
+
+        // Nothing the phone kept is in the clear.
+        expect(jsonEncode(phone.letters.data), isNot(contains('image/jpeg')));
+        for (final blob in phone.blobs.blobs.values) {
+          expect(blob.sublist(0, 5), sealedMagic);
+          expect(_contains(blob, photo.sublist(500, 540)), isFalse);
+        }
+
+        phone.now = phone.now.add(const Duration(seconds: 10));
+        final second = open(phone);
+        await second.pollOnce();
+        expect(phone.of('need_tx').single['missing'], 1);
+        await macService.pollOnce();
+        await second.pollOnce();
+        expect(second.inbox.value.single.media, photo);
+
+        // And the finished letter opens again after another relaunch.
+        final third = open(phone);
+        await third.load();
+        expect(third.inbox.value.single.media, photo);
+      },
+    );
+
+    test(
+      'a duplicate of a finished media letter is answered, not redone',
+      () async {
+        final macService = open(mac);
+        final phoneService = open(phone);
+        await macService.sendMedia(
+          toInstall: await phone.id(),
+          kind: SealedMediaKind.photo,
+          contentType: 'image/jpeg',
+          bytes: bytesOf(20000, 5),
+        );
+        await macService.flush();
+        await phoneService.pollOnce();
+        expect(phoneService.inbox.value, hasLength(1));
+        // The receipt is lost; the Mac puts the letter in again.
+        relay._held.clear();
+        mac.now = mac.now.add(const Duration(seconds: 30));
+        await macService.flush();
+        await phoneService.pollOnce();
+        expect(phoneService.inbox.value, hasLength(1));
+        expect(phone.of('receipt_tx').last['duplicate'], isTrue);
+        await macService.pollOnce();
+        expect(macService.outbox.value.single.delivered, isTrue);
+      },
+    );
+
+    test(
+      'nothing, and too much, are refused before anything is queued',
+      () async {
+        final macService = open(mac);
+        for (final bad in [Uint8List(0), Uint8List(sealedMaxMediaBytes + 1)]) {
+          expect(
+            () async => macService.sendMedia(
+              toInstall: await phone.id(),
+              kind: SealedMediaKind.file,
+              contentType: 'application/octet-stream',
+              bytes: bad,
+            ),
+            throwsArgumentError,
+          );
+        }
+        expect(macService.outbox.value, isEmpty);
+      },
+    );
+  });
+
+  group('where a letter is, in words', () {
+    test(
+      'door closed, then no receipt, then opened — never "sending"',
+      () async {
+        final macService = open(mac);
+        final phoneService = open(phone);
+        relay.down = true;
+        await macService.send(
+          toInstall: await phone.id(),
+          body: _utf8('where'),
+        );
+        await macService.flush();
+        var letter = macService.outbox.value.single;
+        expect(letter.state, SealedSentState.queuedDoorClosed);
+        expect(letter.describe(mac.now), contains('mailbox unreachable'));
+
+        relay.down = false;
+        relay.loseNext = 1;
+        mac.now = mac.now.add(const Duration(seconds: 6));
+        await macService.flush();
+        letter = macService.outbox.value.single;
+        expect(letter.state, SealedSentState.queuedNoReceipt);
+        expect(letter.describe(mac.now), contains('in queue'));
+        expect(letter.describe(mac.now), contains('again in'));
+        // Long unanswered, it says so — and still says it is in the queue.
+        expect(
+          letter.describe(mac.now.add(const Duration(minutes: 11))),
+          contains('not delivered yet'),
+        );
+
+        mac.now = mac.now.add(const Duration(seconds: 30));
+        await macService.flush();
+        await phoneService.pollOnce();
+        await macService.pollOnce();
+        letter = macService.outbox.value.single;
+        expect(letter.state, SealedSentState.opened);
+        expect(letter.describe(mac.now), 'opened by them');
+      },
+    );
   });
 }

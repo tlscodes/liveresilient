@@ -14,11 +14,18 @@
 // answers every copy with a receipt, because a second copy means the first
 // receipt was lost.
 //
+// A photo, a voice note or a video is a letter that describes it (size,
+// SHA-256, number of pieces) plus the pieces, each its own sealed box. The
+// recipient asks for the pieces it lacks, so only those are sent again, and
+// gives its receipt only when the whole verified against the description.
+//
 // At rest nothing is in the clear: the queue holds the sealed box plus a
 // copy sealed to this install's own key (so the sender can still read what
 // it sent), and the inbox holds the boxes as they arrived.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data' show BytesBuilder;
 
 import 'package:cryptography/cryptography.dart' show Sha256;
 import 'package:flutter/foundation.dart';
@@ -27,7 +34,24 @@ import '../intelligence/device_bindings.dart' show intelligenceStorageDirectory;
 import '../intelligence/disk_json_storage.dart';
 import '../peer_identity.dart';
 import 'mailbox_door.dart';
+import 'sealed_blob_store.dart';
 import 'sealed_box.dart';
+import 'sealed_content.dart';
+
+/// Where a letter this install wrote is, in words a screen can show as
+/// they are. There is no "sending…": a letter is in the queue until its
+/// receipt is here, and the reason it is still there is always known.
+enum SealedSentState {
+  /// The mailbox could not be reached at all; nothing has left yet.
+  queuedDoorClosed,
+
+  /// The box was put in their mailbox and no receipt has come: they are
+  /// not reading it, or the relay dropped it. It will be put in again.
+  queuedNoReceipt,
+
+  /// Their receipt is here: it opened on their device.
+  opened,
+}
 
 /// A letter this install wrote.
 @immutable
@@ -35,25 +59,56 @@ class SealedSent {
   const SealedSent({
     required this.id,
     required this.to,
-    required this.body,
+    required this.content,
     required this.at,
     required this.attempts,
+    required this.everDeposited,
+    required this.nextAt,
     required this.deliveredAt,
   });
 
   final String id;
   final String to;
-  final Uint8List body;
+  final SealedContent content;
   final DateTime at;
 
   /// How many times the box was put in the recipient's mailbox.
   final int attempts;
 
+  /// Whether the relay ever took it.
+  final bool everDeposited;
+
+  /// When it is put in again, while it waits.
+  final DateTime nextAt;
+
   /// When the recipient's receipt arrived; null while the letter waits.
   final DateTime? deliveredAt;
 
   bool get delivered => deliveredAt != null;
-  String get text => utf8.decode(body, allowMalformed: true);
+  String get text => content.text ?? content.summary;
+  int get bytes => content.bytes;
+
+  SealedSentState get state => delivered
+      ? SealedSentState.opened
+      : everDeposited
+      ? SealedSentState.queuedNoReceipt
+      : SealedSentState.queuedDoorClosed;
+
+  /// The whole truth about this letter in one line, for the screen.
+  String describe(DateTime now) {
+    switch (state) {
+      case SealedSentState.opened:
+        return 'opened by them';
+      case SealedSentState.queuedDoorClosed:
+        return 'in queue — mailbox unreachable, tried $attempts×';
+      case SealedSentState.queuedNoReceipt:
+        final late = now.difference(at) > const Duration(minutes: 10);
+        final wait = nextAt.difference(now).inSeconds;
+        return '${late ? 'not delivered yet' : 'in queue'} — put in their '
+            'mailbox $attempts×, no receipt: they are not reading it'
+            '${wait > 0 ? ' · again in ${wait}s' : ''}';
+    }
+  }
 }
 
 /// A letter that opened on this install, from a pinned sender.
@@ -62,7 +117,8 @@ class SealedReceived {
   const SealedReceived({
     required this.id,
     required this.from,
-    required this.body,
+    required this.content,
+    required this.media,
     required this.sentAt,
     required this.receivedAt,
     required this.verified,
@@ -70,7 +126,11 @@ class SealedReceived {
 
   final String id;
   final String from;
-  final Uint8List body;
+  final SealedContent content;
+
+  /// The photo, voice or video itself, verified against the description;
+  /// null for a text.
+  final Uint8List? media;
   final DateTime sentAt;
   final DateTime receivedAt;
 
@@ -78,7 +138,12 @@ class SealedReceived {
   /// False is the ordinary "encrypted, not yet verified".
   final bool verified;
 
-  String get text => utf8.decode(body, allowMalformed: true);
+  String get text => content.text ?? content.summary;
+  int get bytes => content.bytes;
+
+  /// The text's bytes, or the media's.
+  Uint8List get body =>
+      media ?? Uint8List.fromList(utf8.encode(content.text ?? ''));
 }
 
 /// Thrown by [SealedLetterService.send] for an install nobody pinned: there
@@ -98,17 +163,23 @@ class SealedLetterService {
     required AppIdentity identity,
     required this.door,
     required this.storage,
+    SealedBlobStore? blobs,
     DateTime Function()? clock,
     this.onEvent,
     this.pollWait = const Duration(seconds: 20),
     this.retryBase = const Duration(seconds: 5),
     this.retryCap = const Duration(minutes: 5),
+    this.needQuiet = const Duration(seconds: 3),
+    this.needEvery = const Duration(seconds: 6),
   }) : _identity = identity,
+       blobs = blobs ?? MemorySealedBlobStore(),
        _clock = clock ?? DateTime.now,
        _codec = SealedBoxCodec(identity);
 
   /// The real thing: this install's identity, the app's border relay, and
-  /// a file beside the other letter files.
+  /// files beside the other letter files. Every event is also appended to
+  /// `sealed_events.jsonl` there — ids, sizes, times and flags, never a
+  /// body — so what happened can be read back after the fact.
   factory SealedLetterService.disk({
     required AppIdentity identity,
     required String relayHost,
@@ -120,31 +191,58 @@ class SealedLetterService {
       directoryFactory: intelligenceStorageDirectory,
       fileName: fileName,
     ),
-    onEvent: onEvent,
+    blobs: DiskSealedBlobStore(
+      () => Directory('${intelligenceStorageDirectory().path}/sealed_blobs'),
+    ),
+    onEvent: (event, fields) {
+      _journal(event, fields);
+      onEvent?.call(event, fields);
+    },
   );
 
   static const String fileName = 'sealed_letters.json';
+  static const String journalName = 'sealed_events.jsonl';
+
+  static void _journal(String event, Map<String, Object?> fields) {
+    try {
+      File(
+        '${intelligenceStorageDirectory().path}/$journalName',
+      ).writeAsStringSync(
+        '${jsonEncode(<String, Object?>{'at': DateTime.now().toUtc().toIso8601String(), 'event': event, ...fields})}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    } catch (_) {
+      // The journal is evidence, never a dependency.
+    }
+  }
 
   final AppIdentity _identity;
   final MailboxDoor door;
   final PersistentStorage storage;
+  final SealedBlobStore blobs;
   final DateTime Function() _clock;
   final SealedBoxCodec _codec;
 
   /// Raw facts as they happen (`tx`, `rx`, `receipt_tx`, `receipt_rx`,
-  /// `rejected`): public ids, sizes and flags only — never a body, never a
-  /// key. A rig run prints these; the app ignores them.
+  /// `here_tx`, `here_rx`, `need_tx`, `need_rx`, `rejected`): public ids,
+  /// sizes, times and flags only — never a body, never a key.
   final void Function(String event, Map<String, Object?> fields)? onEvent;
 
   final Duration pollWait;
   final Duration retryBase;
   final Duration retryCap;
 
+  /// How long no piece must have arrived before the missing ones are
+  /// asked for, and how often at most they are asked for again.
+  final Duration needQuiet;
+  final Duration needEvery;
+
   /// Letters that opened here, oldest first.
   final ValueNotifier<List<SealedReceived>> inbox =
       ValueNotifier<List<SealedReceived>>(const []);
 
-  /// Letters written here, oldest first, with whether each was opened.
+  /// Letters written here, oldest first, with where each one is.
   final ValueNotifier<List<SealedSent>> outbox =
       ValueNotifier<List<SealedSent>>(const []);
 
@@ -153,6 +251,8 @@ class SealedLetterService {
 
   final List<_Queued> _queue = <_Queued>[];
   final List<_Kept> _kept = <_Kept>[];
+  final Map<String, _Partial> _partial = <String, _Partial>{};
+  final Map<String, Uint8List> _media = <String, Uint8List>{};
   Future<void> _chain = Future<void>.value();
   String? _ownInstall;
   bool _loaded = false;
@@ -192,13 +292,39 @@ class SealedLetterService {
       final entry = _Kept.tryParse(raw);
       if (entry != null) _kept.add(entry);
     }
+    for (final raw in (data['partial'] as List? ?? const [])) {
+      final entry = _Kept.tryParse(raw);
+      if (entry == null) continue;
+      final opened = await _codec.open(entry.box);
+      final media = opened == null
+          ? null
+          : SealedContent.decode(opened.body).media;
+      if (opened == null || media == null) continue;
+      final partial = _Partial(
+        id: entry.id,
+        from: opened.senderInstall,
+        senderKey: opened.senderKey,
+        box: entry.box,
+        media: media,
+        at: entry.at,
+      );
+      for (final name in await blobs.list('in.${entry.id}.')) {
+        final index = int.tryParse(name.split('.').last);
+        if (index != null && index < media.chunks) partial.have.add(index);
+      }
+      _partial[entry.id] = partial;
+    }
     await _publish();
   }
 
   Future<void> _save() => storage.save(<String, Object?>{
-    'v': 1,
+    'v': 2,
     'outbox': [for (final q in _queue) q.toJson()],
     'inbox': [for (final k in _kept) k.toJson()],
+    'partial': [
+      for (final p in _partial.values)
+        _Kept(id: p.id, box: p.box, at: p.at).toJson(),
+    ],
   });
 
   /// Rebuilds both lists from the sealed copies: what the screen shows is
@@ -212,9 +338,11 @@ class SealedLetterService {
         SealedSent(
           id: q.id,
           to: q.to,
-          body: own.body,
+          content: SealedContent.decode(own.body),
           at: q.at,
           attempts: q.attempts,
+          everDeposited: q.everDeposited,
+          nextAt: q.nextAt,
           deliveredAt: q.deliveredAt,
         ),
       );
@@ -223,11 +351,20 @@ class SealedLetterService {
     for (final k in _kept) {
       final opened = await _codec.open(k.box);
       if (opened == null) continue;
+      final content = SealedContent.decode(opened.body);
+      Uint8List? media;
+      final described = content.media;
+      if (described != null) {
+        media = _media[k.id] ??=
+            await _assemble(k.id, described) ?? Uint8List(0);
+        if (media.isEmpty) continue; // Its pieces are gone: nothing to show.
+      }
       received.add(
         SealedReceived(
           id: opened.letterId,
           from: opened.senderInstall,
-          body: opened.body,
+          content: content,
+          media: media,
           sentAt: opened.createdAt,
           receivedAt: k.at,
           verified: await _identity.isVerified(
@@ -242,14 +379,84 @@ class SealedLetterService {
     inbox.value = List<SealedReceived>.unmodifiable(received);
   }
 
-  /// Seals [body] to the key pinned for [toInstall], queues it, and tries
-  /// the door once. Returns as soon as the letter is safely queued; whether
-  /// it was opened is told by [outbox]. Throws [NotPinnedError] when no key
-  /// is pinned for [toInstall].
+  /// Opens every piece of letter [id] and joins them; null when a piece is
+  /// missing, does not open, or the whole is not what was described.
+  Future<Uint8List?> _assemble(String id, SealedMedia media) async {
+    final whole = BytesBuilder(copy: false);
+    for (var i = 0; i < media.chunks; i++) {
+      final box = await blobs.get('in.$id.$i');
+      if (box == null) return null;
+      final opened = await _codec.open(box);
+      if (opened == null ||
+          opened.kind != SealedKind.chunk ||
+          opened.letterId != id ||
+          opened.body.length < 2 ||
+          ByteData.sublistView(opened.body).getUint16(0) != i) {
+        return null;
+      }
+      whole.add(Uint8List.sublistView(opened.body, 2));
+    }
+    final bytes = whole.takeBytes();
+    if (bytes.length != media.size ||
+        !listEquals(await _sha(bytes), media.sha256)) {
+      return null;
+    }
+    return bytes;
+  }
+
+  /// Seals the text [body] to the key pinned for [toInstall], queues it,
+  /// and tries the door once. Returns as soon as the letter is safely
+  /// queued; where it is from then on is told by [outbox]. Throws
+  /// [NotPinnedError] when no key is pinned for [toInstall].
   Future<SealedSent> send({
     required String toInstall,
     required Uint8List body,
+  }) => _enqueue(
+    toInstall,
+    SealedContent.text(utf8.decode(body, allowMalformed: true)),
+    null,
+  );
+
+  /// Seals a photo, voice note or video for [toInstall]: one letter that
+  /// describes it and one sealed box per piece. Throws [ArgumentError] when
+  /// it is empty or over [sealedMaxMediaBytes].
+  Future<SealedSent> sendMedia({
+    required String toInstall,
+    required SealedMediaKind kind,
+    required String contentType,
+    required Uint8List bytes,
+    Duration duration = Duration.zero,
+    String caption = '',
   }) async {
+    if (bytes.isEmpty || bytes.length > sealedMaxMediaBytes) {
+      throw ArgumentError.value(
+        bytes.length,
+        'bytes',
+        'must be 1..$sealedMaxMediaBytes',
+      );
+    }
+    return _enqueue(
+      toInstall,
+      SealedContent.media(
+        SealedMedia(
+          kind: kind,
+          contentType: contentType,
+          size: bytes.length,
+          sha256: await _sha(bytes),
+          chunks: (bytes.length + sealedChunkBytes - 1) ~/ sealedChunkBytes,
+          duration: duration,
+          caption: caption,
+        ),
+      ),
+      bytes,
+    );
+  }
+
+  Future<SealedSent> _enqueue(
+    String toInstall,
+    SealedContent content,
+    Uint8List? mediaBytes,
+  ) async {
     final sent = await _serial(() async {
       await _load();
       final key = await _identity.store.pinnedKeyFor(toInstall);
@@ -258,6 +465,7 @@ class SealedLetterService {
       final ownKey = (await _identity.store.localIdentity()).publicKey;
       final now = _clock();
       final id = _codec.newLetterId();
+      final body = content.encode();
       final box = await _codec.seal(
         recipientInstall: toInstall,
         recipientKey: key,
@@ -276,6 +484,29 @@ class SealedLetterService {
         createdAt: now,
         body: body,
       );
+      final chunks = content.media?.chunks ?? 0;
+      if (mediaBytes != null) {
+        for (var i = 0; i < chunks; i++) {
+          final from = i * sealedChunkBytes;
+          final to = from + sealedChunkBytes > mediaBytes.length
+              ? mediaBytes.length
+              : from + sealedChunkBytes;
+          final piece = Uint8List(2 + to - from);
+          ByteData.sublistView(piece).setUint16(0, i);
+          piece.setAll(2, Uint8List.sublistView(mediaBytes, from, to));
+          await blobs.put(
+            'out.$id.$i',
+            await _codec.seal(
+              recipientInstall: toInstall,
+              recipientKey: key,
+              kind: SealedKind.chunk,
+              letterId: id,
+              createdAt: now,
+              body: piece,
+            ),
+          );
+        }
+      }
       _queue.add(
         _Queued(
           id: id,
@@ -285,6 +516,9 @@ class SealedLetterService {
           bodySha: await _sha(body),
           at: now,
           nextAt: now,
+          kind: content.kindLabel,
+          bytes: content.bytes,
+          chunks: chunks,
         ),
       );
       await _save();
@@ -296,25 +530,37 @@ class SealedLetterService {
   }
 
   /// Puts every waiting letter whose pause is over into its recipient's
-  /// mailbox again.
+  /// mailbox again. A media letter's pieces go with it the first time (and
+  /// again when its recipient says it is there); after that the letter
+  /// alone is enough, because the recipient asks for what it lacks.
   Future<void> flush() => _serial(() async {
     await _load();
     final now = _clock();
     var changed = false;
     for (final q in _queue) {
       if (q.deliveredAt != null || q.nextAt.isAfter(now)) continue;
-      final ok = await door.deposit(q.to, q.box);
+      var ok = await door.deposit(q.to, q.box);
+      var pieces = 0;
+      if (ok && q.chunks > 0 && !q.piecesPushed) {
+        pieces = await _depositPieces(q, null);
+        ok = pieces == q.chunks;
+        q.piecesPushed = ok;
+      }
       doorUp.value = ok;
       q.attempts++;
+      q.everDeposited = q.everDeposited || ok;
       q.nextAt = now.add(_pause(q.attempts));
       changed = true;
       onEvent?.call('tx', <String, Object?>{
         'id': q.id,
+        'kind': q.kind,
         'from': await _own(),
         'to': q.to,
-        'box_bytes': q.box.length,
+        'bytes': q.bytes,
+        'sent_at': q.at.toUtc().toIso8601String(),
         'attempt': q.attempts,
         'deposited': ok,
+        'pieces_sent': pieces,
       });
     }
     if (changed) {
@@ -322,6 +568,20 @@ class SealedLetterService {
       await _publish();
     }
   });
+
+  /// Puts pieces of [q] in its recipient's mailbox: [only] those, or all.
+  /// Returns how many the relay took; stops at the first it refuses.
+  Future<int> _depositPieces(_Queued q, Iterable<int>? only) async {
+    var sent = 0;
+    for (final i in only ?? Iterable<int>.generate(q.chunks)) {
+      if (i < 0 || i >= q.chunks) continue;
+      final box = await blobs.get('out.${q.id}.$i');
+      if (box == null) continue;
+      if (!await door.deposit(q.to, box)) break;
+      sent++;
+    }
+    return sent;
+  }
 
   Duration _pause(int attempts) {
     var pause = retryBase;
@@ -340,8 +600,10 @@ class SealedLetterService {
     final taken = await door.take(await _own(), wait: wait);
     doorUp.value = taken != null;
     if (taken == null) return false;
-    if (taken.isEmpty) return true;
-    await _serial(() => _handle(taken));
+    await _serial(() async {
+      if (taken.isNotEmpty) await _handle(taken);
+      await _progress();
+    });
     return true;
   }
 
@@ -371,41 +633,74 @@ class SealedLetterService {
       }
       switch (opened.kind) {
         case SealedKind.letter:
+          final content = SealedContent.decode(opened.body);
+          final media = content.media;
           final seen = _kept.any((k) => k.id == opened.letterId);
+          if (media != null && !seen) {
+            // A described photo, voice or video: kept aside until every
+            // piece is here. Its receipt waits for that too.
+            if (!_partial.containsKey(opened.letterId)) {
+              final partial = _Partial(
+                id: opened.letterId,
+                from: opened.senderInstall,
+                senderKey: opened.senderKey,
+                box: box,
+                media: media,
+                at: _clock(),
+              );
+              for (final name in await blobs.list('in.${partial.id}.')) {
+                final index = int.tryParse(name.split('.').last);
+                if (index != null && index < media.chunks) {
+                  partial.have.add(index);
+                }
+              }
+              _partial[partial.id] = partial;
+              changed = true;
+            }
+            continue;
+          }
           if (!seen) {
             _kept.add(_Kept(id: opened.letterId, box: box, at: _clock()));
             changed = true;
-            onEvent?.call('rx', <String, Object?>{
-              'id': opened.letterId,
-              'from': opened.senderInstall,
-              'to': own,
-              'bytes': opened.body.length,
-              'box_bytes': box.length,
-              'opened': true,
-              'verified': await _identity.isVerified(
-                opened.senderInstall,
-                opened.senderKey,
-              ),
-            });
+            _rx(opened, content, own, box.length);
           }
           // Every copy is answered: a second copy means the first receipt
           // never reached the sender.
-          final receipt = await _codec.seal(
-            recipientInstall: opened.senderInstall,
-            recipientKey: opened.senderKey,
-            kind: SealedKind.receipt,
-            letterId: opened.letterId,
-            createdAt: _clock(),
-            body: await _sha(opened.body),
-          );
-          final ok = await door.deposit(opened.senderInstall, receipt);
-          onEvent?.call('receipt_tx', <String, Object?>{
-            'id': opened.letterId,
-            'from': own,
-            'to': opened.senderInstall,
-            'deposited': ok,
-            'duplicate': seen,
-          });
+          await _receipt(opened, own, duplicate: seen);
+        case SealedKind.chunk:
+          if (opened.body.length < 3) continue;
+          final index = ByteData.sublistView(opened.body).getUint16(0);
+          final partial = _partial[opened.letterId];
+          if (_kept.any((k) => k.id == opened.letterId) ||
+              index >= (partial?.media.chunks ?? 64)) {
+            continue; // Already whole, or not a piece of anything.
+          }
+          await blobs.put('in.${opened.letterId}.$index', box);
+          if (partial != null) {
+            partial.have.add(index);
+            partial.lastPieceAt = _clock();
+          }
+        case SealedKind.need:
+          for (final q in _queue) {
+            if (q.id != opened.letterId ||
+                q.to != opened.senderInstall ||
+                q.deliveredAt != null ||
+                q.chunks == 0) {
+              continue;
+            }
+            final asked = <int>[
+              for (var at = 0; at + 1 < opened.body.length; at += 2)
+                ByteData.sublistView(opened.body).getUint16(at),
+            ];
+            final sent = await _depositPieces(q, asked.isEmpty ? null : asked);
+            onEvent?.call('need_rx', <String, Object?>{
+              'id': q.id,
+              'from': opened.senderInstall,
+              'to': own,
+              'asked': asked.isEmpty ? q.chunks : asked.length,
+              'pieces_sent': sent,
+            });
+          }
         case SealedKind.receipt:
           for (final q in _queue) {
             if (q.id != opened.letterId ||
@@ -416,22 +711,29 @@ class SealedLetterService {
             }
             q.deliveredAt = _clock();
             changed = true;
+            await blobs.deletePrefix('out.${q.id}.');
             onEvent?.call('receipt_rx', <String, Object?>{
               'id': q.id,
+              'kind': q.kind,
               'from': opened.senderInstall,
               'to': own,
+              'bytes': q.bytes,
+              'sent_at': q.at.toUtc().toIso8601String(),
+              'receipt_at': q.deliveredAt!.toUtc().toIso8601String(),
               'attempts': q.attempts,
             });
           }
         case SealedKind.here:
           // The peer is reading its mailbox now: whatever waits for it
-          // goes again at once instead of at the end of its pause.
+          // goes again at once — pieces included — instead of at the end
+          // of its pause.
           var waiting = 0;
           for (final q in _queue) {
             if (q.to != opened.senderInstall || q.deliveredAt != null) {
               continue;
             }
             q.nextAt = _clock();
+            q.piecesPushed = false;
             waiting++;
           }
           onEvent?.call('here_rx', <String, Object?>{
@@ -447,6 +749,123 @@ class SealedLetterService {
       await _publish();
     }
     if (resend) unawaited(flush().catchError((Object _) {}));
+  }
+
+  void _rx(OpenedBox opened, SealedContent content, String own, int boxBytes) {
+    onEvent?.call('rx', <String, Object?>{
+      'id': opened.letterId,
+      'kind': content.kindLabel,
+      'from': opened.senderInstall,
+      'to': own,
+      'bytes': content.bytes,
+      'box_bytes': boxBytes,
+      'sent_at': opened.createdAt.toUtc().toIso8601String(),
+      'opened_at': _clock().toUtc().toIso8601String(),
+      'opened': true,
+    });
+  }
+
+  Future<void> _receipt(
+    OpenedBox opened,
+    String own, {
+    required bool duplicate,
+  }) async {
+    final receipt = await _codec.seal(
+      recipientInstall: opened.senderInstall,
+      recipientKey: opened.senderKey,
+      kind: SealedKind.receipt,
+      letterId: opened.letterId,
+      createdAt: _clock(),
+      body: await _sha(opened.body),
+    );
+    final ok = await door.deposit(opened.senderInstall, receipt);
+    onEvent?.call('receipt_tx', <String, Object?>{
+      'id': opened.letterId,
+      'from': own,
+      'to': opened.senderInstall,
+      'deposited': ok,
+      'duplicate': duplicate,
+    });
+  }
+
+  /// Finishes media letters whose pieces are all here, and asks for the
+  /// pieces of those that have gone quiet.
+  Future<void> _progress() async {
+    if (_partial.isEmpty) return;
+    final own = await _own();
+    final now = _clock();
+    var changed = false;
+    for (final partial in _partial.values.toList()) {
+      final opened = await _codec.open(partial.box);
+      if (opened == null) {
+        _partial.remove(partial.id);
+        changed = true;
+        continue;
+      }
+      if (partial.have.length >= partial.media.chunks) {
+        final whole = await _assemble(partial.id, partial.media);
+        if (whole != null) {
+          _media[partial.id] = whole;
+          _partial.remove(partial.id);
+          _kept.add(_Kept(id: partial.id, box: partial.box, at: now));
+          changed = true;
+          _rx(
+            opened,
+            SealedContent.decode(opened.body),
+            own,
+            partial.box.length,
+          );
+          await _receipt(opened, own, duplicate: false);
+          continue;
+        }
+        // Every piece is here and the whole is wrong: start over.
+        await blobs.deletePrefix('in.${partial.id}.');
+        partial.have.clear();
+        onEvent?.call('rejected', <String, Object?>{
+          'why': 'media_does_not_match_its_description',
+          'id': partial.id,
+          'from': partial.from,
+        });
+      }
+      if (now.difference(partial.lastPieceAt) < needQuiet ||
+          now.difference(partial.lastNeedAt) < needEvery) {
+        continue;
+      }
+      final missing = <int>[
+        for (var i = 0; i < partial.media.chunks; i++)
+          if (!partial.have.contains(i)) i,
+      ];
+      final body = Uint8List(
+        missing.length == partial.media.chunks ? 0 : missing.length * 2,
+      );
+      for (var i = 0; i * 2 < body.length; i++) {
+        ByteData.sublistView(body).setUint16(i * 2, missing[i]);
+      }
+      final ok = await door.deposit(
+        partial.from,
+        await _codec.seal(
+          recipientInstall: partial.from,
+          recipientKey: partial.senderKey,
+          kind: SealedKind.need,
+          letterId: partial.id,
+          createdAt: now,
+          body: body,
+        ),
+      );
+      partial.lastNeedAt = now;
+      onEvent?.call('need_tx', <String, Object?>{
+        'id': partial.id,
+        'from': own,
+        'to': partial.from,
+        'missing': missing.length,
+        'of': partial.media.chunks,
+        'deposited': ok,
+      });
+    }
+    if (changed) {
+      await _save();
+      await _publish();
+    }
   }
 
   /// Tells every pinned peer that this install is reading its mailbox now,
@@ -502,7 +921,11 @@ class SealedLetterService {
             wasUp = reachable;
           }
           await flush();
-          final up = await pollOnce(wait: pollWait);
+          // While a media letter is still coming, the mailbox is read in
+          // short rounds so the missing pieces are asked for promptly.
+          final up = await pollOnce(
+            wait: _partial.isEmpty ? pollWait : needQuiet,
+          );
           wasUp = up;
           if (!up && _running) {
             await Future<void>.delayed(const Duration(seconds: 3));
@@ -540,7 +963,12 @@ class _Queued {
     required this.bodySha,
     required this.at,
     required this.nextAt,
+    this.kind = 'text',
+    this.bytes = 0,
+    this.chunks = 0,
     this.attempts = 0,
+    this.everDeposited = false,
+    this.piecesPushed = false,
     this.deliveredAt,
   });
 
@@ -550,8 +978,18 @@ class _Queued {
   final Uint8List selfBox;
   final Uint8List bodySha;
   final DateTime at;
+  final String kind;
+  final int bytes;
+
+  /// How many pieces travel beside the letter; zero for a text.
+  final int chunks;
   DateTime nextAt;
   int attempts;
+  bool everDeposited;
+
+  /// Whether every piece has been put in the mailbox since the recipient
+  /// last said it was there.
+  bool piecesPushed;
   DateTime? deliveredAt;
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -562,7 +1000,12 @@ class _Queued {
     'body_sha': base64.encode(bodySha),
     'at': at.toUtc().toIso8601String(),
     'next_at': nextAt.toUtc().toIso8601String(),
+    'kind': kind,
+    'bytes': bytes,
+    'chunks': chunks,
     'attempts': attempts,
+    'ever_deposited': everDeposited,
+    'pieces_pushed': piecesPushed,
     'delivered_at': deliveredAt?.toUtc().toIso8601String(),
   };
 
@@ -570,6 +1013,7 @@ class _Queued {
     try {
       final map = raw as Map;
       final delivered = map['delivered_at'] as String?;
+      final attempts = (map['attempts'] as num).toInt();
       return _Queued(
         id: map['id'] as String,
         to: map['to'] as String,
@@ -578,7 +1022,13 @@ class _Queued {
         bodySha: base64.decode(map['body_sha'] as String),
         at: DateTime.parse(map['at'] as String),
         nextAt: DateTime.parse(map['next_at'] as String),
-        attempts: (map['attempts'] as num).toInt(),
+        kind: map['kind'] as String? ?? 'text',
+        bytes: (map['bytes'] as num?)?.toInt() ?? 0,
+        chunks: (map['chunks'] as num?)?.toInt() ?? 0,
+        attempts: attempts,
+        // A file from before this was recorded: any attempt counted.
+        everDeposited: map['ever_deposited'] as bool? ?? attempts > 0,
+        piecesPushed: map['pieces_pushed'] as bool? ?? false,
         deliveredAt: delivered == null ? null : DateTime.parse(delivered),
       );
     } catch (_) {
@@ -613,6 +1063,29 @@ class _Kept {
       return null;
     }
   }
+}
+
+/// A media letter whose pieces are still coming.
+class _Partial {
+  _Partial({
+    required this.id,
+    required this.from,
+    required this.senderKey,
+    required this.box,
+    required this.media,
+    required this.at,
+  }) : lastPieceAt = at,
+       lastNeedAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+
+  final String id;
+  final String from;
+  final Uint8List senderKey;
+  final Uint8List box;
+  final SealedMedia media;
+  final DateTime at;
+  final Set<int> have = <int>{};
+  DateTime lastPieceAt;
+  DateTime lastNeedAt;
 }
 
 String _hex(List<int> bytes) =>
