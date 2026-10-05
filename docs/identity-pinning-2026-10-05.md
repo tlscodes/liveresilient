@@ -125,9 +125,71 @@ both green. Full `reference_app` suite locally: 730 of 730.
   and nothing invented; sealing a letter to the pinned key was therefore not
   built either.
 
+## Round three — sealed letters, both ways, on the rig
+
+Commit `b306434`, same day, local only (not pushed). This replaces the
+"there is no receive path" finding above: the path now exists.
+
+**The design, in four sentences.** Each install has one mailbox, named by
+its install id, on the border relay the letter lanes already use — the
+relay's long-poll route with the install id where a call id would be, read
+through a `receive` the lane always had on the server side and never on
+the client. A letter is locked to the recipient's pinned identity key
+itself (its X25519 twin; no second key to publish or pin), and the box
+names nobody in the clear: sender id, sender key and signature are inside
+the ciphertext, and everything is padded to 256-byte buckets so a receipt
+and a short letter look the same. The recipient opens it, checks that the
+key inside is the one it pinned, and puts a sealed receipt in the sender's
+mailbox. The sender keeps the letter until that receipt and puts the box
+in again until it comes.
+
+**Both directions, same Mac and same phone** (run 2026-10-05T15:51:17Z,
+all six journey rows PASS in the same run; the letters crossed the relay
+over the internet, not the call):
+
+    MAC   sealed_tx from=323c3ca6c1105f43449749bb8d799496 to=da40df0bd869287ecf8200228f302ed8 bytes=48 id=fdc83cc0… attempts=1 receipt_from_recipient=true opened_shown_on_screen=true waited_ms=862
+    PHONE rx        from=323c3ca6c1105f43449749bb8d799496 to=da40df0bd869287ecf8200228f302ed8 bytes=48 box_bytes=313 opened=true verified=true
+    PHONE tx        from=da40df0bd869287ecf8200228f302ed8 to=323c3ca6c1105f43449749bb8d799496 box_bytes=313 attempt=1 deposited=true
+    MAC   sealed_rx from=da40df0bd869287ecf8200228f302ed8 to=323c3ca6c1105f43449749bb8d799496 bytes=45 id=e7b9b2d8… opened=true verified=true text_on_screen=true waited_ms=2002
+    PHONE tx        id=e7b9b2d8… attempt=2 deposited=true
+    PHONE receipt_rx id=e7b9b2d8… from=323c3ca6… attempts=2
+
+The Mac side is the real app: the letter was typed into its panel and sent
+with its button, and the phone's letter was read off its screen. The phone
+side is the rig peer running the same service and the same panel; its
+lines are the service's own events, and its screen was not read by a
+machine. The phone's letter needed a second attempt before its receipt
+came back — the retry rule doing its job on real devices.
+
+**What the real relay does** (measured from the Mac): a frame for a side
+that is not reading returned 200 after 2 s and 8 s, and 204 after 15 s and
+30 s; a side already waiting got it at once. So the relay keeps a box for
+seconds, not for an absent recipient. That is why an install announces "I
+am reading my mailbox now" (one more sealed box, kind `here`) to its pinned
+peers when it starts. Against the real relay with two throwaway installs:
+
+    LIVE_RELAY away   away_s=30 relay_still_had_it=false opened_after_return=true receipt=true attempts=2 total_ms=33029
+    LIVE_RELAY queued attempts_while_closed=1 delivered_after_open=true attempts=2
+
+**Limits, stated plainly.**
+
+- Both installs must be reading within the same few seconds for a letter
+  to cross. A letter to someone who is away waits in the sender's queue,
+  not on a server. True store-and-forward needs the relay to persist
+  boxes, which is a change to the deployed relay and was not made.
+- Anyone who knows a public install id can read — and so remove — that
+  mailbox's boxes, or fill it. They cannot open or forge one. The relay
+  has no way to tell the owner from anyone else.
+- Not forward secret on the recipient's side: the recipient's half of the
+  agreement is its identity key.
+- A `here` tells a pinned peer who is listening that this install is
+  online.
+- "The path was closed" was shown by closing it at the client; the relay
+  itself was never down during a run.
+
 ## Not built
 
-- Letter receive on the phone (a mailbox addressed to an install and a
-  downlink on a lane), sealing letters to a pinned identity, and any
-  carrier for them.
+- A relay that keeps a box for an absent recipient, and any carrier for
+  other people's boxes.
+- Sealed photo, voice and video letters: only text was sent.
 - A changed-key run on real devices.
