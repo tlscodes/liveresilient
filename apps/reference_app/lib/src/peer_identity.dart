@@ -155,6 +155,12 @@ class AppIdentity {
   Future<bool> isVerified(String peerInstall, Uint8List publicKey) async =>
       await _pins.read('$_verifiedPrefix$peerInstall') == _hex(publicKey);
 
+  /// Whether any confirmation for [peerInstall] is on file. A rig run asks
+  /// this of a fresh store after the call is over; a live call uses
+  /// [isVerified], which also checks the key.
+  Future<bool> verifiedOnDisk(String peerInstall) async =>
+      await _pins.read('$_verifiedPrefix$peerInstall') != null;
+
   /// Forgets a confirmation: the person said the numbers differ, or a
   /// second key was proven under [peerInstall]. Only ever a downgrade.
   Future<void> clearVerified(String peerInstall) =>
@@ -208,17 +214,35 @@ final ValueNotifier<PeerSighting?> lastPeerSighting =
 /// host without a keystore simply has no identity, and calls still work.
 Future<void> bootAppIdentity([AppIdentity? identity]) async {
   identityBootError = null;
+  final watch = Stopwatch()..start();
+  int? keystoreMs;
+  int? pinsMs;
   try {
     final resolved = identity ?? AppIdentity.disk();
+    final opened = watch.elapsedMilliseconds;
     _bootedKeyId = await resolved.store.localKeyId();
+    keystoreMs = watch.elapsedMilliseconds - opened;
     await resolved.installId();
+    pinsMs = watch.elapsedMilliseconds - opened - keystoreMs;
     appIdentity = resolved;
   } catch (error) {
     appIdentity = null;
     _bootedKeyId = null;
     identityBootError = error;
   }
+  final total = watch.elapsedMilliseconds;
+  identityBootTimings = <String, int>{
+    'keystore_ms': ?keystoreMs,
+    'pins_ms': ?pinsMs,
+    'other_ms': total - (keystoreMs ?? 0) - (pinsMs ?? 0),
+  };
 }
+
+/// Where the last [bootAppIdentity] spent its time: `keystore_ms` is the
+/// seed read (or made) through the device keystore and the key id derived
+/// from it, `pins_ms` the identity file read for the install id, and
+/// `other_ms` everything else. A part the boot never reached is absent.
+Map<String, int> identityBootTimings = const <String, int>{};
 
 /// Why the last [bootAppIdentity] left no identity; null when it made one
 /// or has not finished. The boot never throws, so this is the only place

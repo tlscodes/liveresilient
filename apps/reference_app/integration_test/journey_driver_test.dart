@@ -833,6 +833,7 @@ void main() {
       'identity=${booted == null ? 'absent' : 'present'} '
       'cause=${bootCause.length > 240 ? bootCause.substring(0, 240) : bootCause} '
       'ms=${bootWatch.elapsedMilliseconds} '
+      '${identityBootTimings.entries.map((e) => '${e.key}=${e.value}').join(' ')} '
       'pins=${identityStorageDirectory().path.contains('/Library/Application Support/') ? 'app_support' : 'shared'} '
       'install=${ownInstall == null ? '-' : ownInstall.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}',
     );
@@ -948,6 +949,50 @@ void main() {
                   'phase=${phaseNow.replaceAll(' ', '_')} '
                   'call_stopped=${phaseNow == 'Call ended' || phaseNow == 'Call failed'}',
       );
+      // The comparison. This driver opens the sheet and reads the digits
+      // off the screen, and that is all it does: it never presses an
+      // answer. The window takes real clicks while it waits, so `verified`
+      // below can only come from a person who compared the two numbers.
+      const verifyWaitS = int.fromEnvironment('JOURNEY_VERIFY_WAIT_S');
+      final row = find.byKey(const Key('call-peer-trust-unverified'));
+      if (verifyWaitS > 0 && sighting != null && row.evaluate().isNotEmpty) {
+        await tester.ensureVisible(row);
+        await tester.tap(row);
+        await tester.pump(const Duration(seconds: 1));
+        final digits = find.byKey(const Key('safety-number-digits'));
+        final shown = digits.evaluate().isEmpty
+            ? null
+            : tester.widget<SelectableText>(digits).data;
+        print(
+          'JOURNEY_APP safety_number side=mac '
+          'digits=${shown == null ? '-' : shown.trim().replaceAll(RegExp(r'\s+'), '_')}',
+        );
+        final live = tester.binding as LiveTestWidgetsFlutterBinding;
+        live.shouldPropagateDevicePointerEvents = true;
+        print('JOURNEY_APP verify waiting_for_touch wait_s=$verifyWaitS');
+        final waited = Stopwatch()..start();
+        await _pumpUntil<bool>(
+          tester,
+          () => peerTrust.value == PeerTrust.verified ? true : null,
+          budget: const Duration(seconds: verifyWaitS),
+          step: const Duration(milliseconds: 500),
+        );
+        live.shouldPropagateDevicePointerEvents = false;
+        if (digits.evaluate().isNotEmpty) {
+          tester.state<NavigatorState>(find.byType(Navigator).last).pop();
+          await tester.pump(const Duration(seconds: 1));
+        }
+        print(
+          'JOURNEY_APP verify trust=${peerTrust.value?.name ?? '-'} '
+          'touched=${peerTrust.value == PeerTrust.verified} '
+          'waited_ms=${waited.elapsedMilliseconds}',
+        );
+      } else if (verifyWaitS > 0) {
+        print(
+          'JOURNEY_APP verify sheet=not_opened '
+          'trust=${peerTrust.value?.name ?? '-'}',
+        );
+      }
     }
 
     var samples = 0;
@@ -1032,6 +1077,19 @@ void main() {
         final phase = _phaseOnScreen();
         return (phase == 'Call ended' || phase == 'Call failed') ? true : null;
       }, budget: const Duration(seconds: 30));
+    }
+    // After the call: what the identity file holds now, read back by a
+    // fresh store rather than remembered by the call that wrote it.
+    final judgedPeer = lastPeerSighting.value?.peerInstall;
+    if (judgedPeer != null) {
+      final onDisk = await tester.runAsync(
+        () => AppIdentity.disk().verifiedOnDisk(judgedPeer),
+      );
+      print(
+        'JOURNEY_APP identity_disk peer_install=$judgedPeer '
+        'verified_on_disk=${onDisk ?? '-'} '
+        'phase=${_phaseOnScreen().replaceAll(' ', '_')}',
+      );
     }
     _observeSurvival();
     final endTexts = _visibleTexts().where((t) => t.length < 70).join(' | ');

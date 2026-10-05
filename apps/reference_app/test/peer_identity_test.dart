@@ -107,6 +107,18 @@ void main() {
 
       await bootAppIdentity(relaunch());
       expect(identityBootError, isNull);
+      // Every part of the boot is timed, and the parts are the whole.
+      expect(
+        identityBootTimings.keys,
+        containsAll(<String>['keystore_ms', 'pins_ms', 'other_ms']),
+      );
+      expect(identityBootTimings.values.every((ms) => ms >= 0), isTrue);
+      // A confirmation is read back by a store that never wrote it.
+      expect(await relaunch().verifiedOnDisk('peer-install'), isFalse);
+      await appIdentity!.markVerified('peer-install', peerKey);
+      expect(await relaunch().verifiedOnDisk('peer-install'), isTrue);
+      await appIdentity!.clearVerified('peer-install');
+      expect(await relaunch().verifiedOnDisk('peer-install'), isFalse);
       final firstInstall = await appIdentity!.installId();
       final firstKeyId = sessionKeyId();
       expect(

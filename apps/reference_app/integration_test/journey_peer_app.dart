@@ -67,6 +67,7 @@ import 'package:media_webrtc_flutter/media_webrtc_flutter.dart'
     show SelectedIcePair;
 import 'package:messaging/messaging.dart';
 import 'package:messaging_webrtc_adapter/messaging_webrtc_adapter.dart';
+import 'package:reference_app/src/call_screen.dart' show SafetyNumberSheet;
 import 'package:reference_app/src/datagram_lane_port.dart';
 import 'package:reference_app/src/intelligence/device_bindings.dart'
     show systemDnsResolverBinding;
@@ -104,6 +105,11 @@ const int journeyConnectBudgetS = int.fromEnvironment(
 /// The whole screen, so the peer can photograph what it shows (the letter
 /// on screen is evidence only if the Mac can see it).
 final GlobalKey journeyScreenKey = GlobalKey();
+
+/// The peer's navigator, so the app's safety-number sheet can be put on
+/// this screen from the call's identity exchange.
+final GlobalKey<NavigatorState> journeyNavigatorKey =
+    GlobalKey<NavigatorState>();
 
 /// The rig peer's lab card for one letter (letter_card.dart): counts and
 /// ids only, never letter text or wire bytes. [outcome] is the fabric's
@@ -3027,19 +3033,47 @@ class _Lanes {
         }, run: _run),
       );
     } else {
-      final handshake = IdentityHandshake(
+      late final IdentityHandshake handshake;
+      handshake = IdentityHandshake(
         port: chatPort,
         identity: identity,
         callId: _stack.controller.callId,
         onTrust: (reading) {
           final stopped = reading == PeerTrust.changed;
+          final number = handshake.safetyNumber;
           unawaited(
             _peer._report('identity', <String, Object?>{
               ...?lastPeerSighting.value?.toJson(),
+              // The reading as it is now: a person's answer changes it
+              // after the sighting was made.
+              'trust': reading.name,
+              'safety_number': number,
               'call_stopped': stopped,
             }, run: _run),
           );
           if (stopped) unawaited(_stack.controller.hangUp());
+          // The app's own comparison sheet, on this screen: the number and
+          // the two answers. Only a touch on this phone calls confirmMatch;
+          // nothing in the rig can.
+          final overlay = journeyNavigatorKey.currentState?.overlay?.context;
+          if (reading == PeerTrust.unverified &&
+              number != null &&
+              !_sheetOpen &&
+              overlay != null) {
+            _sheetOpen = true;
+            unawaited(
+              showModalBottomSheet<void>(
+                context: overlay,
+                showDragHandle: true,
+                isScrollControlled: true,
+                builder: (_) => SafetyNumberSheet(
+                  safetyNumber: number,
+                  onMatch: handshake.confirmMatch,
+                  onDiffer: handshake.denyMatch,
+                ),
+              ).whenComplete(() => _sheetOpen = false),
+            );
+          }
         },
       );
       unawaited(handshake.start().catchError((Object _) {}));
@@ -3191,8 +3225,28 @@ class _Lanes {
     'blobs_failed': blobsFailed,
   };
 
+  // Whether the comparison sheet is up on this phone's screen.
+  bool _sheetOpen = false;
+
   Future<void> close() async {
     _ticker?.cancel();
+    // The call is over: an unanswered sheet goes with it, and what the
+    // identity file holds now is read back by a fresh store and reported.
+    if (_sheetOpen) journeyNavigatorKey.currentState?.pop();
+    final judged = lastPeerSighting.value?.peerInstall;
+    if (judged != null) {
+      unawaited(
+        AppIdentity.disk()
+            .verifiedOnDisk(judged)
+            .then(
+              (onDisk) => _peer._report('identity_disk', <String, Object?>{
+                'peer_install': judged,
+                'verified_on_disk': onDisk,
+              }, run: _run),
+            )
+            .catchError((Object _) {}),
+      );
+    }
     for (final sub in _subs) {
       await sub.cancel();
     }
@@ -3215,6 +3269,7 @@ class JourneyPeerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: journeyNavigatorKey,
       title: 'Journey peer',
       theme: ThemeData.dark(useMaterial3: true),
       home: Scaffold(

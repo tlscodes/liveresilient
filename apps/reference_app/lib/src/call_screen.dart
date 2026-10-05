@@ -301,7 +301,7 @@ class CallScreen extends StatelessWidget {
                             context: context,
                             showDragHandle: true,
                             isScrollControlled: true,
-                            builder: (_) => _SafetyNumberSheet(
+                            builder: (_) => SafetyNumberSheet(
                               safetyNumber: number,
                               onMatch: onSafetyNumbersMatch,
                               onDiffer: onSafetyNumbersDiffer,
@@ -706,8 +706,9 @@ class _JoinCallDialogState extends State<JoinCallDialog> {
 /// The comparison itself: the sixty digits, one instruction, and the two
 /// answers only the person can give. Closing it without an answer changes
 /// nothing — the reading never turns verified on its own.
-class _SafetyNumberSheet extends StatefulWidget {
-  const _SafetyNumberSheet({
+class SafetyNumberSheet extends StatefulWidget {
+  const SafetyNumberSheet({
+    super.key,
     required this.safetyNumber,
     required this.onMatch,
     required this.onDiffer,
@@ -718,10 +719,10 @@ class _SafetyNumberSheet extends StatefulWidget {
   final Future<void> Function()? onDiffer;
 
   @override
-  State<_SafetyNumberSheet> createState() => _SafetyNumberSheetState();
+  State<SafetyNumberSheet> createState() => _SafetyNumberSheetState();
 }
 
-class _SafetyNumberSheetState extends State<_SafetyNumberSheet> {
+class _SafetyNumberSheetState extends State<SafetyNumberSheet> {
   bool _busy = false;
 
   /// Twelve groups of five as three lines of four, the way both phones
