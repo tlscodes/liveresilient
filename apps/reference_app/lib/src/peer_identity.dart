@@ -28,7 +28,7 @@ import 'package:messaging/messaging.dart' show DataChannelPort;
 import 'package:security/security.dart';
 
 import 'intelligence/device_bindings.dart'
-    show identityStorageDirectory, intelligenceStorageDirectory;
+    show identityStorageDirectory, legacyDesktopStorageDirectory;
 import 'intelligence/disk_json_storage.dart';
 import 'letter_queue_keystore.dart';
 
@@ -56,7 +56,7 @@ class PinnedPeerStore implements SecureKeyValueStore {
 
   factory PinnedPeerStore.disk() {
     adoptIdentityFile(
-      from: intelligenceStorageDirectory(),
+      from: legacyDesktopStorageDirectory(),
       to: identityStorageDirectory(),
     );
     return PinnedPeerStore(
@@ -245,6 +245,23 @@ final ValueNotifier<PeerSighting?> lastPeerSighting =
 /// host without a keystore simply has no identity, and calls still work.
 Future<void> bootAppIdentity([AppIdentity? identity]) async {
   identityBootError = null;
+  identityBootPending.value = true;
+  try {
+    await _bootAppIdentity(identity);
+  } finally {
+    identityBootPending.value = false;
+  }
+}
+
+/// True from the moment [bootAppIdentity] is asked until it has an answer —
+/// an identity, or the knowledge that this host has none. The app shows its
+/// window while this is true (a keystore may be waiting on the person) and
+/// starts no call: a call built now would sign its signalling with a
+/// throwaway id and exchange no identity. False before any boot, so a host
+/// that never boots one (a widget test) is never held back.
+final ValueNotifier<bool> identityBootPending = ValueNotifier<bool>(false);
+
+Future<void> _bootAppIdentity(AppIdentity? identity) async {
   final watch = Stopwatch()..start();
   int? keystoreMs;
   int? pinsMs;

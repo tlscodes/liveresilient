@@ -141,13 +141,71 @@ Directory Function()? buildStorageDirectory() {
   return () => docs..createSync(recursive: true);
 }
 
-/// The one folder every intelligence file shares: the persistent base on a
-/// phone, the system-temp folder elsewhere (the same default
-/// `bootIntelligence` falls back to). Single source of truth for the
-/// brains, the parked-letter queue and the per-letter measurement card.
-Directory intelligenceStorageDirectory() =>
-    buildStorageDirectory()?.call() ??
+/// The folder the parked-letter queue, the per-letter measurement card and
+/// the identity file share: the persistent base on a phone,
+/// `Library/Application Support` on a Mac ([identityStorageBase]), and the
+/// system-temp folder elsewhere and under `flutter test`. The brains keep
+/// `bootIntelligence`'s own default; they are rebuilt from what they
+/// measure, a parked letter is not.
+///
+/// A Mac used to keep all of this in the temp folder. The first call here
+/// carries the queue and the card file over once ([adoptDesktopFiles]):
+/// copied, never over a file already there, the old ones left in place.
+Directory intelligenceStorageDirectory() {
+  final phone = buildStorageDirectory();
+  if (phone != null) return phone();
+  final base = identityStorageBase(
+    isMacOS: Platform.isMacOS,
+    environment: Platform.environment,
+  );
+  if (base == null) return legacyDesktopStorageDirectory();
+  final home = Directory(base)..createSync(recursive: true);
+  if (!_desktopFilesAdopted) {
+    _desktopFilesAdopted = true;
+    adoptDesktopFiles(from: legacyDesktopStorageDirectory(), to: home);
+  }
+  return home;
+}
+
+bool _desktopFilesAdopted = false;
+
+/// Where a desktop kept these files before they had a persistent home, and
+/// where a host with no such home still keeps them.
+Directory legacyDesktopStorageDirectory() =>
     Directory('${Directory.systemTemp.path}/voice_call_kit_intelligence');
+
+/// Copies the card file and every parked letter from [from] into [to] when
+/// [to] does not have them yet. Never overwrites, never deletes; a failure
+/// is swallowed, because losing the carry-over must not stop the app.
+/// Returns how many files it copied.
+int adoptDesktopFiles({required Directory from, required Directory to}) {
+  var copied = 0;
+  try {
+    if (from.path == to.path || !from.existsSync()) return 0;
+    void carry(File old, File now) {
+      if (!old.existsSync() || now.existsSync()) return;
+      now.parent.createSync(recursive: true);
+      old.copySync(now.path);
+      copied++;
+    }
+
+    carry(
+      File('${from.path}/letter_cards.jsonl'),
+      File('${to.path}/letter_cards.jsonl'),
+    );
+    final letters = Directory('${from.path}/letters');
+    if (letters.existsSync()) {
+      for (final entry in letters.listSync(followLinks: false)) {
+        if (entry is! File) continue;
+        final name = entry.uri.pathSegments.last;
+        carry(entry, File('${to.path}/letters/$name'));
+      }
+    }
+  } catch (_) {
+    // Best effort.
+  }
+  return copied;
+}
 
 /// Where this install's public id and its pinned peer keys live on a Mac:
 /// `Library/Application Support` under `HOME`, which inside the app sandbox
@@ -168,17 +226,9 @@ String? identityStorageBase({
   return '$root/Library/Application Support/voice_call_kit_intelligence';
 }
 
-/// The folder the identity file is kept in: [identityStorageBase] on a
-/// Mac, the shared [intelligenceStorageDirectory] everywhere else.
-Directory identityStorageDirectory() {
-  final base = identityStorageBase(
-    isMacOS: Platform.isMacOS,
-    environment: Platform.environment,
-  );
-  return base == null
-      ? intelligenceStorageDirectory()
-      : (Directory(base)..createSync(recursive: true));
-}
+/// The folder the identity file is kept in: the same one as the queue and
+/// the card file, on every platform.
+Directory identityStorageDirectory() => intelligenceStorageDirectory();
 
 /// Where a letter parked behind a down door waits between runs: a `letters`
 /// subfolder of [intelligenceStorageDirectory], created on first use. On a
