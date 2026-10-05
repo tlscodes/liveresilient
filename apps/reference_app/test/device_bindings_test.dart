@@ -151,9 +151,10 @@ void main() {
       expect(
         identityStorageBase(
           isMacOS: true,
-          environment: const {'HOME': '/Users/me/Library/Containers/app/Data/'},
+          // Not a real home: tracked source carries no build-machine path.
+          environment: const {'HOME': '/sandbox/Containers/app/Data/'},
         ),
-        '/Users/me/Library/Containers/app/Data/Library/Application Support/'
+        '/sandbox/Containers/app/Data/Library/Application Support/'
         'voice_call_kit_intelligence',
       );
       expect(identityStorageBase(isMacOS: true, environment: const {}), isNull);
