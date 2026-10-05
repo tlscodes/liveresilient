@@ -102,7 +102,13 @@ class CallScreen extends StatelessWidget {
     this.onSafetyNumbersDiffer,
     this.safetyNumbersDiffered = false,
     this.onAcceptNewKey,
+    this.preparingIdentity = false,
   });
+
+  /// This install's identity is still being read from the keystore (which
+  /// may be waiting on the person). The call buttons are off until it is
+  /// there; this line says why.
+  final bool preparingIdentity;
 
   /// The person already said this key's digits did not match. Shown under
   /// the reading so a remembered mismatch is never presented as new.
@@ -402,6 +408,17 @@ class CallScreen extends StatelessWidget {
                 );
               },
             ),
+            if (preparingIdentity)
+              Padding(
+                padding: const EdgeInsets.only(top: Spacing.s12),
+                child: Text(
+                  'Preparing this device\'s identity — calls start once it '
+                  'is ready',
+                  key: const Key('call-identity-preparing'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             if (audioOnly) ...[
               const SizedBox(height: Spacing.s12),
               Chip(

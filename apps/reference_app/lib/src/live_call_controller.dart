@@ -52,7 +52,27 @@ String? validateCallKey(String raw) {
 }
 
 class LiveCallController extends ChangeNotifier {
-  LiveCallController({required this.open, this.mintCallId = newSecureCallId});
+  LiveCallController({
+    required this.open,
+    this.mintCallId = newSecureCallId,
+    this.identityPending,
+  }) {
+    identityPending?.addListener(_onIdentityPending);
+  }
+
+  /// True while this install's identity is still being read from the
+  /// keystore. No call starts then: its signalling id is read when the
+  /// session is built, and a session built too early would carry a
+  /// throwaway id and exchange no identity. Null (tests, hosts that boot no
+  /// identity) never holds a call back.
+  final ValueListenable<bool>? identityPending;
+
+  /// Whether the identity is what is holding the Call button back.
+  bool get waitingForIdentity => identityPending?.value ?? false;
+
+  void _onIdentityPending() {
+    if (!_disposed) notifyListeners();
+  }
 
   /// Builds the session. Injected so widget tests supply fakes; production
   /// passes the dev relay entry point from `main.dart`.
@@ -99,9 +119,10 @@ class LiveCallController extends ChangeNotifier {
   bool get audioOnly => _handle != null;
 
   bool get canCall =>
-      phase == CallPhase.idle ||
-      phase == CallPhase.ended ||
-      phase == CallPhase.failed;
+      !waitingForIdentity &&
+      (phase == CallPhase.idle ||
+          phase == CallPhase.ended ||
+          phase == CallPhase.failed);
 
   bool get canHangUp =>
       phase == CallPhase.connecting ||
@@ -251,6 +272,7 @@ class LiveCallController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    identityPending?.removeListener(_onIdentityPending);
     _generation++;
     unawaited(_teardown());
     super.dispose();

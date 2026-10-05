@@ -64,10 +64,13 @@ export 'src/live_call_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // This install's identity: its key is made here on the first launch and
-  // loaded on every later one. Before runApp, because a call's signalling
-  // id is read synchronously when the session is built. Never throws — a
-  // host with no keystore runs without an identity.
-  await bootAppIdentity();
+  // loaded on every later one. Started here and NOT awaited: a keystore can
+  // wait on the person (a desktop keychain asking for its password), and
+  // the window must not wait with it. A call's signalling id is read when
+  // its session is built, so the call controller starts no call while this
+  // is still in flight (identityBootPending). Never throws — a host with no
+  // keystore runs without an identity.
+  unawaited(bootAppIdentity());
   // This device's own DNS resolver, from the platform's system API — a
   // read, not a probe; the answer joins the door's candidate list when
   // the letter's lanes open. Not awaited: nothing before the first Send
@@ -233,6 +236,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// to sit here changed an enum on a timer; nothing it showed was measured.
   late final LiveCallController _call = LiveCallController(
     open: widget.openSession ?? _openDevSession,
+    // The window is up before the keystore has answered; no call starts
+    // until this install's identity is there (or known to be absent).
+    identityPending: identityBootPending,
   );
   // The letter: the same Send window the rig peer shows, carried over
   // the fallback lanes call_session configures (the DNS door among them
@@ -740,6 +746,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         audioOnly: _call.audioOnly,
         callId: _call.callId,
         failureDetail: _call.error?.toString(),
+        preparingIdentity: _call.waitingForIdentity,
         onCall: _call.canCall ? _call.placeCall : null,
         onJoin: _call.canCall ? _call.joinCall : null,
         onHangUp: _call.canHangUp ? () => unawaited(_call.hangUp()) : null,
