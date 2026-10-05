@@ -1,29 +1,46 @@
 // Sealed letters on the screen: who this install can write to, what it
-// wrote and whether each was opened, and what was opened here. The same
-// panel on every platform — and on the rig peer — so "the letter was read
-// in the app" means the same thing everywhere.
+// wrote and where each letter is, and what was opened here. The same panel
+// on every platform — and on the rig peer — so "the letter was read in the
+// app" means the same thing everywhere.
+//
+// Nothing here spins. A letter that has not been opened is in the queue,
+// and the line under it says why: the mailbox could not be reached, or the
+// box was put in and no receipt came back.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:messaging/messaging.dart' show Attachment, MediaKind;
 
-import '../theme.dart';
 import '../peer_identity.dart';
+import '../sealed/sealed_content.dart';
 import '../sealed/sealed_letters.dart';
+import '../theme.dart';
 
 String _short(String install) =>
     install.length <= 8 ? install : install.substring(0, 8);
+
+String _clock(DateTime at) {
+  final local = at.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+}
 
 class SealedLettersPanel extends StatefulWidget {
   const SealedLettersPanel({
     super.key,
     required this.service,
     required this.identity,
+    this.pickAttachment,
   });
 
   final SealedLetterService service;
   final AppIdentity identity;
+
+  /// Lets the person choose a photo, a recording or a video to seal. Null
+  /// hides the attach button (a host with no file picker).
+  final Future<Attachment?> Function()? pickAttachment;
 
   @override
   State<SealedLettersPanel> createState() => _SealedLettersPanelState();
@@ -78,27 +95,62 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
     }());
   }
 
-  Future<void> _send() async {
+  /// Runs one send and turns what can go wrong into a sentence. The busy
+  /// flag only guards against a double tap; it is cleared the moment the
+  /// letter is queued, which is at once — nothing here waits on a network.
+  Future<void> _guarded(Future<void> Function(String to) send) async {
     final to = _to;
-    final text = _text.text.trim();
-    if (to == null || text.isEmpty || _busy) return;
+    if (to == null || _busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
+      await send(to);
+    } on NotPinnedError {
+      _error = 'No pinned key for that install — call them once first.';
+    } on ArgumentError {
+      _error = 'That is too large for one sealed letter (about 3 MB).';
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _send() async {
+    final text = _text.text.trim();
+    if (text.isEmpty) return;
+    await _guarded((to) async {
       await widget.service.send(
         toInstall: to,
         body: Uint8List.fromList(utf8.encode(text)),
       );
       _text.clear();
-    } on NotPinnedError {
-      _error = 'No pinned key for that install — call them once first.';
-    } on ArgumentError {
-      _error = 'That is too long for one sealed letter.';
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    });
+  }
+
+  Future<void> _attach() async {
+    final pick = widget.pickAttachment;
+    if (pick == null) return;
+    final chosen = await pick();
+    if (chosen == null) return;
+    final type = chosen.contentType;
+    await _guarded(
+      (to) => widget.service.sendMedia(
+        toInstall: to,
+        kind: switch (chosen.kind) {
+          MediaKind.image => SealedMediaKind.photo,
+          MediaKind.video => SealedMediaKind.video,
+          MediaKind.file =>
+            type.startsWith('audio/')
+                ? SealedMediaKind.voice
+                : SealedMediaKind.file,
+        },
+        contentType: type,
+        bytes: Uint8List.fromList(chosen.bytes),
+        caption: _text.text.trim(),
+      ),
+    );
+    if (_error == null) _text.clear();
   }
 
   @override
@@ -108,6 +160,7 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
     final sent = widget.service.outbox.value;
     final received = widget.service.inbox.value;
     final door = widget.service.doorUp.value;
+    final now = DateTime.now();
     if (_peers.isEmpty && sent.isEmpty && received.isEmpty) {
       // Nobody pinned yet and nothing to show: the panel stays out of the
       // way until the first call makes a correspondent.
@@ -169,6 +222,13 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
             if (_to != null)
               Row(
                 children: [
+                  if (widget.pickAttachment != null)
+                    IconButton(
+                      key: const Key('sealed-attach'),
+                      tooltip: 'Seal a photo, a recording or a video',
+                      onPressed: _busy ? null : () => unawaited(_attach()),
+                      icon: const Icon(Icons.attach_file),
+                    ),
                   Expanded(
                     child: TextField(
                       key: const Key('sealed-compose'),
@@ -197,7 +257,7 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
                 style: small?.copyWith(color: theme.colorScheme.error),
               ),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 180),
+              constraints: const BoxConstraints(maxHeight: 220),
               child: ListView(
                 shrinkWrap: true,
                 children: [
@@ -212,11 +272,11 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
                             : Icons.lock_outline,
                         size: 18,
                       ),
-                      title: Text(letter.text),
+                      title: _ReceivedBody(letter: letter),
                       subtitle: Text(
                         'from ${_short(letter.from)}… · '
                         '${letter.verified ? 'verified' : 'not yet verified'} '
-                        '· opened here',
+                        '· opened here ${_clock(letter.receivedAt)}',
                       ),
                     ),
                   for (final letter in sent.reversed)
@@ -224,14 +284,15 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
                       key: Key('sealed-sent-${letter.id}'),
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        letter.delivered ? Icons.done_all : Icons.schedule,
-                        size: 18,
-                      ),
+                      leading: Icon(switch (letter.state) {
+                        SealedSentState.opened => Icons.done_all,
+                        SealedSentState.queuedNoReceipt => Icons.schedule,
+                        SealedSentState.queuedDoorClosed => Icons.cloud_off,
+                      }, size: 18),
                       title: Text(letter.text),
                       subtitle: Text(
-                        'to ${_short(letter.to)}… · '
-                        '${letter.delivered ? 'opened by them' : 'waiting — put in their mailbox ${letter.attempts}×'}',
+                        'to ${_short(letter.to)}… · ${letter.describe(now)}',
+                        key: Key('sealed-state-${letter.id}'),
                       ),
                     ),
                 ],
@@ -240,6 +301,58 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// What opened: the text, the photo itself, or a plain line naming a voice
+/// note or a video with its size and length. Playing audio and video from
+/// here is not built; they are shown as what they are.
+class _ReceivedBody extends StatelessWidget {
+  const _ReceivedBody({required this.letter});
+
+  final SealedReceived letter;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = letter.content.media;
+    final bytes = letter.media;
+    if (media == null || bytes == null) return Text(letter.text);
+    final line = Text(letter.content.summary);
+    if (media.kind != SealedMediaKind.photo) {
+      return Row(
+        children: [
+          Icon(switch (media.kind) {
+            SealedMediaKind.voice => Icons.mic,
+            SealedMediaKind.video => Icons.videocam,
+            _ => Icons.insert_drive_file,
+          }, size: 18),
+          const SizedBox(width: 6),
+          Expanded(child: line),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.r12),
+          child: Image.memory(
+            bytes,
+            key: Key('sealed-photo-${letter.id}'),
+            height: 96,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            // A format this platform cannot draw is still a received,
+            // verified photo; say so instead of showing a broken image.
+            errorBuilder: (_, _, _) => const Text(
+              'photo received — this device cannot draw its format',
+            ),
+          ),
+        ),
+        line,
+      ],
     );
   }
 }

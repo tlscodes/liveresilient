@@ -6,9 +6,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:messaging/messaging.dart' show Attachment, MediaKind;
 import 'package:reference_app/src/intelligence/disk_json_storage.dart';
 import 'package:reference_app/src/peer_identity.dart';
 import 'package:reference_app/src/sealed/mailbox_door.dart';
+import 'package:reference_app/src/sealed/sealed_content.dart';
 import 'package:reference_app/src/sealed/sealed_letters.dart';
 import 'package:reference_app/src/ui/sealed_letters_panel.dart';
 import 'package:security/security.dart';
@@ -102,11 +104,18 @@ void main() {
     });
   }
 
-  Future<void> show(WidgetTester tester) async {
+  Future<void> show(
+    WidgetTester tester, {
+    Future<Attachment?> Function()? picker,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SealedLettersPanel(service: macService, identity: mac),
+          body: SealedLettersPanel(
+            service: macService,
+            identity: mac,
+            pickAttachment: picker,
+          ),
         ),
       ),
     );
@@ -162,7 +171,7 @@ void main() {
     await tapSend(tester);
     await settle(tester);
     expect(find.text('written on the Mac'), findsOneWidget);
-    expect(find.textContaining('waiting'), findsOneWidget);
+    expect(find.textContaining('in queue'), findsOneWidget);
     expect(find.textContaining('opened by them'), findsNothing);
 
     await tester.runAsync(() async {
@@ -171,7 +180,7 @@ void main() {
     });
     await settle(tester);
     expect(find.textContaining('opened by them'), findsOneWidget);
-    expect(find.textContaining('waiting'), findsNothing);
+    expect(find.textContaining('in queue'), findsNothing);
     expect(
       phoneService.inbox.value.single.text,
       'written on the Mac',
@@ -209,7 +218,95 @@ void main() {
     await tapSend(tester);
     await settle(tester);
     expect(find.text('later'), findsOneWidget);
-    expect(find.textContaining('waiting'), findsOneWidget);
-    expect(find.textContaining('mailbox unreachable'), findsOneWidget);
+    expect(find.textContaining('in queue'), findsOneWidget);
+    expect(find.textContaining('mailbox unreachable'), findsWidgets);
+  });
+
+  testWidgets('the line under a waiting letter says why, in words', (
+    tester,
+  ) async {
+    await setUpPair(tester);
+    await show(tester);
+    _MemoryDoor.down = true;
+    await tester.enterText(find.byKey(const Key('sealed-compose')), 'why');
+    await tapSend(tester);
+    await settle(tester);
+    final id = macService.outbox.value.single.id;
+    final line = tester.widget<Text>(find.byKey(Key('sealed-state-$id'))).data!;
+    expect(line, contains('in queue'));
+    expect(line, contains('mailbox unreachable'));
+    // Nothing on the panel spins.
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
+  testWidgets('a photo that opened here is drawn; a voice note and a video '
+      'are named with their size and length', (tester) async {
+    await setUpPair(tester);
+    await show(tester);
+    await tester.runAsync(() async {
+      await phoneService.sendMedia(
+        toInstall: macId,
+        kind: SealedMediaKind.photo,
+        contentType: 'image/png',
+        bytes: Uint8List.fromList(List<int>.generate(900, (i) => i & 0xff)),
+        caption: 'the harbour',
+      );
+      await phoneService.sendMedia(
+        toInstall: macId,
+        kind: SealedMediaKind.voice,
+        contentType: 'audio/ogg',
+        bytes: Uint8List(60000),
+        duration: const Duration(seconds: 30),
+      );
+      await phoneService.sendMedia(
+        toInstall: macId,
+        kind: SealedMediaKind.video,
+        contentType: 'video/mp4',
+        bytes: Uint8List(90000),
+        duration: const Duration(seconds: 4),
+      );
+      await phoneService.flush();
+      await macService.pollOnce();
+    });
+    await settle(tester);
+    final photo = macService.inbox.value.firstWhere(
+      (l) => l.content.media!.kind == SealedMediaKind.photo,
+    );
+    expect(find.byKey(Key('sealed-photo-${photo.id}')), findsOneWidget);
+    expect(find.textContaining('the harbour'), findsOneWidget);
+    expect(find.textContaining('voice · 59 KB · 30 s'), findsOneWidget);
+    expect(find.textContaining('video · 88 KB · 4.0 s'), findsOneWidget);
+  });
+
+  testWidgets('the attach button seals what was chosen, and the text '
+      'becomes its caption', (tester) async {
+    await setUpPair(tester);
+    await show(
+      tester,
+      picker: () async => Attachment(
+        id: 'picked',
+        kind: MediaKind.image,
+        contentType: 'image/jpeg',
+        bytes: List<int>.filled(5000, 7),
+      ),
+    );
+    await tester.enterText(find.byKey(const Key('sealed-compose')), 'look');
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('sealed-attach')));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await settle(tester);
+    final sent = macService.outbox.value.single;
+    expect(sent.content.media!.kind, SealedMediaKind.photo);
+    expect(sent.content.media!.size, 5000);
+    expect(sent.content.media!.caption, 'look');
+    expect(find.textContaining('photo · 5 KB — look'), findsOneWidget);
+  });
+
+  testWidgets('with no picker there is no attach button', (tester) async {
+    await setUpPair(tester);
+    await show(tester);
+    expect(find.byKey(const Key('sealed-attach')), findsNothing);
   });
 }

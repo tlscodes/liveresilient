@@ -83,6 +83,7 @@ import 'package:reference_app/src/call_session.dart'
         defaultBorderRelayEndpoints,
         defaultBorderRelayHost,
         parseValveResolvers;
+import 'package:reference_app/src/sealed/sealed_content.dart';
 import 'package:reference_app/src/sealed/sealed_letters.dart';
 import 'package:reference_app/src/ui/sealed_letters_panel.dart';
 import 'package:reference_app/src/ui/letter_widgets.dart';
@@ -679,6 +680,12 @@ class JourneyPeer extends LetterComposer {
       );
       sealedLetterService.value = service;
       unawaited(service.load().then((_) => service.start()));
+      // A launch that sets SEALED_AUTOSEND=1 (the rig, through devicectl)
+      // makes this phone write at once, with nobody touching it — so it
+      // can be shown writing while the other side is switched off.
+      if (Platform.environment['SEALED_AUTOSEND'] == '1') {
+        unawaited(_sealedAutosend(service));
+      }
     }
     // `blob: true` tells the runner this install posts media bytes to /blob;
     // an older install reports only sha256 receipts. `blackout: true` says
@@ -3544,5 +3551,51 @@ class JourneyPeerApp extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Rig only. Writes one text on this phone and sends back the newest photo,
+/// voice note and video this phone has received from its pinned peer — the
+/// phone has no camera roll to pick from unattended, so the media it writes
+/// is media it was sent. Everything goes through the same service and the
+/// same queue as a letter typed in the panel.
+Future<void> _sealedAutosend(SealedLetterService service) async {
+  try {
+    await service.load();
+    final identity = appIdentity;
+    if (identity == null) return;
+    final peers = await identity.pinnedInstalls();
+    if (peers.isEmpty) return;
+    final to = peers.first;
+    await service.send(
+      toInstall: to,
+      body: Uint8List.fromList(
+        utf8.encode(
+          'written on the phone at '
+          '${DateTime.now().toUtc().toIso8601String()}',
+        ),
+      ),
+    );
+    final done = <SealedMediaKind>{};
+    for (final letter in service.inbox.value.reversed) {
+      final media = letter.content.media;
+      final bytes = letter.media;
+      if (media == null ||
+          bytes == null ||
+          letter.from != to ||
+          !done.add(media.kind)) {
+        continue;
+      }
+      await service.sendMedia(
+        toInstall: to,
+        kind: media.kind,
+        contentType: media.contentType,
+        bytes: bytes,
+        duration: media.duration,
+        caption: 'sent back from the phone',
+      );
+    }
+  } catch (_) {
+    // A rig convenience: it must never take the peer down.
   }
 }

@@ -809,7 +809,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           // Letters sealed to a pinned key, in and out. Absent until this
           // install has an identity and someone to write to.
           if (_sealed != null && appIdentity != null)
-            SealedLettersPanel(service: _sealed!, identity: appIdentity!),
+            SealedLettersPanel(
+              service: _sealed!,
+              identity: appIdentity!,
+              pickAttachment: widget.attachmentPicker ?? pickAttachmentFile,
+            ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _reloadConversations,
