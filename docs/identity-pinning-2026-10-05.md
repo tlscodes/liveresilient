@@ -82,6 +82,22 @@ were not seen on a device:
 - The rig peer shows the app's own comparison sheet, but it is a test
   entry point, not the shipped app screen.
 
+## CI
+
+The code this page describes is commit `d9b73e8` on
+`plan-v4-waves-1-to-6`. Both workflows ran on that commit and finished
+green on 2026-10-05:
+
+| Workflow | CI run | Jobs |
+| --- | --- | --- |
+| CI | 37313336791 | Gate, Hygiene, Dependency audit, Packaging, Leak gate, Border relay — all success |
+| Desktop | 37313341024 | Linux bundle, Windows bundle, Native core check — all success |
+
+Before the push the full `reference_app` suite passed locally (721 of 721)
+and so did the cheap gates. The last rig run was made at `7fd89bd`, one
+rule change earlier: the changed-key rule in point 4 was changed after it
+and is covered by unit tests only.
+
 ## Not built
 
 - Letter receive on the phone, sealing letters to a pinned identity, and
