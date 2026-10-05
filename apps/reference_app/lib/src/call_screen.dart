@@ -100,7 +100,17 @@ class CallScreen extends StatelessWidget {
     this.safetyNumber,
     this.onSafetyNumbersMatch,
     this.onSafetyNumbersDiffer,
+    this.safetyNumbersDiffered = false,
+    this.onAcceptNewKey,
   });
+
+  /// The person already said this key's digits did not match. Shown under
+  /// the reading so a remembered mismatch is never presented as new.
+  final bool safetyNumbersDiffered;
+
+  /// The person accepts a changed key as the peer's legitimate new one.
+  /// Non-null only while a stopped call's key change is unanswered.
+  final Future<void> Function()? onAcceptNewKey;
 
   /// The live call's safety number (sixty digits in groups of five), shown
   /// when the person taps the identity row. Null makes the row inert: there
@@ -114,6 +124,39 @@ class CallScreen extends StatelessWidget {
 
   /// The person saw different digits; any earlier confirmation is dropped.
   final Future<void> Function()? onSafetyNumbersDiffer;
+
+  /// Accepting a new key is the one thing here that can let an impostor
+  /// in, so it is asked twice and says what it costs.
+  Future<void> _askAcceptNewKey(BuildContext context) async {
+    final accept = onAcceptNewKey;
+    if (accept == null) return;
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        key: const Key('accept-new-key-dialog'),
+        title: const Text('Accept a new identity key?'),
+        content: const Text(
+          'Only do this if the other person told you — outside this app — '
+          'that they reinstalled it or changed phones. Their old key will '
+          'no longer be trusted, and the next call will read "not yet '
+          'verified" until you compare safety numbers again.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('accept-new-key-cancel'),
+            onPressed: () => Navigator.of(dialog).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('accept-new-key-confirm'),
+            onPressed: () => Navigator.of(dialog).pop(true),
+            child: const Text('Accept new key'),
+          ),
+        ],
+      ),
+    );
+    if (agreed == true) await accept();
+  }
 
   /// The connectivity fabric's snapshots for the active call. Non-null shows
   /// a card naming the lane the next message takes (direct media, relay,
@@ -330,11 +373,27 @@ class CallScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          if (comparable && trust == PeerTrust.unverified)
+                          if (comparable &&
+                              trust == PeerTrust.unverified &&
+                              safetyNumbersDiffered)
+                            Text(
+                              'You said these safety numbers did not match',
+                              key: const Key('call-peer-trust-differed-note'),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: scheme.error),
+                            )
+                          else if (comparable && trust == PeerTrust.unverified)
                             Text(
                               'Compare safety numbers to confirm',
                               key: const Key('call-peer-trust-compare-hint'),
                               style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          if (trust == PeerTrust.changed &&
+                              onAcceptNewKey != null)
+                            TextButton(
+                              key: const Key('call-peer-accept-new-key'),
+                              onPressed: () => _askAcceptNewKey(context),
+                              child: const Text('They have a new key…'),
                             ),
                         ],
                       ),

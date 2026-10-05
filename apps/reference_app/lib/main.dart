@@ -752,6 +752,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         safetyNumber: _identityHandshake?.safetyNumber,
         onSafetyNumbersMatch: _identityHandshake?.confirmMatch,
         onSafetyNumbersDiffer: _identityHandshake?.denyMatch,
+        safetyNumbersDiffered: _identityHandshake?.saidDifferent ?? false,
+        // A changed key stopped the call; only the person can say the new
+        // key is the peer's own. Accepting clears the reading: the next
+        // call starts at "not yet verified".
+        onAcceptNewKey: pendingKeyChange.value == null
+            ? null
+            : () async {
+                await pendingKeyChange.value?.accept();
+                peerTrust.value = null;
+                if (mounted) setState(() {});
+              },
       ),
       RefreshIndicator(
         onRefresh: _reloadConversations,

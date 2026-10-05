@@ -161,6 +161,36 @@ class AppIdentity {
   Future<bool> verifiedOnDisk(String peerInstall) async =>
       await _pins.read('$_verifiedPrefix$peerInstall') != null;
 
+  static const String _differedPrefix = 'differed:';
+
+  /// Records that the person compared and saw DIFFERENT digits for
+  /// [publicKey] under [peerInstall], so the next call says so again
+  /// instead of quietly offering the comparison as if it were new.
+  Future<void> markDiffered(String peerInstall, Uint8List publicKey) =>
+      _pins.write('$_differedPrefix$peerInstall', _hex(publicKey));
+
+  /// True only while the key the person refused is the one presented now.
+  Future<bool> saidDifferent(String peerInstall, Uint8List publicKey) async =>
+      await _pins.read('$_differedPrefix$peerInstall') == _hex(publicKey);
+
+  /// Forgets a "not the same": the person later saw matching digits, or
+  /// the key it was said about is no longer the pinned one.
+  Future<void> clearDiffered(String peerInstall) =>
+      _pins.delete('$_differedPrefix$peerInstall');
+
+  /// The person accepts that [peerInstall] legitimately has a new key (a
+  /// reinstall, a new phone): [newKey] replaces the pin. Nothing said about
+  /// the old key carries over — the new one starts not verified and must be
+  /// compared like any first contact.
+  Future<void> acceptChangedKey(String peerInstall, Uint8List newKey) async {
+    await store.acceptChangedIdentity(
+      peerId: peerInstall,
+      newPublicKey: newKey,
+    );
+    await clearVerified(peerInstall);
+    await clearDiffered(peerInstall);
+  }
+
   /// Forgets a confirmation: the person said the numbers differ, or a
   /// second key was proven under [peerInstall]. Only ever a downgrade.
   Future<void> clearVerified(String peerInstall) =>
@@ -297,6 +327,12 @@ class IdentityHandshake {
   /// once a changed key was seen: there is nothing honest to compare then.
   String? safetyNumber;
 
+  /// The person already compared this very key and saw different digits —
+  /// in this call or an earlier one. The reading stays not verified; the
+  /// screen says the mismatch was reported instead of offering the
+  /// comparison as if nothing had been said.
+  bool saidDifferent = false;
+
   StreamSubscription<List<int>>? _sub;
   Timer? _resend;
   Future<void> _chain = Future<void>.value();
@@ -325,10 +361,13 @@ class IdentityHandshake {
           final peer = _peerInstall!;
           if (reading == PeerTrust.verified) {
             await _identity.markVerified(peer, _peerKey!);
+            await _identity.clearDiffered(peer);
           } else {
             await _identity.clearVerified(peer);
+            await _identity.markDiffered(peer, _peerKey!);
           }
           if (stale()) return;
+          saidDifferent = reading != PeerTrust.verified;
           trust.value = reading;
           onTrust?.call(reading);
         })
@@ -451,6 +490,12 @@ class IdentityHandshake {
       _peerKey = publicKey;
     }
     safetyNumber = number;
+    saidDifferent =
+        reading == PeerTrust.unverified &&
+        await _identity.saidDifferent(peer, publicKey);
+    if (reading == PeerTrust.changed) {
+      pendingKeyChange.value = KeyChange._(_identity, peer, publicKey);
+    }
     lastPeerSighting.value = PeerSighting(
       at: DateTime.now(),
       install: _hex(await _identity.installId()),
@@ -463,6 +508,31 @@ class IdentityHandshake {
     onTrust?.call(reading);
   }
 }
+
+/// A key change a call was stopped for, waiting for the person's answer.
+/// It is never accepted by the app on its own: only [accept], called from
+/// the person's explicit choice, replaces the pin.
+class KeyChange {
+  KeyChange._(this._identity, this.peerInstall, this._newKey);
+
+  final AppIdentity _identity;
+  final String peerInstall;
+  final Uint8List _newKey;
+
+  /// Pins the new key in the old one's place. The next call with it reads
+  /// not verified; the old key, presented again, now reads changed.
+  Future<void> accept() async {
+    await _identity.acceptChangedKey(peerInstall, _newKey);
+    if (identical(pendingKeyChange.value, this)) pendingKeyChange.value = null;
+  }
+}
+
+/// The most recent key change no one has answered yet; null when there is
+/// none. Held in memory only: unanswered, the same change is simply seen —
+/// and stopped — again on the next call.
+final ValueNotifier<KeyChange?> pendingKeyChange = ValueNotifier<KeyChange?>(
+  null,
+);
 
 String _hex(List<int> bytes) =>
     bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
