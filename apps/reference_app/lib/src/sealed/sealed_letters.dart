@@ -30,10 +30,12 @@ import 'dart:typed_data' show BytesBuilder;
 import 'package:cryptography/cryptography.dart' show Sha256;
 import 'package:flutter/foundation.dart';
 
+import '../broadcast_wiring.dart' show IoBroadcastHttpTransport;
 import '../intelligence/device_bindings.dart' show intelligenceStorageDirectory;
 import '../intelligence/disk_json_storage.dart';
 import '../peer_identity.dart';
 import 'mailbox_door.dart';
+import 'pair_shelf.dart';
 import 'sealed_blob_store.dart';
 import 'sealed_box.dart';
 import 'sealed_content.dart';
@@ -63,6 +65,7 @@ class SealedSent {
     required this.at,
     required this.attempts,
     required this.everDeposited,
+    this.onShelf = false,
     required this.nextAt,
     required this.deliveredAt,
   });
@@ -77,6 +80,10 @@ class SealedSent {
 
   /// Whether the relay ever took it.
   final bool everDeposited;
+
+  /// It is on the relay's shelf, where it waits for a recipient who is
+  /// away, rather than only in this install's own queue.
+  final bool onShelf;
 
   /// When it is put in again, while it waits.
   final DateTime nextAt;
@@ -101,6 +108,9 @@ class SealedSent {
         return 'opened by them';
       case SealedSentState.queuedDoorClosed:
         return 'in queue — mailbox unreachable, tried $attempts×';
+      case SealedSentState.queuedNoReceipt when onShelf:
+        return 'on the relay, not opened yet — it waits there about '
+            'two days for them';
       case SealedSentState.queuedNoReceipt:
         final late = now.difference(at) > const Duration(minutes: 10);
         final wait = nextAt.difference(now).inSeconds;
@@ -164,6 +174,7 @@ class SealedLetterService {
     required this.door,
     required this.storage,
     SealedBlobStore? blobs,
+    this.shelf,
     DateTime Function()? clock,
     this.onEvent,
     this.pollWait = const Duration(seconds: 20),
@@ -171,6 +182,7 @@ class SealedLetterService {
     this.retryCap = const Duration(minutes: 5),
     this.needQuiet = const Duration(seconds: 3),
     this.needEvery = const Duration(seconds: 6),
+    this.shelfRefresh = const Duration(hours: 40),
   }) : _identity = identity,
        blobs = blobs ?? MemorySealedBlobStore(),
        _clock = clock ?? DateTime.now,
@@ -193,6 +205,11 @@ class SealedLetterService {
     ),
     blobs: DiskSealedBlobStore(
       () => Directory('${intelligenceStorageDirectory().path}/sealed_blobs'),
+    ),
+    shelf: PairShelf(
+      identity: identity,
+      origin: Uri(scheme: 'https', host: relayHost),
+      transport: IoBroadcastHttpTransport(),
     ),
     onEvent: (event, fields) {
       _journal(event, fields);
@@ -221,6 +238,16 @@ class SealedLetterService {
   final MailboxDoor door;
   final PersistentStorage storage;
   final SealedBlobStore blobs;
+
+  /// Where boxes wait for a recipient who is away. With a shelf, every
+  /// box goes there and the mailbox only rings; without one (a relay
+  /// that has no archive) boxes go through the mailbox and reach only
+  /// a recipient who is reading it.
+  final LetterShelf? shelf;
+
+  /// How long after shelving a letter that still has no receipt it is
+  /// shelved again — before the relay's two days run out.
+  final Duration shelfRefresh;
   final DateTime Function() _clock;
   final SealedBoxCodec _codec;
 
@@ -284,6 +311,12 @@ class SealedLetterService {
     if (_loaded) return;
     _loaded = true;
     final data = await storage.load();
+    final cursors = data['shelf'];
+    if (cursors is Map) {
+      cursors.forEach((key, value) {
+        if (value is num) shelf?.cursors['$key'] = value.toInt();
+      });
+    }
     for (final raw in (data['outbox'] as List? ?? const [])) {
       final entry = _Queued.tryParse(raw);
       if (entry != null) _queue.add(entry);
@@ -325,6 +358,7 @@ class SealedLetterService {
       for (final p in _partial.values)
         _Kept(id: p.id, box: p.box, at: p.at).toJson(),
     ],
+    'shelf': shelf?.cursors ?? const <String, int>{},
   });
 
   /// Rebuilds both lists from the sealed copies: what the screen shows is
@@ -342,6 +376,7 @@ class SealedLetterService {
           at: q.at,
           attempts: q.attempts,
           everDeposited: q.everDeposited,
+          onShelf: shelf != null && q.everDeposited,
           nextAt: q.nextAt,
           deliveredAt: q.deliveredAt,
         ),
@@ -539,7 +574,10 @@ class SealedLetterService {
     var changed = false;
     for (final q in _queue) {
       if (q.deliveredAt != null || q.nextAt.isAfter(now)) continue;
-      var ok = await door.deposit(q.to, q.box);
+      // Shelved before and due again: its two days are nearly up, so
+      // the letter and every piece are shelved afresh.
+      if (shelf != null && q.everDeposited) q.piecesPushed = false;
+      var ok = await _put(q.to, q.box);
       var pieces = 0;
       if (ok && q.chunks > 0 && !q.piecesPushed) {
         pieces = await _depositPieces(q, null);
@@ -549,9 +587,13 @@ class SealedLetterService {
       doorUp.value = ok;
       q.attempts++;
       q.everDeposited = q.everDeposited || ok;
-      q.nextAt = now.add(_pause(q.attempts));
+      q.nextAt = now.add(
+        ok && shelf != null ? shelfRefresh : _pause(q.attempts),
+      );
+      if (ok) await _ring(q.to);
       changed = true;
       onEvent?.call('tx', <String, Object?>{
+        'via': shelf != null ? 'shelf' : 'mailbox',
         'id': q.id,
         'kind': q.kind,
         'from': await _own(),
@@ -569,6 +611,34 @@ class SealedLetterService {
     }
   });
 
+  /// Hands one box over: onto the shelf when there is one, where it
+  /// waits for a recipient who is away; otherwise into the mailbox,
+  /// which keeps it only for a recipient who is reading.
+  Future<bool> _put(String to, Uint8List box) {
+    final shelf = this.shelf;
+    return shelf != null ? shelf.put(to, box) : door.deposit(to, box);
+  }
+
+  /// Rings [to]'s mailbox after something was shelved for it, so a
+  /// recipient who is reading looks at the shelf now instead of at its
+  /// next round. Lost without harm: the box is on the shelf.
+  Future<void> _ring(String to) async {
+    if (shelf == null) return;
+    final key = await _identity.store.pinnedKeyFor(to);
+    if (key == null) return;
+    await door.deposit(
+      to,
+      await _codec.seal(
+        recipientInstall: to,
+        recipientKey: key,
+        kind: SealedKind.here,
+        letterId: _codec.newLetterId(),
+        createdAt: _clock(),
+        body: Uint8List(0),
+      ),
+    );
+  }
+
   /// Puts pieces of [q] in its recipient's mailbox: [only] those, or all.
   /// Returns how many the relay took; stops at the first it refuses.
   Future<int> _depositPieces(_Queued q, Iterable<int>? only) async {
@@ -577,7 +647,7 @@ class SealedLetterService {
       if (i < 0 || i >= q.chunks) continue;
       final box = await blobs.get('out.${q.id}.$i');
       if (box == null) continue;
-      if (!await door.deposit(q.to, box)) break;
+      if (!await _put(q.to, box)) break;
       sent++;
     }
     return sent;
@@ -598,20 +668,41 @@ class SealedLetterService {
     // The wait happens outside the serial section, so a Send is never
     // stuck behind a long-poll.
     final taken = await door.take(await _own(), wait: wait);
-    doorUp.value = taken != null;
-    if (taken == null) return false;
+    var reachable = taken != null;
+    // Then the shelves: what each pinned peer left since the last look.
+    // This is where a letter written while this install was away is.
+    final shelf = this.shelf;
+    final shelved = <Uint8List>[];
+    final cursorsBefore = shelf == null ? '' : jsonEncode(shelf.cursors);
+    if (shelf != null) {
+      for (final peer in await _identity.pinnedInstalls()) {
+        final boxes = await shelf.collect(peer);
+        if (boxes == null) continue;
+        reachable = true;
+        shelved.addAll(boxes);
+      }
+    }
+    doorUp.value = reachable;
+    if (!reachable) return false;
     await _serial(() async {
-      if (taken.isNotEmpty) await _handle(taken);
+      if (taken != null && taken.isNotEmpty) {
+        await _handleBoxes(SealedBoxCodec.split(taken));
+      }
+      if (shelved.isNotEmpty) await _handleBoxes(shelved);
       await _progress();
+      await _flushReceipts();
+      if (shelf != null && jsonEncode(shelf.cursors) != cursorsBefore) {
+        await _save();
+      }
     });
     return true;
   }
 
-  Future<void> _handle(Uint8List taken) async {
+  Future<void> _handleBoxes(List<Uint8List> boxes) async {
     final own = await _own();
     var changed = false;
     var resend = false;
-    for (final box in SealedBoxCodec.split(taken)) {
+    for (final box in boxes) {
       final opened = await _codec.open(box);
       if (opened == null) {
         onEvent?.call('rejected', <String, Object?>{
@@ -664,9 +755,15 @@ class SealedLetterService {
             changed = true;
             _rx(opened, content, own, box.length);
           }
-          // Every copy is answered: a second copy means the first receipt
-          // never reached the sender.
-          await _receipt(opened, own, duplicate: seen);
+          // Through the mailbox every copy is answered: a second copy
+          // means the first receipt never reached the sender. On a shelf
+          // a receipt that was shelved is there to be read, so a copy is
+          // answered only if its receipt never got onto the shelf.
+          final kept = _kept.firstWhere((k) => k.id == opened.letterId);
+          if (shelf == null || !kept.receiptOk) {
+            kept.receiptOk = await _receipt(opened, own, duplicate: seen);
+            changed = true;
+          }
         case SealedKind.chunk:
           if (opened.body.length < 3) continue;
           final index = ByteData.sublistView(opened.body).getUint16(0);
@@ -732,6 +829,8 @@ class SealedLetterService {
             if (q.to != opened.senderInstall || q.deliveredAt != null) {
               continue;
             }
+            // Already on the shelf: it is there to be read.
+            if (shelf != null && q.everDeposited) continue;
             q.nextAt = _clock();
             q.piecesPushed = false;
             waiting++;
@@ -765,7 +864,7 @@ class SealedLetterService {
     });
   }
 
-  Future<void> _receipt(
+  Future<bool> _receipt(
     OpenedBox opened,
     String own, {
     required bool duplicate,
@@ -778,7 +877,8 @@ class SealedLetterService {
       createdAt: _clock(),
       body: await _sha(opened.body),
     );
-    final ok = await door.deposit(opened.senderInstall, receipt);
+    final ok = await _put(opened.senderInstall, receipt);
+    if (ok) await _ring(opened.senderInstall);
     onEvent?.call('receipt_tx', <String, Object?>{
       'id': opened.letterId,
       'from': own,
@@ -786,6 +886,26 @@ class SealedLetterService {
       'deposited': ok,
       'duplicate': duplicate,
     });
+    return ok;
+  }
+
+  /// Shelves the receipts that could not be shelved when their letters
+  /// opened (the relay was out of reach just then).
+  Future<void> _flushReceipts() async {
+    if (shelf == null) return;
+    final own = await _own();
+    var changed = false;
+    for (final kept in _kept) {
+      if (kept.receiptOk) continue;
+      final opened = await _codec.open(kept.box);
+      if (opened == null) {
+        kept.receiptOk = true;
+        continue;
+      }
+      kept.receiptOk = await _receipt(opened, own, duplicate: true);
+      changed = changed || kept.receiptOk;
+    }
+    if (changed) await _save();
   }
 
   /// Finishes media letters whose pieces are all here, and asks for the
@@ -807,7 +927,8 @@ class SealedLetterService {
         if (whole != null) {
           _media[partial.id] = whole;
           _partial.remove(partial.id);
-          _kept.add(_Kept(id: partial.id, box: partial.box, at: now));
+          final kept = _Kept(id: partial.id, box: partial.box, at: now);
+          _kept.add(kept);
           changed = true;
           _rx(
             opened,
@@ -815,7 +936,7 @@ class SealedLetterService {
             own,
             partial.box.length,
           );
-          await _receipt(opened, own, duplicate: false);
+          kept.receiptOk = await _receipt(opened, own, duplicate: false);
           continue;
         }
         // Every piece is here and the whole is wrong: start over.
@@ -841,7 +962,7 @@ class SealedLetterService {
       for (var i = 0; i * 2 < body.length; i++) {
         ByteData.sublistView(body).setUint16(i * 2, missing[i]);
       }
-      final ok = await door.deposit(
+      final ok = await _put(
         partial.from,
         await _codec.seal(
           recipientInstall: partial.from,
@@ -1039,16 +1160,25 @@ class _Queued {
 
 /// A box that opened here, kept as it arrived.
 class _Kept {
-  _Kept({required this.id, required this.box, required this.at});
+  _Kept({
+    required this.id,
+    required this.box,
+    required this.at,
+    this.receiptOk = false,
+  });
 
   final String id;
   final Uint8List box;
   final DateTime at;
 
+  /// Whether this letter's receipt was handed over.
+  bool receiptOk;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
     'box': base64.encode(box),
     'at': at.toUtc().toIso8601String(),
+    'receipt_ok': receiptOk,
   };
 
   static _Kept? tryParse(Object? raw) {
@@ -1058,6 +1188,9 @@ class _Kept {
         id: map['id'] as String,
         box: base64.decode(map['box'] as String),
         at: DateTime.parse(map['at'] as String),
+        // A file from before this was recorded: its receipt went out
+        // the old way, by answering every copy.
+        receiptOk: map['receipt_ok'] as bool? ?? true,
       );
     } catch (_) {
       return null;
