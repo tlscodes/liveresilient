@@ -74,6 +74,7 @@ import 'package:reference_app/src/intelligence/system_dns.dart' show systemDns;
 import 'package:reference_app/src/letter_card.dart';
 import 'package:reference_app/src/letter_composer.dart';
 import 'package:reference_app/src/letter_parts.dart';
+import 'package:reference_app/src/peer_identity.dart';
 import 'package:reference_app/src/photo_letter_picker.dart'
     show photoLetterFallbackChannel;
 import 'package:reference_app/src/call_session.dart'
@@ -648,6 +649,11 @@ class JourneyPeer extends LetterComposer {
     final keyPair = _keyPair = await Ed25519().newKeyPair();
     _pubkeyB64 = base64Encode((await keyPair.extractPublicKey()).bytes);
     _note('boot media=${_mode!.name} hub=$journeyHubUrl');
+    // This install's own identity, as the app's main() boots it: the key
+    // lives in the keychain and the install id beside the pins, so both
+    // outlive this process. Never throws; `identity` says if it is there.
+    await bootAppIdentity();
+    final ownInstall = await appIdentity?.installId();
     // `blob: true` tells the runner this install posts media bytes to /blob;
     // an older install reports only sha256 receipts. `blackout: true` says
     // it can hold a signed bundle across an outage, and `pubkey` is the
@@ -657,6 +663,10 @@ class JourneyPeer extends LetterComposer {
       'blob': true,
       'blackout': true,
       'pubkey': _pubkeyB64,
+      'identity': appIdentity != null,
+      'install': ownInstall
+          ?.map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join(),
     });
     while (true) {
       final job = await _nextJob();
@@ -3005,6 +3015,35 @@ class _Lanes {
     final chatPort = MediaChannelDataPort(
       await _stack.media.openDataChannel(CallLanes.chat),
     );
+    // The app's rule on this side too: exchange and pin identity keys on
+    // this call's chat channel — the raw port, so a re-sent hello is never
+    // taken for a retransmit by the lane set. Each judged peer is reported
+    // raw; a changed key stops the call here as it does in the app.
+    final identity = appIdentity;
+    if (identity == null) {
+      unawaited(
+        _peer._report('identity', const <String, Object?>{
+          'identity': 'absent',
+        }, run: _run),
+      );
+    } else {
+      final handshake = IdentityHandshake(
+        port: chatPort,
+        identity: identity,
+        callId: _stack.controller.callId,
+        onTrust: (reading) {
+          final stopped = reading == PeerTrust.changed;
+          unawaited(
+            _peer._report('identity', <String, Object?>{
+              ...?lastPeerSighting.value?.toJson(),
+              'call_stopped': stopped,
+            }, run: _run),
+          );
+          if (stopped) unawaited(_stack.controller.hangUp());
+        },
+      );
+      unawaited(handshake.start().catchError((Object _) {}));
+    }
     final photoPort = MediaChannelDataPort(
       await _stack.media.openDataChannel(CallLanes.photo),
       maxPendingFrames: 128,

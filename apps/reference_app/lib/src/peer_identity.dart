@@ -140,6 +140,40 @@ String? _bootedKeyId;
 /// identities yet.
 final ValueNotifier<PeerTrust?> peerTrust = ValueNotifier<PeerTrust?>(null);
 
+/// What one judged peer frame established: who this install is, who the
+/// peer said it is, what the pin store answered and the reading that
+/// followed. Public ids and enum names only — never a key, never a call
+/// id. It exists so a rig run can print both sides of the same call.
+class PeerSighting {
+  const PeerSighting({
+    required this.at,
+    required this.install,
+    required this.peerInstall,
+    required this.check,
+    required this.trust,
+  });
+
+  final DateTime at;
+  final String install;
+  final String peerInstall;
+
+  /// `pinnedFirstUse` the first time, `match` once the pin is on file.
+  final RemoteIdentityCheck check;
+  final PeerTrust trust;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'at': at.toUtc().toIso8601String(),
+    'install': install,
+    'peer_install': peerInstall,
+    'check': check.name,
+    'trust': trust.name,
+  };
+}
+
+/// The most recent [PeerSighting] any handshake in this process made.
+final ValueNotifier<PeerSighting?> lastPeerSighting =
+    ValueNotifier<PeerSighting?>(null);
+
 /// Makes (first launch) or loads this install's identity. Never throws: a
 /// host without a keystore simply has no identity, and calls still work.
 Future<void> bootAppIdentity([AppIdentity? identity]) async {
@@ -356,6 +390,14 @@ class IdentityHandshake {
       _peerKey = publicKey;
     }
     safetyNumber = number;
+    lastPeerSighting.value = PeerSighting(
+      at: DateTime.now(),
+      install: _hex(await _identity.installId()),
+      peerInstall: peer,
+      check: check,
+      trust: reading,
+    );
+    if (_disposed) return;
     trust.value = reading;
     onTrust?.call(reading);
   }

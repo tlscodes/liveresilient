@@ -56,6 +56,7 @@ import 'package:reference_app/src/demo_feeds.dart' show demoQualitySourceLabel;
 import 'package:reference_app/src/live_chat_registry.dart';
 import 'package:reference_app/src/live_quality_feed.dart'
     show liveQualitySourceLabel;
+import 'package:reference_app/src/peer_identity.dart';
 import 'package:reference_app/src/photo_ingest.dart'
     show buildStagedPhotoArtifacts;
 import 'package:reference_app/src/photo_source.dart';
@@ -807,6 +808,25 @@ void main() {
     _driverStartedAt = DateTime.now();
     final photo = _photoFixture(DateTime.now().toUtc());
     _writePhotoFixture(photo);
+    // What main() does before runApp, which this driver never runs: make or
+    // load this install's identity. Bounded, because a keychain that asks a
+    // question nobody answers must not hang the run; and said out loud,
+    // because the boot itself swallows its failure.
+    await tester.runAsync(
+      () => bootAppIdentity().timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {},
+      ),
+    );
+    final booted = appIdentity;
+    final ownInstall = booted == null
+        ? null
+        : await tester.runAsync(booted.installId);
+    print(
+      'JOURNEY_APP identity_boot '
+      'identity=${booted == null ? 'absent' : 'present'} '
+      'install=${ownInstall == null ? '-' : ownInstall.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}',
+    );
     await tester.pumpWidget(
       MyApp(
         photoPicker: (PhotoSource source) async => photo.raw,
@@ -893,6 +913,27 @@ void main() {
       'JOURNEY_APP outcome=${(outcome ?? 'timeout').replaceAll(' ', '_')} '
       'connect_ms=$connectMs screen=$visible',
     );
+    // Both installs exchange identity keys on this call's chat channel. The
+    // hello is re-sent for ten seconds, so the reading is waited for, then
+    // printed raw: this side's install id, the peer's, what the pin store
+    // answered, the reading, and whether that stopped the call.
+    if (outcome != null && outcome.startsWith('Connected')) {
+      final sighting = await _pumpUntil<PeerSighting>(
+        tester,
+        () => lastPeerSighting.value,
+        budget: const Duration(seconds: 15),
+      );
+      final phaseNow = _phaseOnScreen();
+      print(
+        sighting == null
+            ? 'JOURNEY_APP identity sighting=none phase=${phaseNow.replaceAll(' ', '_')}'
+            : 'JOURNEY_APP identity install=${sighting.install} '
+                  'peer_install=${sighting.peerInstall} '
+                  'check=${sighting.check.name} trust=${sighting.trust.name} '
+                  'phase=${phaseNow.replaceAll(' ', '_')} '
+                  'call_stopped=${phaseNow == 'Call ended' || phaseNow == 'Call failed'}',
+      );
+    }
 
     var samples = 0;
     int? rttMin;

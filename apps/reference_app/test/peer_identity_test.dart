@@ -175,6 +175,76 @@ void main() {
     );
   });
 
+  group('the sighting a rig run prints', () {
+    tearDown(() => lastPeerSighting.value = null);
+
+    test('names both installs and says first use, then match', () async {
+      final a = _Install();
+      final b = _Install();
+      final aId = _hex(await a.open().installId());
+      final bId = _hex(await b.open().installId());
+
+      await _call(a.open(), b.open());
+      final first = lastPeerSighting.value!;
+      // The last frame judged was on one of the two sides.
+      expect({first.install, first.peerInstall}, {aId, bId});
+      expect(first.check, RemoteIdentityCheck.pinnedFirstUse);
+      expect(first.trust, PeerTrust.unverified);
+
+      await _call(a.open(), b.open(), callId: 'call-2');
+      final second = lastPeerSighting.value!;
+      expect({second.install, second.peerInstall}, {aId, bId});
+      expect(second.check, RemoteIdentityCheck.match);
+      expect(second.trust, PeerTrust.unverified);
+    });
+
+    test('carries public ids and enum names only', () async {
+      await _call(_Install().open(), _Install().open());
+      final json = lastPeerSighting.value!.toJson();
+      expect(json.keys, ['at', 'install', 'peer_install', 'check', 'trust']);
+      expect(json['check'], 'pinnedFirstUse');
+      expect(json['trust'], 'unverified');
+      expect(json['install'], hasLength(AppIdentity.installIdBytes * 2));
+    });
+
+    test('a changed key is reported as changed', () async {
+      final a = _Install();
+      final b = _Install();
+      await _call(a.open(), b.open());
+      final impostor = _Install();
+      impostor.pins.data = {'install-id': _hex(await b.open().installId())};
+      final aId = _hex(await a.open().installId());
+      // Both sides judge, so every sighting is kept and a's is picked out.
+      final seen = <PeerSighting>[];
+      void keep() {
+        final s = lastPeerSighting.value;
+        if (s != null) seen.add(s);
+      }
+
+      lastPeerSighting.addListener(keep);
+      addTearDown(() => lastPeerSighting.removeListener(keep));
+      final (portA, portI) = pairLoopbackPorts();
+      final ha = IdentityHandshake(
+        port: portA,
+        identity: a.open(),
+        callId: 'c',
+      );
+      final hi = IdentityHandshake(
+        port: portI,
+        identity: impostor.open(),
+        callId: 'c',
+      );
+      await ha.start();
+      await hi.start();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await hi.dispose();
+      await ha.dispose();
+      final changed = seen.singleWhere((s) => s.install == aId);
+      expect(changed.check, RemoteIdentityCheck.changed);
+      expect(changed.trust, PeerTrust.changed);
+    });
+  });
+
   group('a changed key is never accepted silently', () {
     test('the same install id with another key reads changed, the caller is '
         'told, and the first pin stays', () async {
