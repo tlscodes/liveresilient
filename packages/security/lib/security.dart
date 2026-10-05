@@ -3,6 +3,7 @@
 library;
 
 export 'src/crypto_identity_engine.dart';
+export 'src/identity_key_agreement.dart';
 export 'src/identity_store.dart';
 export 'src/key_store.dart';
 export 'src/log_redactor.dart';

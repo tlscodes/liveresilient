@@ -10,6 +10,7 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 
+import 'identity_key_agreement.dart';
 import 'key_store.dart';
 import 'identity_store.dart';
 
@@ -20,7 +21,8 @@ import 'identity_store.dart';
 /// [KeyMaterialStore] so the same handle reloads the same key pair later.
 /// A per-handle in-memory cache avoids re-deriving the key pair from its
 /// seed on every operation.
-class CryptographyIdentityKeyEngine implements IdentityKeyEngine {
+class CryptographyIdentityKeyEngine
+    implements IdentityKeyEngine, IdentityKeyAgreement {
   final KeyMaterialStore _keyStore;
   final Ed25519 _algorithm;
   final Sha256 _hashAlgorithm;
@@ -98,6 +100,50 @@ class CryptographyIdentityKeyEngine implements IdentityKeyEngine {
   Future<Uint8List> sha256(Uint8List input) async {
     final hash = await _hashAlgorithm.hash(input);
     return Uint8List.fromList(hash.bytes);
+  }
+
+  @override
+  Future<Uint8List> agree({
+    required String keyHandle,
+    required Uint8List remoteX25519PublicKey,
+  }) async {
+    if (remoteX25519PublicKey.length != 32) {
+      throw ArgumentError.value(
+        remoteX25519PublicKey.length,
+        'remoteX25519PublicKey',
+        'must be 32 bytes',
+      );
+    }
+    final keyPair = await _loadKeyPair(keyHandle);
+    if (keyPair == null) {
+      throw StateError('No identity key pair for handle "$keyHandle".');
+    }
+    // RFC 8032 §5.1.5: the Ed25519 secret scalar is the clamped low half of
+    // SHA-512(seed). X25519 clamps the same way, so handing it those 32
+    // bytes yields the Montgomery key whose public half is
+    // ed25519PublicKeyToX25519(this key's public half).
+    final seed = await keyPair.extractPrivateKeyBytes();
+    final expanded = await Sha512().hash(seed);
+    final x25519 = X25519();
+    final montgomery = await x25519.newKeyPairFromSeed(
+      expanded.bytes.sublist(0, 32),
+    );
+    final secret = await x25519.sharedSecretKey(
+      keyPair: montgomery,
+      remotePublicKey: SimplePublicKey(
+        remoteX25519PublicKey,
+        type: KeyPairType.x25519,
+      ),
+    );
+    final bytes = Uint8List.fromList(await secret.extractBytes());
+    var acc = 0;
+    for (final b in bytes) {
+      acc |= b;
+    }
+    if (acc == 0) {
+      throw ArgumentError('remoteX25519PublicKey is a low-order point');
+    }
+    return bytes;
   }
 
   /// Drops any cached key pair for [keyHandle] so the next operation on
