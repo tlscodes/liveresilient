@@ -178,11 +178,16 @@ void main() {
       (ha, after) = await _call(a, newB, 'call-2');
       expect(ha.trust.value, PeerTrust.changed);
       expect(pendingKeyChange.value?.peerInstall, bId);
-      expect(a.keys('verified:'), isEmpty);
+      // Presenting a key erases nothing: the old key keeps what the person
+      // confirmed about it.
+      expect(a.pins.data['verified:$bId'], _hex(bKey));
       await after();
 
-      // Unanswered: the pin is still the old key, and the new one is
-      // stopped again on the next call.
+      // Unanswered: the pin is still the old key — which still reads
+      // verified — and the new one is stopped again on the next call.
+      (ha, after) = await _call(a, b, 'call-old');
+      expect(ha.trust.value, PeerTrust.verified);
+      await after();
       expect(
         await a.open().store.checkRemoteIdentity(
           peerId: bId,
@@ -233,7 +238,9 @@ void main() {
       // The old key, presented again, is now the stranger.
       (ha, after) = await _call(a, b, 'call-4');
       expect(ha.trust.value, PeerTrust.changed);
-      expect(a.keys('verified:'), isEmpty);
+      // And, like any stranger, it erases nothing: the confirmation given
+      // to the new key is still the new key's.
+      expect(a.pins.data['verified:$bId'], _hex(newKey));
       await after();
     });
 

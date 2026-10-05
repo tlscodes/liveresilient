@@ -191,8 +191,9 @@ class AppIdentity {
     await clearDiffered(peerInstall);
   }
 
-  /// Forgets a confirmation: the person said the numbers differ, or a
-  /// second key was proven under [peerInstall]. Only ever a downgrade.
+  /// Forgets a confirmation: the person said the numbers differ, or
+  /// accepted a new key for [peerInstall]. Never done because a key was
+  /// merely presented. Only ever a downgrade.
   Future<void> clearVerified(String peerInstall) =>
       _pins.delete('$_verifiedPrefix$peerInstall');
 }
@@ -468,16 +469,14 @@ class IdentityHandshake {
     };
     String? number;
     if (reading == PeerTrust.changed) {
-      // A second key proven under this install id falsifies "only this key
-      // speaks for it": the confirmation must be earned again. The pin
-      // itself stays, so the old key still reads as a match next time.
-      final judged = _peerInstall;
+      // A stranger's key stops this call and nothing more. The pin stays,
+      // and so does any confirmation of the pinned key: a confirmation is
+      // bound to the key it was given for, so the stranger's key can never
+      // read verified — while erasing it here would hand anyone who knows
+      // a public install id a way to make the person verify again and
+      // again. Only the person's own "accept the new key" clears it.
       _peerInstall = null;
       _peerKey = null;
-      await _identity.clearVerified(peer);
-      if (judged != null && judged != peer) {
-        await _identity.clearVerified(judged);
-      }
     } else {
       number = await _identity.store.safetyNumber(
         localPublicKey: (await _identity.store.localIdentity()).publicKey,

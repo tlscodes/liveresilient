@@ -292,7 +292,7 @@ void main() {
     });
   });
 
-  group('changed: the confirmation is cleared and the call stops', () {
+  group('changed: the call stops, the old key keeps its confirmation', () {
     testWidgets('an impostor under a verified install id', (tester) async {
       final a = _Install();
       final b = _Install();
@@ -327,13 +327,14 @@ void main() {
       await tester.tap(find.byKey(_changedRow));
       await tester.pumpAndSettle();
       expect(find.byKey(_sheet), findsNothing);
-      expect(a.confirmations, isEmpty);
+      // The stranger erased nothing: what was confirmed was b's key.
+      expect(a.pins.data['verified:$bInstall'], _hex(bKey));
 
-      // The real b again: still pinned, but the confirmation must be
-      // earned again.
+      // The real b again: still pinned and still verified. An impostor
+      // cannot make the person verify twice.
       await tester.runAsync(() => rig.call(a.open(), b.open(), 'call-3'));
       await tester.pump();
-      expect(find.byKey(_unverifiedRow), findsOneWidget);
+      expect(find.byKey(_verifiedRow), findsOneWidget);
       expect(
         await tester.runAsync(
           () => a.open().store.checkRemoteIdentity(
