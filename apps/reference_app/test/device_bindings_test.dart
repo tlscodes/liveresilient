@@ -146,6 +146,38 @@ void main() {
       expect(buildStorageDirectory(), isNull);
     });
 
+    test('the identity file: Application Support under HOME on a Mac, the '
+        'shared folder everywhere else and under flutter test', () {
+      expect(
+        identityStorageBase(
+          isMacOS: true,
+          environment: const {'HOME': '/Users/me/Library/Containers/app/Data/'},
+        ),
+        '/Users/me/Library/Containers/app/Data/Library/Application Support/'
+        'voice_call_kit_intelligence',
+      );
+      expect(identityStorageBase(isMacOS: true, environment: const {}), isNull);
+      expect(
+        identityStorageBase(
+          isMacOS: true,
+          environment: const {'HOME': '/Users/me', 'FLUTTER_TEST': 'true'},
+        ),
+        isNull,
+      );
+      expect(
+        identityStorageBase(
+          isMacOS: false,
+          environment: const {'HOME': '/home/me'},
+        ),
+        isNull,
+      );
+      // This very process is a flutter test: nothing lands in a real home.
+      expect(
+        identityStorageDirectory().path,
+        intelligenceStorageDirectory().path,
+      );
+    });
+
     test('card and parked-letter queue share one base', () {
       expect(
         letterQueueDirectory().parent.path,

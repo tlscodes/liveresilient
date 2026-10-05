@@ -19,6 +19,7 @@
 // signing key cannot seal, and a letter has no receiving path yet.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Directory, File;
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -26,7 +27,8 @@ import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:messaging/messaging.dart' show DataChannelPort;
 import 'package:security/security.dart';
 
-import 'intelligence/device_bindings.dart' show intelligenceStorageDirectory;
+import 'intelligence/device_bindings.dart'
+    show identityStorageDirectory, intelligenceStorageDirectory;
 import 'intelligence/disk_json_storage.dart';
 import 'letter_queue_keystore.dart';
 
@@ -52,12 +54,40 @@ enum PeerTrust {
 class PinnedPeerStore implements SecureKeyValueStore {
   PinnedPeerStore(this._storage);
 
-  factory PinnedPeerStore.disk() => PinnedPeerStore(
-    DiskJsonStorage(
-      directoryFactory: intelligenceStorageDirectory,
-      fileName: 'peer_identities.json',
-    ),
-  );
+  factory PinnedPeerStore.disk() {
+    adoptIdentityFile(
+      from: intelligenceStorageDirectory(),
+      to: identityStorageDirectory(),
+    );
+    return PinnedPeerStore(
+      DiskJsonStorage(
+        directoryFactory: identityStorageDirectory,
+        fileName: fileName,
+      ),
+    );
+  }
+
+  static const String fileName = 'peer_identities.json';
+
+  /// Carries an identity file written before the folder moved into the
+  /// folder it is read from now, once: never over a file already there,
+  /// and the old one is left where it was. Returns whether it copied.
+  static bool adoptIdentityFile({
+    required Directory from,
+    required Directory to,
+  }) {
+    try {
+      if (from.path == to.path) return false;
+      final old = File('${from.path}/$fileName');
+      final now = File('${to.path}/$fileName');
+      if (now.existsSync() || !old.existsSync()) return false;
+      if (!to.existsSync()) to.createSync(recursive: true);
+      old.copySync(now.path);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   final PersistentStorage _storage;
 

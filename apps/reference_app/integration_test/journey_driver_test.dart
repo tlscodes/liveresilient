@@ -53,6 +53,8 @@ import 'package:reference_app/main.dart';
 import 'package:reference_app/src/call_screen.dart' show CallScreen;
 import 'package:reference_app/src/chat_screen.dart' show ChatEntry;
 import 'package:reference_app/src/demo_feeds.dart' show demoQualitySourceLabel;
+import 'package:reference_app/src/intelligence/device_bindings.dart'
+    show identityStorageDirectory;
 import 'package:reference_app/src/live_chat_registry.dart';
 import 'package:reference_app/src/live_quality_feed.dart'
     show liveQualitySourceLabel;
@@ -809,19 +811,12 @@ void main() {
     final photo = _photoFixture(DateTime.now().toUtc());
     _writePhotoFixture(photo);
     // What main() does before runApp, which this driver never runs: make or
-    // load this install's identity. Bounded, because a keychain that asks a
-    // question nobody answers must not hang the run; and said out loud,
-    // because the boot itself swallows its failure.
-    var bootTimedOut = false;
+    // load this install's identity. Not bounded: a bound that gives up
+    // reads exactly like a host with no keystore, and a call that goes on
+    // without an identity proves nothing about pinning. A boot that never
+    // returns is stopped by the run's own limit, with this line unprinted.
     final bootWatch = Stopwatch()..start();
-    await tester.runAsync(
-      () => bootAppIdentity().timeout(
-        const Duration(seconds: 20),
-        onTimeout: () {
-          bootTimedOut = true;
-        },
-      ),
-    );
+    await tester.runAsync(bootAppIdentity);
     final booted = appIdentity;
     final ownInstall = booted == null
         ? null
@@ -829,8 +824,6 @@ void main() {
     final bootError = identityBootError;
     final bootCause = booted != null
         ? 'none'
-        : bootTimedOut
-        ? 'timeout'
         : bootError == null
         ? 'unknown'
         : 'error:${bootError.runtimeType}:'
@@ -840,7 +833,14 @@ void main() {
       'identity=${booted == null ? 'absent' : 'present'} '
       'cause=${bootCause.length > 240 ? bootCause.substring(0, 240) : bootCause} '
       'ms=${bootWatch.elapsedMilliseconds} '
+      'pins=${identityStorageDirectory().path.contains('/Library/Application Support/') ? 'app_support' : 'shared'} '
       'install=${ownInstall == null ? '-' : ownInstall.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}',
+    );
+    // The run stops here, with the cause above on the record.
+    expect(
+      booted,
+      isNotNull,
+      reason: 'this install has no identity: $bootCause',
     );
     await tester.pumpWidget(
       MyApp(

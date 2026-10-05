@@ -149,6 +149,37 @@ Directory intelligenceStorageDirectory() =>
     buildStorageDirectory()?.call() ??
     Directory('${Directory.systemTemp.path}/voice_call_kit_intelligence');
 
+/// Where this install's public id and its pinned peer keys live on a Mac:
+/// `Library/Application Support` under `HOME`, which inside the app sandbox
+/// is the app's own container. The system-temp folder the other
+/// intelligence files default to on a desktop is purgeable, and an install
+/// that loses this file comes back as a stranger to every peer that pinned
+/// it. `null` everywhere else — a phone's intelligence folder is already
+/// persistent — and under `flutter test`, which must not write into the
+/// developer's home.
+String? identityStorageBase({
+  required bool isMacOS,
+  required Map<String, String> environment,
+}) {
+  if (!isMacOS || environment.containsKey('FLUTTER_TEST')) return null;
+  final home = environment['HOME'];
+  if (home == null || home.isEmpty) return null;
+  final root = home.replaceAll(RegExp(r'/+$'), '');
+  return '$root/Library/Application Support/voice_call_kit_intelligence';
+}
+
+/// The folder the identity file is kept in: [identityStorageBase] on a
+/// Mac, the shared [intelligenceStorageDirectory] everywhere else.
+Directory identityStorageDirectory() {
+  final base = identityStorageBase(
+    isMacOS: Platform.isMacOS,
+    environment: Platform.environment,
+  );
+  return base == null
+      ? intelligenceStorageDirectory()
+      : (Directory(base)..createSync(recursive: true));
+}
+
 /// Where a letter parked behind a down door waits between runs: a `letters`
 /// subfolder of [intelligenceStorageDirectory], created on first use. On a
 /// phone this is the OS-backed Documents home (no `HOME` dependency), so a

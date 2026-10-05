@@ -2,6 +2,7 @@
 // other than the real Ed25519 one: two installs, an in-process data channel
 // pair, and the same handshake the app starts on a live call.
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:call_core/call_core.dart' show CallPhase;
@@ -24,6 +25,15 @@ class _MemoryStorage implements PersistentStorage {
   Future<void> save(Map<String, Object?> data) async {
     this.data = Map<String, Object?>.from(data);
   }
+}
+
+class _BrokenStorage implements PersistentStorage {
+  @override
+  Future<Map<String, Object?>> load() async =>
+      throw StateError('pin file unreadable');
+
+  @override
+  Future<void> save(Map<String, Object?> data) async {}
 }
 
 /// One install: its own seed store and its own pin file.
@@ -76,6 +86,81 @@ void main() {
       final first = await install.open().installId();
       expect(first, hasLength(AppIdentity.installIdBytes));
       expect(await install.open().installId(), first);
+    });
+
+    test('a second boot from the same folder reads the same install id and '
+        'the same pin', () async {
+      final folder = Directory.systemTemp.createTempSync('identity_boot_test');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      final seeds = InMemoryKeyStore();
+      // A fresh object over the same folder and keystore: what a relaunch is.
+      AppIdentity relaunch() => AppIdentity(
+        engine: CryptographyIdentityKeyEngine(keyStore: seeds),
+        pins: PinnedPeerStore(
+          DiskJsonStorage(
+            directoryFactory: () => folder,
+            fileName: PinnedPeerStore.fileName,
+          ),
+        ),
+      );
+      final peerKey = (await _Install().open().store.localIdentity()).publicKey;
+
+      await bootAppIdentity(relaunch());
+      expect(identityBootError, isNull);
+      final firstInstall = await appIdentity!.installId();
+      final firstKeyId = sessionKeyId();
+      expect(
+        await appIdentity!.store.checkRemoteIdentity(
+          peerId: 'peer-install',
+          presentedPublicKey: peerKey,
+        ),
+        RemoteIdentityCheck.pinnedFirstUse,
+      );
+
+      await bootAppIdentity(relaunch());
+      expect(identityBootError, isNull);
+      expect(await appIdentity!.installId(), firstInstall);
+      expect(sessionKeyId(), firstKeyId);
+      expect(
+        await appIdentity!.store.checkRemoteIdentity(
+          peerId: 'peer-install',
+          presentedPublicKey: peerKey,
+        ),
+        RemoteIdentityCheck.match,
+      );
+      appIdentity = null;
+    });
+
+    test('a boot that fails leaves no identity and says why', () async {
+      await bootAppIdentity(
+        AppIdentity(
+          engine: CryptographyIdentityKeyEngine(keyStore: InMemoryKeyStore()),
+          pins: PinnedPeerStore(_BrokenStorage()),
+        ),
+      );
+      expect(appIdentity, isNull);
+      expect(identityBootError, isA<StateError>());
+      expect('$identityBootError', contains('pin file unreadable'));
+    });
+
+    test('an identity file from the old folder is carried over once, never '
+        'over one already there', () {
+      final root = Directory.systemTemp.createTempSync('identity_adopt_test');
+      addTearDown(() => root.deleteSync(recursive: true));
+      final from = Directory('${root.path}/old')..createSync();
+      final to = Directory('${root.path}/new/deeper');
+      final old = File('${from.path}/${PinnedPeerStore.fileName}')
+        ..writeAsStringSync('{"install-id":"aa"}');
+      final now = File('${to.path}/${PinnedPeerStore.fileName}');
+
+      expect(PinnedPeerStore.adoptIdentityFile(from: from, to: to), isTrue);
+      expect(now.readAsStringSync(), '{"install-id":"aa"}');
+      expect(old.existsSync(), isTrue);
+
+      old.writeAsStringSync('{"install-id":"bb"}');
+      expect(PinnedPeerStore.adoptIdentityFile(from: from, to: to), isFalse);
+      expect(now.readAsStringSync(), '{"install-id":"aa"}');
+      expect(PinnedPeerStore.adoptIdentityFile(from: to, to: to), isFalse);
     });
 
     test('two installs never share a key, an id, or a key id', () async {
