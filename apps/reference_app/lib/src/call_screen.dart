@@ -97,7 +97,23 @@ class CallScreen extends StatelessWidget {
     this.qualitySourceLabel,
     this.rung,
     this.connectivity,
+    this.safetyNumber,
+    this.onSafetyNumbersMatch,
+    this.onSafetyNumbersDiffer,
   });
+
+  /// The live call's safety number (sixty digits in groups of five), shown
+  /// when the person taps the identity row. Null makes the row inert: there
+  /// is nothing to compare before the peer proved its key, or after a
+  /// changed one.
+  final String? safetyNumber;
+
+  /// The person saw the same digits on both phones — the only way the
+  /// reading becomes verified.
+  final Future<void> Function()? onSafetyNumbersMatch;
+
+  /// The person saw different digits; any earlier confirmation is dropped.
+  final Future<void> Function()? onSafetyNumbersDiffer;
 
   /// The connectivity fabric's snapshots for the active call. Non-null shows
   /// a card naming the lane the next message takes (direct media, relay,
@@ -270,21 +286,59 @@ class CallScreen extends StatelessWidget {
                   PeerTrust.unverified => (Icons.lock_outline, scheme.outline),
                   PeerTrust.changed => (Icons.gpp_bad, scheme.error),
                 };
-                return Padding(
-                  padding: const EdgeInsets.only(top: Spacing.s12),
-                  child: Row(
-                    key: Key('call-peer-trust-${trust.name}'),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, size: 18, color: color),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          trust.label,
-                          style: TextStyle(color: color),
-                        ),
+                // Verified arrives only from the person's comparison: the
+                // row opens the number while there is an honest one to show.
+                final number = safetyNumber;
+                final comparable =
+                    number != null && trust != PeerTrust.changed && _isActive;
+                // Its own transparent Material: the screen is also built
+                // with no Scaffold above it, and an InkWell needs one.
+                return Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    onTap: comparable
+                        ? () => showModalBottomSheet<void>(
+                            context: context,
+                            showDragHandle: true,
+                            isScrollControlled: true,
+                            builder: (_) => _SafetyNumberSheet(
+                              safetyNumber: number,
+                              onMatch: onSafetyNumbersMatch,
+                              onDiffer: onSafetyNumbersDiffer,
+                            ),
+                          )
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        top: Spacing.s12,
+                        bottom: Spacing.s4,
                       ),
-                    ],
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            key: Key('call-peer-trust-${trust.name}'),
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(icon, size: 18, color: color),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  trust.label,
+                                  style: TextStyle(color: color),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (comparable && trust == PeerTrust.unverified)
+                            Text(
+                              'Compare safety numbers to confirm',
+                              key: const Key('call-peer-trust-compare-hint'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },
@@ -645,6 +699,99 @@ class _JoinCallDialogState extends State<JoinCallDialog> {
           child: const Text('Join'),
         ),
       ],
+    );
+  }
+}
+
+/// The comparison itself: the sixty digits, one instruction, and the two
+/// answers only the person can give. Closing it without an answer changes
+/// nothing — the reading never turns verified on its own.
+class _SafetyNumberSheet extends StatefulWidget {
+  const _SafetyNumberSheet({
+    required this.safetyNumber,
+    required this.onMatch,
+    required this.onDiffer,
+  });
+
+  final String safetyNumber;
+  final Future<void> Function()? onMatch;
+  final Future<void> Function()? onDiffer;
+
+  @override
+  State<_SafetyNumberSheet> createState() => _SafetyNumberSheetState();
+}
+
+class _SafetyNumberSheetState extends State<_SafetyNumberSheet> {
+  bool _busy = false;
+
+  /// Twelve groups of five as three lines of four, the way both phones
+  /// show it, so two people can read it to each other line by line.
+  String get _lines {
+    final groups = widget.safetyNumber.split(RegExp(r'\s+'));
+    return [
+      for (var i = 0; i < groups.length; i += 4)
+        groups
+            .sublist(i, i + 4 > groups.length ? groups.length : i + 4)
+            .join(' '),
+    ].join('\n');
+  }
+
+  Future<void> _answer(Future<void> Function() answer) async {
+    setState(() => _busy = true);
+    await answer();
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final match = widget.onMatch;
+    final differ = widget.onDiffer;
+    return SafeArea(
+      child: Padding(
+        key: const Key('safety-number-sheet'),
+        padding: const EdgeInsetsDirectional.fromSTEB(
+          Spacing.s24,
+          0,
+          Spacing.s24,
+          Spacing.s24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Safety number', style: theme.textTheme.titleLarge),
+            const SizedBox(height: Spacing.s8),
+            Text(
+              'Read this number aloud to the other person, or compare it in '
+              'person. Both phones must show the same digits.',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: Spacing.s16),
+            SelectableText(
+              _lines,
+              key: const Key('safety-number-digits'),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontFamily: 'monospace',
+                height: 1.6,
+              ),
+            ),
+            const SizedBox(height: Spacing.s24),
+            FilledButton(
+              key: const Key('safety-number-match'),
+              onPressed: _busy || match == null ? null : () => _answer(match),
+              child: const Text('They match'),
+            ),
+            const SizedBox(height: Spacing.s8),
+            OutlinedButton(
+              key: const Key('safety-number-mismatch'),
+              onPressed: _busy || differ == null ? null : () => _answer(differ),
+              child: const Text('Not the same'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

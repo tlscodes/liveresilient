@@ -420,6 +420,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             onTrust: (reading) {
               if (generation != _liveChatGeneration) return;
               peerTrust.value = reading;
+              // The safety number on the call screen is plain data, not a
+              // listenable: rebuild so it appears (or goes) with the reading.
+              if (mounted) setState(() {});
               if (reading == PeerTrust.changed) unawaited(_call.hangUp());
             },
           );
@@ -745,6 +748,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         rung: _rung,
         // The fabric's own snapshots: which lane the next message takes.
         connectivity: _call.handle?.connectionFabric?.snapshots,
+        // Verified only by the person comparing the two phones' digits.
+        safetyNumber: _identityHandshake?.safetyNumber,
+        onSafetyNumbersMatch: _identityHandshake?.confirmMatch,
+        onSafetyNumbersDiffer: _identityHandshake?.denyMatch,
       ),
       RefreshIndicator(
         onRefresh: _reloadConversations,

@@ -124,6 +124,11 @@ class AppIdentity {
   /// True only while the confirmed key is the one presented now.
   Future<bool> isVerified(String peerInstall, Uint8List publicKey) async =>
       await _pins.read('$_verifiedPrefix$peerInstall') == _hex(publicKey);
+
+  /// Forgets a confirmation: the person said the numbers differ, or a
+  /// second key was proven under [peerInstall]. Only ever a downgrade.
+  Future<void> clearVerified(String peerInstall) =>
+      _pins.delete('$_verifiedPrefix$peerInstall');
 }
 
 /// The process's identity, set once by [bootAppIdentity]; null when the
@@ -192,11 +197,48 @@ class IdentityHandshake {
   /// This call's reading; null until the peer's proof arrived.
   final ValueNotifier<PeerTrust?> trust = ValueNotifier<PeerTrust?>(null);
 
+  /// The sixty digits both phones show for this pair of keys — what the
+  /// person compares. Null until a non-changed reading, and null again
+  /// once a changed key was seen: there is nothing honest to compare then.
+  String? safetyNumber;
+
   StreamSubscription<List<int>>? _sub;
   Timer? _resend;
   Future<void> _chain = Future<void>.value();
   String? _peerKeyThisCall;
+  // The peer the shown [safetyNumber] belongs to.
+  String? _peerInstall;
+  Uint8List? _peerKey;
   bool _disposed = false;
+
+  /// The person saw the same digits on both phones. The only writer of a
+  /// confirmation: [_onFrame] reads verified only from what this stored.
+  Future<void> confirmMatch() => _judgedByPerson(PeerTrust.verified);
+
+  /// The person saw different digits: any earlier confirmation is gone and
+  /// the reading stays not verified.
+  Future<void> denyMatch() => _judgedByPerson(PeerTrust.unverified);
+
+  /// Queued behind any frame still being judged, so a tap never races a
+  /// changed key. A no-op once disposed, before a peer, or after changed.
+  Future<void> _judgedByPerson(PeerTrust reading) {
+    bool stale() =>
+        _disposed || _peerInstall == null || trust.value == PeerTrust.changed;
+    return _chain = _chain
+        .then((_) async {
+          if (stale()) return;
+          final peer = _peerInstall!;
+          if (reading == PeerTrust.verified) {
+            await _identity.markVerified(peer, _peerKey!);
+          } else {
+            await _identity.clearVerified(peer);
+          }
+          if (stale()) return;
+          trust.value = reading;
+          onTrust?.call(reading);
+        })
+        .catchError((Object _) {});
+  }
 
   /// Listens, then says hello — and again every [resendEvery] until the
   /// peer is heard, because a frame sent before the other side listens is
@@ -290,7 +332,30 @@ class IdentityHandshake {
             ? PeerTrust.verified
             : PeerTrust.unverified,
     };
+    String? number;
+    if (reading == PeerTrust.changed) {
+      // A second key proven under this install id falsifies "only this key
+      // speaks for it": the confirmation must be earned again. The pin
+      // itself stays, so the old key still reads as a match next time.
+      final judged = _peerInstall;
+      _peerInstall = null;
+      _peerKey = null;
+      await _identity.clearVerified(peer);
+      if (judged != null && judged != peer) {
+        await _identity.clearVerified(judged);
+      }
+    } else {
+      number = await _identity.store.safetyNumber(
+        localPublicKey: (await _identity.store.localIdentity()).publicKey,
+        remotePublicKey: publicKey,
+      );
+    }
     if (_disposed) return;
+    if (reading != PeerTrust.changed) {
+      _peerInstall = peer;
+      _peerKey = publicKey;
+    }
+    safetyNumber = number;
     trust.value = reading;
     onTrust?.call(reading);
   }
