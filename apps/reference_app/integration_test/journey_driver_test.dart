@@ -978,7 +978,13 @@ void main() {
           step: const Duration(milliseconds: 500),
         );
         live.shouldPropagateDevicePointerEvents = false;
-        if (digits.evaluate().isNotEmpty) {
+        // An answer closes the sheet itself, and the sheet is still in the
+        // tree while it slides away: popping then takes the call screen
+        // with it. So the closing is waited out, and only a sheet nobody
+        // answered is closed from here.
+        await tester.pump(const Duration(seconds: 2));
+        if (peerTrust.value != PeerTrust.verified &&
+            digits.evaluate().isNotEmpty) {
           tester.state<NavigatorState>(find.byType(Navigator).last).pop();
           await tester.pump(const Duration(seconds: 1));
         }
