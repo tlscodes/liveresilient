@@ -6,8 +6,8 @@
 #   A. Mac -> phone. The phone app is terminated. The Mac app writes a text, a
 #      photo, a 30 s voice note and a short video; the script waits until the
 #      app has said where each letter is, then launches the phone app.
-#   B. Phone -> Mac. The Mac app is not running. The phone app is launched with
-#      SEALED_AUTOSEND=1 and writes; later the Mac app is started.
+#   B. Phone -> Mac. The Mac app is not running. The phone writes on its own,
+#      asked to by the Mac's text a minute earlier; later the Mac app is started.
 #
 # "Off" means the app's process is not running. The phone app is launched and
 # terminated with devicectl and is never reinstalled or removed here. The
@@ -22,6 +22,10 @@ BUNDLE_ID=${JOURNEY_BUNDLE_ID:-com.tlscodes.referenceApp}
 APP=apps/reference_app
 BOX="$HOME/Library/Containers/com.voicecallkit.referenceApp/Data/tmp/sealed_rig"
 WAIT=${SEALED_RIG_WAIT_S:-240}
+# The Mac's text asks the rig peer to write back this many seconds after it
+# opens it; by then the Mac app has exited. (A launch-time switch was tried
+# first and never reached the app: the phone's journal showed no write.)
+REPLY_AFTER=${SEALED_RIG_REPLY_AFTER_S:-60}
 JOURNAL=Documents/voice_call_kit_intelligence/sealed_events.jsonl
 mkdir -p "$OUT" "$BOX"
 rm -f "$BOX/peer_may_start"
@@ -61,7 +65,8 @@ pull_journal() { # tag
 mac_app() { # mode, log
   ( cd "$APP" && flutter test integration_test/sealed_offline_rig_test.dart -d macos \
       --dart-define=SEALED_RIG_MODE="$1" --dart-define=SEALED_RIG_DIR="$BOX" \
-      --dart-define=SEALED_RIG_WAIT_S="$WAIT" >"$2" 2>&1 )
+      --dart-define=SEALED_RIG_WAIT_S="$WAIT" \
+      --dart-define=SEALED_RIG_REPLY_AFTER_S="$REPLY_AFTER" >"$2" 2>&1 )
 }
 
 # --- fixtures: real files of each kind, inside the app's sandbox -------------
@@ -97,9 +102,8 @@ pull_journal A
 # --- B. phone -> Mac, Mac app off -------------------------------------------
 say_ "B: phone writes while the Mac app is not running"
 pgrep -f "reference_app.app/Contents/MacOS/reference_app" >/dev/null && say_ "B: a Mac app process is STILL running" || say_ "B: Mac app off: yes"
-phone_off
-phone_on '{"SEALED_AUTOSEND":"1"}'
-sleep 50
+say_ "B: the phone was asked to write ${REPLY_AFTER}s after opening the Mac's text; waiting for it to try with the Mac off"
+sleep $((REPLY_AFTER + 45))
 pull_journal B_before_mac
 say_ "B: starting the Mac app"
 mac_app receive "$OUT/mac_receive.log"; say_ "B: Mac app exited rc=$?"

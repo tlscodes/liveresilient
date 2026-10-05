@@ -686,6 +686,33 @@ class JourneyPeer extends LetterComposer {
       if (Platform.environment['SEALED_AUTOSEND'] == '1') {
         unawaited(_sealedAutosend(service));
       }
+      // The same, asked for over the sealed channel itself: a text from
+      // the pinned peer ending in `#rig-reply-after=<seconds>` makes this
+      // phone write back that much later — when the asker has gone off.
+      // Rig peer only; the app has no such convention.
+      final asked = <String>{};
+      var primed = false;
+      service.inbox.addListener(() {
+        final letters = service.inbox.value;
+        if (!primed) {
+          // What was already here at launch is history, not a request.
+          primed = true;
+          final launched = DateTime.now().subtract(const Duration(seconds: 90));
+          for (final l in letters) {
+            if (l.receivedAt.isBefore(launched)) asked.add(l.id);
+          }
+        }
+        for (final l in letters) {
+          final wait = RegExp(
+            r'#rig-reply-after=(\d+)$',
+          ).firstMatch(l.content.text ?? '');
+          if (wait == null || !asked.add(l.id)) continue;
+          Timer(
+            Duration(seconds: int.parse(wait.group(1)!)),
+            () => unawaited(_sealedAutosend(service)),
+          );
+        }
+      });
     }
     // `blob: true` tells the runner this install posts media bytes to /blob;
     // an older install reports only sha256 receipts. `blackout: true` says

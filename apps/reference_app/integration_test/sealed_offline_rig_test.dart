@@ -33,6 +33,7 @@ import 'package:reference_app/src/sealed/sealed_letters.dart';
 const String _mode = String.fromEnvironment('SEALED_RIG_MODE');
 const String _dir = String.fromEnvironment('SEALED_RIG_DIR');
 const int _waitS = int.fromEnvironment('SEALED_RIG_WAIT_S', defaultValue: 240);
+const int _replyAfterS = int.fromEnvironment('SEALED_RIG_REPLY_AFTER_S');
 
 String _iso(DateTime? at) => at == null ? '-' : at.toUtc().toIso8601String();
 
@@ -88,15 +89,38 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.byKey(const Key('sealed-panel')), findsOneWidget);
 
-    String onScreen(String id) {
+    // The list builds only the rows in view, so a row is scrolled to before
+    // its line is read off the screen.
+    Future<String> onScreen(String id) async {
       final line = find.byKey(Key('sealed-state-$id'));
+      if (line.evaluate().isEmpty) {
+        try {
+          await tester.scrollUntilVisible(
+            line,
+            60,
+            scrollable: find
+                .descendant(
+                  of: find.byKey(const Key('sealed-panel')),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+            maxScrolls: 30,
+          );
+        } catch (_) {
+          // Reported below as not in view.
+        }
+      }
       return line.evaluate().isEmpty
-          ? '-'
+          ? 'not_in_view'
           : tester.widget<Text>(line).data!.replaceAll(' ', '_');
     }
 
     if (_mode == 'send') {
-      final text = 'written on the mac at ${_iso(DateTime.now())}';
+      // The rig peer writes back this many seconds after it opens this
+      // text — by then this app has exited.
+      final text =
+          'written on the mac at ${_iso(DateTime.now())}'
+          '${_replyAfterS > 0 ? ' #rig-reply-after=$_replyAfterS' : ''}';
       await tester.enterText(find.byKey(const Key('sealed-compose')), text);
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byKey(const Key('sealed-send')));
@@ -151,7 +175,7 @@ void main() {
           'SEALED_RIG queued kind=${s.content.kindLabel} from=$own to=${s.to} '
           'bytes=${s.bytes} sent_at=${_iso(s.at)} state=${s.state.name} '
           'attempts=${s.attempts} receipt=${s.delivered} '
-          'screen=${onScreen(s.id)}',
+          'screen=${await onScreen(s.id)}',
         );
       }
       // The script switches the peer on when this file appears.
@@ -176,7 +200,7 @@ void main() {
           'from=$own to=${s.to} bytes=${s.bytes} sent_at=${_iso(s.at)} '
           'receipt_at=${_iso(s.deliveredAt)} receipt=${s.delivered} '
           'state=${s.state.name} attempts=${s.attempts} '
-          'screen=${onScreen(s.id)}',
+          'screen=${await onScreen(s.id)}',
         );
       }
     } else {
