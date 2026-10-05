@@ -673,4 +673,104 @@ void main() {
       expect(macService.outbox.value.single.delivered, isFalse);
     });
   });
+
+  group('"I am reading my mailbox now"', () {
+    test('a letter the relay did not keep goes again the moment its '
+        'recipient says it is there — no waiting out the pause', () async {
+      final macService = open(mac);
+      final phoneService = open(phone);
+      // The phone is away: the relay keeps nothing for it.
+      relay.loseNext = 1;
+      await macService.send(toInstall: await phone.id(), body: _utf8('soon'));
+      await macService.flush();
+      await phoneService.pollOnce();
+      expect(phoneService.inbox.value, isEmpty);
+      final before = macService.outbox.value.single.attempts;
+
+      // The phone comes back and says so. The Mac's clock has NOT moved,
+      // so only the announcement can make the letter go again.
+      await phoneService.announce();
+      expect(phone.of('here_tx').single['to'], await mac.id());
+      await macService.pollOnce();
+      expect(mac.of('here_rx').single['waiting_for_them'], 1);
+      await macService.flush();
+      expect(macService.outbox.value.single.attempts, before + 1);
+
+      await phoneService.pollOnce();
+      expect(phoneService.inbox.value.single.text, 'soon');
+      await macService.pollOnce();
+      expect(macService.outbox.value.single.delivered, isTrue);
+    });
+
+    test('it is a box like any other, shows nothing, and is answered by '
+        'nothing', () async {
+      final macService = open(mac);
+      final phoneService = open(phone);
+      await phoneService.announce();
+      final posts = relay.posts;
+      await macService.pollOnce();
+      expect(macService.inbox.value, isEmpty);
+      expect(macService.outbox.value, isEmpty);
+      expect(relay.posts, posts, reason: 'no receipt for a presence');
+      expect(mac.of('here_rx').single['waiting_for_them'], 0);
+
+      // Same size on the wire as a short letter.
+      await macService.send(toInstall: await phone.id(), body: _utf8('x'));
+      await macService.flush();
+      expect(relay.seen.map((b) => b.length).toSet(), hasLength(1));
+    });
+
+    test('a stranger saying it is there moves nothing', () async {
+      final stranger = _Install('stranger');
+      await stranger.ready();
+      await stranger.pin(mac);
+      final macService = open(mac);
+      relay.down = true;
+      await macService.send(toInstall: await phone.id(), body: _utf8('held'));
+      await macService.flush();
+      relay.down = false;
+      final attempts = macService.outbox.value.single.attempts;
+
+      await open(stranger).announce();
+      await macService.pollOnce();
+      await macService.flush();
+      expect(mac.of('here_rx'), isEmpty);
+      expect(mac.of('rejected').single['why'], 'sender_not_pinned');
+      expect(macService.outbox.value.single.attempts, attempts);
+    });
+
+    test('starting the service announces once the door answers, and '
+        'delivers what was waiting', () async {
+      final macService = SealedLetterService(
+        identity: mac.identity,
+        door: relay.door(),
+        storage: mac.letters,
+        pollWait: const Duration(milliseconds: 50),
+        onEvent: (event, fields) => mac.events.add((event, fields)),
+      );
+      final phoneService = SealedLetterService(
+        identity: phone.identity,
+        door: relay.door(),
+        storage: phone.letters,
+        pollWait: const Duration(milliseconds: 50),
+        onEvent: (event, fields) => phone.events.add((event, fields)),
+      );
+      services
+        ..add(macService)
+        ..add(phoneService);
+
+      relay.loseNext = 1;
+      await macService.send(toInstall: await phone.id(), body: _utf8('late'));
+      await macService.flush();
+      macService.start();
+      phoneService.start();
+      for (var i = 0; i < 100; i++) {
+        if (macService.outbox.value.single.delivered) break;
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(phone.of('here_tx'), isNotEmpty);
+      expect(phoneService.inbox.value.single.text, 'late');
+      expect(macService.outbox.value.single.delivered, isTrue);
+    });
+  });
 }

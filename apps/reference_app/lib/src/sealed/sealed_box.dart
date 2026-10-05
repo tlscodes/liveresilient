@@ -49,7 +49,13 @@ enum SealedKind {
   letter(1),
 
   /// "I opened letter X": the letter's id and the SHA-256 of its body.
-  receipt(2);
+  receipt(2),
+
+  /// "I am reading my mailbox now", with no body. The relay keeps a box
+  /// only for seconds when nobody is reading (measured: gone between 8 and
+  /// 15 s), so a letter lands only while its recipient is listening. This
+  /// tells a pinned peer that now is such a moment.
+  here(3);
 
   const SealedKind(this.wire);
   final int wire;

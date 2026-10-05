@@ -348,6 +348,7 @@ class SealedLetterService {
   Future<void> _handle(Uint8List taken) async {
     final own = await _own();
     var changed = false;
+    var resend = false;
     for (final box in SealedBoxCodec.split(taken)) {
       final opened = await _codec.open(box);
       if (opened == null) {
@@ -422,13 +423,66 @@ class SealedLetterService {
               'attempts': q.attempts,
             });
           }
+        case SealedKind.here:
+          // The peer is reading its mailbox now: whatever waits for it
+          // goes again at once instead of at the end of its pause.
+          var waiting = 0;
+          for (final q in _queue) {
+            if (q.to != opened.senderInstall || q.deliveredAt != null) {
+              continue;
+            }
+            q.nextAt = _clock();
+            waiting++;
+          }
+          onEvent?.call('here_rx', <String, Object?>{
+            'from': opened.senderInstall,
+            'to': own,
+            'waiting_for_them': waiting,
+          });
+          if (waiting > 0) resend = true;
       }
     }
     if (changed) {
       await _save();
       await _publish();
     }
+    if (resend) unawaited(flush().catchError((Object _) {}));
   }
+
+  /// Tells every pinned peer that this install is reading its mailbox now,
+  /// and makes every letter still waiting here due at once. Called when the
+  /// service starts and when the door comes back.
+  ///
+  /// It is a sealed box like any other — the relay cannot tell it from a
+  /// letter — but a pinned peer who is listening does learn that this
+  /// install is online.
+  Future<void> announce() => _serial(() async {
+    await _load();
+    final now = _clock();
+    for (final q in _queue) {
+      if (q.deliveredAt == null) q.nextAt = now;
+    }
+    final own = await _own();
+    for (final peer in await _identity.pinnedInstalls()) {
+      final key = await _identity.store.pinnedKeyFor(peer);
+      if (key == null || peer == own) continue;
+      final box = await _codec.seal(
+        recipientInstall: peer,
+        recipientKey: key,
+        kind: SealedKind.here,
+        letterId: _codec.newLetterId(),
+        createdAt: now,
+        body: Uint8List(0),
+      );
+      final ok = await door.deposit(peer, box);
+      doorUp.value = ok;
+      onEvent?.call('here_tx', <String, Object?>{
+        'from': own,
+        'to': peer,
+        'deposited': ok,
+      });
+    }
+  });
 
   /// Keeps reading the mailbox and re-sending what still waits, until
   /// [stop]. A door that is down is asked again after a short pause.
@@ -436,10 +490,20 @@ class SealedLetterService {
     if (_running || _disposed) return;
     _running = true;
     _loop = () async {
+      // Null so the first round announces, like a door that just came up.
+      bool? wasUp;
       while (_running && !_disposed) {
         try {
+          if (wasUp != true) {
+            // Only once the door answers: an announcement into a closed
+            // door is nothing, and the next round would repeat it.
+            final reachable = await pollOnce();
+            if (reachable) await announce();
+            wasUp = reachable;
+          }
           await flush();
           final up = await pollOnce(wait: pollWait);
+          wasUp = up;
           if (!up && _running) {
             await Future<void>.delayed(const Duration(seconds: 3));
           }
