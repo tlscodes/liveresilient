@@ -98,8 +98,36 @@ and so did the cheap gates. The last rig run was made at `7fd89bd`, one
 rule change earlier: the changed-key rule in point 4 was changed after it
 and is covered by unit tests only.
 
+## Round two — the desktop start and the Mac's files
+
+Commit `aac47c8`, same day. CI run 37320495408 and Desktop run 37320501665,
+both green. Full `reference_app` suite locally: 730 of 730.
+
+- **The window no longer waits for the keystore.** The identity boot is
+  started and not awaited, and no call starts while it is in flight. One
+  real run of the app through its own `main()` on the Mac:
+
+      APP_START window_ms=1229 identity_pending_at_window=true identity=present identity_ready_ms=1452 keystore_ms=1335 pins_ms=99 other_ms=15
+
+  The window was up while the identity was still pending. The keychain did
+  not ask for its password in this run, so a window standing in front of an
+  unanswered prompt was not observed — that case is unit-tested only.
+- **A Mac keeps its parked letters and its card file in Application
+  Support**, beside the identity file, carried over once from the temp
+  folder. The real run reported `cards_dir=app_support queue_dir=app_support`.
+  This Mac's old folder held no card file and no parked letter, so the
+  carry-over itself ran only in unit tests.
+- **Letter receive on the phone: there is no receive path.** Every letter
+  lane (`HttpLongPollLane`, `WebSocketRelayLane`, `TxtQueryLane`) offers
+  `probe()` and `send()` and nothing inbound; a letter ends as a file on the
+  door's server, addressed to no install. The rig rows that decode a letter
+  "on the phone" hand it to the phone inside the rig job. Nothing was built
+  and nothing invented; sealing a letter to the pinned key was therefore not
+  built either.
+
 ## Not built
 
-- Letter receive on the phone, sealing letters to a pinned identity, and
-  any carrier for them.
+- Letter receive on the phone (a mailbox addressed to an install and a
+  downlink on a lane), sealing letters to a pinned identity, and any
+  carrier for them.
 - A changed-key run on real devices.
