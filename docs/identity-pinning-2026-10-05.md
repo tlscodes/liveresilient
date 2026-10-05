@@ -187,9 +187,79 @@ peers when it starts. Against the real relay with two throwaway installs:
 - "The path was closed" was shown by closing it at the client; the relay
   itself was never down during a run.
 
+## Round four — one side off, and photo, voice, video
+
+Local only (not pushed). Lab rig: the same Mac and the same phone.
+
+**Read first: the pair shelf cannot be built on the deployed relay.** By
+the repo's `broadcast.js`, `/o/<hash>` is write-once, needs no credential
+(the body must hash to its name) and is kept 48 h, and `/a/<author>/<seq>`
+is write-once, kept 48 h and refuses a write without a valid credential
+(403). But the DEPLOYED relay is an older build with no broadcast routes
+at all: every `/o/` and `/a/` request, read or write, answered 404, and
+`GET /` answered 404 "not found" where the repo's code serves a page.
+Deploying the repo's worker is changing the public relay, which this work
+may not do. So no shelf; the existing mailbox was taken further instead.
+
+**Media.** A photo, a voice note or a video is a letter that describes it
+(kind, type, size, SHA-256, pieces, duration) plus the pieces, each its own
+sealed box of at most 48 000 bytes, up to about 3 MB. The recipient gives
+its receipt only when the whole matches the description, and asks for
+exactly the pieces it lacks.
+
+**One side off at the moment of sending, both directions.** "Off" means
+the app's process was not running; the phone app was terminated and
+launched with `devicectl`, never reinstalled. Times are UTC.
+
+| Direction | Kind | Bytes | Sent | Opened on the other device | Receipt back |
+| --- | --- | --- | --- | --- | --- |
+| Mac → phone (phone off) | text | 69 | 16:57:29.4 | 16:58:04.0 | 16:58:05.1 |
+| Mac → phone (phone off) | photo | 101 738 | 16:57:30.4 | 16:58:04.5 | 16:58:05.1 |
+| Mac → phone (phone off) | voice, 30 s | 64 715 | 16:57:31.6 | 16:58:05.1 | 16:58:05.4 |
+| Mac → phone (phone off) | video, 10 s | 38 103 | 16:57:32.1 | 16:58:05.4 | 16:58:05.5 |
+| phone → Mac (Mac app off) | text | 51 | 16:59:04.1 | 17:01:51.0 | 17:01:52.2 |
+| phone → Mac (Mac app off) | video, 10 s | 38 103 | 16:59:04.4 | 17:01:51.9 | 17:01:52.2 |
+| phone → Mac (Mac app off) | voice, 30 s | 64 715 | 16:59:04.9 | 17:01:51.9 | 17:01:52.7 |
+| phone → Mac (Mac app off) | photo | 101 738 | 16:59:05.3 | 17:01:53.5 | 17:01:53.7 |
+
+The phone was switched on at 16:58:03 and had opened all four by 16:58:05.
+The Mac app was started at 17:00:10 (its build takes most of two minutes)
+and had opened all four by 17:01:53; in between the phone's journal shows
+five attempts per letter with no receipt, then the Mac's "I am reading my
+mailbox now", then the sixth attempt with every piece. The SHA-256 of each
+file that opened on the Mac equals the file the Mac had sent
+(`b7591bd9`, `a95fcc79`, `2c5eb559`).
+
+What that table is and is not:
+
+- "Opened" is the app's mailbox service opening and verifying the letter
+  on that device, with the time it did so; on the phone it is read from
+  the phone's own event journal, copied off the device.
+- The phone wrote the text itself. The photo, voice note and video it sent
+  were the ones it had just received — it has nothing to pick from
+  unattended. The bytes crossed in both directions; nothing was recorded
+  or photographed on the phone.
+- The phone was asked to write by a line in the Mac's own sealed text
+  (`#rig-reply-after=60`), a convention of the rig peer only. A launch-time
+  switch was tried first and never reached the app.
+- While the phone was off the Mac app's screen read, for the two rows in
+  view, "in queue — put in their mailbox 2×, no receipt: they are not
+  reading it · again in 8s", and afterwards "opened by them". The other
+  two rows were outside the visible part of the list and were not read off
+  the screen. The phone's screen was not read by a machine at all.
+- The voice note and the video are shown as a line with their size and
+  length; playing them from the panel is not built. The photo is drawn.
+
 ## Not built
 
-- A relay that keeps a box for an absent recipient, and any carrier for
-  other people's boxes.
-- Sealed photo, voice and video letters: only text was sent.
+- A relay that keeps a box for an absent recipient: a letter still crosses
+  only when both apps are running within the same few seconds, and until
+  then it waits in the sender's queue. Any carrier for other people's
+  boxes.
+- The pair shelf, and the one-time key in a receipt (forward secrecy) that
+  was to come with it.
+- Playing a sealed voice note or video in the panel; recording or picking
+  media on the phone without a person.
+- A lock on reading a mailbox: anyone who knows a public install id can
+  still take its boxes.
 - A changed-key run on real devices.
