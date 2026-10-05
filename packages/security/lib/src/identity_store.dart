@@ -20,6 +20,7 @@ library;
 import 'dart:typed_data';
 
 import 'hex_codec.dart';
+import 'identity_key_agreement.dart';
 
 /// Handle-based signer over an audited Ed25519 implementation. The engine
 /// owns private key material (ideally hardware-backed) and exposes only
@@ -182,6 +183,39 @@ class IdentityStore {
     return pinnedHex == presentedHex
         ? RemoteIdentityCheck.match
         : RemoteIdentityCheck.changed;
+  }
+
+  /// The key pinned for [peerId], or null when none is. A read: unlike
+  /// [checkRemoteIdentity] it never pins, so asking about a stranger does
+  /// not make them a contact.
+  Future<Uint8List?> pinnedKeyFor(String peerId) async {
+    if (peerId.isEmpty) return null;
+    final pinnedHex = await _store.read('$_remoteKeyPrefix$peerId');
+    if (pinnedHex == null) return null;
+    try {
+      final key = hexDecode(pinnedHex);
+      return key.length == 32 ? key : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// X25519 between this install's identity key and
+  /// [remoteX25519PublicKey] (see `identity_key_agreement.dart`). The
+  /// result is input for a KDF, never a key. Throws [UnsupportedError] when
+  /// the engine cannot agree.
+  Future<Uint8List> agreeWithLocalIdentity(
+    Uint8List remoteX25519PublicKey,
+  ) async {
+    final Object engine = _engine;
+    if (engine is! IdentityKeyAgreement) {
+      throw UnsupportedError('this identity engine cannot do key agreement');
+    }
+    await localIdentity(); // Ensures the key exists.
+    return engine.agree(
+      keyHandle: _localKeyHandle,
+      remoteX25519PublicKey: remoteX25519PublicKey,
+    );
   }
 
   /// Re-pins a peer's key after the user explicitly accepted the change

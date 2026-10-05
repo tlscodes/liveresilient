@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../transport_channel.dart';
 
@@ -80,6 +81,54 @@ class HttpLongPollLane implements TransportChannel {
       final result = SendResult(SendStatus.unavailable, error: error);
       health.observe(result);
       return result;
+    }
+  }
+
+  /// The receiving half of this lane: asks the endpoint for whatever it is
+  /// holding for this side, waiting up to [wait] for the first frame.
+  ///
+  /// The relay has always answered `GET` on the same URL the lane posts to
+  /// (see the border relay's long-poll route); nothing on the client ever
+  /// asked. Returns the bytes exactly as held — frames are concatenated, so
+  /// the caller's frames must delimit themselves — an empty list when
+  /// nothing is waiting, and null when the endpoint could not be reached.
+  Future<Uint8List?> receive({Duration wait = Duration.zero}) async {
+    final started = DateTime.now();
+    final budget = _requestTimeout + wait;
+    try {
+      final uri = _sendUri.replace(
+        queryParameters: <String, String>{
+          ..._sendUri.queryParameters,
+          'wait': '${wait.inMilliseconds}',
+        },
+      );
+      final request = await _client.getUrl(uri).timeout(_requestTimeout);
+      final response = await request.close().timeout(budget);
+      final body = BytesBuilder(copy: false);
+      await for (final chunk in response.timeout(budget)) {
+        body.add(chunk);
+      }
+      final rtt = DateTime.now().difference(started).inMilliseconds;
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // A long-poll's round trip is mostly the wait it asked for, so it
+        // says the endpoint is alive without being a latency sample.
+        health.observe(
+          SendResult(SendStatus.ok, rttMs: wait > Duration.zero ? null : rtt),
+        );
+        return body.takeBytes();
+      }
+      health.observe(
+        SendResult(
+          response.statusCode >= 500
+              ? SendStatus.transient
+              : SendStatus.unavailable,
+          rttMs: rtt,
+        ),
+      );
+      return null;
+    } catch (error) {
+      health.observe(SendResult(SendStatus.unavailable, error: error));
+      return null;
     }
   }
 
