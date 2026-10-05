@@ -61,7 +61,7 @@ void main() {
   testWidgets('sealed letters with one side off: the Mac app ($_mode)', (
     tester,
   ) async {
-    expect(['send', 'receive'], contains(_mode));
+    expect(['send', 'write', 'receive'], contains(_mode));
     expect(_dir, isNotEmpty);
     final started = DateTime.now();
     final booted = app.main();
@@ -115,7 +115,7 @@ void main() {
           : tester.widget<Text>(line).data!.replaceAll(' ', '_');
     }
 
-    if (_mode == 'send') {
+    if (_mode == 'send' || _mode == 'write') {
       // The rig peer writes back this many seconds after it opens this
       // text — by then this app has exited.
       final text =
@@ -166,6 +166,34 @@ void main() {
         const Duration(seconds: 10),
       );
 
+      if (_mode == 'write') {
+        // Write, see every letter onto the relay's shelf, say where each
+        // one is — and leave. Nobody is there to open them; this app is
+        // off long before anyone is.
+        await _until<bool>(
+          tester,
+          () =>
+              service.outbox.value
+                  .where((s) => s.at.isAfter(started))
+                  .every((s) => s.onShelf)
+              ? true
+              : null,
+          const Duration(seconds: 120),
+        );
+        await tester.pump(const Duration(seconds: 2));
+        for (final s in service.outbox.value.where(
+          (s) => s.at.isAfter(started),
+        )) {
+          print(
+            'SEALED_RIG written dir=mac_to_phone kind=${s.content.kindLabel} '
+            'from=$own to=${s.to} bytes=${s.bytes} sent_at=${_iso(s.at)} '
+            'on_relay=${s.onShelf} receipt=${s.delivered} '
+            'attempts=${s.attempts} screen=${await onScreen(s.id)}',
+          );
+        }
+        print('SEALED_RIG leaving_at=${_iso(DateTime.now())}');
+        return;
+      }
       // The peer is off. Let the queue try, then say where each letter is.
       await _until<bool>(tester, () => null, const Duration(seconds: 25));
       for (final s in service.outbox.value.where(
@@ -232,6 +260,27 @@ void main() {
         );
       }
       print('SEALED_RIG received=${fresh().length}');
+      // And the receipts for what THIS app wrote before it was switched
+      // off: they were waiting on the shelf too.
+      final cutoff = started.subtract(const Duration(hours: 6));
+      await _until<bool>(
+        tester,
+        () =>
+            service.outbox.value
+                .where((s) => s.at.isAfter(cutoff))
+                .every((s) => s.delivered)
+            ? true
+            : null,
+        const Duration(seconds: 60),
+      );
+      for (final s in service.outbox.value.where((s) => s.at.isAfter(cutoff))) {
+        print(
+          'SEALED_RIG row dir=mac_to_phone kind=${s.content.kindLabel} '
+          'from=$own to=${s.to} bytes=${s.bytes} sent_at=${_iso(s.at)} '
+          'receipt_read_at=${_iso(s.deliveredAt)} receipt=${s.delivered} '
+          'attempts=${s.attempts}',
+        );
+      }
       // Give the receipts time to leave before the app goes off again.
       await _until<bool>(tester, () => null, const Duration(seconds: 12));
       print('SEALED_RIG note=utf8_check ${utf8.encode('ok').length == 2}');
