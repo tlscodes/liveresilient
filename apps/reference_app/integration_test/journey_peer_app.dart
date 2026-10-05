@@ -79,7 +79,12 @@ import 'package:reference_app/src/peer_identity.dart';
 import 'package:reference_app/src/photo_letter_picker.dart'
     show photoLetterFallbackChannel;
 import 'package:reference_app/src/call_session.dart'
-    show defaultBorderRelayEndpoints, parseValveResolvers;
+    show
+        defaultBorderRelayEndpoints,
+        defaultBorderRelayHost,
+        parseValveResolvers;
+import 'package:reference_app/src/sealed/sealed_letters.dart';
+import 'package:reference_app/src/ui/sealed_letters_panel.dart';
 import 'package:reference_app/src/ui/letter_widgets.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -660,6 +665,21 @@ class JourneyPeer extends LetterComposer {
     // outlive this process. Never throws; `identity` says if it is there.
     await bootAppIdentity();
     final ownInstall = await appIdentity?.installId();
+    // This install's sealed mailbox, read by the same service the app
+    // runs, from the moment it has an identity. Its raw facts (ids,
+    // sizes, flags — never a body) go to the hub as `sealed` events.
+    final booted = appIdentity;
+    if (booted != null && sealedLetterService.value == null) {
+      final service = SealedLetterService.disk(
+        identity: booted,
+        relayHost: defaultBorderRelayHost,
+        onEvent: (what, fields) => unawaited(
+          _report('sealed', <String, Object?>{'what': what, ...fields}),
+        ),
+      );
+      sealedLetterService.value = service;
+      unawaited(service.load().then((_) => service.start()));
+    }
     // `blob: true` tells the runner this install posts media bytes to /blob;
     // an older install reports only sha256 receipts. `blackout: true` says
     // it can hold a signed bundle across an outage, and `pubkey` is the
@@ -3052,6 +3072,25 @@ class _Lanes {
             }, run: _run),
           );
           if (stopped) unawaited(_stack.controller.hangUp());
+          // One sealed letter per run, written here and locked to the key
+          // this phone has pinned for the install it just heard from. It
+          // travels through that install's mailbox, not through this call.
+          final sealed = sealedLetterService.value;
+          final writeTo = lastPeerSighting.value?.peerInstall;
+          if (!stopped && sealed != null && writeTo != null && !_sealedSent) {
+            _sealedSent = true;
+            unawaited(
+              sealed
+                  .send(
+                    toInstall: writeTo,
+                    body: Uint8List.fromList(
+                      utf8.encode('sealed on the phone, run $_run'),
+                    ),
+                  )
+                  .then((_) {})
+                  .catchError((Object _) {}),
+            );
+          }
           // The app's own comparison sheet, on this screen: the number and
           // the two answers. Only a touch on this phone calls confirmMatch;
           // nothing in the rig can.
@@ -3227,6 +3266,8 @@ class _Lanes {
 
   // Whether the comparison sheet is up on this phone's screen.
   bool _sheetOpen = false;
+  // Whether this run's sealed letter was already written.
+  bool _sealedSent = false;
 
   Future<void> close() async {
     _ticker?.cancel();
@@ -3290,6 +3331,19 @@ class JourneyPeerApp extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
+                // Sealed letters, in and out: the panel the app shows.
+                ValueListenableBuilder<SealedLetterService?>(
+                  valueListenable: sealedLetterService,
+                  builder: (context, service, _) {
+                    final identity = appIdentity;
+                    return service == null || identity == null
+                        ? const SizedBox.shrink()
+                        : SealedLettersPanel(
+                            service: service,
+                            identity: identity,
+                          );
+                  },
+                ),
                 ValueListenableBuilder<String>(
                   valueListenable: peer.letter,
                   builder: (context, value, _) => value.isEmpty

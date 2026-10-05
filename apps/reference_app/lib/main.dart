@@ -53,6 +53,8 @@ import 'src/ui/incoming_call_screen.dart';
 import 'src/ui/letter_sheet.dart';
 import 'src/ui/letter_thread.dart';
 import 'src/ui/network_truth.dart';
+import 'src/sealed/sealed_letters.dart';
+import 'src/ui/sealed_letters_panel.dart';
 import 'src/ui/settings_screen.dart';
 import 'src/letter_queue_keystore.dart';
 import 'src/peer_identity.dart';
@@ -345,9 +347,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   static bool get _liveFeedsAllowed => AppMotion.ambientEnabled;
 
+  // Sealed letters: this install's mailbox on the border relay, read from
+  // the moment the install has an identity. Null before that, and on a host
+  // that has none (a widget test), where nothing is read and nothing shown.
+  SealedLetterService? _sealed;
+
+  void _startSealedLetters() {
+    final identity = appIdentity;
+    if (_sealed != null || identity == null || identityBootPending.value) {
+      return;
+    }
+    final service = SealedLetterService.disk(
+      identity: identity,
+      relayHost: defaultBorderRelayHost,
+    );
+    _sealed = service;
+    sealedLetterService.value = service;
+    unawaited(service.load().then((_) => service.start()));
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    identityBootPending.addListener(_startSealedLetters);
+    _startSealedLetters();
     WidgetsBinding.instance.addObserver(this);
     _call.addListener(_onChanged);
     _chat.addListener(_onChanged);
@@ -497,6 +521,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    identityBootPending.removeListener(_startSealedLetters);
+    final sealed = _sealed;
+    _sealed = null;
+    if (sealed != null) {
+      if (identical(sealedLetterService.value, sealed)) {
+        sealedLetterService.value = null;
+      }
+      unawaited(sealed.dispose());
+    }
     WidgetsBinding.instance.removeObserver(this);
     _call.removeListener(_onChanged);
     _chat.removeListener(_onChanged);
@@ -771,14 +804,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 if (mounted) setState(() {});
               },
       ),
-      RefreshIndicator(
-        onRefresh: _reloadConversations,
-        child: ConversationsScreen(
-          conversations: _conversations(),
-          loading: _conversationsLoading,
-          onOpen: _openThread,
-          onLetter: _openLetter,
-        ),
+      Column(
+        children: [
+          // Letters sealed to a pinned key, in and out. Absent until this
+          // install has an identity and someone to write to.
+          if (_sealed != null && appIdentity != null)
+            SealedLettersPanel(service: _sealed!, identity: appIdentity!),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _reloadConversations,
+              child: ConversationsScreen(
+                conversations: _conversations(),
+                loading: _conversationsLoading,
+                onOpen: _openThread,
+                onLetter: _openLetter,
+              ),
+            ),
+          ),
+        ],
       ),
       SettingsScreen(
         themeMode: widget.themeMode,

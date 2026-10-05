@@ -87,6 +87,12 @@ class NotPinnedError extends StateError {
   NotPinnedError(String install) : super('no pinned key for $install');
 }
 
+/// The app's one mailbox service, once this install has an identity; null
+/// before, and on a host with no identity. A rig driver reads it; the app's
+/// own screens are handed the service directly.
+final ValueNotifier<SealedLetterService?> sealedLetterService =
+    ValueNotifier<SealedLetterService?>(null);
+
 class SealedLetterService {
   SealedLetterService({
     required AppIdentity identity,

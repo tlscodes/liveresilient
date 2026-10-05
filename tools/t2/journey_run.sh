@@ -591,6 +591,7 @@ defaults write com.voicecallkit.referenceApp NSAppSleepDisabled -bool YES 2>/dev
     --dart-define=JOURNEY_HOLD_S="$HOLD" --dart-define=E2E_CONNECT_BUDGET_S="$BUDGET" \
     --dart-define=JOURNEY_FEATURE_BUDGET_S="$FEATURE_BUDGET" \
     --dart-define=JOURNEY_VERIFY_WAIT_S="${JOURNEY_VERIFY_WAIT_S:-0}" \
+    --dart-define=JOURNEY_SEALED_WAIT_S="${JOURNEY_SEALED_WAIT_S:-0}" \
     --dart-define=JOURNEY_PROFILE="$PROFILE" --dart-define=JOURNEY_RUN_ID="$RUN_ID" \
     --dart-define=JOURNEY_PHOTO_FILE="$RUN/fixtures/photo_src.jpg" \
     --dart-define=JOURNEY_PHOTO_BYTES="$PHOTO_BYTES" --dart-define=JOURNEY_VOICE_S="$VOICE_S" \
@@ -623,7 +624,9 @@ fi
 # the call ends if the app side dies silently.
 # JOURNEY_VERIFY_WAIT_S (default 0): how long the app keeps the safety-number
 # sheet open for a person to compare and answer; the phone must outlast it.
-PHONE_HOLD=$((HOLD + BUDGET + 4 * FEATURE_BUDGET + 60 + ${JOURNEY_VERIFY_WAIT_S:-0}))
+# JOURNEY_SEALED_WAIT_S (default 0): how long the app waits, each way, for a
+# sealed letter to cross the two installs' mailboxes.
+PHONE_HOLD=$((HOLD + BUDGET + 4 * FEATURE_BUDGET + 60 + ${JOURNEY_VERIFY_WAIT_S:-0} + 2 * ${JOURNEY_SEALED_WAIT_S:-0}))
 launched=""
 for try in 1 2 3 4 5; do
   out=$(xcrun devicectl device process launch --terminate-existing --device "$PHONE" "$BUNDLE_ID" 2>&1)

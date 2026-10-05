@@ -59,6 +59,7 @@ import 'package:reference_app/src/live_chat_registry.dart';
 import 'package:reference_app/src/live_quality_feed.dart'
     show liveQualitySourceLabel;
 import 'package:reference_app/src/peer_identity.dart';
+import 'package:reference_app/src/sealed/sealed_letters.dart';
 import 'package:reference_app/src/photo_ingest.dart'
     show buildStagedPhotoArtifacts;
 import 'package:reference_app/src/photo_source.dart';
@@ -999,6 +1000,84 @@ void main() {
           'trust=${peerTrust.value?.name ?? '-'}',
         );
       }
+    }
+
+    // Sealed letters, both ways, through the two installs' mailboxes on the
+    // border relay — not through this call. Mac -> phone is typed into the
+    // app's own panel and sent with its own button; the line is printed
+    // when the phone's receipt has come back. Phone -> Mac is whatever the
+    // app's mailbox service opened from that install during this run, and
+    // whether its text is on this screen. Ids, sizes and flags only.
+    const sealedWaitS = int.fromEnvironment('JOURNEY_SEALED_WAIT_S');
+    if (sealedWaitS > 0) {
+      final sealed = sealedLetterService.value;
+      final seen = lastPeerSighting.value;
+      await tester.tap(find.byIcon(Icons.chat_bubble));
+      await tester.pump(const Duration(milliseconds: 800));
+      final compose = find.byKey(const Key('sealed-compose'));
+      if (sealed == null || seen == null || compose.evaluate().isEmpty) {
+        print(
+          'JOURNEY_APP sealed ready=false service=${sealed != null} '
+          'peer=${seen != null} panel=${compose.evaluate().isNotEmpty}',
+        );
+      } else {
+        final text =
+            'sealed on the mac at '
+            '${DateTime.now().toUtc().toIso8601String()}';
+        final waited = Stopwatch()..start();
+        await tester.enterText(compose, text);
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.tap(find.byKey(const Key('sealed-send')));
+        final delivered = await _pumpUntil<SealedSent>(
+          tester,
+          () {
+            for (final s in sealed.outbox.value) {
+              if (s.text == text && s.delivered) return s;
+            }
+            return null;
+          },
+          budget: const Duration(seconds: sealedWaitS),
+          step: const Duration(milliseconds: 500),
+        );
+        final queued = sealed.outbox.value.where((s) => s.text == text);
+        print(
+          'JOURNEY_APP sealed_tx from=${seen.install} to=${seen.peerInstall} '
+          'bytes=${utf8.encode(text).length} '
+          'id=${queued.isEmpty ? '-' : queued.first.id} '
+          'attempts=${queued.isEmpty ? '-' : queued.first.attempts} '
+          'receipt_from_recipient=${delivered != null} '
+          'opened_shown_on_screen=${find.textContaining('opened by them').evaluate().isNotEmpty} '
+          'door_up=${sealed.doorUp.value} waited_ms=${waited.elapsedMilliseconds}',
+        );
+        final got = await _pumpUntil<SealedReceived>(
+          tester,
+          () {
+            for (final r in sealed.inbox.value.reversed) {
+              if (r.from == seen.peerInstall &&
+                  r.receivedAt.isAfter(_driverStartedAt)) {
+                return r;
+              }
+            }
+            return null;
+          },
+          budget: const Duration(seconds: sealedWaitS),
+          step: const Duration(milliseconds: 500),
+        );
+        await tester.pump(const Duration(milliseconds: 600));
+        print(
+          got == null
+              ? 'JOURNEY_APP sealed_rx seen=false from=${seen.peerInstall} '
+                    'to=${seen.install} door_up=${sealed.doorUp.value} '
+                    'waited_ms=${waited.elapsedMilliseconds}'
+              : 'JOURNEY_APP sealed_rx seen=true from=${got.from} '
+                    'to=${seen.install} bytes=${got.body.length} id=${got.id} '
+                    'opened=true verified=${got.verified} '
+                    'text_on_screen=${find.text(got.text).evaluate().isNotEmpty} '
+                    'waited_ms=${waited.elapsedMilliseconds}',
+        );
+      }
+      await tester.tap(find.byIcon(Icons.call));
+      await tester.pump(const Duration(milliseconds: 400));
     }
 
     var samples = 0;

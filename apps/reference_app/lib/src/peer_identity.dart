@@ -109,6 +109,12 @@ class PinnedPeerStore implements SecureKeyValueStore {
     final data = await _storage.load();
     if (data.remove(key) != null) await _storage.save(data);
   }
+
+  /// Every key in the file that starts with [prefix], sorted.
+  Future<List<String>> keysWithPrefix(String prefix) async => [
+    for (final key in (await _storage.load()).keys)
+      if (key.startsWith(prefix)) key,
+  ]..sort();
 }
 
 /// This install's identity: its key (through [store]) and its install id.
@@ -154,6 +160,18 @@ class AppIdentity {
   /// True only while the confirmed key is the one presented now.
   Future<bool> isVerified(String peerInstall, Uint8List publicKey) async =>
       await _pins.read('$_verifiedPrefix$peerInstall') == _hex(publicKey);
+
+  /// The install ids this install has pinned a key for — everyone it can
+  /// write a sealed letter to. Empty for a pin store that cannot be listed.
+  Future<List<String>> pinnedInstalls() async {
+    final pins = _pins;
+    if (pins is! PinnedPeerStore) return const <String>[];
+    const prefix = 'peer-identity:';
+    return [
+      for (final key in await pins.keysWithPrefix(prefix))
+        key.substring(prefix.length),
+    ];
+  }
 
   /// Whether any confirmation for [peerInstall] is on file. A rig run asks
   /// this of a fresh store after the call is over; a live call uses
