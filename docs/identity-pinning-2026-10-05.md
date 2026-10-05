@@ -15,8 +15,12 @@ Every install, with no switch and nothing to configure:
    key under the peer's install id;
 3. reads **not yet verified** until the person compares the sixty-digit
    safety number on both screens and answers "They match";
-4. stops the call when a different key arrives under a pinned install id,
-   and clears any earlier confirmation.
+4. stops the call when a different key arrives under a pinned install id.
+   The pin and the confirmation of the pinned key stay: a confirmation is
+   bound to its key, so a stranger's key can never read verified, and
+   erasing it would let anyone who knows a public install id make the
+   person verify again and again. Only the person's explicit "accept the
+   new key" clears it, and the accepted key starts not verified.
 
 Nothing in the app or the rig can produce "verified" except the person's
 answer on the comparison sheet.
@@ -60,7 +64,7 @@ Phones and properly signed releases never had this prompt.
 No second install with the same install id exists on the rig, so these
 were not seen on a device:
 
-- **A changed key.** The call stops and the confirmation is cleared.
+- **A changed key.** The call stops; the old key keeps its confirmation.
 - **Accepting a legitimately new key.** The stopped call leaves a pending
   change; the person is asked twice; the new key replaces the pin and
   starts not verified; the old key then reads changed.
@@ -72,7 +76,7 @@ were not seen on a device:
 - Trust on first use does not stop a signalling server that inserts itself
   into the very first call. Only the safety-number comparison does.
 - Anyone who can present a pinned install id with another key can stop a
-  call and clear a confirmation. They cannot become verified.
+  call. They cannot become verified and cannot erase a confirmation.
 - Identity keys sign; they do not seal. Letters are not locked with them,
   and the phone has no letter-receiving path yet.
 - The rig peer shows the app's own comparison sheet, but it is a test
