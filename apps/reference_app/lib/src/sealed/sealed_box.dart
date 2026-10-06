@@ -51,10 +51,11 @@ enum SealedKind {
   /// "I opened letter X": the letter's id and the SHA-256 of its body.
   receipt(2),
 
-  /// "I am reading my mailbox now", with no body. The relay keeps a box
-  /// only for seconds when nobody is reading (measured: gone between 8 and
-  /// 15 s), so a letter lands only while its recipient is listening. This
-  /// tells a pinned peer that now is such a moment.
+  /// "I am reading now", with no body. NO LONGER SENT: it told every pinned
+  /// peer when this install came on, and it existed for a mailbox that kept
+  /// a box only while its reader held a request open. Letters wait on a
+  /// shelf now and are found by looking. The number stays reserved so that
+  /// one from an older install is recognised — and ignored.
   here(3),
 
   /// One piece of a photo, voice note or video: the letter's id, a two-byte

@@ -59,7 +59,7 @@ import 'package:reference_app/src/live_chat_registry.dart';
 import 'package:reference_app/src/live_quality_feed.dart'
     show liveQualitySourceLabel;
 import 'package:reference_app/src/peer_identity.dart';
-import 'package:reference_app/src/sealed/sealed_letters.dart';
+import 'package:reference_app/src/sealed/sealed_letter_service.dart';
 import 'package:reference_app/src/photo_ingest.dart'
     show buildStagedPhotoArtifacts;
 import 'package:reference_app/src/photo_source.dart';
@@ -1047,7 +1047,7 @@ void main() {
           'attempts=${queued.isEmpty ? '-' : queued.first.attempts} '
           'receipt_from_recipient=${delivered != null} '
           'opened_shown_on_screen=${find.textContaining('opened by them').evaluate().isNotEmpty} '
-          'door_up=${sealed.doorUp.value} waited_ms=${waited.elapsedMilliseconds}',
+          'relay=${sealed.relay.value.name} waited_ms=${waited.elapsedMilliseconds}',
         );
         final got = await _pumpUntil<SealedReceived>(
           tester,
@@ -1067,7 +1067,7 @@ void main() {
         print(
           got == null
               ? 'JOURNEY_APP sealed_rx seen=false from=${seen.peerInstall} '
-                    'to=${seen.install} door_up=${sealed.doorUp.value} '
+                    'to=${seen.install} relay=${sealed.relay.value.name} '
                     'waited_ms=${waited.elapsedMilliseconds}'
               : 'JOURNEY_APP sealed_rx seen=true from=${got.from} '
                     'to=${seen.install} bytes=${got.body.length} id=${got.id} '

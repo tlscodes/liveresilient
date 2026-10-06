@@ -1,264 +1,62 @@
 // The pair shelf, without a device: real crypto, the real service, the real
-// HTTP transport, and a relay on loopback that keeps the border relay's
+// counted transport, and a relay on loopback that keeps the border relay's
 // archive contract — `/o/<hash>` must hash to its name, `/a/<author>/<seq>`
 // must prove its author with the same three-link check the worker runs,
-// both are write-once — and whose mailbox keeps NOTHING for a side that is
-// not reading, which is what the real one was measured to do after seconds.
-// Lab only: nothing here is a device result.
+// both are write-once. Lab only: nothing here is a device result.
 //
 // Plain `test`, never `testWidgets`: the widget binding replaces HttpClient.
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart';
+import 'package:broadcast/broadcast.dart'
+    show BroadcastHttpResponse, BroadcastHttpTransport;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:reference_app/src/broadcast_wiring.dart'
-    show IoBroadcastHttpTransport;
-import 'package:reference_app/src/intelligence/disk_json_storage.dart';
-import 'package:reference_app/src/peer_identity.dart';
-import 'package:reference_app/src/sealed/mailbox_door.dart';
 import 'package:reference_app/src/sealed/pair_shelf.dart';
-import 'package:reference_app/src/sealed/sealed_blob_store.dart';
+import 'package:reference_app/src/sealed/relay_requests.dart';
 import 'package:reference_app/src/sealed/sealed_box.dart';
 import 'package:reference_app/src/sealed/sealed_content.dart';
-import 'package:reference_app/src/sealed/sealed_letters.dart';
-import 'package:security/security.dart';
+import 'package:reference_app/src/sealed/sealed_letter_service.dart';
 
-class _MemoryStorage implements PersistentStorage {
-  Map<String, Object?> data = {};
+import 'support/loopback_relay.dart';
+
+/// Fails the request with this number (counted from 1), once.
+class _FailsOnce implements BroadcastHttpTransport {
+  _FailsOnce(this._inner, this.failAt);
+
+  final BroadcastHttpTransport _inner;
+  final int failAt;
+  int calls = 0;
 
   @override
-  Future<Map<String, Object?>> load() async =>
-      jsonDecode(jsonEncode(data)) as Map<String, Object?>;
+  Future<BroadcastHttpResponse> get(Uri url) {
+    if (++calls == failAt) throw const SocketException('out of reach');
+    return _inner.get(url);
+  }
 
   @override
-  Future<void> save(Map<String, Object?> data) async {
-    this.data = jsonDecode(jsonEncode(data)) as Map<String, Object?>;
-  }
+  Future<BroadcastHttpResponse> put(
+    Uri url,
+    Uint8List body, {
+    Map<String, String> headers = const {},
+  }) => _inner.put(url, body, headers: headers);
 }
-
-String _hex(List<int> bytes) =>
-    bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-
-/// The border relay on loopback: the archive as the worker implements it,
-/// and a mailbox that forgets at once.
-class _Relay {
-  _Relay._(this._server);
-
-  static Future<_Relay> start() async {
-    final relay = _Relay._(await HttpServer.bind('127.0.0.1', 0));
-    relay._server.listen(relay._serve);
-    return relay;
-  }
-
-  final HttpServer _server;
-  final Map<String, Uint8List> objects = {};
-  final Map<String, Uint8List> pointers = {};
-
-  /// Answer 503 to everything.
-  bool down = false;
-
-  /// Reads work, writes are refused: the relay is reachable but full.
-  bool refuseWrites = false;
-  int rings = 0;
-  int refusedPointerWrites = 0;
-
-  Uri get origin => Uri.parse('http://127.0.0.1:${_server.port}');
-
-  Uri mailbox(String install, String role) => Uri.parse(
-    'http://127.0.0.1:${_server.port}/http?session=$install&role=$role',
-  );
-
-  /// The relay's two days are up.
-  void expireEverything() {
-    objects.clear();
-    pointers.clear();
-  }
-
-  Future<Uint8List> _body(HttpRequest request) async {
-    final body = BytesBuilder();
-    await for (final chunk in request) {
-      body.add(chunk);
-    }
-    return body.takeBytes();
-  }
-
-  Future<String> _sha(List<int> bytes) async =>
-      _hex((await Sha256().hash(bytes)).bytes);
-
-  Future<bool> _signed(List<int> key, List<int> message, List<int> sig) =>
-      Ed25519().verify(
-        message,
-        signature: Signature(
-          sig,
-          publicKey: SimplePublicKey(key, type: KeyPairType.ed25519),
-        ),
-      );
-
-  /// The worker's `authorizeDescriptorWrite`, link for link.
-  Future<bool> _authorised(
-    String author,
-    Uint8List pointer,
-    String? header,
-  ) async {
-    if (header == null) return false;
-    final Uint8List credentials;
-    try {
-      credentials = base64Url.decode(base64Url.normalize(header));
-    } on FormatException {
-      return false;
-    }
-    if (credentials.length != 32 + 125) return false;
-    final root = credentials.sublist(0, 32);
-    final certificate = credentials.sublist(32);
-    if ((await _sha(root)).substring(0, 32) != author) return false;
-    if (_hex(certificate.sublist(1, 17)) != author) return false;
-    if (!await _signed(root, [
-      ...utf8.encode('vck/broadcast/publishing-key/v1\n'),
-      ...certificate.sublist(0, 125 - 64),
-    ], certificate.sublist(125 - 64))) {
-      return false;
-    }
-    if (pointer.length < 2 + 16 + 64) return false;
-    if (_hex(pointer.sublist(2, 18)) != author) return false;
-    return _signed(certificate.sublist(17, 49), [
-      ...utf8.encode('vck/broadcast/descriptor/v1\n'),
-      ...pointer.sublist(0, pointer.length - 64),
-    ], pointer.sublist(pointer.length - 64));
-  }
-
-  Future<void> _serve(HttpRequest request) async {
-    final response = request.response;
-    final path = request.uri.path;
-    final write = request.method == 'PUT' || request.method == 'POST';
-    final body = write ? await _body(request) : Uint8List(0);
-    if (!write) await request.drain<void>();
-    if (down || (write && refuseWrites)) {
-      response.statusCode = 503;
-    } else if (path == '/http') {
-      // The mailbox: accepts, keeps nothing — nobody is ever reading here.
-      if (write) rings++;
-      response.statusCode = 204;
-    } else if (path.startsWith('/o/')) {
-      final hash = path.substring(3);
-      if (!write) {
-        final held = objects[hash];
-        response.statusCode = held == null ? 404 : 200;
-        if (held != null) response.add(held);
-      } else if (body.isEmpty) {
-        response.statusCode = 400;
-      } else if (body.length > 100000) {
-        response.statusCode = 413;
-      } else if (await _sha(body) != hash) {
-        response.statusCode = 400;
-      } else {
-        response.statusCode = objects.containsKey(hash) ? 204 : 201;
-        objects[hash] = body;
-      }
-    } else if (path.startsWith('/a/')) {
-      final key = path.substring(3);
-      final author = key.split('/').first;
-      if (!write) {
-        final held = pointers[key];
-        response.statusCode = held == null ? 404 : 200;
-        if (held != null) response.add(held);
-      } else if (body.isEmpty || body.length > 512) {
-        response.statusCode = body.isEmpty ? 400 : 413;
-      } else if (!await _authorised(
-        author,
-        body,
-        request.headers.value('x-broadcast-auth'),
-      )) {
-        refusedPointerWrites++;
-        response.statusCode = 403;
-      } else {
-        final held = pointers[key];
-        if (held == null) {
-          pointers[key] = body;
-          response.statusCode = 201;
-        } else {
-          response.statusCode = _hex(held) == _hex(body) ? 204 : 409;
-        }
-      }
-    } else {
-      response.statusCode = 404;
-    }
-    await response.close();
-  }
-
-  Future<void> stop() => _server.close(force: true);
-}
-
-/// One install: its own keystore, pins, letter file, pieces and clock.
-class _Install {
-  _Install()
-    : identity = AppIdentity(
-        engine: CryptographyIdentityKeyEngine(keyStore: InMemoryKeyStore()),
-        pins: PinnedPeerStore(_MemoryStorage()),
-      );
-
-  final AppIdentity identity;
-  final _MemoryStorage letters = _MemoryStorage();
-  final MemorySealedBlobStore blobs = MemorySealedBlobStore();
-  final List<(String, Map<String, Object?>)> events = [];
-  DateTime now = DateTime.utc(2026, 10, 5, 12);
-  late final String id;
-  late final Uint8List key;
-
-  Future<void> ready() async {
-    id = _hex(await identity.installId());
-    key = (await identity.store.localIdentity()).publicKey;
-  }
-
-  Future<void> pin(_Install other) => identity.store.checkRemoteIdentity(
-    peerId: other.id,
-    presentedPublicKey: other.key,
-  );
-
-  PairShelf shelf(_Relay relay) => PairShelf(
-    identity: identity,
-    origin: relay.origin,
-    transport: IoBroadcastHttpTransport(),
-    clock: () => now,
-  );
-
-  /// A fresh service over the same files — what switching the app on is.
-  SealedLetterService service(_Relay relay) => SealedLetterService(
-    identity: identity,
-    door: RelayMailboxDoor(
-      uriFor: relay.mailbox,
-      requestTimeout: const Duration(seconds: 2),
-    ),
-    storage: letters,
-    blobs: blobs,
-    shelf: shelf(relay),
-    clock: () => now,
-    onEvent: (event, fields) => events.add((event, fields)),
-  );
-
-  Iterable<Map<String, Object?>> of(String event) =>
-      events.where((e) => e.$1 == event).map((e) => e.$2);
-}
-
-Uint8List _utf8(String text) => Uint8List.fromList(utf8.encode(text));
 
 void main() {
-  late _Relay relay;
-  late _Install mac;
-  late _Install phone;
+  late LoopbackRelay relay;
+  late TestInstall mac;
+  late TestInstall phone;
   final services = <SealedLetterService>[];
 
-  SealedLetterService on(_Install install) {
+  SealedLetterService on(TestInstall install) {
     final service = install.service(relay);
     services.add(service);
     return service;
   }
 
   setUp(() async {
-    relay = await _Relay.start();
-    mac = _Install();
-    phone = _Install();
+    relay = await LoopbackRelay.start();
+    mac = TestInstall();
+    phone = TestInstall();
     await mac.ready();
     await phone.ready();
     await mac.pin(phone);
@@ -273,6 +71,26 @@ void main() {
     await relay.stop();
   });
 
+  /// What the phone seals for the Mac: a text letter's box.
+  Future<Uint8List> boxFromPhone(String text) {
+    final codec = SealedBoxCodec(phone.identity);
+    return codec.seal(
+      recipientInstall: mac.id,
+      recipientKey: mac.key,
+      kind: SealedKind.letter,
+      letterId: codec.newLetterId(),
+      createdAt: phone.now,
+      body: SealedContent.text(text).encode(),
+    );
+  }
+
+  /// How many requests [action] made.
+  Future<int> asked(Future<Object?> Function() action) async {
+    final before = relay.requests.length;
+    await action();
+    return relay.requests.length - before;
+  }
+
   group('a letter waits on the shelf', () {
     test('the Mac writes and is switched off; the phone comes on later and '
         'opens it; the Mac learns of it the next time IT comes on', () async {
@@ -282,7 +100,7 @@ void main() {
       final writing = on(mac);
       await writing.send(
         toInstall: phone.id,
-        body: _utf8('while you were away'),
+        body: utf8Of('while you were away'),
       );
       await writing.sendMedia(
         toInstall: phone.id,
@@ -300,7 +118,7 @@ void main() {
       // An hour later, on another clock, the phone is switched on.
       phone.now = phone.now.add(const Duration(hours: 1));
       final reading = on(phone);
-      expect(await reading.pollOnce(), isTrue);
+      expect(await reading.look(), isTrue);
       final inbox = reading.inbox.value;
       expect(inbox.map((l) => l.content.kindLabel), ['text', 'photo']);
       expect(inbox.first.text, 'while you were away');
@@ -314,20 +132,9 @@ void main() {
       // The Mac comes back to two receipts, with the phone off.
       mac.now = mac.now.add(const Duration(hours: 2));
       final back = on(mac);
-      expect(await back.pollOnce(), isTrue);
+      expect(await back.look(), isTrue);
       expect(back.outbox.value.every((s) => s.delivered), isTrue);
       expect(back.outbox.value.first.describe(mac.now), 'opened by them');
-    });
-
-    test('the mailbox kept nothing; only the shelf carried it', () async {
-      final writing = on(mac);
-      await writing.send(toInstall: phone.id, body: _utf8('shelf only'));
-      await writing.flush();
-      expect(relay.rings, greaterThan(0), reason: 'the doorbell was rung');
-      await writing.dispose();
-      final reading = on(phone);
-      await reading.pollOnce();
-      expect(reading.inbox.value.single.text, 'shelf only');
     });
 
     test(
@@ -336,16 +143,13 @@ void main() {
         final writing = on(mac);
         await writing.send(
           toInstall: phone.id,
-          body: _utf8('nobody else may read this'),
+          body: utf8Of('nobody else may read this'),
         );
         await writing.flush();
         expect(relay.objects, isNotEmpty);
         for (final entry in relay.objects.entries) {
           expect(entry.value.sublist(0, 5), sealedMagic);
-          expect(
-            utf8.decode(entry.value, allowMalformed: true),
-            isNot(contains('nobody else')),
-          );
+          expect(containsBytes(entry.value, utf8Of('nobody else')), isFalse);
         }
         for (final entry in relay.pointers.entries) {
           expect(entry.value, hasLength(PairShelf.pointerBytes));
@@ -361,18 +165,18 @@ void main() {
       'read twice, and after a relaunch: shown once, receipted once',
       () async {
         final writing = on(mac);
-        await writing.send(toInstall: phone.id, body: _utf8('once'));
+        await writing.send(toInstall: phone.id, body: utf8Of('once'));
         await writing.flush();
         final first = on(phone);
-        await first.pollOnce();
-        await first.pollOnce();
+        await first.look();
+        await first.look();
         expect(first.inbox.value, hasLength(1));
         expect(phone.of('rx'), hasLength(1));
         expect(phone.of('receipt_tx'), hasLength(1));
         await first.dispose();
 
         final again = on(phone);
-        await again.pollOnce();
+        await again.look();
         expect(again.inbox.value, hasLength(1));
         expect(phone.of('rx'), hasLength(1), reason: 'the cursor was kept');
         expect(phone.of('receipt_tx'), hasLength(1));
@@ -383,27 +187,27 @@ void main() {
       'both directions at once, each side off when the other writes',
       () async {
         final macWrites = on(mac);
-        await macWrites.send(toInstall: phone.id, body: _utf8('from the Mac'));
+        await macWrites.send(toInstall: phone.id, body: utf8Of('from the Mac'));
         await macWrites.flush();
         await macWrites.dispose();
         final phoneWrites = on(phone);
         await phoneWrites.send(
           toInstall: mac.id,
-          body: _utf8('from the phone'),
+          body: utf8Of('from the phone'),
         );
         await phoneWrites.flush();
-        await phoneWrites.pollOnce();
+        await phoneWrites.look();
         expect(phoneWrites.inbox.value.single.text, 'from the Mac');
         await phoneWrites.dispose();
 
         final macBack = on(mac);
-        await macBack.pollOnce();
+        await macBack.look();
         expect(macBack.inbox.value.single.text, 'from the phone');
         expect(macBack.outbox.value.single.delivered, isTrue);
         await macBack.dispose();
 
         final phoneBack = on(phone);
-        await phoneBack.pollOnce();
+        await phoneBack.look();
         expect(phoneBack.outbox.value.single.delivered, isTrue);
       },
     );
@@ -413,10 +217,10 @@ void main() {
     test('a third install that knows both keys finds nothing and can put '
         'nothing there', () async {
       final writing = on(mac);
-      await writing.send(toInstall: phone.id, body: _utf8('for the phone'));
+      await writing.send(toInstall: phone.id, body: utf8Of('for the phone'));
       await writing.flush();
 
-      final third = _Install();
+      final third = TestInstall();
       await third.ready();
       await third.pin(mac);
       await third.pin(phone);
@@ -443,14 +247,14 @@ void main() {
 
     test('a pointer cannot be replaced: the archive is write-once', () async {
       final writing = on(mac);
-      await writing.send(toInstall: phone.id, body: _utf8('first'));
+      await writing.send(toInstall: phone.id, body: utf8Of('first'));
       await writing.flush();
       final before = Map<String, Uint8List>.of(relay.pointers);
       // The same install, having lost its file and its count, writes again:
       // it steps over the taken number instead of overwriting it.
       mac.letters.data = {};
       final amnesiac = on(mac);
-      await amnesiac.send(toInstall: phone.id, body: _utf8('second'));
+      await amnesiac.send(toInstall: phone.id, body: utf8Of('second'));
       await amnesiac.flush();
       for (final entry in before.entries) {
         expect(relay.pointers[entry.key], entry.value);
@@ -458,9 +262,163 @@ void main() {
       expect(relay.pointers.length, greaterThan(before.length));
 
       final reading = on(phone);
-      await reading.pollOnce();
+      await reading.look();
       expect(reading.inbox.value.map((l) => l.text), ['first', 'second']);
     });
+  });
+
+  group('which days a look asks about', () {
+    test('the first look asks all four; then a fast look asks today, and a '
+        'slow look the three others', () async {
+      final shelf = mac.shelf(relay); // noon: midnight is long past
+      expect(await asked(() => shelf.collect(phone.id)), 4);
+      expect(
+        await asked(() => shelf.collect(phone.id, look: ShelfLook.fast)),
+        1,
+      );
+      expect(
+        await asked(() => shelf.collect(phone.id, look: ShelfLook.slow)),
+        3,
+      );
+    });
+
+    test('yesterday is asked with today until ten minutes past midnight, '
+        'then rests', () async {
+      mac.now = DateTime.utc(2026, 10, 6, 0, 5);
+      final shelf = mac.shelf(relay);
+      Future<int> fast() =>
+          asked(() => shelf.collect(phone.id, look: ShelfLook.fast));
+      expect(await asked(() => shelf.collect(phone.id)), 4);
+      expect(await fast(), 2, reason: 'today and yesterday');
+      expect(
+        await asked(() => shelf.collect(phone.id, look: ShelfLook.slow)),
+        2,
+        reason: 'two days back and tomorrow',
+      );
+
+      mac.now = DateTime.utc(2026, 10, 6, 0, 11);
+      expect(await fast(), 2, reason: 'read to its end once more');
+      expect(await fast(), 1, reason: 'and now it rests');
+      expect(
+        await asked(() => shelf.collect(phone.id, look: ShelfLook.slow)),
+        3,
+        reason: 'the slow look still asks about it',
+      );
+    });
+
+    test('a letter put on yesterday\'s shelf after it rests is still found, '
+        'by the slow look', () async {
+      mac.now = DateTime.utc(2026, 10, 6, 12);
+      final shelf = mac.shelf(relay);
+      await shelf.collect(phone.id);
+      // The phone's clock is half a day behind: it writes to "yesterday".
+      phone.now = DateTime.utc(2026, 10, 5, 23, 59);
+      expect(
+        await phone.shelf(relay).put(mac.id, await boxFromPhone('late')),
+        isTrue,
+      );
+      expect(await shelf.collect(phone.id, look: ShelfLook.fast), isEmpty);
+      expect(await shelf.collect(phone.id, look: ShelfLook.slow), hasLength(1));
+    });
+
+    test('a day behind the one its writer was last seen on is closed for '
+        'good', () async {
+      phone.now = DateTime.utc(2026, 10, 5, 12);
+      final writer = phone.shelf(relay);
+      expect(await writer.put(mac.id, await boxFromPhone('monday')), isTrue);
+
+      mac.now = DateTime.utc(2026, 10, 6, 12);
+      final shelf = mac.shelf(relay);
+      Future<int> slow() =>
+          asked(() => shelf.collect(phone.id, look: ShelfLook.slow));
+      expect(await shelf.collect(phone.id), hasLength(1));
+      // Seen on the 5th: the 4th, read to its end again, is closed.
+      expect(await slow(), 3);
+      expect(await slow(), 2, reason: 'the 4th is not asked about any more');
+
+      // Seen on the 6th: now the 5th closes too.
+      phone.now = DateTime.utc(2026, 10, 6, 12);
+      expect(await writer.put(mac.id, await boxFromPhone('tuesday')), isTrue);
+      expect(await shelf.collect(phone.id, look: ShelfLook.fast), hasLength(1));
+      expect(await slow(), 2, reason: 'the 5th is read to its end once more');
+      expect(await slow(), 1, reason: 'only tomorrow is left');
+    });
+
+    test(
+      'a writer never goes back a day, so a closed day cannot grow',
+      () async {
+        final writer = phone.shelf(relay);
+        phone.now = DateTime.utc(2026, 10, 6, 0, 1);
+        expect(await writer.put(mac.id, await boxFromPhone('one')), isTrue);
+        // Its clock steps back across midnight.
+        phone.now = DateTime.utc(2026, 10, 5, 23, 58);
+        expect(await writer.put(mac.id, await boxFromPhone('two')), isTrue);
+        expect(
+          relay.pointers.keys.map((k) => k.split('/').first).toSet(),
+          hasLength(1),
+          reason: 'both are on the shelf of the 6th',
+        );
+        expect(relay.pointers.keys.map((k) => k.split('/').last).toSet(), {
+          '0',
+          '1',
+        });
+      },
+    );
+
+    test(
+      'a day written under a clock that ran far ahead is not followed',
+      () async {
+        final writer = phone.shelf(relay);
+        phone.now = DateTime.utc(2026, 10, 20, 12);
+        expect(await writer.put(mac.id, await boxFromPhone('ahead')), isTrue);
+        phone.now = DateTime.utc(2026, 10, 6, 12);
+        expect(await writer.put(mac.id, await boxFromPhone('now')), isTrue);
+        mac.now = DateTime.utc(2026, 10, 6, 12);
+        // Two shelves were written to; the reader, whose clock is right,
+        // looks at the 6th and finds the one written under the right clock.
+        expect(
+          relay.pointers.keys.map((k) => k.split('/').first).toSet(),
+          hasLength(2),
+        );
+        expect(await mac.shelf(relay).collect(phone.id), hasLength(1));
+      },
+    );
+
+    test('out of reach part-way: what was read is handed over, and the '
+        'next look reads on from there', () async {
+      final writer = phone.shelf(relay);
+      expect(await writer.put(mac.id, await boxFromPhone('one')), isTrue);
+      expect(await writer.put(mac.id, await boxFromPhone('two')), isTrue);
+      // Requests of the first look: two older days (1, 2), today's first
+      // pointer and box (3, 4), today's second pointer (5) — which fails.
+      final shelf = PairShelf(
+        identity: mac.identity,
+        origin: relay.origin,
+        transport: _FailsOnce(MeteredRelayTransport(budget: mac.budget()), 5),
+        clock: () => mac.now,
+      );
+      expect(await shelf.collect(phone.id), hasLength(1));
+      expect(await shelf.collect(phone.id), hasLength(1));
+      expect(await shelf.collect(phone.id), isEmpty);
+    });
+
+    test('out of reach from the first request: nothing was read', () async {
+      relay.down = true;
+      expect(await mac.shelf(relay).collect(phone.id), isNull);
+    });
+
+    test(
+      'the counts of days the relay no longer keeps are forgotten',
+      () async {
+        final shelf = mac.shelf(relay);
+        mac.now = DateTime.utc(2026, 10, 1, 12);
+        expect(await shelf.put(phone.id, await boxFromPhone('old')), isTrue);
+        expect(shelf.cursors, hasLength(1));
+        mac.now = DateTime.utc(2026, 10, 6, 12);
+        await shelf.collect(phone.id);
+        expect(shelf.cursors, isEmpty);
+      },
+    );
   });
 
   group('when the relay is out of reach or forgets', () {
@@ -468,12 +426,12 @@ void main() {
         'later, it says that instead', () async {
       final writing = on(mac);
       relay.down = true;
-      await writing.send(toInstall: phone.id, body: _utf8('later'));
+      await writing.send(toInstall: phone.id, body: utf8Of('later'));
       await writing.flush();
       var letter = writing.outbox.value.single;
-      expect(letter.state, SealedSentState.queuedDoorClosed);
+      expect(letter.state, SealedSentState.waiting);
       expect(letter.onShelf, isFalse);
-      expect(letter.describe(mac.now), contains('mailbox unreachable'));
+      expect(letter.describe(mac.now), contains('relay unreachable'));
 
       relay.down = false;
       mac.now = mac.now.add(const Duration(seconds: 6));
@@ -491,16 +449,16 @@ void main() {
     test(
       'starting the app again does not shelve a waiting letter twice',
       () async {
-        // Seen on the rig: the app's "I am here" made every unopened letter
-        // due at once, so letters already on the relay were put there again.
+        // Seen on the rig: coming on made every unopened letter due at
+        // once, so letters already on the relay were put there again.
         final writing = on(mac);
-        await writing.send(toInstall: phone.id, body: _utf8('once is enough'));
+        await writing.send(toInstall: phone.id, body: utf8Of('once is enough'));
         await writing.flush();
         final pointers = relay.pointers.length;
         await writing.dispose();
 
         final again = on(mac);
-        await again.announce();
+        await again.retryWaiting();
         await again.flush();
         expect(again.outbox.value.single.attempts, 1);
         expect(relay.pointers.length, pointers);
@@ -511,24 +469,24 @@ void main() {
       'a receipt that could not be shelved is shelved on a later round',
       () async {
         final writing = on(mac);
-        await writing.send(toInstall: phone.id, body: _utf8('receipt later'));
+        await writing.send(toInstall: phone.id, body: utf8Of('receipt later'));
         await writing.flush();
         final reading = on(phone);
         relay.refuseWrites = true;
-        await reading.pollOnce();
+        await reading.look();
         expect(reading.inbox.value.single.text, 'receipt later');
         expect(
           phone.of('receipt_tx').every((e) => e['deposited'] == false),
           isTrue,
           reason: 'tried, and tried again in the same round, in vain',
         );
-        await writing.pollOnce();
+        await writing.look();
         expect(writing.outbox.value.single.delivered, isFalse);
 
         relay.refuseWrites = false;
-        await reading.pollOnce();
+        await reading.look();
         expect(phone.of('receipt_tx').last['deposited'], isTrue);
-        await writing.pollOnce();
+        await writing.look();
         expect(writing.outbox.value.single.delivered, isTrue);
       },
     );
@@ -536,7 +494,7 @@ void main() {
     test('nobody came for two days: the letter is shelved afresh and still '
         'arrives', () async {
       final writing = on(mac);
-      await writing.send(toInstall: phone.id, body: _utf8('patient'));
+      await writing.send(toInstall: phone.id, body: utf8Of('patient'));
       await writing.flush();
       relay.expireEverything();
       mac.now = mac.now.add(const Duration(hours: 41));
@@ -545,9 +503,9 @@ void main() {
       expect(writing.outbox.value.single.attempts, 2);
 
       final reading = on(phone);
-      await reading.pollOnce();
+      await reading.look();
       expect(reading.inbox.value.single.text, 'patient');
-      await writing.pollOnce();
+      await writing.look();
       expect(writing.outbox.value.single.delivered, isTrue);
     });
 
@@ -555,13 +513,13 @@ void main() {
       'a box the relay no longer has does not hold up the ones after it',
       () async {
         final writing = on(mac);
-        await writing.send(toInstall: phone.id, body: _utf8('lost'));
+        await writing.send(toInstall: phone.id, body: utf8Of('lost'));
         await writing.flush();
         relay.objects.clear(); // The object is gone; its pointer is not.
-        await writing.send(toInstall: phone.id, body: _utf8('kept'));
+        await writing.send(toInstall: phone.id, body: utf8Of('kept'));
         await writing.flush();
         final reading = on(phone);
-        await reading.pollOnce();
+        await reading.look();
         expect(reading.inbox.value.single.text, 'kept');
       },
     );

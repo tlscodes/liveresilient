@@ -1,11 +1,9 @@
 // The pair shelf: where a sealed box waits for someone who is not there.
 //
-// The mailbox (mailbox_door.dart) hands a box over only while its recipient
-// is reading — the relay keeps a frame for seconds. The same relay also has
-// an archive: `/o/<hash>` stores an object under its own SHA-256 and
-// `/a/<author>/<seq>` stores one small signed pointer per sequence number,
-// both write-once and kept about two days. A shelf is one such author feed
-// used by exactly two installs:
+// The relay has an archive: `/o/<hash>` stores an object under its own
+// SHA-256 and `/a/<author>/<seq>` stores one small signed pointer per
+// sequence number, both write-once and kept about two days. A shelf is one
+// such author feed used by exactly two installs:
 //
 //   * the author's key is derived from the secret the two installs already
 //     share — X25519 between their pinned identity keys — together with the
@@ -22,7 +20,22 @@
 // Either of the two could write to a shelf (both hold its key). That is
 // fine: what is ON the shelf is a sealed box signed by its real sender, and
 // a box is only ever accepted on the strength of that signature.
+//
+// What a look costs. Nothing tells a reader that something was shelved, so
+// it asks: one request per day shelf, answered "nothing at that number" when
+// there is nothing new. Four day shelves could hold something (two days
+// back, today, and tomorrow for a writer whose clock runs ahead), but only
+// today's can be written to by a writer whose clock is right. So a look is
+// one of three kinds ([ShelfLook]), and a day that can no longer change is
+// not asked about again:
+//
+//   * a writer never goes back a day (see [put]). Once it has been seen on a
+//     later day, an earlier day read to its end is CLOSED: it cannot grow;
+//   * yesterday's shelf, read to its end once midnight is [yesterdayGrace]
+//     behind, RESTS: only a writer whose clock is that far behind could
+//     still add to it, and the slow look still finds what it adds.
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:broadcast/broadcast.dart';
@@ -31,16 +44,34 @@ import 'package:security/security.dart';
 
 import '../peer_identity.dart' show AppIdentity;
 
+/// Which of a peer's day shelves one look asks the relay about.
+enum ShelfLook {
+  /// Where something new is expected: today's shelf, and yesterday's until
+  /// it rests or is closed.
+  fast,
+
+  /// Every other day that is not closed: two days back, tomorrow, and
+  /// yesterday once it rests.
+  slow,
+
+  /// All four days, closed or not: the first look after the app starts.
+  all,
+}
+
 /// Where boxes wait.
 abstract class LetterShelf {
   /// Puts [box] on this install's shelf for [peerInstall]. False when the
   /// relay could not be reached or refused it.
   Future<bool> put(String peerInstall, Uint8List box);
 
-  /// Everything [peerInstall] has put on its shelf for this install since
-  /// the last call. Null when the relay could not be reached (nothing is
-  /// skipped: the next call starts from the same place).
-  Future<List<Uint8List>?> collect(String peerInstall);
+  /// What [peerInstall] has put on its shelf for this install since the
+  /// last call, on the days [look] asks about. Null when the relay could
+  /// not be reached and nothing was read (nothing is skipped: the next call
+  /// starts from the same place).
+  Future<List<Uint8List>?> collect(
+    String peerInstall, {
+    ShelfLook look = ShelfLook.all,
+  });
 
   /// How far each shelf has been written and read. The owner persists it
   /// and gives it back after a relaunch.
@@ -54,6 +85,7 @@ class PairShelf implements LetterShelf {
     required this.origin,
     required this.transport,
     DateTime Function()? clock,
+    this.yesterdayGrace = const Duration(minutes: 10),
   }) : _clock = clock ?? DateTime.now;
 
   final AppIdentity identity;
@@ -63,11 +95,23 @@ class PairShelf implements LetterShelf {
   final BroadcastHttpTransport transport;
   final DateTime Function() _clock;
 
+  /// How long after midnight (UTC) yesterday's shelf is still looked at as
+  /// often as today's: the clock difference between two installs that a
+  /// fast look makes up for.
+  final Duration yesterdayGrace;
+
   @override
   final Map<String, int> cursors = <String, int>{};
 
   final Map<String, _Feed> _feeds = <String, _Feed>{};
   final Ed25519 _ed25519 = Ed25519();
+
+  /// Incoming day shelves that cannot grow any more, and yesterday's once
+  /// it rests. Kept for the life of the process: after a relaunch the first
+  /// look reads every day and finds them again.
+  final Set<String> _closed = <String>{};
+  final Set<String> _resting = <String>{};
+  int _prunedOn = -1;
 
   /// First byte of a shelf pointer. Not a broadcast descriptor version, so
   /// a broadcast reader that ever met one would refuse it.
@@ -138,11 +182,49 @@ class PairShelf implements LetterShelf {
   Uri _pointer(_Feed feed, int seq) =>
       origin.replace(path: '/a/${_hex(feed.author)}/$seq');
 
+  /// The newest day with a count under [prefix] (`in:a>b@`, `out:a>b@`).
+  int? _newestDay(String prefix) {
+    int? newest;
+    for (final entry in cursors.entries) {
+      if (entry.value <= 0 || !entry.key.startsWith(prefix)) continue;
+      final day = int.tryParse(entry.key.substring(prefix.length));
+      if (day != null && (newest == null || day > newest)) newest = day;
+    }
+    return newest;
+  }
+
+  /// Forgets the counts of days the relay no longer keeps.
+  void _prune(int today) {
+    if (_prunedOn == today) return;
+    _prunedOn = today;
+    bool old(String key) {
+      final at = key.lastIndexOf('@');
+      final day = at < 0 ? null : int.tryParse(key.substring(at + 1));
+      return day != null && day < today - daysBack - 1;
+    }
+
+    cursors.removeWhere((key, _) => old(key));
+    _closed.removeWhere(old);
+    _resting.removeWhere(old);
+    _feeds.removeWhere((key, _) => old(key));
+  }
+
   @override
   Future<bool> put(String peerInstall, Uint8List box) async {
     try {
       final own = _hex(await identity.installId());
-      final feed = await _feed(own, peerInstall, _day(_clock()));
+      final today = _day(_clock());
+      _prune(today);
+      // A writer never goes back a day: the reader stops asking about a day
+      // once this install has been seen on a later one. (A last day more
+      // than one ahead of the clock was written under a clock that has
+      // since been set back, and no reader looks that far ahead: the clock
+      // is followed again.)
+      final last = _newestDay('out:$own>$peerInstall@');
+      final day = last != null && last <= today + 1
+          ? math.max(today, last)
+          : today;
+      final feed = await _feed(own, peerInstall, day);
       if (feed == null) return false;
       final hash = Uint8List.fromList((await Sha256().hash(box)).bytes);
       final stored = await transport.put(_object(_hex(hash)), box);
@@ -181,25 +263,51 @@ class PairShelf implements LetterShelf {
   }
 
   @override
-  Future<List<Uint8List>?> collect(String peerInstall) async {
+  Future<List<Uint8List>?> collect(
+    String peerInstall, {
+    ShelfLook look = ShelfLook.all,
+  }) async {
+    final boxes = <Uint8List>[];
     try {
       final own = _hex(await identity.installId());
-      final today = _day(_clock());
-      final boxes = <Uint8List>[];
+      final now = _clock().toUtc();
+      final today = _day(now);
+      _prune(today);
+      // As of the look before this one: an earlier day read to its end now
+      // is read AFTER its writer was seen to have moved on.
+      final newest = _newestDay('in:$peerInstall>$own@');
+      final pastGrace =
+          now.millisecondsSinceEpoch - today * Duration.millisecondsPerDay >=
+          yesterdayGrace.inMilliseconds;
       for (var day = today - daysBack; day <= today + 1; day++) {
+        final key = '$peerInstall>$own@$day';
+        final closed = _closed.contains(key);
+        final fast =
+            day == today ||
+            (day == today - 1 && !closed && !_resting.contains(key));
+        final asked = switch (look) {
+          ShelfLook.all => true,
+          ShelfLook.fast => fast,
+          ShelfLook.slow => !fast && !closed,
+        };
+        if (!asked) continue;
         final feed = await _feed(peerInstall, own, day);
         if (feed == null) return const <Uint8List>[];
         var seq = cursors['in:${feed.key}'] ?? 0;
+        var atEnd = false;
         for (var read = 0; read < maxPerCollect; read++) {
           final pointer = await transport.get(_pointer(feed, seq));
-          if (pointer.statusCode == 404) break;
-          if (pointer.statusCode != 200) return null;
+          if (pointer.statusCode == 404) {
+            atEnd = true;
+            break;
+          }
+          if (pointer.statusCode != 200) return boxes.isEmpty ? null : boxes;
           seq++;
           final hash = await _checked(feed, pointer.body);
           if (hash != null) {
             final object = await transport.get(_object(_hex(hash)));
             if (object.statusCode != 200 && object.statusCode != 404) {
-              return null;
+              return boxes.isEmpty ? null : boxes;
             }
             final box = object.body;
             // A pointer whose object is gone, or is not what it names, is
@@ -210,10 +318,19 @@ class PairShelf implements LetterShelf {
           }
           cursors['in:${feed.key}'] = seq;
         }
+        if (atEnd && day < today) {
+          if (newest != null && newest > day) {
+            _closed.add(key);
+          } else if (day == today - 1 && pastGrace) {
+            _resting.add(key);
+          }
+        }
       }
       return boxes;
     } catch (_) {
-      return null;
+      // Out of reach part-way. What was read is handed over — the counts
+      // have moved past it — and the next look reads on from there.
+      return boxes.isEmpty ? null : boxes;
     }
   }
 

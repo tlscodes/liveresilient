@@ -28,7 +28,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:reference_app/main.dart' as app;
 import 'package:reference_app/src/peer_identity.dart';
 import 'package:reference_app/src/sealed/sealed_content.dart';
-import 'package:reference_app/src/sealed/sealed_letters.dart';
+import 'package:reference_app/src/sealed/sealed_letter_service.dart';
 
 const String _mode = String.fromEnvironment('SEALED_RIG_MODE');
 const String _dir = String.fromEnvironment('SEALED_RIG_DIR');

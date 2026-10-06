@@ -53,7 +53,7 @@ import 'src/ui/incoming_call_screen.dart';
 import 'src/ui/letter_sheet.dart';
 import 'src/ui/letter_thread.dart';
 import 'src/ui/network_truth.dart';
-import 'src/sealed/sealed_letters.dart';
+import 'src/sealed/sealed_letter_service.dart';
 import 'src/ui/sealed_letters_panel.dart';
 import 'src/ui/settings_screen.dart';
 import 'src/letter_queue_keystore.dart';
@@ -347,9 +347,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   static bool get _liveFeedsAllowed => AppMotion.ambientEnabled;
 
-  // Sealed letters: this install's mailbox on the border relay, read from
-  // the moment the install has an identity. Null before that, and on a host
-  // that has none (a widget test), where nothing is read and nothing shown.
+  // Sealed letters: the shelves this install shares with its pinned peers on
+  // the border relay, looked at on a schedule from the moment the install
+  // has an identity. Null before that, and on a host that has none (a widget
+  // test), where nothing is asked and nothing shown.
   SealedLetterService? _sealed;
 
   void _startSealedLetters() {

@@ -1,18 +1,23 @@
 // Sealed letters between installs that have pinned each other.
 //
-// Each install has one mailbox, named by its install id. To write, the
-// sender seals the letter to the recipient's PINNED key and puts the box in
-// the recipient's mailbox. The recipient reads its own mailbox, opens the
-// box, checks that the key inside is the one it pinned for that install,
-// and puts a short receipt — itself a sealed box — in the sender's mailbox.
+// To write, the sender seals the letter to the recipient's PINNED key and
+// puts the box on the pair's shelf on the relay (pair_shelf.dart), where it
+// waits about two days. The recipient reads the shelf, opens the box,
+// checks that the key inside is the one it pinned for that install, and
+// shelves a short receipt — itself a sealed box — for the sender.
 //
-// The sender keeps every letter until its receipt comes back and puts the
-// box in again, with a growing pause, until it does. That one rule covers
-// a door that is down, a relay that dropped the box, and a recipient who
-// was away: the letter waits in the sender's queue until the path is up.
-// The recipient may therefore see a letter twice; it shows it once and
-// answers every copy with a receipt, because a second copy means the first
-// receipt was lost.
+// The sender keeps every letter until its receipt comes back. One that
+// could not be shelved is tried again with a growing pause; one that was
+// shelved and never answered is shelved afresh before the relay's two days
+// run out. The recipient may therefore see a letter twice; it shows it once.
+//
+// Nothing rings. No request is held open waiting for the relay to speak,
+// and no install tells its contacts that it is there. A reader finds out by
+// looking, and how often it looks follows the conversation: every few
+// seconds for two minutes after something was written or the screen was
+// opened, then at twice the interval each time, down to once in fifteen
+// minutes. Every request counts against a daily allowance
+// (relay_requests.dart).
 //
 // A photo, a voice note or a video is a letter that describes it (size,
 // SHA-256, number of pieces) plus the pieces, each its own sealed box. The
@@ -30,12 +35,11 @@ import 'dart:typed_data' show BytesBuilder;
 import 'package:cryptography/cryptography.dart' show Sha256;
 import 'package:flutter/foundation.dart';
 
-import '../broadcast_wiring.dart' show IoBroadcastHttpTransport;
 import '../intelligence/device_bindings.dart' show intelligenceStorageDirectory;
 import '../intelligence/disk_json_storage.dart';
 import '../peer_identity.dart';
-import 'mailbox_door.dart';
 import 'pair_shelf.dart';
+import 'relay_requests.dart';
 import 'sealed_blob_store.dart';
 import 'sealed_box.dart';
 import 'sealed_content.dart';
@@ -44,15 +48,27 @@ import 'sealed_content.dart';
 /// they are. There is no "sending…": a letter is in the queue until its
 /// receipt is here, and the reason it is still there is always known.
 enum SealedSentState {
-  /// The mailbox could not be reached at all; nothing has left yet.
-  queuedDoorClosed,
+  /// Not on the relay yet: it could not be reached, or today's allowance
+  /// of requests is used up. It is tried again.
+  waiting,
 
-  /// The box was put in their mailbox and no receipt has come: they are
-  /// not reading it, or the relay dropped it. It will be put in again.
-  queuedNoReceipt,
+  /// On the relay's shelf, where it waits about two days to be opened.
+  shelved,
 
   /// Their receipt is here: it opened on their device.
   opened,
+}
+
+/// What the relay said the last time this install asked it anything.
+enum SealedRelayState {
+  /// Nothing has been asked yet.
+  unknown,
+  reachable,
+  unreachable,
+
+  /// Today's allowance of requests is used up: nothing more is asked
+  /// until the next day (UTC).
+  spent,
 }
 
 /// A letter this install wrote.
@@ -64,8 +80,7 @@ class SealedSent {
     required this.content,
     required this.at,
     required this.attempts,
-    required this.everDeposited,
-    this.onShelf = false,
+    required this.onShelf,
     required this.nextAt,
     required this.deliveredAt,
   });
@@ -75,17 +90,14 @@ class SealedSent {
   final SealedContent content;
   final DateTime at;
 
-  /// How many times the box was put in the recipient's mailbox.
+  /// How many times the box was handed to the relay.
   final int attempts;
 
-  /// Whether the relay ever took it.
-  final bool everDeposited;
-
-  /// It is on the relay's shelf, where it waits for a recipient who is
-  /// away, rather than only in this install's own queue.
+  /// The relay took it, whole: it is on the shelf, where it waits for a
+  /// recipient who is away.
   final bool onShelf;
 
-  /// When it is put in again, while it waits.
+  /// When it is handed to the relay again, while it waits.
   final DateTime nextAt;
 
   /// When the recipient's receipt arrived; null while the letter waits.
@@ -97,25 +109,23 @@ class SealedSent {
 
   SealedSentState get state => delivered
       ? SealedSentState.opened
-      : everDeposited
-      ? SealedSentState.queuedNoReceipt
-      : SealedSentState.queuedDoorClosed;
+      : onShelf
+      ? SealedSentState.shelved
+      : SealedSentState.waiting;
 
   /// The whole truth about this letter in one line, for the screen.
   String describe(DateTime now) {
     switch (state) {
       case SealedSentState.opened:
         return 'opened by them';
-      case SealedSentState.queuedDoorClosed:
-        return 'in queue — mailbox unreachable, tried $attempts×';
-      case SealedSentState.queuedNoReceipt when onShelf:
+      case SealedSentState.shelved:
         return 'on the relay, not opened yet — it waits there about '
             'two days for them';
-      case SealedSentState.queuedNoReceipt:
-        final late = now.difference(at) > const Duration(minutes: 10);
+      case SealedSentState.waiting when attempts == 0:
+        return 'in queue — not on the relay yet';
+      case SealedSentState.waiting:
         final wait = nextAt.difference(now).inSeconds;
-        return '${late ? 'not delivered yet' : 'in queue'} — put in their '
-            'mailbox $attempts×, no receipt: they are not reading it'
+        return 'in queue — relay unreachable, tried $attempts×'
             '${wait > 0 ? ' · again in ${wait}s' : ''}';
     }
   }
@@ -162,22 +172,30 @@ class NotPinnedError extends StateError {
   NotPinnedError(String install) : super('no pinned key for $install');
 }
 
-/// The app's one mailbox service, once this install has an identity; null
-/// before, and on a host with no identity. A rig driver reads it; the app's
-/// own screens are handed the service directly.
+/// The app's one sealed-letter service, once this install has an identity;
+/// null before, and on a host with no identity. A rig driver and the
+/// diagnostics screen read it; the letters panel is handed the service
+/// directly.
 final ValueNotifier<SealedLetterService?> sealedLetterService =
     ValueNotifier<SealedLetterService?>(null);
 
 class SealedLetterService {
   SealedLetterService({
     required AppIdentity identity,
-    required this.door,
+    required this.shelf,
     required this.storage,
     SealedBlobStore? blobs,
-    this.shelf,
+    this.budget,
     DateTime Function()? clock,
+    // `sleep:` — how the loop waits between looks. A test passes its own
+    // and runs hours of schedule in an instant.
+    this._sleep,
     this.onEvent,
-    this.pollWait = const Duration(seconds: 20),
+    this.warmEvery = const Duration(seconds: 3),
+    this.warmFor = const Duration(minutes: 2),
+    this.coldEvery = const Duration(minutes: 15),
+    this.slowEvery = const Duration(minutes: 30),
+    this.aliveEvery = const Duration(seconds: 30),
     this.retryBase = const Duration(seconds: 5),
     this.retryCap = const Duration(minutes: 5),
     this.needQuiet = const Duration(seconds: 3),
@@ -190,41 +208,66 @@ class SealedLetterService {
 
   /// The real thing: this install's identity, the app's border relay, and
   /// files beside the other letter files. Every event is also appended to
-  /// `sealed_events.jsonl` there — ids, sizes, times and flags, never a
-  /// body — so what happened can be read back after the fact.
+  /// `sealed_events.jsonl` there — ids, sizes, times, counts and flags,
+  /// never a body — so what happened can be read back after the fact.
   factory SealedLetterService.disk({
     required AppIdentity identity,
     required String relayHost,
     void Function(String event, Map<String, Object?> fields)? onEvent,
-  }) => SealedLetterService(
-    identity: identity,
-    door: RelayMailboxDoor.borderRelay(relayHost),
-    storage: DiskJsonStorage(
-      directoryFactory: intelligenceStorageDirectory,
-      fileName: fileName,
-    ),
-    blobs: DiskSealedBlobStore(
-      () => Directory('${intelligenceStorageDirectory().path}/sealed_blobs'),
-    ),
-    shelf: PairShelf(
-      identity: identity,
-      origin: Uri(scheme: 'https', host: relayHost),
-      transport: IoBroadcastHttpTransport(),
-    ),
-    onEvent: (event, fields) {
+  }) {
+    void record(String event, Map<String, Object?> fields) {
       _journal(event, fields);
       onEvent?.call(event, fields);
-    },
-  );
+    }
+
+    final budget = RequestBudget(
+      ledger: FileRequestLedger(intelligenceStorageDirectory),
+    );
+    return SealedLetterService(
+      identity: identity,
+      storage: DiskJsonStorage(
+        directoryFactory: intelligenceStorageDirectory,
+        fileName: fileName,
+      ),
+      blobs: DiskSealedBlobStore(
+        () => Directory('${intelligenceStorageDirectory().path}/sealed_blobs'),
+      ),
+      shelf: PairShelf(
+        identity: identity,
+        origin: Uri(scheme: 'https', host: relayHost),
+        transport: MeteredRelayTransport(
+          budget: budget,
+          onRequest: (open, {required write, required cut}) {
+            // A request that was cut, or took most of its limit, is worth
+            // a line; the rest are only counted.
+            if (!cut && open < const Duration(seconds: 1)) return;
+            record('slow_request', <String, Object?>{
+              'ms': open.inMilliseconds,
+              'write': write,
+              'cut': cut,
+            });
+          },
+        ),
+      ),
+      budget: budget,
+      onEvent: record,
+    );
+  }
 
   static const String fileName = 'sealed_letters.json';
   static const String journalName = 'sealed_events.jsonl';
 
+  /// The journal starts a new file at this size and keeps the one before:
+  /// a line every thirty seconds would otherwise grow without end.
+  static const int journalMaxBytes = 4 * 1024 * 1024;
+
   static void _journal(String event, Map<String, Object?> fields) {
     try {
-      File(
-        '${intelligenceStorageDirectory().path}/$journalName',
-      ).writeAsStringSync(
+      final file = File('${intelligenceStorageDirectory().path}/$journalName');
+      if (file.existsSync() && file.lengthSync() > journalMaxBytes) {
+        file.renameSync('${file.path}.1');
+      }
+      file.writeAsStringSync(
         '${jsonEncode(<String, Object?>{'at': DateTime.now().toUtc().toIso8601String(), 'event': event, ...fields})}\n',
         mode: FileMode.append,
         flush: true,
@@ -235,28 +278,45 @@ class SealedLetterService {
   }
 
   final AppIdentity _identity;
-  final MailboxDoor door;
   final PersistentStorage storage;
   final SealedBlobStore blobs;
 
-  /// Where boxes wait for a recipient who is away. With a shelf, every
-  /// box goes there and the mailbox only rings; without one (a relay
-  /// that has no archive) boxes go through the mailbox and reach only
-  /// a recipient who is reading it.
-  final LetterShelf? shelf;
+  /// Where every box goes and where every box is read from.
+  final LetterShelf shelf;
+
+  /// This install's daily allowance of relay requests, when the shelf's
+  /// transport counts against one. The service does not look once the
+  /// share for looking is used up, and says so.
+  final RequestBudget? budget;
 
   /// How long after shelving a letter that still has no receipt it is
   /// shelved again — before the relay's two days run out.
   final Duration shelfRefresh;
   final DateTime Function() _clock;
+  final Future<void> Function(Duration wait)? _sleep;
   final SealedBoxCodec _codec;
 
-  /// Raw facts as they happen (`tx`, `rx`, `receipt_tx`, `receipt_rx`,
-  /// `here_tx`, `here_rx`, `need_tx`, `need_rx`, `rejected`): public ids,
-  /// sizes, times and flags only — never a body, never a key.
+  /// Raw facts as they happen (`start`, `alive`, `stop`, `warm`, `tx`,
+  /// `rx`, `receipt_tx`, `receipt_rx`, `need_tx`, `need_rx`, `rejected`):
+  /// public ids, sizes, times, counts and flags only — never a body, never
+  /// a key.
   final void Function(String event, Map<String, Object?> fields)? onEvent;
 
-  final Duration pollWait;
+  /// How often the shelves are looked at while the conversation is warm,
+  /// and for how long after the last write or opened screen it stays so.
+  final Duration warmEvery;
+  final Duration warmFor;
+
+  /// After that the interval doubles at every look, up to this.
+  final Duration coldEvery;
+
+  /// How often the days a fast look leaves out are looked at.
+  final Duration slowEvery;
+
+  /// "The service is on" is a line in the journal at start and one every
+  /// [aliveEvery] after it — not an entry in a process list.
+  final Duration aliveEvery;
+
   final Duration retryBase;
   final Duration retryCap;
 
@@ -273,8 +333,10 @@ class SealedLetterService {
   final ValueNotifier<List<SealedSent>> outbox =
       ValueNotifier<List<SealedSent>>(const []);
 
-  /// Whether the door answered the last time it was asked; null before.
-  final ValueNotifier<bool?> doorUp = ValueNotifier<bool?>(null);
+  /// What the relay said the last time it was asked.
+  final ValueNotifier<SealedRelayState> relay = ValueNotifier<SealedRelayState>(
+    SealedRelayState.unknown,
+  );
 
   final List<_Queued> _queue = <_Queued>[];
   final List<_Kept> _kept = <_Kept>[];
@@ -286,6 +348,32 @@ class SealedLetterService {
   bool _running = false;
   bool _disposed = false;
   Future<void>? _loop;
+  int _generation = 0;
+
+  static final DateTime _never = DateTime.fromMillisecondsSinceEpoch(
+    0,
+    isUtc: true,
+  );
+
+  /// The loop never turns faster than this, whatever its schedule says.
+  static const Duration _shortest = Duration(milliseconds: 50);
+
+  // The schedule. Heat is the time of the last write, opened screen or
+  // arriving letter; the fast look follows it, the slow look its own clock.
+  DateTime _touchedAt = _never;
+  DateTime _startedAt = _never;
+  DateTime _lastFastAt = _never;
+  DateTime _nextFastAt = _never;
+  DateTime _nextSlowAt = _never;
+  Duration _every = Duration.zero;
+  int _fastLooks = 0;
+  int _slowLooks = 0;
+  Completer<void>? _wake;
+  Timer? _beat;
+
+  /// The relay could not be reached when a letter was handed to it: the
+  /// letters behind it wait until then rather than each finding the same.
+  DateTime _holdUntil = _never;
 
   Future<String> _own() async =>
       _ownInstall ??= _hex(await _identity.installId());
@@ -314,7 +402,7 @@ class SealedLetterService {
     final cursors = data['shelf'];
     if (cursors is Map) {
       cursors.forEach((key, value) {
-        if (value is num) shelf?.cursors['$key'] = value.toInt();
+        if (value is num) shelf.cursors['$key'] = value.toInt();
       });
     }
     for (final raw in (data['outbox'] as List? ?? const [])) {
@@ -358,7 +446,7 @@ class SealedLetterService {
       for (final p in _partial.values)
         _Kept(id: p.id, box: p.box, at: p.at).toJson(),
     ],
-    'shelf': shelf?.cursors ?? const <String, int>{},
+    'shelf': shelf.cursors,
   });
 
   /// Rebuilds both lists from the sealed copies: what the screen shows is
@@ -375,8 +463,7 @@ class SealedLetterService {
           content: SealedContent.decode(own.body),
           at: q.at,
           attempts: q.attempts,
-          everDeposited: q.everDeposited,
-          onShelf: shelf != null && q.everDeposited,
+          onShelf: q.everDeposited,
           nextAt: q.nextAt,
           deliveredAt: q.deliveredAt,
         ),
@@ -440,8 +527,8 @@ class SealedLetterService {
   }
 
   /// Seals the text [body] to the key pinned for [toInstall], queues it,
-  /// and tries the door once. Returns as soon as the letter is safely
-  /// queued; where it is from then on is told by [outbox]. Throws
+  /// and hands it to the relay once. Returns as soon as the letter is
+  /// safely queued; where it is from then on is told by [outbox]. Throws
   /// [NotPinnedError] when no key is pinned for [toInstall].
   Future<SealedSent> send({
     required String toInstall,
@@ -560,40 +647,55 @@ class SealedLetterService {
       await _publish();
       return outbox.value.firstWhere((s) => s.id == id);
     });
+    // Something was written: an answer may follow, so look often for a
+    // while.
+    touch('write');
     unawaited(flush().catchError((Object _) {}));
     return sent;
   }
 
-  /// Puts every waiting letter whose pause is over into its recipient's
-  /// mailbox again. A media letter's pieces go with it the first time (and
-  /// again when its recipient says it is there); after that the letter
-  /// alone is enough, because the recipient asks for what it lacks.
+  /// What the screen is told after the relay was asked. Once the share for
+  /// looking is used up nothing that arrives is seen until the next day:
+  /// that is said from the request that used it up, whether or not that
+  /// request itself was answered.
+  SealedRelayState _afterRequest(bool ok) => (budget?.now.looksSpent ?? false)
+      ? SealedRelayState.spent
+      : ok
+      ? SealedRelayState.reachable
+      : SealedRelayState.unreachable;
+
+  /// Hands every waiting letter whose pause is over to the relay. A media
+  /// letter's pieces go with it; after that the recipient asks for what it
+  /// lacks. When the relay cannot be reached the letters behind the first
+  /// one wait for its next try instead of each finding the same.
   Future<void> flush() => _serial(() async {
     await _load();
     final now = _clock();
+    if (now.isBefore(_holdUntil)) return;
     var changed = false;
     for (final q in _queue) {
       if (q.deliveredAt != null || q.nextAt.isAfter(now)) continue;
-      // Shelved before and due again: its two days are nearly up, so
-      // the letter and every piece are shelved afresh.
-      if (shelf != null && q.everDeposited) q.piecesPushed = false;
-      var ok = await _put(q.to, q.box);
+      if (budget?.now.spent ?? false) {
+        relay.value = SealedRelayState.spent;
+        break;
+      }
+      // Shelved before and due again: its two days are nearly up, so the
+      // letter and every piece are shelved afresh.
+      if (q.everDeposited) q.piecesPushed = false;
+      var ok = await shelf.put(q.to, q.box);
       var pieces = 0;
       if (ok && q.chunks > 0 && !q.piecesPushed) {
         pieces = await _depositPieces(q, null);
         ok = pieces == q.chunks;
         q.piecesPushed = ok;
       }
-      doorUp.value = ok;
+      relay.value = _afterRequest(ok);
       q.attempts++;
       q.everDeposited = q.everDeposited || ok;
-      q.nextAt = now.add(
-        ok && shelf != null ? shelfRefresh : _pause(q.attempts),
-      );
-      if (ok) await _ring(q.to);
+      q.nextAt = now.add(ok ? shelfRefresh : _pause(q.attempts));
       changed = true;
       onEvent?.call('tx', <String, Object?>{
-        'via': shelf != null ? 'shelf' : 'mailbox',
+        'via': 'shelf',
         'id': q.id,
         'kind': q.kind,
         'from': await _own(),
@@ -604,6 +706,10 @@ class SealedLetterService {
         'deposited': ok,
         'pieces_sent': pieces,
       });
+      if (!ok) {
+        _holdUntil = q.nextAt;
+        break;
+      }
     }
     if (changed) {
       await _save();
@@ -611,35 +717,7 @@ class SealedLetterService {
     }
   });
 
-  /// Hands one box over: onto the shelf when there is one, where it
-  /// waits for a recipient who is away; otherwise into the mailbox,
-  /// which keeps it only for a recipient who is reading.
-  Future<bool> _put(String to, Uint8List box) {
-    final shelf = this.shelf;
-    return shelf != null ? shelf.put(to, box) : door.deposit(to, box);
-  }
-
-  /// Rings [to]'s mailbox after something was shelved for it, so a
-  /// recipient who is reading looks at the shelf now instead of at its
-  /// next round. Lost without harm: the box is on the shelf.
-  Future<void> _ring(String to) async {
-    if (shelf == null) return;
-    final key = await _identity.store.pinnedKeyFor(to);
-    if (key == null) return;
-    await door.deposit(
-      to,
-      await _codec.seal(
-        recipientInstall: to,
-        recipientKey: key,
-        kind: SealedKind.here,
-        letterId: _codec.newLetterId(),
-        createdAt: _clock(),
-        body: Uint8List(0),
-      ),
-    );
-  }
-
-  /// Puts pieces of [q] in its recipient's mailbox: [only] those, or all.
+  /// Shelves pieces of [q] for its recipient: [only] those, or all.
   /// Returns how many the relay took; stops at the first it refuses.
   Future<int> _depositPieces(_Queued q, Iterable<int>? only) async {
     var sent = 0;
@@ -647,7 +725,7 @@ class SealedLetterService {
       if (i < 0 || i >= q.chunks) continue;
       final box = await blobs.get('out.${q.id}.$i');
       if (box == null) continue;
-      if (!await _put(q.to, box)) break;
+      if (!await shelf.put(q.to, box)) break;
       sent++;
     }
     return sent;
@@ -661,39 +739,39 @@ class SealedLetterService {
     return pause > retryCap ? retryCap : pause;
   }
 
-  /// Reads this install's own mailbox once and deals with what was there.
-  /// Returns false when the door was down.
-  Future<bool> pollOnce({Duration wait = Duration.zero}) async {
+  /// Asks the relay what each pinned peer has shelved for this install on
+  /// the days [look] covers, and deals with what was there. False when the
+  /// relay could not be reached, or today's allowance for looking is used
+  /// up.
+  Future<bool> look({ShelfLook look = ShelfLook.all}) async {
     await load();
-    // The wait happens outside the serial section, so a Send is never
-    // stuck behind a long-poll.
-    final taken = await door.take(await _own(), wait: wait);
-    var reachable = taken != null;
-    // Then the shelves: what each pinned peer left since the last look.
-    // This is where a letter written while this install was away is.
-    final shelf = this.shelf;
-    final shelved = <Uint8List>[];
-    final cursorsBefore = shelf == null ? '' : jsonEncode(shelf.cursors);
-    if (shelf != null) {
-      for (final peer in await _identity.pinnedInstalls()) {
-        final boxes = await shelf.collect(peer);
-        if (boxes == null) continue;
-        reachable = true;
-        shelved.addAll(boxes);
-      }
+    if (budget?.now.looksSpent ?? false) {
+      relay.value = SealedRelayState.spent;
+      return false;
     }
-    doorUp.value = reachable;
+    if (look != ShelfLook.slow) {
+      _fastLooks++;
+      _lastFastAt = _clock();
+    }
+    if (look != ShelfLook.fast) _slowLooks++;
+    final peers = await _identity.pinnedInstalls();
+    if (peers.isEmpty) return true;
+    final shelved = <Uint8List>[];
+    final cursorsBefore = jsonEncode(shelf.cursors);
+    var reachable = false;
+    for (final peer in peers) {
+      final boxes = await shelf.collect(peer, look: look);
+      if (boxes == null) continue;
+      reachable = true;
+      shelved.addAll(boxes);
+    }
+    relay.value = _afterRequest(reachable);
     if (!reachable) return false;
     await _serial(() async {
-      if (taken != null && taken.isNotEmpty) {
-        await _handleBoxes(SealedBoxCodec.split(taken));
-      }
       if (shelved.isNotEmpty) await _handleBoxes(shelved);
       await _progress();
       await _flushReceipts();
-      if (shelf != null && jsonEncode(shelf.cursors) != cursorsBefore) {
-        await _save();
-      }
+      if (jsonEncode(shelf.cursors) != cursorsBefore) await _save();
     });
     return true;
   }
@@ -701,7 +779,6 @@ class SealedLetterService {
   Future<void> _handleBoxes(List<Uint8List> boxes) async {
     final own = await _own();
     var changed = false;
-    var resend = false;
     for (final box in boxes) {
       final opened = await _codec.open(box);
       if (opened == null) {
@@ -747,6 +824,7 @@ class SealedLetterService {
               }
               _partial[partial.id] = partial;
               changed = true;
+              touch('letter');
             }
             continue;
           }
@@ -755,12 +833,11 @@ class SealedLetterService {
             changed = true;
             _rx(opened, content, own, box.length);
           }
-          // Through the mailbox every copy is answered: a second copy
-          // means the first receipt never reached the sender. On a shelf
-          // a receipt that was shelved is there to be read, so a copy is
-          // answered only if its receipt never got onto the shelf.
+          // A receipt that was shelved is there to be read, so a second
+          // copy of a letter is answered only if its receipt never got
+          // onto the shelf.
           final kept = _kept.firstWhere((k) => k.id == opened.letterId);
-          if (shelf == null || !kept.receiptOk) {
+          if (!kept.receiptOk) {
             kept.receiptOk = await _receipt(opened, own, duplicate: seen);
             changed = true;
           }
@@ -776,6 +853,7 @@ class SealedLetterService {
           if (partial != null) {
             partial.have.add(index);
             partial.lastPieceAt = _clock();
+            touch('letter');
           }
         case SealedKind.need:
           for (final q in _queue) {
@@ -821,36 +899,22 @@ class SealedLetterService {
             });
           }
         case SealedKind.here:
-          // The peer is reading its mailbox now: whatever waits for it
-          // goes again at once — pieces included — instead of at the end
-          // of its pause.
-          var waiting = 0;
-          for (final q in _queue) {
-            if (q.to != opened.senderInstall || q.deliveredAt != null) {
-              continue;
-            }
-            // Already on the shelf: it is there to be read.
-            if (shelf != null && q.everDeposited) continue;
-            q.nextAt = _clock();
-            q.piecesPushed = false;
-            waiting++;
-          }
-          onEvent?.call('here_rx', <String, Object?>{
-            'from': opened.senderInstall,
-            'to': own,
-            'waiting_for_them': waiting,
-          });
-          if (waiting > 0) resend = true;
+          // "I am reading now", from an install built before that was
+          // removed. Nothing is told to contacts any more, and nothing
+          // follows from being told.
+          break;
       }
     }
     if (changed) {
       await _save();
       await _publish();
     }
-    if (resend) unawaited(flush().catchError((Object _) {}));
   }
 
   void _rx(OpenedBox opened, SealedContent content, String own, int boxBytes) {
+    // A letter just opened: an answer may be written, so look often for a
+    // while.
+    touch('letter');
     onEvent?.call('rx', <String, Object?>{
       'id': opened.letterId,
       'kind': content.kindLabel,
@@ -877,8 +941,7 @@ class SealedLetterService {
       createdAt: _clock(),
       body: await _sha(opened.body),
     );
-    final ok = await _put(opened.senderInstall, receipt);
-    if (ok) await _ring(opened.senderInstall);
+    final ok = await shelf.put(opened.senderInstall, receipt);
     onEvent?.call('receipt_tx', <String, Object?>{
       'id': opened.letterId,
       'from': own,
@@ -892,7 +955,6 @@ class SealedLetterService {
   /// Shelves the receipts that could not be shelved when their letters
   /// opened (the relay was out of reach just then).
   Future<void> _flushReceipts() async {
-    if (shelf == null) return;
     final own = await _own();
     var changed = false;
     for (final kept in _kept) {
@@ -904,6 +966,8 @@ class SealedLetterService {
       }
       kept.receiptOk = await _receipt(opened, own, duplicate: true);
       changed = changed || kept.receiptOk;
+      // Out of reach still: the ones behind it would only find the same.
+      if (!kept.receiptOk) break;
     }
     if (changed) await _save();
   }
@@ -962,7 +1026,7 @@ class SealedLetterService {
       for (var i = 0; i * 2 < body.length; i++) {
         ByteData.sublistView(body).setUint16(i * 2, missing[i]);
       }
-      final ok = await _put(
+      final ok = await shelf.put(
         partial.from,
         await _codec.seal(
           recipientInstall: partial.from,
@@ -989,87 +1053,200 @@ class SealedLetterService {
     }
   }
 
-  /// Tells every pinned peer that this install is reading its mailbox now,
-  /// and makes every letter still waiting here due at once. Called when the
-  /// service starts and when the door comes back.
-  ///
-  /// It is a sealed box like any other — the relay cannot tell it from a
-  /// letter — but a pinned peer who is listening does learn that this
-  /// install is online.
-  Future<void> announce() => _serial(() async {
+  /// Makes every letter that never reached the relay due at once. Called
+  /// when the service starts: the path may be up now. What is already on
+  /// the shelf is there to be read and is left alone, and nobody is told
+  /// that this install has come on.
+  Future<void> retryWaiting() => _serial(() async {
     await _load();
     final now = _clock();
     for (final q in _queue) {
-      // What is already on the shelf is there to be read: starting the app
-      // must not put it there a second time.
-      if (shelf != null && q.everDeposited) continue;
-      if (q.deliveredAt == null) q.nextAt = now;
+      if (q.deliveredAt == null && !q.everDeposited) q.nextAt = now;
     }
-    final own = await _own();
-    for (final peer in await _identity.pinnedInstalls()) {
-      final key = await _identity.store.pinnedKeyFor(peer);
-      if (key == null || peer == own) continue;
-      final box = await _codec.seal(
-        recipientInstall: peer,
-        recipientKey: key,
-        kind: SealedKind.here,
-        letterId: _codec.newLetterId(),
-        createdAt: now,
-        body: Uint8List(0),
-      );
-      final ok = await door.deposit(peer, box);
-      doorUp.value = ok;
-      onEvent?.call('here_tx', <String, Object?>{
-        'from': own,
-        'to': peer,
-        'deposited': ok,
-      });
-    }
+    _holdUntil = _never;
   });
 
-  /// Keeps reading the mailbox and re-sending what still waits, until
-  /// [stop]. A door that is down is asked again after a short pause.
+  bool _warmAt(DateTime at) => at.difference(_touchedAt) < warmFor;
+
+  /// Something was written, the letters screen was opened, or a letter
+  /// arrived: the shelves are looked at every [warmEvery] for the next
+  /// [warmFor].
+  void touch([String why = 'screen']) {
+    if (_disposed) return;
+    final now = _clock();
+    final wasWarm = _warmAt(now);
+    _touchedAt = now;
+    if (!_running) return;
+    if (!wasWarm) onEvent?.call('warm', <String, Object?>{'why': why});
+    // On the warm beat from here: the next look comes one beat after the
+    // last one, or now if that has already passed.
+    final beat = _lastFastAt.add(warmEvery);
+    final soonest = beat.isAfter(now) ? beat : now;
+    if (_nextFastAt.isAfter(soonest)) _nextFastAt = soonest;
+    _wakeLoop();
+  }
+
+  /// Plans the fast look after one that began at [from]: on the warm beat
+  /// while the conversation is warm, at twice the last interval after that.
+  void _scheduleFast(DateTime from) {
+    if (_warmAt(from)) {
+      _every = warmEvery;
+    } else {
+      final doubled = (_every < warmEvery ? warmEvery : _every) * 2;
+      _every = doubled > coldEvery ? coldEvery : doubled;
+    }
+    _nextFastAt = from.add(_every);
+  }
+
+  /// When the next waiting letter is handed to the relay again; null when
+  /// none waits.
+  DateTime? _nextDue() {
+    DateTime? next;
+    for (final q in _queue) {
+      if (q.deliveredAt != null) continue;
+      if (next == null || q.nextAt.isBefore(next)) next = q.nextAt;
+    }
+    if (next == null) return null;
+    if (budget?.now.spent ?? false) return budget!.nextDay;
+    return next.isBefore(_holdUntil) ? _holdUntil : next;
+  }
+
+  void _wakeLoop() {
+    final wake = _wake;
+    if (wake != null && !wake.isCompleted) wake.complete();
+  }
+
+  /// Waits for whatever is due next — a fast look, a slow look, a letter's
+  /// next try — or until [touch] or [stop] ends the wait.
+  Future<void> _idle() async {
+    final now = _clock();
+    var next = (budget?.now.looksSpent ?? false)
+        ? budget!.nextDay
+        : (_nextSlowAt.isBefore(_nextFastAt) ? _nextSlowAt : _nextFastAt);
+    final due = _nextDue();
+    if (due != null && due.isBefore(next)) next = due;
+    var wait = next.difference(now);
+    if (wait < _shortest) wait = _shortest;
+    final wake = _wake = Completer<void>();
+    final sleep = _sleep;
+    if (sleep != null) {
+      await Future.any<void>(<Future<void>>[sleep(wait), wake.future]);
+    } else {
+      final timer = Timer(wait, () {
+        if (!wake.isCompleted) wake.complete();
+      });
+      await wake.future;
+      timer.cancel();
+    }
+    if (identical(_wake, wake)) _wake = null;
+  }
+
+  int get _waiting =>
+      _queue.where((q) => q.deliveredAt == null && !q.everDeposited).length;
+  int get _shelved =>
+      _queue.where((q) => q.deliveredAt == null && q.everDeposited).length;
+
+  Map<String, Object?> _vitals() {
+    final count = budget?.now;
+    final now = _clock();
+    return <String, Object?>{
+      'pid': pid,
+      'up_s': now.difference(_startedAt).inSeconds,
+      'req_start': count?.sinceStart,
+      'req_day': count?.usedToday,
+      'cap': count?.dailyCap,
+      'refused_day': count?.refusedToday,
+      'longest_ms': count?.longestOpen.inMilliseconds,
+      'open_now': count?.openNow,
+      'looks_fast': _fastLooks,
+      'looks_slow': _slowLooks,
+      'every_s': _every.inSeconds,
+      'warm': _warmAt(now),
+      'waiting': _waiting,
+      'shelved': _shelved,
+      'relay': relay.value.name,
+    };
+  }
+
+  /// Looks at the shelves on the schedule and re-sends what still waits,
+  /// until [stop]. While it runs, the journal has a `start` line and an
+  /// `alive` line every [aliveEvery]: that, and nothing else, is what "the
+  /// service is on" means.
   void start() {
     if (_running || _disposed) return;
     _running = true;
-    _loop = () async {
-      // Null so the first round announces, like a door that just came up.
-      bool? wasUp;
-      while (_running && !_disposed) {
-        try {
-          if (wasUp != true) {
-            // Only once the door answers: an announcement into a closed
-            // door is nothing, and the next round would repeat it.
-            final reachable = await pollOnce();
-            if (reachable) await announce();
-            wasUp = reachable;
+    final generation = ++_generation;
+    final now = _clock();
+    _startedAt = now;
+    // The app was just opened: that is a screen being opened.
+    _touchedAt = now;
+    _every = warmEvery;
+    _beat = Timer.periodic(
+      aliveEvery,
+      (_) => onEvent?.call('alive', _vitals()),
+    );
+    _loop = _run(generation);
+  }
+
+  Future<void> _run(int generation) async {
+    bool on() => _running && !_disposed && generation == _generation;
+    var first = true;
+    while (on()) {
+      try {
+        final now = _clock();
+        if (first) {
+          first = false;
+          await load();
+          onEvent?.call('start', <String, Object?>{
+            ..._vitals(),
+            'peers': (await _identity.pinnedInstalls()).length,
+            'look_cap': budget?.lookCap,
+            'warm_every_s': warmEvery.inSeconds,
+            'warm_for_s': warmFor.inSeconds,
+            'cold_every_s': coldEvery.inSeconds,
+            'slow_every_s': slowEvery.inSeconds,
+            'alive_every_s': aliveEvery.inSeconds,
+          });
+          await retryWaiting();
+          await look();
+          _nextSlowAt = now.add(slowEvery);
+          _scheduleFast(now);
+        } else {
+          if (!now.isBefore(_nextSlowAt)) {
+            await look(look: ShelfLook.slow);
+            // From the planned time, so the half hours do not drift.
+            final next = _nextSlowAt.add(slowEvery);
+            _nextSlowAt = next.isAfter(now) ? next : now.add(slowEvery);
           }
-          await flush();
-          // While a media letter is still coming, the mailbox is read in
-          // short rounds so the missing pieces are asked for promptly.
-          final up = await pollOnce(
-            wait: _partial.isEmpty ? pollWait : needQuiet,
-          );
-          wasUp = up;
-          if (!up && _running) {
-            await Future<void>.delayed(const Duration(seconds: 3));
+          if (!now.isBefore(_nextFastAt)) {
+            await look(look: ShelfLook.fast);
+            _scheduleFast(now);
           }
-        } catch (_) {
-          // The loop outlives any one bad round.
-          await Future<void>.delayed(const Duration(seconds: 3));
         }
+        // After the look: a receipt already on the shelf is read before
+        // its letter would be shelved again.
+        await flush();
+      } catch (_) {
+        // The loop outlives any one bad round.
       }
-    }();
+      if (!on()) break;
+      await _idle();
+    }
   }
 
   Future<void> stop() async {
+    if (!_running) return;
     _running = false;
+    _beat?.cancel();
+    _beat = null;
+    _wakeLoop();
+    onEvent?.call('stop', _vitals());
   }
 
   Future<void> dispose() async {
-    _running = false;
+    await stop();
     _disposed = true;
-    await door.dispose();
+    _wakeLoop();
     await _loop?.timeout(const Duration(seconds: 1), onTimeout: () {});
   }
 
@@ -1109,10 +1286,11 @@ class _Queued {
   final int chunks;
   DateTime nextAt;
   int attempts;
+
+  /// Whether the relay ever took it, pieces and all.
   bool everDeposited;
 
-  /// Whether every piece has been put in the mailbox since the recipient
-  /// last said it was there.
+  /// Whether every piece has been shelved since the letter was last due.
   bool piecesPushed;
   DateTime? deliveredAt;
 

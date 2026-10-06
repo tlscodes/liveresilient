@@ -84,7 +84,7 @@ import 'package:reference_app/src/call_session.dart'
         defaultBorderRelayHost,
         parseValveResolvers;
 import 'package:reference_app/src/sealed/sealed_content.dart';
-import 'package:reference_app/src/sealed/sealed_letters.dart';
+import 'package:reference_app/src/sealed/sealed_letter_service.dart';
 import 'package:reference_app/src/ui/sealed_letters_panel.dart';
 import 'package:reference_app/src/ui/letter_widgets.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -666,17 +666,22 @@ class JourneyPeer extends LetterComposer {
     // outlive this process. Never throws; `identity` says if it is there.
     await bootAppIdentity();
     final ownInstall = await appIdentity?.installId();
-    // This install's sealed mailbox, read by the same service the app
+    // This install's sealed letters, read by the same service the app
     // runs, from the moment it has an identity. Its raw facts (ids,
-    // sizes, flags — never a body) go to the hub as `sealed` events.
+    // sizes, flags — never a body) go to the hub as `sealed` events. The
+    // thirty-second heartbeat stays in the journal on this phone: the hub
+    // is told what happened, not that nothing did.
     final booted = appIdentity;
     if (booted != null && sealedLetterService.value == null) {
       final service = SealedLetterService.disk(
         identity: booted,
         relayHost: defaultBorderRelayHost,
-        onEvent: (what, fields) => unawaited(
-          _report('sealed', <String, Object?>{'what': what, ...fields}),
-        ),
+        onEvent: (what, fields) {
+          if (what == 'alive') return;
+          unawaited(
+            _report('sealed', <String, Object?>{'what': what, ...fields}),
+          );
+        },
       );
       sealedLetterService.value = service;
       unawaited(service.load().then((_) => service.start()));
@@ -686,10 +691,13 @@ class JourneyPeer extends LetterComposer {
       if (Platform.environment['SEALED_AUTOSEND'] == '1') {
         unawaited(_sealedAutosend(service));
       }
-      // The same, asked for over the sealed channel itself: a text from
+      // The same, asked for over the sealed channel itself. A text from
       // the pinned peer ending in `#rig-reply-after=<seconds>` makes this
       // phone write back that much later — when the asker has gone off.
-      // Rig peer only; the app has no such convention.
+      // One ending in `#rig-echo=<n>` is answered at once with a text that
+      // says when this phone opened it, so a warm run can time written to
+      // opened in both directions. Rig peer only; the app has no such
+      // conventions.
       final asked = <String>{};
       var primed = false;
       service.inbox.addListener(() {
@@ -703,12 +711,35 @@ class JourneyPeer extends LetterComposer {
           }
         }
         for (final l in letters) {
-          final wait = RegExp(
-            r'#rig-reply-after=(\d+)$',
-          ).firstMatch(l.content.text ?? '');
-          if (wait == null || !asked.add(l.id)) continue;
+          final text = l.content.text ?? '';
+          final echo = RegExp(r'#rig-echo=(\d+)$').firstMatch(text);
+          final wait = RegExp(r'#rig-reply-after=(\d+)$').firstMatch(text);
+          if ((echo == null && wait == null) || !asked.add(l.id)) continue;
+          if (echo != null) {
+            // Not on the beat of this phone's own looks: each answer is
+            // written a different part of three seconds after the text
+            // opened, so the other side's wait for it is not always the
+            // same part of its beat.
+            final n = int.parse(echo.group(1)!);
+            Timer(Duration(milliseconds: (n * 977) % 3000), () {
+              unawaited(
+                service
+                    .send(
+                      toInstall: l.from,
+                      body: Uint8List.fromList(
+                        utf8.encode(
+                          'rig-echo=$n opened_ms='
+                          '${l.receivedAt.toUtc().millisecondsSinceEpoch}',
+                        ),
+                      ),
+                    )
+                    .then<void>((_) {}, onError: (Object _) {}),
+              );
+            });
+            continue;
+          }
           Timer(
-            Duration(seconds: int.parse(wait.group(1)!)),
+            Duration(seconds: int.parse(wait!.group(1)!)),
             () => unawaited(_sealedAutosend(service)),
           );
         }

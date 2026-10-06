@@ -14,17 +14,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:reference_app/src/broadcast_wiring.dart'
-    show IoBroadcastHttpTransport;
 import 'package:reference_app/src/call_session.dart'
     show defaultBorderRelayHost;
 import 'package:reference_app/src/intelligence/disk_json_storage.dart';
 import 'package:reference_app/src/peer_identity.dart';
-import 'package:reference_app/src/sealed/mailbox_door.dart';
 import 'package:reference_app/src/sealed/pair_shelf.dart';
+import 'package:reference_app/src/sealed/relay_requests.dart';
 import 'package:reference_app/src/sealed/sealed_blob_store.dart';
 import 'package:reference_app/src/sealed/sealed_content.dart';
-import 'package:reference_app/src/sealed/sealed_letters.dart';
+import 'package:reference_app/src/sealed/sealed_letter_service.dart';
 import 'package:security/security.dart';
 
 class _MemoryStorage implements PersistentStorage {
@@ -50,16 +48,20 @@ class _Install {
   final List<String> events = [];
   late final String id;
 
+  /// What this install has asked of the real relay, counted and cut off
+  /// exactly as the app's own requests are.
+  final RequestBudget budget = RequestBudget();
+
   SealedLetterService service() => SealedLetterService(
     identity: identity,
-    door: RelayMailboxDoor.borderRelay(defaultBorderRelayHost),
     storage: letters,
     blobs: blobs,
     shelf: PairShelf(
       identity: identity,
       origin: Uri(scheme: 'https', host: defaultBorderRelayHost),
-      transport: IoBroadcastHttpTransport(),
+      transport: MeteredRelayTransport(budget: budget),
     ),
+    budget: budget,
     onEvent: (event, fields) => events.add('$event ${jsonEncode(fields)}'),
   );
 }
@@ -115,7 +117,7 @@ void main() {
 
       // B comes on, alone.
       final reading = b.service();
-      expect(await reading.pollOnce(), isTrue);
+      expect(await reading.look(), isTrue);
       expect(reading.inbox.value.map((l) => l.content.kindLabel), [
         'text',
         'photo',
@@ -127,7 +129,7 @@ void main() {
 
       // A comes back, alone, to its receipts.
       final back = a.service();
-      expect(await back.pollOnce(), isTrue);
+      expect(await back.look(), isTrue);
       expect(back.outbox.value.every((s) => s.delivered), isTrue);
       await back.dispose();
       // ignore: avoid_print

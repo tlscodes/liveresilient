@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 
 import 'diagnostics_panel.dart';
 import 'network_truth.dart';
+import 'relay_requests_card.dart';
 import 'tokens.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -102,6 +103,9 @@ class SettingsScreen extends StatelessWidget {
             seed: diagnosticsSeed,
             sourceLabel: diagnosticsSource,
           ),
+          // What sealed letters have cost the relay today; nothing until
+          // this install has a letter service.
+          const RelayRequestsCard(),
           const SizedBox(height: AppSpacing.s24),
           const _SectionHeader('About'),
           _SectionCard(

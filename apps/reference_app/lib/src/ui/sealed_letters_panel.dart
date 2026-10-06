@@ -4,8 +4,12 @@
 // app" means the same thing everywhere.
 //
 // Nothing here spins. A letter that has not been opened is in the queue,
-// and the line under it says why: the mailbox could not be reached, or the
-// box was put in and no receipt came back.
+// and the line under it says why: the relay could not be reached, or the
+// box is on the relay and nobody has opened it yet.
+//
+// Showing this panel is "the screen was opened": the service looks at the
+// shelves often for a while afterwards, and again when the app comes back
+// into view.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -15,7 +19,7 @@ import 'package:messaging/messaging.dart' show Attachment, MediaKind;
 
 import '../peer_identity.dart';
 import '../sealed/sealed_content.dart';
-import '../sealed/sealed_letters.dart';
+import '../sealed/sealed_letter_service.dart';
 import '../theme.dart';
 
 String _short(String install) =>
@@ -46,31 +50,51 @@ class SealedLettersPanel extends StatefulWidget {
   State<SealedLettersPanel> createState() => _SealedLettersPanelState();
 }
 
-class _SealedLettersPanelState extends State<SealedLettersPanel> {
+class _SealedLettersPanelState extends State<SealedLettersPanel>
+    with WidgetsBindingObserver {
   final TextEditingController _text = TextEditingController();
   List<String> _peers = const [];
   String? _to;
   String? _error;
   bool _busy = false;
+  AppLifecycleState? _was;
 
   @override
   void initState() {
     super.initState();
     widget.service.inbox.addListener(_changed);
     widget.service.outbox.addListener(_changed);
-    widget.service.doorUp.addListener(_changed);
+    widget.service.relay.addListener(_changed);
     lastPeerSighting.addListener(_reloadPeers);
+    WidgetsBinding.instance.addObserver(this);
+    widget.service.touch();
     _reloadPeers();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.service.inbox.removeListener(_changed);
     widget.service.outbox.removeListener(_changed);
-    widget.service.doorUp.removeListener(_changed);
+    widget.service.relay.removeListener(_changed);
     lastPeerSighting.removeListener(_reloadPeers);
     _text.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back into view is the screen being opened again. Losing and
+    // regaining focus while it stays in view is not.
+    final wasOutOfView =
+        _was == AppLifecycleState.hidden ||
+        _was == AppLifecycleState.paused ||
+        _was == AppLifecycleState.detached;
+    final inView =
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.resumed;
+    if (wasOutOfView && inView) widget.service.touch();
+    _was = state;
   }
 
   void _changed() {
@@ -159,7 +183,7 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
     final small = theme.textTheme.bodySmall;
     final sent = widget.service.outbox.value;
     final received = widget.service.inbox.value;
-    final door = widget.service.doorUp.value;
+    final relay = widget.service.relay.value;
     final now = DateTime.now();
     if (_peers.isEmpty && sent.isEmpty && received.isEmpty) {
       // Nobody pinned yet and nothing to show: the panel stays out of the
@@ -186,12 +210,15 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
                   ),
                 ),
                 Text(
-                  switch (door) {
-                    null => 'mailbox not read yet',
-                    true => 'mailbox reachable',
-                    false => 'mailbox unreachable — letters wait',
+                  switch (relay) {
+                    SealedRelayState.unknown => 'relay not asked yet',
+                    SealedRelayState.reachable => 'relay reachable',
+                    SealedRelayState.unreachable =>
+                      'relay unreachable — letters wait',
+                    SealedRelayState.spent =>
+                      "today's requests are used up — letters wait",
                   },
-                  key: const Key('sealed-door'),
+                  key: const Key('sealed-relay'),
                   style: small,
                 ),
               ],
@@ -286,8 +313,8 @@ class _SealedLettersPanelState extends State<SealedLettersPanel> {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(switch (letter.state) {
                         SealedSentState.opened => Icons.done_all,
-                        SealedSentState.queuedNoReceipt => Icons.schedule,
-                        SealedSentState.queuedDoorClosed => Icons.cloud_off,
+                        SealedSentState.shelved => Icons.schedule,
+                        SealedSentState.waiting => Icons.cloud_off,
                       }, size: 18),
                       title: Text(letter.text),
                       subtitle: Text(

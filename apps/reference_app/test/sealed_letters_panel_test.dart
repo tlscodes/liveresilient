@@ -1,6 +1,6 @@
 // The sealed-letters panel: what a person sees. Real crypto and the real
-// service; the door is a map in memory, because a widget test has no
-// network. Lab only.
+// service; the relay's shelves are lists in memory, because a widget test
+// has no network. Lab only.
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -9,11 +9,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:messaging/messaging.dart' show Attachment, MediaKind;
 import 'package:reference_app/src/intelligence/disk_json_storage.dart';
 import 'package:reference_app/src/peer_identity.dart';
-import 'package:reference_app/src/sealed/mailbox_door.dart';
+import 'package:reference_app/src/sealed/relay_requests.dart';
 import 'package:reference_app/src/sealed/sealed_content.dart';
-import 'package:reference_app/src/sealed/sealed_letters.dart';
+import 'package:reference_app/src/sealed/sealed_letter_service.dart';
 import 'package:reference_app/src/ui/sealed_letters_panel.dart';
 import 'package:security/security.dart';
+
+import 'support/memory_shelf.dart';
 
 class _MemoryStorage implements PersistentStorage {
   Map<String, Object?> data = {};
@@ -28,34 +30,6 @@ class _MemoryStorage implements PersistentStorage {
   }
 }
 
-/// Mailboxes in memory, with a switch for "the door is down".
-class _MemoryDoor implements MailboxDoor {
-  _MemoryDoor(this._boxes);
-
-  final Map<String, List<Uint8List>> _boxes;
-  static bool down = false;
-
-  @override
-  Future<bool> deposit(String install, Uint8List box) async {
-    if (down) return false;
-    (_boxes[install] ??= []).add(box);
-    return true;
-  }
-
-  @override
-  Future<Uint8List?> take(
-    String install, {
-    Duration wait = Duration.zero,
-  }) async {
-    if (down) return null;
-    final held = _boxes.remove(install) ?? const <Uint8List>[];
-    return Uint8List.fromList([for (final box in held) ...box]);
-  }
-
-  @override
-  Future<void> dispose() async {}
-}
-
 AppIdentity _newIdentity() => AppIdentity(
   engine: CryptographyIdentityKeyEngine(keyStore: InMemoryKeyStore()),
   pins: PinnedPeerStore(_MemoryStorage()),
@@ -65,24 +39,18 @@ String _hex(List<int> bytes) =>
     bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
 void main() {
-  late Map<String, List<Uint8List>> relay;
+  late MemoryRelay relay;
   late AppIdentity mac;
   late AppIdentity phone;
   late SealedLetterService macService;
   late SealedLetterService phoneService;
+  late RequestBudget macBudget;
   late String macId;
   late String phoneId;
 
-  SealedLetterService service(AppIdentity identity) => SealedLetterService(
-    identity: identity,
-    door: _MemoryDoor(relay),
-    storage: _MemoryStorage(),
-  );
-
   Future<void> setUpPair(WidgetTester tester, {bool pinned = true}) async {
     await tester.runAsync(() async {
-      relay = {};
-      _MemoryDoor.down = false;
+      relay = MemoryRelay();
       mac = _newIdentity();
       phone = _newIdentity();
       macId = _hex(await mac.installId());
@@ -97,8 +65,18 @@ void main() {
           presentedPublicKey: (await mac.store.localIdentity()).publicKey,
         );
       }
-      macService = service(mac);
-      phoneService = service(phone);
+      macBudget = RequestBudget(dailyCap: 10, lookShare: 0.5);
+      macService = SealedLetterService(
+        identity: mac,
+        shelf: relay.shelfOf(macId),
+        storage: _MemoryStorage(),
+        budget: macBudget,
+      );
+      phoneService = SealedLetterService(
+        identity: phone,
+        shelf: relay.shelfOf(phoneId),
+        storage: _MemoryStorage(),
+      );
       await macService.load();
       await phoneService.load();
     });
@@ -146,6 +124,9 @@ void main() {
     await tester.pump();
   }
 
+  String relayLine(WidgetTester tester) =>
+      tester.widget<Text>(find.byKey(const Key('sealed-relay'))).data!;
+
   testWidgets('with nobody pinned and nothing to show, the panel is absent', (
     tester,
   ) async {
@@ -154,8 +135,8 @@ void main() {
     expect(find.byKey(const Key('sealed-panel')), findsNothing);
   });
 
-  testWidgets('a pinned peer can be written to: the letter waits, then '
-      'reads "opened by them" once the receipt is back', (tester) async {
+  testWidgets('a pinned peer can be written to: the letter is on the relay, '
+      'then reads "opened by them" once the receipt is back', (tester) async {
     await setUpPair(tester);
     await show(tester);
     expect(find.byKey(const Key('sealed-panel')), findsOneWidget);
@@ -163,6 +144,7 @@ void main() {
       find.textContaining('to ${phoneId.substring(0, 8)}'),
       findsOneWidget,
     );
+    expect(relayLine(tester), 'relay not asked yet');
 
     await tester.enterText(
       find.byKey(const Key('sealed-compose')),
@@ -171,16 +153,17 @@ void main() {
     await tapSend(tester);
     await settle(tester);
     expect(find.text('written on the Mac'), findsOneWidget);
-    expect(find.textContaining('in queue'), findsOneWidget);
+    expect(find.textContaining('on the relay, not opened yet'), findsOneWidget);
     expect(find.textContaining('opened by them'), findsNothing);
+    expect(relayLine(tester), 'relay reachable');
 
     await tester.runAsync(() async {
-      await phoneService.pollOnce();
-      await macService.pollOnce();
+      await phoneService.look();
+      await macService.look();
     });
     await settle(tester);
     expect(find.textContaining('opened by them'), findsOneWidget);
-    expect(find.textContaining('in queue'), findsNothing);
+    expect(find.textContaining('on the relay'), findsNothing);
     expect(
       phoneService.inbox.value.single.text,
       'written on the Mac',
@@ -198,7 +181,7 @@ void main() {
         body: Uint8List.fromList(utf8.encode('written on the phone')),
       );
       await phoneService.flush();
-      await macService.pollOnce();
+      await macService.look();
     });
     await settle(tester);
     expect(find.text('written on the phone'), findsOneWidget);
@@ -210,16 +193,18 @@ void main() {
     expect(find.textContaining('opened here'), findsOneWidget);
   });
 
-  testWidgets('the door down: the panel says the letter waits', (tester) async {
+  testWidgets('the relay out of reach: the panel says the letter waits', (
+    tester,
+  ) async {
     await setUpPair(tester);
     await show(tester);
-    _MemoryDoor.down = true;
+    relay.down = true;
     await tester.enterText(find.byKey(const Key('sealed-compose')), 'later');
     await tapSend(tester);
     await settle(tester);
     expect(find.text('later'), findsOneWidget);
     expect(find.textContaining('in queue'), findsOneWidget);
-    expect(find.textContaining('mailbox unreachable'), findsWidgets);
+    expect(relayLine(tester), 'relay unreachable — letters wait');
   });
 
   testWidgets('the line under a waiting letter says why, in words', (
@@ -227,17 +212,33 @@ void main() {
   ) async {
     await setUpPair(tester);
     await show(tester);
-    _MemoryDoor.down = true;
+    relay.down = true;
     await tester.enterText(find.byKey(const Key('sealed-compose')), 'why');
     await tapSend(tester);
     await settle(tester);
     final id = macService.outbox.value.single.id;
     final line = tester.widget<Text>(find.byKey(Key('sealed-state-$id'))).data!;
     expect(line, contains('in queue'));
-    expect(line, contains('mailbox unreachable'));
+    expect(line, contains('relay unreachable'));
     // Nothing on the panel spins.
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
+  testWidgets("today's requests used up: the panel says so instead of "
+      '"unreachable"', (tester) async {
+    await setUpPair(tester);
+    await show(tester);
+    await tester.runAsync(() async {
+      // The share for looking is five of ten.
+      while (macBudget.take(write: false)) {
+        macBudget.done(Duration.zero);
+      }
+      expect(await macService.look(), isFalse);
+    });
+    await settle(tester);
+    expect(relayLine(tester), "today's requests are used up — letters wait");
+    expect(relay.looks, isEmpty, reason: 'nothing was asked');
   });
 
   testWidgets('a photo that opened here is drawn; a voice note and a video '
@@ -267,7 +268,7 @@ void main() {
         duration: const Duration(seconds: 4),
       );
       await phoneService.flush();
-      await macService.pollOnce();
+      await macService.look();
     });
     await settle(tester);
     final photo = macService.inbox.value.firstWhere(
