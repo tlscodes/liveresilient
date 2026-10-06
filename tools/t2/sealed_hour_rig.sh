@@ -12,67 +12,36 @@
 #      text — writes its own four a minute later. Then it is terminated.
 #   3. GAP minutes after the phone wrote, the Mac app is started; the phone app
 #      is not running. It opens the phone's four and reads its own receipts.
-#   4. The phone app is launched once more to read its receipts.
+#   4. The phone app is launched once more to read its receipts, and closed.
 #
-# "Off" means the app's process is not running. The phone app is launched and
+# "Off" is not a process list: the phone app is off when it was terminated
+# and its journal then stays still for longer than two of its thirty-second
+# heartbeats (tools/t2/sealed_rig_lib.sh). The phone app is launched and
 # terminated with devicectl and is never reinstalled or removed here. The
 # phone's side of the record is its own event journal, copied off the device.
+# The script ends with both apps off, and says so.
 #
-# Usage: tools/t2/sealed_hour_rig.sh <output dir>      (about 100 minutes)
+# Usage: tools/t2/sealed_hour_rig.sh <output dir>      (about 105 minutes)
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-OUT=${1:?output directory}
-PHONE=${JOURNEY_PHONE:-00008030-001215003AF2802E}
-BUNDLE_ID=${JOURNEY_BUNDLE_ID:-com.tlscodes.referenceApp}
+OUT=$(mkdir -p "${1:?output directory}" && cd "$1" && pwd)
+. tools/t2/sealed_rig_lib.sh
 APP=apps/reference_app
-BOX="$HOME/Library/Containers/com.voicecallkit.referenceApp/Data/tmp/sealed_rig"
+BOX="$HOME/Library/Containers/$MAC_BUNDLE_ID/Data/tmp/sealed_rig"
 GAP_MIN=${SEALED_GAP_MIN:-46}
 REPLY_AFTER=60
-JOURNAL=Documents/voice_call_kit_intelligence/sealed_events.jsonl
-mkdir -p "$OUT" "$BOX"
+mkdir -p "$BOX"
 LOG="$OUT/script.log"
 
-say_() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$LOG"; }
-phone_pid() {
-  xcrun devicectl device info processes --device "$PHONE" 2>/dev/null \
-    | awk '/Runner\.app\/Runner/ {print $1; exit}'
-}
-phone_off() {
-  local pid; pid=$(phone_pid)
-  [ -n "$pid" ] && xcrun devicectl device process terminate --device "$PHONE" --pid "$pid" --kill >/dev/null 2>&1
-  sleep 3
-  pid=$(phone_pid)
-  say_ "phone app off: $([ -z "$pid" ] && echo yes || echo "NO, still pid $pid")"
-}
-phone_on() { # a locked phone refuses a launch, so this keeps trying
-  local out
-  for try in $(seq 1 60); do
-    out=$(xcrun devicectl device process launch --terminate-existing --device "$PHONE" "$BUNDLE_ID" 2>&1)
-    if echo "$out" | grep -qi 'launched application'; then
-      say_ "phone app on (try $try)"
-      return 0
-    fi
-    say_ "phone app did not launch (try $try): $(echo "$out" | grep -i 'error\|locked\|denied' | head -1 | cut -c1-140)"
-    sleep 30
-  done
-  return 1
-}
-mac_off() { pgrep -f "reference_app.app/Contents/MacOS/reference_app" >/dev/null && echo "NO, a Mac app process is running" || echo yes; }
 pull_journal() {
-  rm -f "$OUT/phone_events_$1.jsonl"
-  xcrun devicectl device copy from --device "$PHONE" --domain-type appDataContainer \
-    --domain-identifier "$BUNDLE_ID" --source "$JOURNAL" \
-    --destination "$OUT/phone_events_$1.jsonl" >/dev/null 2>&1
-  say_ "phone journal ($1): $([ -s "$OUT/phone_events_$1.jsonl" ] && wc -l <"$OUT/phone_events_$1.jsonl" | tr -d ' ' || echo 0) lines"
+  phone_journal "$OUT/phone_events_$1.jsonl"
+  say_ "phone journal ($1): $(wc -l <"$OUT/phone_events_$1.jsonl" 2>/dev/null | tr -d ' ') lines"
 }
 mac_app() { # mode, log
   ( cd "$APP" && flutter test integration_test/sealed_offline_rig_test.dart -d macos \
       --dart-define=SEALED_RIG_MODE="$1" --dart-define=SEALED_RIG_DIR="$BOX" \
       --dart-define=SEALED_RIG_WAIT_S=300 \
       --dart-define=SEALED_RIG_REPLY_AFTER_S="$REPLY_AFTER" >"$2" 2>&1 )
-}
-wait_until() { # epoch seconds
-  while [ "$(date +%s)" -lt "$1" ]; do sleep 30; done
 }
 
 # --- fixtures ---------------------------------------------------------------
@@ -84,34 +53,38 @@ rm -f "$BOX/voice.aiff"
 
 # --- 1. the Mac writes and is closed ----------------------------------------
 say_ "1: the Mac app writes; the phone app is off"
-phone_off
+phone_off "$OUT" || say_ "1 continues, but the phone app was NOT confirmed off"
 mac_app write "$OUT/mac_write.log"; say_ "1: Mac app exited rc=$?"
 MAC_LEFT=$(date +%s)
-say_ "1: Mac app off: $(mac_off)"
+say_ "1: Mac app not running: $(mac_not_running)"
 grep -a "SEALED_RIG" "$OUT/mac_write.log" | tee -a "$LOG" >/dev/null
 
 # --- 2. GAP later, the phone alone -------------------------------------------
 say_ "waiting $GAP_MIN minutes with both apps off"
 wait_until $((MAC_LEFT + GAP_MIN * 60))
-say_ "2: switching the phone app on; Mac app off: $(mac_off); phone app off before launch: $([ -z "$(phone_pid)" ] && echo yes || echo NO)"
+say_ "2: switching the phone app on; Mac app not running: $(mac_not_running)"
 phone_on || say_ "2: the phone app could NOT be launched"
 sleep $((REPLY_AFTER + 90))
 pull_journal 2_phone_opened_and_wrote
-phone_off
+phone_off "$OUT" || say_ "2: the phone app was NOT confirmed off"
 PHONE_LEFT=$(date +%s)
 
 # --- 3. GAP later, the Mac alone ----------------------------------------------
 say_ "waiting $GAP_MIN minutes with both apps off"
 wait_until $((PHONE_LEFT + GAP_MIN * 60))
-say_ "3: starting the Mac app; phone app off: $([ -z "$(phone_pid)" ] && echo yes || echo NO)"
+pull_journal 3_phone_before_mac
+say_ "3: starting the Mac app; the phone app has been off since $(date -u -r "$PHONE_LEFT" +%H:%M:%SZ)"
 mac_app receive "$OUT/mac_receive.log"; say_ "3: Mac app exited rc=$?"
-say_ "3: Mac app off: $(mac_off)"
+say_ "3: Mac app not running: $(mac_not_running)"
 
-# --- 4. the phone reads its receipts ------------------------------------------
+# --- 4. the phone reads its receipts, and everything is closed ----------------
 say_ "4: the phone app once more, for its receipts"
 phone_on || say_ "4: the phone app could NOT be launched"
 sleep 75
 pull_journal 4_phone_final
+phone_off "$OUT" && PHONE_END=yes || PHONE_END=NO
 
 grep -a "SEALED_RIG" "$OUT/mac_write.log" "$OUT/mac_receive.log" 2>/dev/null | sed 's/^[^:]*://' >"$OUT/mac_lines.txt"
-say_ "done"
+python3 tools/t2/sealed_hour_verdict.py "$OUT" "$GAP_MIN" | tee "$OUT/verdict.txt" | tee -a "$LOG" >/dev/null
+say_ "done — phone app off: $PHONE_END; Mac app not running: $(mac_not_running)"
+tail -n 1 "$OUT/verdict.txt"

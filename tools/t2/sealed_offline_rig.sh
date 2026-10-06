@@ -1,7 +1,7 @@
 #!/bin/bash
 # Sealed letters with one side OFF at the moment of sending, both directions,
 # on the same Mac and the same phone. No call, no hub, no shaping: the letters
-# cross the two installs' mailboxes on the border relay over the internet.
+# wait on the pair shelf of the border relay and are found by looking.
 #
 #   A. Mac -> phone. The phone app is terminated. The Mac app writes a text, a
 #      photo, a 30 s voice note and a short video; the script waits until the
@@ -9,58 +9,32 @@
 #   B. Phone -> Mac. The Mac app is not running. The phone writes on its own,
 #      asked to by the Mac's text a minute earlier; later the Mac app is started.
 #
-# "Off" means the app's process is not running. The phone app is launched and
+# "Off" is not a process list: the phone app is off when it was terminated
+# and its journal then stays still for longer than two of its thirty-second
+# heartbeats (tools/t2/sealed_rig_lib.sh). The phone app is launched and
 # terminated with devicectl and is never reinstalled or removed here. The
 # phone's side of the record is its own event journal, copied off the device.
+# The script ends with both apps off, and says so.
 #
 # Usage: tools/t2/sealed_offline_rig.sh <output dir>
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-OUT=${1:?output directory}
-PHONE=${JOURNEY_PHONE:-00008030-001215003AF2802E}
-BUNDLE_ID=${JOURNEY_BUNDLE_ID:-com.tlscodes.referenceApp}
+OUT=$(mkdir -p "${1:?output directory}" && cd "$1" && pwd)
+. tools/t2/sealed_rig_lib.sh
 APP=apps/reference_app
-BOX="$HOME/Library/Containers/com.voicecallkit.referenceApp/Data/tmp/sealed_rig"
+BOX="$HOME/Library/Containers/$MAC_BUNDLE_ID/Data/tmp/sealed_rig"
 WAIT=${SEALED_RIG_WAIT_S:-240}
 # The Mac's text asks the rig peer to write back this many seconds after it
 # opens it; by then the Mac app has exited. (A launch-time switch was tried
 # first and never reached the app: the phone's journal showed no write.)
 REPLY_AFTER=${SEALED_RIG_REPLY_AFTER_S:-60}
-JOURNAL=Documents/voice_call_kit_intelligence/sealed_events.jsonl
-mkdir -p "$OUT" "$BOX"
+mkdir -p "$BOX"
 rm -f "$BOX/peer_may_start"
+LOG="$OUT/script.log"
 
-say_() { echo "[$(date -u +%H:%M:%S)] $*"; }
-
-phone_pid() {
-  xcrun devicectl device info processes --device "$PHONE" 2>/dev/null \
-    | awk '/Runner\.app\/Runner/ {print $1; exit}'
-}
-phone_off() {
-  local pid; pid=$(phone_pid)
-  if [ -n "$pid" ]; then
-    xcrun devicectl device process terminate --device "$PHONE" --pid "$pid" --kill >/dev/null 2>&1
-    sleep 2
-  fi
-  pid=$(phone_pid)
-  say_ "phone app off: $([ -z "$pid" ] && echo yes || echo "NO, still pid $pid")"
-  [ -z "$pid" ]
-}
-phone_on() { # optional JSON of environment variables
-  local out
-  if [ -n "${1:-}" ]; then
-    out=$(xcrun devicectl device process launch --terminate-existing -e "$1" --device "$PHONE" "$BUNDLE_ID" 2>&1)
-  else
-    out=$(xcrun devicectl device process launch --terminate-existing --device "$PHONE" "$BUNDLE_ID" 2>&1)
-  fi
-  say_ "phone app on: $(echo "$out" | grep -qi 'launched application' && echo yes || echo "? $(echo "$out" | tail -1)")"
-}
 pull_journal() { # tag
-  rm -f "$OUT/phone_events_$1.jsonl"
-  xcrun devicectl device copy from --device "$PHONE" --domain-type appDataContainer \
-    --domain-identifier "$BUNDLE_ID" --source "$JOURNAL" \
-    --destination "$OUT/phone_events_$1.jsonl" >/dev/null 2>&1
-  say_ "phone journal ($1): $([ -s "$OUT/phone_events_$1.jsonl" ] && wc -l <"$OUT/phone_events_$1.jsonl" | tr -d ' ' || echo 0) lines"
+  phone_journal "$OUT/phone_events_$1.jsonl"
+  say_ "phone journal ($1): $(wc -l <"$OUT/phone_events_$1.jsonl" 2>/dev/null | tr -d ' ') lines"
 }
 mac_app() { # mode, log
   ( cd "$APP" && flutter test integration_test/sealed_offline_rig_test.dart -d macos \
@@ -81,7 +55,7 @@ done
 
 # --- A. Mac -> phone, phone off ---------------------------------------------
 say_ "A: Mac writes while the phone app is off"
-phone_off || say_ "A continues, but the phone was NOT off"
+phone_off "$OUT" || say_ "A continues, but the phone app was NOT confirmed off"
 mac_app send "$OUT/mac_send.log" &
 MAC_PID=$!
 for _ in $(seq 1 360); do
@@ -91,7 +65,7 @@ for _ in $(seq 1 360); do
 done
 if [ -f "$BOX/peer_may_start" ]; then
   say_ "A: the Mac app has said where its letters are; switching the phone on"
-  phone_on
+  phone_on || say_ "A: the phone app could NOT be launched"
 else
   say_ "A: the Mac app never reached its queue report"
 fi
@@ -100,8 +74,7 @@ sleep 6
 pull_journal A
 
 # --- B. phone -> Mac, Mac app off -------------------------------------------
-say_ "B: phone writes while the Mac app is not running"
-pgrep -f "reference_app.app/Contents/MacOS/reference_app" >/dev/null && say_ "B: a Mac app process is STILL running" || say_ "B: Mac app off: yes"
+say_ "B: phone writes while the Mac app is not running: $(mac_not_running)"
 say_ "B: the phone was asked to write ${REPLY_AFTER}s after opening the Mac's text; waiting for it to try with the Mac off"
 sleep $((REPLY_AFTER + 45))
 pull_journal B_before_mac
@@ -110,5 +83,7 @@ mac_app receive "$OUT/mac_receive.log"; say_ "B: Mac app exited rc=$?"
 sleep 8
 pull_journal B_after_mac
 
+# --- the end: everything this script opened is closed -------------------------
+phone_off "$OUT" && PHONE_END=yes || PHONE_END=NO
 grep -a "SEALED_RIG" "$OUT/mac_send.log" "$OUT/mac_receive.log" 2>/dev/null | sed 's/^[^:]*://' >"$OUT/mac_lines.txt"
-say_ "done: $(grep -c 'row dir=' "$OUT/mac_lines.txt") Mac rows in $OUT/mac_lines.txt"
+say_ "done: $(grep -c 'row dir=' "$OUT/mac_lines.txt") Mac rows in $OUT/mac_lines.txt — phone app off: $PHONE_END; Mac app not running: $(mac_not_running)"
