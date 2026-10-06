@@ -322,6 +322,87 @@ over the relay's WSS lane arrives at the other side as the text
 "[object Blob]" (a text frame arrives intact). It behaved the same before
 and after the deploy.
 
+## Round six — nothing rings: letters are found by looking
+
+What round five cost the relay was never measured, only computed, and the
+computation was bad: one open install with one pinned peer held a 20 s
+request open around the clock and asked four day shelves at the end of
+each — about 21,600 requests and 10,400 GB-s of held connection a day, on
+a relay every install shares. Two such installs were more than the relay's
+free allowance of held time. Round six removes the held request and puts
+every request under a count.
+
+What is different (commits 78e2e77 … 4f8ed67, 2026-10-06):
+
+- No request is held open and no letter goes through the long-poll
+  mailbox; `mailbox_door.dart` is gone and the service has only the pair
+  shelf. Nobody is told that an install came on: the "I am here" box is no
+  longer sent, and one from an older install is opened and ignored.
+- A reader looks: every 3 s for two minutes after a write, an opened
+  screen or an arriving letter, then at twice the interval each time, down
+  to once in 15 minutes. The look asks today's shelf, and yesterday's until
+  ten minutes past UTC midnight; the other days are asked every half hour.
+  A writer never goes back a day, so a day read to its end after its
+  writer was seen on a later day is closed and never asked again.
+- Every request is taken from a daily allowance before it leaves (3000 a
+  day; looking stops at 2400 so writing keeps a share), timed, and cut off
+  at 1.8 s — a request carrying a piece of media may stay open longer, in
+  proportion to its size. The count is on the diagnostics screen and
+  outlives a relaunch.
+- "On" is a line in the app's journal: `start`, then `alive` every thirty
+  seconds with the request count and the longest open request. The rig
+  scripts read that, not a process list, and end by closing the phone app
+  and waiting for its journal to fall silent.
+
+Measured on the rig, same Mac and same iPhone, the relay over the internet:
+
+```
+warm, 10 texts each way, 12:56–13:00Z    10/10
+  median written -> opened    Mac -> phone  <= 3792 ms   (raw 2708)
+                              phone -> Mac  <= 3269 ms   (raw 2099)
+  the two clocks differ by between -1085 and +1170 ms, bounded from
+  the data alone; the line is 5000 ms
+
+hour run, 13:01–14:45Z                    8/8
+  Mac -> phone: text 69 B, photo 101738 B, voice 64715 B, video 38103 B
+    written 13:03:55–13:04:01, opened on the phone 13:50:31–33 (46:31–46:36),
+    receipts read by the Mac 14:41:56
+  phone -> Mac: the same four, written 13:51:32–36, opened on the Mac
+    14:41:56–57 (50:21–50:24), receipts read by the phone 14:42:19,
+    SHA-256 b7591bd9 / a95fcc79 / 2c5eb559 as sent
+  the phone's journal has no line between its two sessions
+
+idle, both apps open, one pinned peer, 14:48–22:50Z (8 h)
+                       Mac                 phone
+  alive lines          961, gap 30 s       961, gap 30 s
+  requests in 8 h      98  (x3 = 294/day)  98  (x3 = 294/day)
+  looks                79 fast, 17 slow    79 fast, 17 slow
+  anything else        none                none
+  longest open         2832 ms             944 ms
+```
+
+The idle count is the one the lab predicted to the request (98 when the
+peer wrote that day; `test/sealed_idle_cost_test.dart` gives 114 and 130
+for a peer who wrote yesterday or never — at most 390 a day, under the
+line of 400 in every state).
+
+What was NOT seen: "no request open longer than two seconds", on the Mac.
+Two of its 98 requests, at 22:15:37Z and 22:30:38Z, were open 2832 and
+2491 ms before the app's own cut ended them — a cut set for 1800 ms that
+ran about a second late, twice, in the same quarter-hour in which the
+phone and a `curl` from the same Mac reached the relay in half a second.
+The cause was not established. What it means: a cut inside the app cannot
+promise "never above two seconds" on a Mac whose process can be held for
+a second by something outside it; a hard ceiling has to be the relay's own
+(phase j of the plan, not built). The phone kept every request under
+944 ms for eight hours.
+
+The suite ran three times through `tools/safe_flutter_test.sh` at 5bfd731
+(817 of 817; 442, 433 and 424 s against a limit of 630) and the thirteen
+cheap gates were green. The leak gate now reads a trace stamped by an
+injected clock and gives the same number every run (7.756566). None of
+this was pushed.
+
 ## Not built
 
 - Playing a sealed voice note or video in the panel; recording or picking
@@ -329,10 +410,13 @@ and after the deploy.
 - The one-time key in a receipt (forward secrecy on the recipient's side).
 - A letter that nobody opens within about two days is shelved again by the
   sender's app — which must be running then. Nothing keeps it longer.
-- A lock on the mailbox: anyone who knows a public install id can still
-  ring it or empty it. Letters no longer travel through it, so that loses a
-  doorbell, not a letter.
-- Reading the shelf costs a few requests per pinned peer per round; fine
-  for tens of peers, not measured beyond two.
+- A ceiling on how long a request stays open that the relay itself
+  enforces; the app's own cut ran late twice in eight hours on the Mac.
+- Looking costs one request per pinned peer per look once that peer has
+  written today (up to four before that); fine for tens of peers, not
+  measured beyond two.
+- A link on which connect, TLS and a request take longer than 1.8 s: every
+  look is cut there and letters wait until it is faster (phase b of the
+  plan is the answer).
 - Any carrier for other people's boxes.
 - A changed-key run on real devices.
