@@ -84,8 +84,22 @@ void main() {
     var counted = 0;
     for (var i = 0; i <= _count; i++) {
       final text = 'warm $i at ${_ms(DateTime.now())} #rig-echo=$i';
-      await tester.enterText(find.byKey(const Key('sealed-compose')), text);
+      // Clicking Send moves the focus to the button and the field's input
+      // connection closes with it (seen on the rig: the second text was
+      // never typed). So the field is clicked before every text, as a
+      // person would; and if typing still did not land, the text is put in
+      // the field directly and the line says so.
+      final compose = find.byKey(const Key('sealed-compose'));
+      await tester.tap(compose);
       await tester.pump(const Duration(milliseconds: 200));
+      await tester.enterText(compose, text);
+      await tester.pump(const Duration(milliseconds: 200));
+      final field = tester.widget<TextField>(compose).controller;
+      if (field != null && field.text != text) {
+        print('SEALED_WARM note i=$i typing_did_not_land=true');
+        field.text = text;
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       await tester.tap(find.byKey(const Key('sealed-send')));
       final sent = await _until<SealedSent>(
         tester,
