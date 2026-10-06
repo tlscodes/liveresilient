@@ -54,12 +54,21 @@ if [ -n "$MAC_PID" ]; then
 else
   say_ "1: the Mac app did NOT start"
 fi
+STARTED=yes
 wait_for_start "$MAC_JOURNAL" "$SINCE" mac \
   && say_ "1: Mac app on: yes — a start line in its journal" \
-  || say_ "1: Mac app on: NO start line in its journal"
+  || { say_ "1: Mac app on: NO start line in its journal"; STARTED=no; }
 wait_for_start "$OUT/phone_events_soak.jsonl" "$SINCE" phone \
   && say_ "1: phone app on: yes — a start line in its journal" \
-  || say_ "1: phone app on: NO start line in its journal"
+  || { say_ "1: phone app on: NO start line in its journal"; STARTED=no; }
+if [ "$STARTED" = no ]; then
+  # Eight hours beside an app whose letter service never started would show
+  # nothing: stop here, close what was opened, and say so.
+  say_ "1: not both apps started their letter service — the run is stopped"
+  mac_off; phone_off "$OUT"
+  echo "VERDICT soak FAIL an app did not write its start line" | tee "$OUT/verdict.txt"
+  exit 2
+fi
 
 END=$(( $(date +%s) + HOURS * 3600 + 120 ))
 say_ "2: both open and idle until $(date -u -r "$END" +%Y-%m-%dT%H:%M:%SZ); nothing is touched"
