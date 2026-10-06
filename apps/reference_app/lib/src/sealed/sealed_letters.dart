@@ -1000,6 +1000,9 @@ class SealedLetterService {
     await _load();
     final now = _clock();
     for (final q in _queue) {
+      // What is already on the shelf is there to be read: starting the app
+      // must not put it there a second time.
+      if (shelf != null && q.everDeposited) continue;
       if (q.deliveredAt == null) q.nextAt = now;
     }
     final own = await _own();

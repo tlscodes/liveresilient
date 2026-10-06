@@ -489,6 +489,25 @@ void main() {
     });
 
     test(
+      'starting the app again does not shelve a waiting letter twice',
+      () async {
+        // Seen on the rig: the app's "I am here" made every unopened letter
+        // due at once, so letters already on the relay were put there again.
+        final writing = on(mac);
+        await writing.send(toInstall: phone.id, body: _utf8('once is enough'));
+        await writing.flush();
+        final pointers = relay.pointers.length;
+        await writing.dispose();
+
+        final again = on(mac);
+        await again.announce();
+        await again.flush();
+        expect(again.outbox.value.single.attempts, 1);
+        expect(relay.pointers.length, pointers);
+      },
+    );
+
+    test(
       'a receipt that could not be shelved is shelved on a later round',
       () async {
         final writing = on(mac);
