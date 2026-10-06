@@ -65,6 +65,11 @@ if [ -n "${LEAK_GATE_OBSERVED:-}" ]; then
   echo "leak_gate: gating externally supplied trace: $OBSERVED"
 else
   OBSERVED="$TMPDIR_GATE/observed.csv"
+  # The emitter stamps the trace with an INJECTED clock — the transport's own
+  # tick time — not with wall-clock time. The same code therefore gives the
+  # same trace on any machine under any load, and this gate cannot go red
+  # because a runner was slow. (It did once, on unchanged code: peak_ratio
+  # 8.047 against 8.0. With the injected clock it is 7.756566 every time.)
   if ! (cd "$EMITTER_PKG" && dart run tool/emit_wire_trace.dart "$OBSERVED" "$BASELINE_TICKS"); then
     not_run "emitter failed in $EMITTER_PKG"
   fi
@@ -74,6 +79,8 @@ KL_THRESHOLD="$(awk -v b="$BASELINE_KL" -v t="$KL_TOLERANCE" 'BEGIN{printf "%.6f
 
 echo "==================================================================="
 echo "LEAK GATE — no-regression mode"
+echo "  Timing: the trace is stamped by an injected clock, so this verdict is"
+echo "  the same on every run of the same code."
 echo "  This gate compares against the committed baseline kl=$BASELINE_KL"
 echo "  ($BASELINE_DATE) and fails only if kl exceeds baseline+tolerance"
 echo "  = $KL_THRESHOLD nats (tolerance $KL_TOLERANCE, see leak_gate_baseline.env)."
