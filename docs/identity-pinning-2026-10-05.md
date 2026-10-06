@@ -250,16 +250,89 @@ What that table is and is not:
 - The voice note and the video are shown as a line with their size and
   length; playing them from the panel is not built. The photo is drawn.
 
+## Round five — the line: written, closed, and opened most of an hour later
+
+Lab rig, the same Mac and the same phone. This replaces round four's "a
+letter crosses only when both apps are running within the same few
+seconds": that is no longer true.
+
+**The relay.** The repo's relay was deployed to the same account on
+2026-10-05 (version `40300297-2a59-4809-9b4c-1fa98a821ac0`; before it,
+`2c33b6f2-9d11-4fe2-a2f2-2f064ea86d46` from 2026-07-27, which matched repo
+commit `61c39e3`). A probe of the call lanes and the mailbox gave the same
+answers before and after. The archive routes now exist: `PUT /o/<sha256>`
+201, the same bytes again 204, other bytes 400, read back identical — and
+still identical 2 h 15 min later; `PUT /a/<author>/<seq>` without a valid
+credential 403. The two-day retention is the code's constant; it was not
+waited out.
+
+**The pair shelf.** One author feed of that archive, used by exactly two
+installs. Its key is derived from the secret they already share — X25519
+between their pinned identity keys — with the direction and the day, so
+both can compute its address and nobody else can; and because the archive
+is write-once nobody can take anything off it. The sender puts each sealed
+box at `/o/<sha256>` and a pointer at the next number; the recipient reads
+forward from where it stopped. Letters, pieces and receipts all go there;
+the long-poll mailbox only rings.
+
+**The run.** An app writes a text, a photo, a 30 s voice note and a 10 s
+video and is closed. The other side's app is started at least 45 minutes
+later, with the writer's app not running. UTC, 2026-10-05, code `b846f5e`:
+
+| Direction | Kind | Bytes | Sent | Opened on the other device | After | Receipt read by the sender |
+| --- | --- | --- | --- | --- | --- | --- |
+| Mac → phone | text | 69 | 18:43:17 | 19:30:05 | 46 min 48 s | 20:20:45 |
+| Mac → phone | photo | 101 738 | 18:43:19 | 19:30:07 | 46 min 48 s | 20:20:45 |
+| Mac → phone | voice, 30 s | 64 715 | 18:43:21 | 19:30:07 | 46 min 46 s | 20:20:45 |
+| Mac → phone | video, 10 s | 38 103 | 18:43:24 | 19:30:08 | 46 min 43 s | 20:20:46 |
+| phone → Mac | text | 51 | 19:31:07 | 20:20:46 | 49 min 39 s | 20:21:10 |
+| phone → Mac | video, 10 s | 38 103 | 19:31:08 | 20:20:47 | 49 min 39 s | 20:21:10 |
+| phone → Mac | voice, 30 s | 64 715 | 19:31:10 | 20:20:47 | 49 min 37 s | 20:21:10 |
+| phone → Mac | photo | 101 738 | 19:31:12 | 20:20:47 | 49 min 35 s | 20:21:10 |
+
+The Mac app exited at 18:43:37 and was not started again until 20:18:52.
+The phone app was launched at 19:29:59 and terminated at 19:32:37, then
+launched once more at 20:21:07 for its receipts. Each side read its
+receipts on its own next start, with the other side off. The SHA-256 of
+each file that opened on the Mac equals the file the Mac had first sent
+(`b7591bd9`, `a95fcc79`, `2c5eb559`).
+
+What that table is and is not:
+
+- "Off" means the app's process was not running; the devices themselves
+  were on, awake and connected.
+- Three times during the two gaps iOS listed a process for the phone app
+  that this run had not launched (once before each planned launch, and once
+  in between). The app's own event journal has no entry inside either gap
+  — the service writes one the moment it starts — and the letters opened
+  six seconds after the planned launch. Two of those processes were
+  terminated by hand before the Mac came on. What started them was not
+  established; a system that prepares an app's process ahead of time would
+  look like this.
+- The phone wrote its text itself; the photo, voice note and video it sent
+  were the ones it had received. It was asked to write by a line in the
+  Mac's own sealed text, a convention of the rig peer only.
+- "Opened" on the phone is read from the phone's own journal, copied off
+  the device; its screen was not read by a machine. On the Mac three of
+  the four received rows were read off the screen; the text row was outside
+  the visible part of the list.
+
+Found on the way, not part of this work and not fixed: a BINARY frame sent
+over the relay's WSS lane arrives at the other side as the text
+"[object Blob]" (a text frame arrives intact). It behaved the same before
+and after the deploy.
+
 ## Not built
 
-- A relay that keeps a box for an absent recipient: a letter still crosses
-  only when both apps are running within the same few seconds, and until
-  then it waits in the sender's queue. Any carrier for other people's
-  boxes.
-- The pair shelf, and the one-time key in a receipt (forward secrecy) that
-  was to come with it.
 - Playing a sealed voice note or video in the panel; recording or picking
   media on the phone without a person.
-- A lock on reading a mailbox: anyone who knows a public install id can
-  still take its boxes.
+- The one-time key in a receipt (forward secrecy on the recipient's side).
+- A letter that nobody opens within about two days is shelved again by the
+  sender's app — which must be running then. Nothing keeps it longer.
+- A lock on the mailbox: anyone who knows a public install id can still
+  ring it or empty it. Letters no longer travel through it, so that loses a
+  doorbell, not a letter.
+- Reading the shelf costs a few requests per pinned peer per round; fine
+  for tens of peers, not measured beyond two.
+- Any carrier for other people's boxes.
 - A changed-key run on real devices.
