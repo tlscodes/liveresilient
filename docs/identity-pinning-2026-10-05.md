@@ -345,10 +345,10 @@ What is different (commits 78e2e77 … 4f8ed67, 2026-10-06):
   A writer never goes back a day, so a day read to its end after its
   writer was seen on a later day is closed and never asked again.
 - Every request is taken from a daily allowance before it leaves (3000 a
-  day; looking stops at 2400 so writing keeps a share), timed, and cut off
-  at 1.8 s — a request carrying a piece of media may stay open longer, in
-  proportion to its size. The count is on the diagnostics screen and
-  outlives a relaunch.
+  day; looking stops at 2400 so writing keeps a share) and timed, and a
+  cut at 1.8 s is asked for — a request carrying a piece of media is
+  allowed longer, in proportion to its size. The count is on the
+  diagnostics screen and outlives a relaunch.
 - "On" is a line in the app's journal: `start`, then `alive` every thirty
   seconds with the request count and the longest open request. The rig
   scripts read that, not a process list, and end by closing the phone app
@@ -386,16 +386,9 @@ peer wrote that day; `test/sealed_idle_cost_test.dart` gives 114 and 130
 for a peer who wrote yesterday or never — at most 390 a day, under the
 line of 400 in every state).
 
-What was NOT seen: "no request open longer than two seconds", on the Mac.
-Two of its 98 requests, at 22:15:37Z and 22:30:38Z, were open 2832 and
-2491 ms before the app's own cut ended them — a cut set for 1800 ms that
-ran about a second late, twice, in the same quarter-hour in which the
-phone and a `curl` from the same Mac reached the relay in half a second.
-The cause was not established. What it means: a cut inside the app cannot
-promise "never above two seconds" on a Mac whose process can be held for
-a second by something outside it; a hard ceiling has to be the relay's own
-(phase j of the plan, not built). The phone kept every request under
-944 ms for eight hours.
+A cut at 1.8 s is asked for. The longest request seen on the Mac was
+2.8 s (22:15 and 22:30, 2832 and 2491 ms) and on the phone 0.944 s. The
+app itself does not guarantee a hard ceiling.
 
 The suite ran three times through `tools/safe_flutter_test.sh` at 5bfd731
 (817 of 817; 442, 433 and 424 s against a limit of 630) and the thirteen
