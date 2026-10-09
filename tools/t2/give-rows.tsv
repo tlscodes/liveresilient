@@ -1,0 +1,10 @@
+kind	dir	via	bytes	sha	ok
+text	put	txt	313	b2ef3a0c0718da6d6e5fa4c4e6b1cb02fe22ca7af31a3f676d5a9dfd45b09381	PASS
+text	get	txt	313	b2ef3a0c0718da6d6e5fa4c4e6b1cb02fe22ca7af31a3f676d5a9dfd45b09381	PASS
+photo	put	txt	5000	0aa199e76faa3f65d643880e730c0ff012313bea8a661fb4cde566e13bc896b2	PASS
+photo	get	txt	5000	0aa199e76faa3f65d643880e730c0ff012313bea8a661fb4cde566e13bc896b2	PASS
+voice30	put	txt	3007	bbef423f69a284b5b20b0d5edf87c4ba006f271c9a4f97a22c19be5471d2e19d	PASS
+voice30	get	txt	3007	bbef423f69a284b5b20b0d5edf87c4ba006f271c9a4f97a22c19be5471d2e19d	PASS
+video	put	txt	12000	019700a49cc1f8fd34de0a39865b9a46092c97de66115df0f420a4874426618c	PASS
+video	get	txt	12000	019700a49cc1f8fd34de0a39865b9a46092c97de66115df0f420a4874426618c	PASS
+absent	get	txt	0	-	PASS

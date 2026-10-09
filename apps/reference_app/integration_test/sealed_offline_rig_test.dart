@@ -34,6 +34,9 @@ const String _mode = String.fromEnvironment('SEALED_RIG_MODE');
 const String _dir = String.fromEnvironment('SEALED_RIG_DIR');
 const int _waitS = int.fromEnvironment('SEALED_RIG_WAIT_S', defaultValue: 240);
 const int _replyAfterS = int.fromEnvironment('SEALED_RIG_REPLY_AFTER_S');
+const String _rigPeer = String.fromEnvironment('SEALED_RIG_PEER');
+// The TXT smoke writes the text letter alone (one give request each way).
+const bool _textOnly = bool.fromEnvironment('SEALED_RIG_TEXT_ONLY');
 
 String _iso(DateTime? at) => at == null ? '-' : at.toUtc().toIso8601String();
 
@@ -81,8 +84,21 @@ void main() {
     ))!.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     final peers = (await tester.runAsync(identity.pinnedInstalls))!;
     expect(peers, isNotEmpty, reason: 'this install has pinned nobody');
-    final peer = peers.first;
-    print('SEALED_RIG ready=true mode=$_mode own=$own peer=$peer');
+    // With more than one pin the rig must be told which peer it addresses,
+    // so a letter never goes silently to an old pin.
+    final asked = _rigPeer.trim().toLowerCase();
+    if (asked.isEmpty && peers.length > 1) {
+      fail('${peers.length} pins, set SEALED_RIG_PEER: ${peers.join(',')}');
+    }
+    if (asked == own) fail('SEALED_RIG_PEER is this install\'s own id');
+    if (asked.isNotEmpty) {
+      expect(peers, contains(asked), reason: 'SEALED_RIG_PEER is not pinned');
+    }
+    final peer = asked.isEmpty ? peers.first : asked;
+    print(
+      'SEALED_RIG ready=true mode=$_mode own=$own '
+      'pins=${peers.length} peer=$peer',
+    );
 
     // The panel is on the Chat tab.
     await tester.tap(find.byIcon(Icons.chat_bubble));
@@ -120,11 +136,32 @@ void main() {
       // text — by then this app has exited.
       final text =
           'written on the mac at ${_iso(DateTime.now())}'
-          '${_replyAfterS > 0 ? ' #rig-reply-after=$_replyAfterS' : ''}';
-      await tester.enterText(find.byKey(const Key('sealed-compose')), text);
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.byKey(const Key('sealed-send')));
+          // Text-only asks for the rig peer's echo: one short text back,
+          // written the moment it opens this one.
+          '${_textOnly
+              ? ' #rig-echo=1'
+              : _replyAfterS > 0
+              ? ' #rig-reply-after=$_replyAfterS'
+              : ''}';
+      if (asked.isEmpty) {
+        await tester.enterText(find.byKey(const Key('sealed-compose')), text);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.byKey(const Key('sealed-send')));
+      } else {
+        // The panel addresses its own choice (last seen, else the first
+        // pin); a chosen rig peer is written to directly.
+        await tester.runAsync(
+          () => service.send(
+            toInstall: peer,
+            body: Uint8List.fromList(utf8.encode(text)),
+          ),
+        );
+      }
       await tester.pump(const Duration(seconds: 1));
+      print(
+        'SEALED_RIG fixture kind=text bytes=${utf8.encode(text).length} '
+        'sha=${await tester.runAsync(() => _sha8(utf8.encode(text)))}',
+      );
       Future<void> media(
         SealedMediaKind kind,
         String file,
@@ -147,24 +184,26 @@ void main() {
         );
       }
 
-      await media(
-        SealedMediaKind.photo,
-        'photo.jpg',
-        'image/jpeg',
-        Duration.zero,
-      );
-      await media(
-        SealedMediaKind.voice,
-        'voice.m4a',
-        'audio/mp4',
-        const Duration(seconds: 30),
-      );
-      await media(
-        SealedMediaKind.video,
-        'video.mp4',
-        'video/mp4',
-        const Duration(seconds: 10),
-      );
+      if (!_textOnly) {
+        await media(
+          SealedMediaKind.photo,
+          'photo.jpg',
+          'image/jpeg',
+          Duration.zero,
+        );
+        await media(
+          SealedMediaKind.voice,
+          'voice.m4a',
+          'audio/mp4',
+          const Duration(seconds: 30),
+        );
+        await media(
+          SealedMediaKind.video,
+          'video.mp4',
+          'video/mp4',
+          const Duration(seconds: 10),
+        );
+      }
 
       if (_mode == 'write') {
         // Write, see every letter onto the relay's shelf, say where each

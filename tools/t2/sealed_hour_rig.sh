@@ -37,19 +37,38 @@ pull_journal() {
   phone_journal "$OUT/phone_events_$1.jsonl"
   say_ "phone journal ($1): $(wc -l <"$OUT/phone_events_$1.jsonl" 2>/dev/null | tr -d ' ') lines"
 }
+# SEALED_BEFORE_PHONE names a command run before every phone launch (the
+# TXT-lane run proves the phone is on the bridge with it); when it fails the
+# run stops, because a leg on the wrong path proves nothing.
+before_phone() {
+  [ -z "${SEALED_BEFORE_PHONE:-}" ] && return 0
+  LOG="$LOG" $SEALED_BEFORE_PHONE && return 0
+  say_ "$1: STOPPED — the check before the phone launch failed: $SEALED_BEFORE_PHONE"
+  exit 3
+}
 mac_app() { # mode, log
   ( cd "$APP" && flutter test integration_test/sealed_offline_rig_test.dart -d macos \
       --dart-define=SEALED_RIG_MODE="$1" --dart-define=SEALED_RIG_DIR="$BOX" \
       --dart-define=SEALED_RIG_WAIT_S=300 \
+      --dart-define=SEALED_RIG_PEER="${SEALED_RIG_PEER:-}" \
+      --dart-define=SEALED_RIG_TEXT_ONLY="${SEALED_RIG_TEXT_ONLY:-false}" \
       --dart-define=SEALED_RIG_REPLY_AFTER_S="$REPLY_AFTER" >"$2" 2>&1 )
 }
 
 # --- fixtures ---------------------------------------------------------------
+# SEALED_FIXTURES names a directory holding photo.jpg, voice.m4a and video.mp4
+# made beforehand (the TXT-lane run uses narrow-lane sizes); without it the
+# fixtures are made here as before.
+if [ -n "${SEALED_FIXTURES:-}" ]; then
+  for f in photo.jpg voice.m4a video.mp4; do cp "$SEALED_FIXTURES/$f" "$BOX/$f"; done
+else
 cp tools/dossier/evidence/journey/media/bandwidth-photo.jpg "$BOX/photo.jpg"
 say -o "$BOX/voice.aiff" "This is a thirty second voice note for the sealed letter test. $(printf 'One two three four five six seven eight nine ten. %.0s' 1 2 3 4 5 6 7 8 9 10)"
 ffmpeg -v error -y -stream_loop 4 -i "$BOX/voice.aiff" -t 30 -ac 1 -ar 16000 -c:a aac -b:a 16k "$BOX/voice.m4a"
 ffmpeg -v error -y -i tools/dossier/evidence/journey/media/bandwidth-video.mp4 -t 10 -c copy "$BOX/video.mp4"
 rm -f "$BOX/voice.aiff"
+fi
+for f in photo.jpg voice.m4a video.mp4; do say_ "fixture $f $(wc -c <"$BOX/$f" | tr -d ' ') B"; done
 
 # --- 1. the Mac writes and is closed ----------------------------------------
 say_ "1: the Mac app writes; the phone app is off"
@@ -63,6 +82,7 @@ grep -a "SEALED_RIG" "$OUT/mac_write.log" | tee -a "$LOG" >/dev/null
 say_ "waiting $GAP_MIN minutes with both apps off"
 wait_until $((MAC_LEFT + GAP_MIN * 60))
 say_ "2: switching the phone app on; Mac app not running: $(mac_not_running)"
+before_phone 2
 phone_on || say_ "2: the phone app could NOT be launched"
 sleep $((REPLY_AFTER + 90))
 pull_journal 2_phone_opened_and_wrote
@@ -79,6 +99,7 @@ say_ "3: Mac app not running: $(mac_not_running)"
 
 # --- 4. the phone reads its receipts, and everything is closed ----------------
 say_ "4: the phone app once more, for its receipts"
+before_phone 4
 phone_on || say_ "4: the phone app could NOT be launched"
 sleep 75
 pull_journal 4_phone_final

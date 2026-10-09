@@ -43,6 +43,7 @@ import 'relay_requests.dart';
 import 'sealed_blob_store.dart';
 import 'sealed_box.dart';
 import 'sealed_content.dart';
+import 'txt_lane_transport.dart';
 
 /// Where a letter this install wrote is, in words a screen can show as
 /// they are. There is no "sending…": a letter is in the queue until its
@@ -223,6 +224,46 @@ class SealedLetterService {
     final budget = RequestBudget(
       ledger: FileRequestLedger(intelligenceStorageDirectory),
     );
+    final https = MeteredRelayTransport(
+      budget: budget,
+      onRequest: (open, {required write, required cut}) {
+        // A request that was cut, or took most of its limit, is worth
+        // a line; the rest are only counted.
+        if (!cut && open < const Duration(seconds: 1)) return;
+        record('slow_request', <String, Object?>{
+          'ms': open.inMilliseconds,
+          'write': write,
+          'cut': cut,
+        });
+      },
+    );
+    // The courier: HTTPS first; when the relay cannot be reached, the same
+    // GET / PUT over the TXT lane's give gateway, if one was compiled in.
+    const laneHost = String.fromEnvironment('SEALED_TXT_HOST');
+    const laneDomain = String.fromEnvironment('SEALED_TXT_DOMAIN');
+    const lanePort = int.fromEnvironment('SEALED_TXT_PORT', defaultValue: 5300);
+    final courier = laneHost.isEmpty || laneDomain.isEmpty
+        ? https
+        : FallbackBroadcastTransport(
+            https: https,
+            fallsBackOn: (error) => error is! RequestBudgetSpent,
+            txt: MeteredTxtTransport(
+              lane: TxtLaneBroadcastTransport.udp(
+                domain: laneDomain,
+                host: laneHost,
+                port: lanePort,
+              ),
+              budget: budget,
+              onCarried: (method, status, bytes, open) =>
+                  record('relay_request', <String, Object?>{
+                    'via': 'txt',
+                    'method': method,
+                    'status': status,
+                    'bytes': bytes,
+                    'ms': open.inMilliseconds,
+                  }),
+            ),
+          );
     return SealedLetterService(
       identity: identity,
       storage: DiskJsonStorage(
@@ -235,19 +276,7 @@ class SealedLetterService {
       shelf: PairShelf(
         identity: identity,
         origin: Uri(scheme: 'https', host: relayHost),
-        transport: MeteredRelayTransport(
-          budget: budget,
-          onRequest: (open, {required write, required cut}) {
-            // A request that was cut, or took most of its limit, is worth
-            // a line; the rest are only counted.
-            if (!cut && open < const Duration(seconds: 1)) return;
-            record('slow_request', <String, Object?>{
-              'ms': open.inMilliseconds,
-              'write': write,
-              'cut': cut,
-            });
-          },
-        ),
+        transport: courier,
       ),
       budget: budget,
       onEvent: record,

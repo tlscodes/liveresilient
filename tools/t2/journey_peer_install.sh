@@ -47,7 +47,9 @@ flutter build ios --profile -t integration_test/journey_peer_app.dart \
   --dart-define=JOURNEY_HUB_URL="http://$SELF:$HTTP_PORT" \
   --dart-define=E2E_CONNECT_BUDGET_S="$BUDGET" \
   --dart-define=DNS_VALVE_DOMAIN="$VALVE_DOMAIN" \
-  --dart-define=DNS_VALVE_RESOLVERS="$VALVE_RESOLVERS"
+  --dart-define=DNS_VALVE_RESOLVERS="$VALVE_RESOLVERS" \
+  --dart-define=SEALED_TXT_HOST="${SEALED_TXT_HOST:-}" \
+  --dart-define=SEALED_TXT_DOMAIN="${SEALED_TXT_DOMAIN:-}"
 BUNDLE="$APP/build/ios/iphoneos/Runner.app"
 [ -d "$BUNDLE" ] || { echo "ERROR: no bundle at $BUNDLE" >&2; exit 1; }
 echo "install   $BUNDLE"
