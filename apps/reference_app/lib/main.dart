@@ -54,6 +54,7 @@ import 'src/ui/letter_sheet.dart';
 import 'src/ui/letter_thread.dart';
 import 'src/ui/network_truth.dart';
 import 'src/sealed/sealed_letter_service.dart';
+import 'src/sealed/sealed_rig.dart';
 import 'src/ui/sealed_letters_panel.dart';
 import 'src/ui/settings_screen.dart';
 import 'src/letter_queue_keystore.dart';
@@ -219,7 +220,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
-  int _index = 0;
+  // A rig build (SEALED_RIG) opens on the Chat tab, where the letters are.
+  int _index = kSealedRig ? 1 : 0;
 
   /// A manifest the user imported out of band this session. Held so the
   /// banner can say which endpoints are in use — "which ICE servers am I
@@ -813,7 +815,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             SealedLettersPanel(
               service: _sealed!,
               identity: appIdentity!,
-              pickAttachment: widget.attachmentPicker ?? pickAttachmentFile,
+              pickAttachment: kSealedRig
+                  ? SealedRig.instance.pick
+                  : widget.attachmentPicker ?? pickAttachmentFile,
             ),
           Expanded(
             child: RefreshIndicator(

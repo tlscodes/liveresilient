@@ -15,11 +15,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:messaging/messaging.dart' show Attachment, MediaKind;
 
 import '../peer_identity.dart';
 import '../sealed/sealed_content.dart';
 import '../sealed/sealed_letter_service.dart';
+import '../sealed/sealed_rig.dart';
 import '../theme.dart';
 
 String _short(String install) =>
@@ -59,6 +61,9 @@ class _SealedLettersPanelState extends State<SealedLettersPanel>
   bool _busy = false;
   AppLifecycleState? _was;
 
+  /// The rig's hold on this panel's controls; null in a normal build.
+  SealedRigHands? _rigHands;
+
   @override
   void initState() {
     super.initState();
@@ -69,11 +74,27 @@ class _SealedLettersPanelState extends State<SealedLettersPanel>
     WidgetsBinding.instance.addObserver(this);
     widget.service.touch();
     _reloadPeers();
+    if (kSealedRig) {
+      _rigHands = SealedRigHands(
+        address: (to) {
+          if (mounted) setState(() => _to = to);
+        },
+        write: (text) async {
+          _text.text = text;
+          await _send();
+        },
+        attach: _attach,
+      );
+      SealedRig.instance.attachPanel(widget.service, _rigHands!);
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (kSealedRig && _rigHands != null) {
+      SealedRig.instance.detachPanel(_rigHands!);
+    }
     widget.service.inbox.removeListener(_changed);
     widget.service.outbox.removeListener(_changed);
     widget.service.relay.removeListener(_changed);
@@ -112,6 +133,8 @@ class _SealedLettersPanelState extends State<SealedLettersPanel>
         final recent = lastPeerSighting.value?.peerInstall;
         _to = peers.contains(_to)
             ? _to
+            : kSealedRig && peers.contains(kSealedRigPeer)
+            ? kSealedRigPeer
             : peers.contains(recent)
             ? recent
             : (peers.isEmpty ? null : peers.first);
@@ -171,6 +194,9 @@ class _SealedLettersPanelState extends State<SealedLettersPanel>
         },
         contentType: type,
         bytes: Uint8List.fromList(chosen.bytes),
+        duration: kSealedRig
+            ? SealedRig.instance.pickedDuration
+            : Duration.zero,
         caption: _text.text.trim(),
       ),
     );
@@ -185,6 +211,11 @@ class _SealedLettersPanelState extends State<SealedLettersPanel>
     final received = widget.service.inbox.value;
     final relay = widget.service.relay.value;
     final now = DateTime.now();
+    if (kSealedRig) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) SealedRig.instance.readScreen(context);
+      });
+    }
     if (_peers.isEmpty && sent.isEmpty && received.isEmpty) {
       // Nobody pinned yet and nothing to show: the panel stays out of the
       // way until the first call makes a correspondent.
@@ -287,6 +318,10 @@ class _SealedLettersPanelState extends State<SealedLettersPanel>
               constraints: const BoxConstraints(maxHeight: 220),
               child: ListView(
                 shrinkWrap: true,
+                // The rig reads every row off the tree, so all are built.
+                scrollCacheExtent: kSealedRig
+                    ? const ScrollCacheExtent.pixels(100000)
+                    : null,
                 children: [
                   for (final letter in received.reversed)
                     ListTile(
