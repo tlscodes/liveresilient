@@ -30,6 +30,8 @@ import 'package:reference_app/src/peer_identity.dart';
 import 'package:reference_app/src/sealed/sealed_content.dart';
 import 'package:reference_app/src/sealed/sealed_letter_service.dart';
 
+import 'support/sealed_screen_probe.dart';
+
 const String _mode = String.fromEnvironment('SEALED_RIG_MODE');
 const String _dir = String.fromEnvironment('SEALED_RIG_DIR');
 const int _waitS = int.fromEnvironment('SEALED_RIG_WAIT_S', defaultValue: 240);
@@ -287,15 +289,19 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 1));
       for (final r in fresh()) {
-        final drawn = r.content.media?.kind == SealedMediaKind.photo
-            ? find.byKey(Key('sealed-photo-${r.id}')).evaluate().isNotEmpty
-            : find.textContaining(r.text).evaluate().isNotEmpty;
+        final sight = await sealedRowSight(
+          tester,
+          id: r.id,
+          text: r.text,
+          photo: r.content.media?.kind == SealedMediaKind.photo,
+        );
         print(
           'SEALED_RIG row dir=phone_to_mac kind=${r.content.kindLabel} '
-          'from=${r.from} to=$own bytes=${r.bytes} sent_at=${_iso(r.sentAt)} '
-          'opened_at=${_iso(r.receivedAt)} opened=true verified=${r.verified} '
+          'id=${r.id} from=${r.from} to=$own bytes=${r.bytes} '
+          'sent_at=${_iso(r.sentAt)} opened_at=${_iso(r.receivedAt)} '
+          'opened=true verified=${r.verified} '
           'sha=${await tester.runAsync(() => _sha8(r.body))} '
-          'on_screen=$drawn',
+          'on_screen=${sight.shown} in_view=${sight.inView}',
         );
       }
       print('SEALED_RIG received=${fresh().length}');

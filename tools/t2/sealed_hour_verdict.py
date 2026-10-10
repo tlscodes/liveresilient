@@ -1,18 +1,27 @@
 #!/usr/bin/env python3
 """Reads what tools/t2/sealed_hour_rig.sh left and says, row by row, whether
 the line was seen: a letter written by an app that was then closed is opened
-by the other side at least GAP minutes later, and its receipt is read by the
-sender on its own next start.
+by the other side at least GAP minutes later, its receipt is read by the
+sender on its own next start, and the receiver's panel drew THAT letter.
 
 Eight rows: Mac -> phone and phone -> Mac, each for a text, a photo, a voice
 note and a video. A row passes only if the letter opened, the gap between
-"written" and "opened" is at least the gap asked for, and the receipt was
-read. Nothing is inferred: a row whose facts are not in the files fails.
+"written" and "opened" is at least the gap asked for, the receipt was read,
+and the receiver's own screen reader journaled the letter. Nothing is
+inferred: a row whose facts are not in the files fails.
+
+"On screen" is matched by identity, never by kind and time alone: the
+receiver's `rx` event with the row's kind and sent_at names the letter's id,
+and a `rig_screen dir=in` line for that id must show the body — for a text,
+the exact bytes whose sha the row recorded; for media, its kind's summary.
+The device's own finder value (only rows in the viewport at that instant,
+2026-10-10 full4) is echoed as `in_view=` and does not decide the row.
 
   sealed_hour_verdict.py <output dir> [gap minutes, default 45]
 
 The last line is `VERDICT hour PASS rows=8/8` or `VERDICT hour FAIL ...`.
 """
+import hashlib
 import json
 import re
 import sys
@@ -35,14 +44,15 @@ def fields(line):
     return dict(re.findall(r"(\w+)=(\S+)", line))
 
 
-def journal(path):
+def journal(*paths):
     rows = []
-    if path.exists():
-        for line in path.read_text(errors="replace").splitlines():
-            try:
-                rows.append(json.loads(line))
-            except ValueError:
-                continue
+    for path in paths:
+        if path.exists():
+            for line in path.read_text(errors="replace").splitlines():
+                try:
+                    rows.append(json.loads(line))
+                except ValueError:
+                    continue
     return rows
 
 
@@ -54,17 +64,44 @@ def hms(at):
     return at.strftime("%H:%M:%S") if at else "-"
 
 
+def sha8(text):
+    return hashlib.sha256(text.encode()).hexdigest()[:8]
+
+
+def screen_seen(rows, kind, sent, sha=None, letter_id=None):
+    """The receiver's panel drew this letter: the id comes from its `rx` event
+    (kind + sent_at within 5 ms, or the id the row already names), and a
+    `rig_screen dir=in` line for that id shows the body. A text needs [sha]
+    and matches only the exact bytes; media match their kind's summary."""
+    ids = {r.get("id") for r in rows
+           if r.get("event") == "rx" and r.get("kind") == kind and close(when(r.get("sent_at")), sent)}
+    ids.discard(None)
+    if letter_id:
+        ids &= {letter_id}
+    for r in rows:
+        if r.get("event") != "rig_screen" or r.get("dir") != "in" or r.get("id") not in ids:
+            continue
+        shown = r.get("screen_text", "")
+        if kind == "text" and sha and sha8(shown) == sha:
+            return True
+        if kind != "text" and shown.startswith(kind):
+            return True
+    return False
+
+
 def main():
     out = Path(sys.argv[1])
     # The run waits 46; the line is 45.
     need = timedelta(minutes=min(int(sys.argv[2]) if len(sys.argv) > 2 else 45, 45))
-    mac = [fields(l) for l in (out / "mac_lines.txt").read_text(errors="replace").splitlines()] \
-        if (out / "mac_lines.txt").exists() else []
     lines = (out / "mac_lines.txt").read_text(errors="replace").splitlines() \
         if (out / "mac_lines.txt").exists() else []
+    mac = [fields(l) for l in lines]
+    fixtures = {f.get("kind"): f.get("sha") for f, l in zip(mac, lines) if " fixture " in l}
     written = [f for f, l in zip(mac, lines) if " written " in l and f.get("dir") == "mac_to_phone"]
     mac_rows = [f for f, l in zip(mac, lines) if " row " in l]
+    mac_journal = journal(out / "mac_journal.jsonl")
     phone = journal(out / "phone_events_4_phone_final.jsonl")
+    phone_all = journal(*sorted(out.glob("phone_events_[24]_*.jsonl")))
     phone_rx = [r for r in phone if r.get("event") == "rx"]
     phone_receipts = [r for r in phone if r.get("event") == "receipt_rx"]
 
@@ -72,7 +109,7 @@ def main():
     print("direction      kind   bytes    written   opened    gap       receipt read by the writer")
     for kind in KINDS:
         # Mac -> phone: written on the Mac, opened in the phone's journal,
-        # receipt read by the Mac on its next start.
+        # receipt read by the Mac on its next start, drawn by the phone.
         sent = next((when(w.get("sent_at")) for w in reversed(written) if w.get("kind") == kind), None)
         rx = next((r for r in reversed(phone_rx)
                    if r.get("kind") == kind and close(when(r.get("sent_at")), sent)), None)
@@ -81,10 +118,12 @@ def main():
                      if f.get("dir") == "mac_to_phone" and f.get("kind") == kind
                      and close(when(f.get("sent_at")), sent)), None)
         receipt = when(back.get("receipt_read_at")) if back and back.get("receipt") == "true" else None
-        rows.append(("mac -> phone", kind, rx.get("bytes") if rx else "-", sent, opened, receipt, ""))
+        seen = screen_seen(phone_all, kind, sent, fixtures.get(kind), rx.get("id") if rx else None)
+        rows.append(("mac -> phone", kind, rx.get("bytes") if rx else "-", sent, opened, receipt, seen,
+                     f"on_screen={str(seen).lower()}"))
     for kind in KINDS:
         # Phone -> Mac: opened on the Mac (its own line), receipt read in
-        # the phone's journal.
+        # the phone's journal, drawn by the Mac.
         got = next((f for f in reversed(mac_rows)
                     if f.get("dir") == "phone_to_mac" and f.get("kind") == kind
                     and f.get("opened") == "true"), None)
@@ -93,13 +132,17 @@ def main():
         back = next((r for r in reversed(phone_receipts)
                      if r.get("kind") == kind and close(when(r.get("sent_at")), sent)), None)
         receipt = when(back.get("receipt_at")) if back else None
-        note = f"sha={got.get('sha')} on_screen={got.get('on_screen')}" if got else ""
-        rows.append(("phone -> mac", kind, got.get("bytes") if got else "-", sent, opened, receipt, note))
+        seen = screen_seen(mac_journal, kind, sent, got.get("sha") if got else None,
+                           got.get("id") if got else None)
+        # The device's finder before 2026-10-10 printed in-viewport as on_screen.
+        in_view = (got.get("in_view") or got.get("on_screen")) if got else None
+        note = f"sha={got.get('sha')} on_screen={str(seen).lower()} in_view={in_view}" if got else ""
+        rows.append(("phone -> mac", kind, got.get("bytes") if got else "-", sent, opened, receipt, seen, note))
 
     passed = 0
-    for direction, kind, size, sent, opened, receipt, note in rows:
+    for direction, kind, size, sent, opened, receipt, seen, note in rows:
         gap = opened - sent if sent and opened else None
-        ok = gap is not None and gap >= need and receipt is not None
+        ok = gap is not None and gap >= need and receipt is not None and seen
         passed += ok
         gap_text = str(gap).split(".")[0] if gap is not None else "-"
         print(f"{direction:<14} {kind:<6} {str(size):>7}  {hms(sent)}  {hms(opened)}  {gap_text:<8}  "
