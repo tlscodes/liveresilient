@@ -107,32 +107,6 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.byKey(const Key('sealed-panel')), findsOneWidget);
 
-    // The list builds only the rows in view, so a row is scrolled to before
-    // its line is read off the screen.
-    Future<String> onScreen(String id) async {
-      final line = find.byKey(Key('sealed-state-$id'));
-      if (line.evaluate().isEmpty) {
-        try {
-          await tester.scrollUntilVisible(
-            line,
-            60,
-            scrollable: find
-                .descendant(
-                  of: find.byKey(const Key('sealed-panel')),
-                  matching: find.byType(Scrollable),
-                )
-                .first,
-            maxScrolls: 30,
-          );
-        } catch (_) {
-          // Reported below as not in view.
-        }
-      }
-      return line.evaluate().isEmpty
-          ? 'not_in_view'
-          : tester.widget<Text>(line).data!.replaceAll(' ', '_');
-    }
-
     if (_mode == 'send' || _mode == 'write') {
       // The rig peer writes back this many seconds after it opens this
       // text — by then this app has exited.
@@ -222,29 +196,27 @@ void main() {
           const Duration(seconds: 120),
         );
         await tester.pump(const Duration(seconds: 2));
-        for (final s in service.outbox.value.where(
-          (s) => s.at.isAfter(started),
-        )) {
-          print(
-            'SEALED_RIG written dir=mac_to_phone kind=${s.content.kindLabel} '
-            'from=$own to=${s.to} bytes=${s.bytes} sent_at=${_iso(s.at)} '
-            'on_relay=${s.onShelf} receipt=${s.delivered} '
-            'attempts=${s.attempts} screen=${await onScreen(s.id)}',
-          );
+        for (final s
+            in service.outbox.value
+                .where((s) => s.at.isAfter(started))
+                .toList()) {
+          final screen = await sealedSentLine(tester, s.id);
+          print(sealedWrittenLine(s, own: own, screen: screen));
         }
         print('SEALED_RIG leaving_at=${_iso(DateTime.now())}');
         return;
       }
       // The peer is off. Let the queue try, then say where each letter is.
       await _until<bool>(tester, () => null, const Duration(seconds: 25));
-      for (final s in service.outbox.value.where(
-        (s) => s.at.isAfter(started),
-      )) {
+      for (final s
+          in service.outbox.value
+              .where((s) => s.at.isAfter(started))
+              .toList()) {
         print(
           'SEALED_RIG queued kind=${s.content.kindLabel} from=$own to=${s.to} '
           'bytes=${s.bytes} sent_at=${_iso(s.at)} state=${s.state.name} '
           'attempts=${s.attempts} receipt=${s.delivered} '
-          'screen=${await onScreen(s.id)}',
+          'screen=${await sealedSentLine(tester, s.id)}',
         );
       }
       // The script switches the peer on when this file appears.
@@ -261,16 +233,12 @@ void main() {
         const Duration(seconds: _waitS),
       );
       await tester.pump(const Duration(seconds: 1));
-      for (final s in service.outbox.value.where(
-        (s) => s.at.isAfter(started),
-      )) {
-        print(
-          'SEALED_RIG row dir=mac_to_phone kind=${s.content.kindLabel} '
-          'from=$own to=${s.to} bytes=${s.bytes} sent_at=${_iso(s.at)} '
-          'receipt_at=${_iso(s.deliveredAt)} receipt=${s.delivered} '
-          'state=${s.state.name} attempts=${s.attempts} '
-          'screen=${await onScreen(s.id)}',
-        );
+      for (final s
+          in service.outbox.value
+              .where((s) => s.at.isAfter(started))
+              .toList()) {
+        final screen = await sealedSentLine(tester, s.id);
+        print(sealedSentRowLine(s, own: own, screen: screen));
       }
     } else {
       // Everything the peer wrote while this app was off.
@@ -288,20 +256,16 @@ void main() {
         const Duration(seconds: _waitS),
       );
       await tester.pump(const Duration(seconds: 1));
-      for (final r in fresh()) {
+      for (final r in fresh().toList()) {
         final sight = await sealedRowSight(
           tester,
           id: r.id,
           text: r.text,
           photo: r.content.media?.kind == SealedMediaKind.photo,
         );
+        final sha = await tester.runAsync(() => _sha8(r.body));
         print(
-          'SEALED_RIG row dir=phone_to_mac kind=${r.content.kindLabel} '
-          'id=${r.id} from=${r.from} to=$own bytes=${r.bytes} '
-          'sent_at=${_iso(r.sentAt)} opened_at=${_iso(r.receivedAt)} '
-          'opened=true verified=${r.verified} '
-          'sha=${await tester.runAsync(() => _sha8(r.body))} '
-          'on_screen=${sight.shown} in_view=${sight.inView}',
+          sealedReceivedRowLine(r, own: own, sha: sha ?? '-', sight: sight),
         );
       }
       print('SEALED_RIG received=${fresh().length}');
@@ -318,13 +282,10 @@ void main() {
             : null,
         const Duration(seconds: 60),
       );
-      for (final s in service.outbox.value.where((s) => s.at.isAfter(cutoff))) {
-        print(
-          'SEALED_RIG row dir=mac_to_phone kind=${s.content.kindLabel} '
-          'from=$own to=${s.to} bytes=${s.bytes} sent_at=${_iso(s.at)} '
-          'receipt_read_at=${_iso(s.deliveredAt)} receipt=${s.delivered} '
-          'attempts=${s.attempts}',
-        );
+      for (final s
+          in service.outbox.value.where((s) => s.at.isAfter(cutoff)).toList()) {
+        final screen = await sealedSentLine(tester, s.id);
+        print(sealedSentRowLine(s, own: own, screen: screen));
       }
       // Give the receipts time to leave before the app goes off again.
       await _until<bool>(tester, () => null, const Duration(seconds: 12));

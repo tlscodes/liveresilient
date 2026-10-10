@@ -101,13 +101,6 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.byKey(const Key('sealed-panel')), findsOneWidget);
 
-    String stateLine(String id) {
-      final line = find.byKey(Key('sealed-state-$id'));
-      return line.evaluate().isEmpty
-          ? 'not_built'
-          : tester.widget<Text>(line).data!.replaceAll(' ', '_');
-    }
-
     if (_mode == 'write') {
       final text =
           'written on the mac at ${_iso(DateTime.now())} '
@@ -176,14 +169,10 @@ void main() {
         const Duration(seconds: 120),
       );
       await tester.pump(const Duration(seconds: 2));
-      for (final s in mine()) {
+      for (final s in mine().toList()) {
         expect(s.to, peer);
-        print(
-          'SEALED_RIG written dir=mac_to_phone kind=${s.content.kindLabel} '
-          'from=$own to=${s.to} bytes=${s.bytes} sent_at=${_iso(s.at)} '
-          'on_relay=${s.onShelf} receipt=${s.delivered} '
-          'attempts=${s.attempts} screen=${stateLine(s.id)}',
-        );
+        final screen = await sealedSentLine(tester, s.id);
+        print(sealedWrittenLine(s, own: own, screen: screen));
       }
       print('SEALED_RIG leaving_at=${_iso(DateTime.now())}');
       return;
@@ -204,21 +193,15 @@ void main() {
       const Duration(seconds: _waitS),
     );
     await tester.pump(const Duration(seconds: 1));
-    for (final r in fresh()) {
+    for (final r in fresh().toList()) {
       final sight = await sealedRowSight(
         tester,
         id: r.id,
         text: r.text,
         photo: r.content.media?.kind == SealedMediaKind.photo,
       );
-      print(
-        'SEALED_RIG row dir=phone_to_mac kind=${r.content.kindLabel} '
-        'id=${r.id} from=${r.from} to=$own bytes=${r.bytes} '
-        'sent_at=${_iso(r.sentAt)} opened_at=${_iso(r.receivedAt)} '
-        'opened=true verified=${r.verified} '
-        'sha=${await tester.runAsync(() => _sha8(r.body))} '
-        'on_screen=${sight.shown} in_view=${sight.inView}',
-      );
+      final sha = await tester.runAsync(() => _sha8(r.body));
+      print(sealedReceivedRowLine(r, own: own, sha: sha ?? '-', sight: sight));
     }
     print('SEALED_RIG received=${fresh().length}');
     // And the receipts for what THIS app wrote before it was switched off.
@@ -230,13 +213,9 @@ void main() {
       () => recent().every((s) => s.delivered) ? true : null,
       const Duration(seconds: 60),
     );
-    for (final s in recent()) {
-      print(
-        'SEALED_RIG row dir=mac_to_phone kind=${s.content.kindLabel} '
-        'from=$own to=${s.to} bytes=${s.bytes} sent_at=${_iso(s.at)} '
-        'receipt_read_at=${_iso(s.deliveredAt)} receipt=${s.delivered} '
-        'attempts=${s.attempts} screen=${stateLine(s.id)}',
-      );
+    for (final s in recent().toList()) {
+      final screen = await sealedSentLine(tester, s.id);
+      print(sealedSentRowLine(s, own: own, screen: screen));
     }
     // Give the receipts time to leave before the app goes off again.
     await _until<bool>(tester, () => null, const Duration(seconds: 12));

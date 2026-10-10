@@ -229,10 +229,11 @@ phone_session 4_phone_final 75
 
 # The Mac's own written lines feed the mac -> phone rows.
 grep -a "SEALED_RIG" "$OUT/mac_write.log" "$OUT/mac_receive.log" 2>/dev/null | sed 's/^[^:]*://' >"$OUT/mac_lines.txt"
-python3 tools/t2/sealed_hour_verdict.py "$OUT" "$GAP_MIN" >"$OUT/verdict.txt"
 # The Mac journal of this run only (rig_screen lines: what its screen showed).
+# Copied BEFORE the verdict: since 8c61838 the phone -> mac rows are judged on it.
 python3 -c 'import sys; [sys.stdout.write(l) for l in open(sys.argv[1], errors="replace") if l[7:26] >= sys.argv[2]]' \
   "$MAC_JOURNAL" "$RUN_START" >"$OUT/mac_journal.jsonl" 2>/dev/null
+python3 tools/t2/sealed_hour_verdict.py "$OUT" "$GAP_MIN" --json "$OUT/verdict.json" >"$OUT/verdict.txt"
 say_ "screen lines in the journals: mac $(grep -c '"rig_screen"' "$OUT/mac_journal.jsonl"), phone $(cat "$OUT"/phone_events_[24]_*.jsonl 2>/dev/null | grep -c '"rig_screen"')"
 cat "$OUT"/phone_events_*.jsonl 2>/dev/null | grep -a '"relay_request"' | sort -u >"$OUT/phone_txt_requests.jsonl"
 say_ "phone requests the lane carried: $(grep -c '"via":"txt"' "$OUT/phone_txt_requests.jsonl") (PUT $(grep -c '"method":"PUT"' "$OUT/phone_txt_requests.jsonl"), GET $(grep -c '"method":"GET"' "$OUT/phone_txt_requests.jsonl"))"
