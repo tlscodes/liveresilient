@@ -115,25 +115,50 @@ void main() {
       await tester.tap(find.byKey(const Key('sealed-send')));
       Iterable<SealedSent> mine() =>
           service.outbox.value.where((s) => s.at.isAfter(started));
+      // Each letter is awaited by its own kind, not by the outbox length: in
+      // full3 the text took a second attempt, every count shifted by one and
+      // the video tap landed while the panel was busy (attach is disabled
+      // then, so the tap was dropped and the video never left).
+      bool has(String kind) => mine().any((s) => s.content.kindLabel == kind);
       await _until<bool>(
         tester,
-        () => mine().isNotEmpty ? true : null,
-        const Duration(seconds: 10),
+        () => has('text') ? true : null,
+        const Duration(seconds: 60),
       );
       print(
         'SEALED_RIG fixture kind=text bytes=${utf8.encode(text).length} '
         'sha=${await tester.runAsync(() => _sha8(utf8.encode(text)))}',
       );
       for (final (name, _, _, _) in SealedRig.fixtures) {
-        final before = mine().length;
-        await tester.tap(find.byKey(const Key('sealed-attach')));
-        final queued = await _until<bool>(
-          tester,
-          () => mine().length > before ? true : null,
-          const Duration(seconds: 20),
-        );
+        final kind = name.split('.').first; // photo, voice, video
+        bool? queued;
+        for (var tap = 0; tap < 3 && queued == null; tap++) {
+          await _until<bool>(
+            tester,
+            () =>
+                tester
+                        .widget<IconButton>(
+                          find.byKey(const Key('sealed-attach')),
+                        )
+                        .onPressed !=
+                    null
+                ? true
+                : null,
+            const Duration(seconds: 60),
+          );
+          // A tap the panel took late would pick the next fixture on re-tap.
+          if (has(kind)) {
+            queued = true;
+            break;
+          }
+          await tester.tap(find.byKey(const Key('sealed-attach')));
+          queued = await _until<bool>(
+            tester,
+            () => has(kind) ? true : null,
+            const Duration(seconds: 60),
+          );
+        }
         final bytes = File('$_dir/$name').readAsBytesSync();
-        final kind = mine().isEmpty ? '-' : mine().last.content.kindLabel;
         print(
           'SEALED_RIG fixture kind=$kind bytes=${bytes.length} '
           'sha=${await tester.runAsync(() => _sha8(bytes))} '
