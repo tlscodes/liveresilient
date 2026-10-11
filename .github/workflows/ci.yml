@@ -171,7 +171,9 @@ jobs:
               # cannot match a Linux runner. They are not skipped silently —
               # the tag names what is not covered here, and the same suite
               # runs them on macOS.
-              (cd "$d" && flutter test --coverage --exclude-tags golden \
+              # `rig` needs --dart-define=SEALED_RIG=true; the step below runs
+              # it with the flag, so it is moved, not dropped.
+              (cd "$d" && flutter test --coverage --exclude-tags golden,rig \
                  --file-reporter="json:${report}")
             else
               echo "== testing ${d} (dart)"
@@ -191,6 +193,21 @@ jobs:
             echo "No test/ directories found — that is itself a gate failure."
             exit 1
           fi
+
+      # The `rig` tag is compiled-flag code (phase پ): it only means something
+      # with SEALED_RIG=true, so it gets its own run with the flag, and fails
+      # the gate if it reds or if no rig test ran at all.
+      - name: Rig tests with the SEALED_RIG flag (apps/reference_app)
+        working-directory: apps/reference_app
+        run: |
+          set -e
+          rig_dir="$(mktemp -d)"
+          flutter test --tags rig \
+            --dart-define=SEALED_RIG=true \
+            --dart-define=SEALED_RIG_DIR="$rig_dir" \
+            --file-reporter="json:$GITHUB_WORKSPACE/test-reports/reference_app_rig.json"
+          grep -q '"type":"testDone"' "$GITHUB_WORKSPACE/test-reports/reference_app_rig.json" \
+            || { echo "no rig test ran — the tag lost its tests"; exit 1; }
 
       # Coverage arrives as per-package LCOV; auditors want one file, so
       # the pieces are concatenated with each package's paths prefixed

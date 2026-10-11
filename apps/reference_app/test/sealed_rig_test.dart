@@ -9,6 +9,12 @@
 // bytes sealed are the box's bytes; a #rig-reply-after text makes the other
 // side write back a text and the three fixtures through its own panel; and
 // every row's line read off the widget tree reaches the journal hook.
+//
+// Tagged `rig`: the plain CI loop has no flag, so it excludes the tag and a
+// separate CI step runs this file with SEALED_RIG=true.
+@Tags(['rig'])
+library;
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
