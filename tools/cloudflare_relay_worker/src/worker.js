@@ -31,6 +31,12 @@ import {
   parseBroadcastPath,
 } from './broadcast.js';
 
+import { handleDnsQuery, GiveSession } from './txt_give_doh.js';
+
+// The `give` lane's Durable Object must be a named export of the entry
+// module for its binding to resolve; its logic lives in txt_give_doh.js.
+export { GiveSession };
+
 /** How often a shard wakes to expire what it holds. */
 const _sweepIntervalMs = 60 * 60 * 1000;
 
@@ -114,6 +120,14 @@ export default {
         );
       }
       return new Response('ok\n', { status: 200 });
+    }
+
+    // The `give` lane over DNS-over-HTTPS (RFC 8484). A locked phone that can
+    // only reach its own resolver carries the relay's own GET/PUT over this
+    // path; the responder replays each request against the relay's broadcast
+    // routes. It opens no port 53 and reaches only this origin.
+    if (url.pathname === '/dns-query') {
+      return handleDnsQuery(request, env);
     }
 
     // Broadcast is checked before the landing page so a malformed

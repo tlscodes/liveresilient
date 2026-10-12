@@ -24,3 +24,16 @@ new_sqlite_classes = ["RelaySession"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["BroadcastArchiveObject"]
+
+# One singleton object holds the give lane's in-memory reassembly, downstream
+# queue and probe table — the same shape as the single-process Python
+# responder it is ported from. A give exchange lasts seconds, inside a warm
+# object's life; no durable storage is used, but the class still needs a
+# migration to exist.
+[[durable_objects.bindings]]
+name = "GIVE_SESSION"
+class_name = "GiveSession"
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["GiveSession"]
