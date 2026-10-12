@@ -242,17 +242,27 @@ class SealedLetterService {
     const laneHost = String.fromEnvironment('SEALED_TXT_HOST');
     const laneDomain = String.fromEnvironment('SEALED_TXT_DOMAIN');
     const lanePort = int.fromEnvironment('SEALED_TXT_PORT', defaultValue: 5300);
+    // SEALED_TXT_DOH (phase چ, locked-phone path): the give lane carried over a
+    // DoH dns-query URL instead of UDP to a LAN/bridge host. A locked phone has
+    // no route to a private host but still resolves over its own network, so the
+    // responder must live at this public URL. When set it wins over the UDP host.
+    const laneDoh = String.fromEnvironment('SEALED_TXT_DOH');
     // SEALED_TXT_ONLY (phase چ flag build): the TXT lane alone, no HTTPS
     // fallback, so an arrival can only have come over the lane.
     const txtOnly = bool.fromEnvironment('SEALED_TXT_ONLY');
-    final txt = laneHost.isEmpty || laneDomain.isEmpty
+    final txt = laneDomain.isEmpty || (laneHost.isEmpty && laneDoh.isEmpty)
         ? null
         : MeteredTxtTransport(
-            lane: TxtLaneBroadcastTransport.udp(
-              domain: laneDomain,
-              host: laneHost,
-              port: lanePort,
-            ),
+            lane: laneDoh.isNotEmpty
+                ? TxtLaneBroadcastTransport.doh(
+                    domain: laneDomain,
+                    endpoint: Uri.parse(laneDoh),
+                  )
+                : TxtLaneBroadcastTransport.udp(
+                    domain: laneDomain,
+                    host: laneHost,
+                    port: lanePort,
+                  ),
             budget: budget,
             onCarried: (method, status, bytes, open) =>
                 record('relay_request', <String, Object?>{

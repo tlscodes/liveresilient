@@ -25,6 +25,7 @@ import 'dart:typed_data';
 
 import 'package:adaptive_transport/adaptive_transport.dart'
     show
+        DohQueryTransport,
         HostPort,
         ParsedDnsAnswer,
         TxtQueryTransport,
@@ -127,6 +128,25 @@ class TxtLaneBroadcastTransport implements BroadcastHttpTransport {
     }
     return TxtLaneBroadcastTransport(
       transport: Udp53QueryTransport(HostPort(host: host, port: port)),
+      domain: domain,
+      queryTimeout: queryTimeout,
+      drainTimeout: drainTimeout,
+    );
+  }
+
+  /// The give lane carried over DoH (RFC 8484) instead of UDP: each DNS query
+  /// of the lane is one POST to [endpoint] (the relay's dns-query URL), the
+  /// path that keeps working where UDP/53 is filtered and the only one a
+  /// locked phone can reach over its own resolver. The responder must speak
+  /// the give protocol at that URL; nothing here opens port 53.
+  factory TxtLaneBroadcastTransport.doh({
+    required String domain,
+    required Uri endpoint,
+    Duration queryTimeout = const Duration(seconds: 4),
+    Duration drainTimeout = const Duration(seconds: 60),
+  }) {
+    return TxtLaneBroadcastTransport(
+      transport: DohQueryTransport(endpoint),
       domain: domain,
       queryTimeout: queryTimeout,
       drainTimeout: drainTimeout,

@@ -9,6 +9,7 @@
 // it — so byte-for-byte equality across the lane is the property proven.
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -224,6 +225,52 @@ void main() {
         expect(drained.statusCode, 200);
       },
     );
+
+    test('.doh carries a give round-trip over a real DoH endpoint', () async {
+      // A real loopback HTTP server answers RFC 8484 POSTs: it hands each DNS
+      // query packet to the SAME give responder the UDP tests use and returns
+      // the answer as application/dns-message. So TxtLaneBroadcastTransport.doh
+      // drives a real DohQueryTransport over a real socket — the locked-phone
+      // path (SEALED_TXT_DOH) exercised end to end, not mocked.
+      final relay = <String, Uint8List>{};
+      final give = _FakeGiveTransport(_domain, relay);
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) async {
+        final query = Uint8List.fromList(
+          await req.fold<List<int>>(<int>[], (b, d) => b..addAll(d)),
+        );
+        final txid = (query[0] << 8) | query[1];
+        final answer = await give.exchange(
+          query,
+          txid,
+          const Duration(seconds: 2),
+        );
+        req.response.headers.contentType = ContentType(
+          'application',
+          'dns-message',
+        );
+        req.response.add(answer);
+        await req.response.close();
+      });
+
+      final lane = TxtLaneBroadcastTransport.doh(
+        domain: _domain,
+        endpoint: Uri.parse('http://127.0.0.1:${server.port}/dns-query'),
+        drainTimeout: const Duration(seconds: 10),
+      );
+
+      final box = _box(7, 313);
+      final url = Uri(path: '/box/doh');
+      final put = await lane.put(url, box);
+      expect(put.statusCode, 200, reason: 'doh PUT');
+      final got = await lane.get(url);
+      expect(got.statusCode, 200, reason: 'doh GET');
+      expect(got.body, orderedEquals(box), reason: 'doh bytes');
+      expect(give.exchanges, greaterThan(0), reason: 'the lane rode DoH');
+
+      await lane.dispose();
+      await server.close(force: true);
+    });
   });
 }
 
