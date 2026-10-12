@@ -19,10 +19,20 @@ abstract interface class PersistentStorage {
 
 /// Atomic-write JSON file storage.
 class DiskJsonStorage implements PersistentStorage {
-  DiskJsonStorage({required this._directoryFactory, required this.fileName});
+  DiskJsonStorage({
+    required this._directoryFactory,
+    required this.fileName,
+    this.strict = false,
+  });
 
   final Directory Function() _directoryFactory;
   final String fileName;
+
+  /// True: a file that exists but cannot be read throws instead of reading
+  /// as empty, so a whole-snapshot saver never overwrites what it never saw
+  /// (iOS before first unlock, a transient I/O error). A file that reads
+  /// but is not JSON is still empty.
+  final bool strict;
 
   File get _file => File('${_directoryFactory().path}/$fileName');
 
@@ -43,9 +53,18 @@ class DiskJsonStorage implements PersistentStorage {
 
   @override
   Future<Map<String, Object?>> load() async {
+    final List<int> bytes;
     try {
       if (!_file.existsSync()) return {};
-      final decoded = jsonDecode(await _file.readAsString());
+      bytes = await _file.readAsBytes();
+    } catch (_) {
+      if (strict) rethrow;
+      return {};
+    }
+    try {
+      // Bytes then decode: readAsString reports bad UTF-8 as a
+      // FileSystemException, which strict must not mistake for unreadable.
+      final decoded = jsonDecode(utf8.decode(bytes));
       return decoded is Map<String, Object?>
           ? decoded
           : decoded is Map

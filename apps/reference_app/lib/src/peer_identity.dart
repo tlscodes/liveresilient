@@ -63,6 +63,7 @@ class PinnedPeerStore implements SecureKeyValueStore {
       DiskJsonStorage(
         directoryFactory: identityStorageDirectory,
         fileName: fileName,
+        strict: true,
       ),
     );
   }

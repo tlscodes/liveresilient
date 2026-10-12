@@ -15,6 +15,10 @@ import UniformTypeIdentifiers
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    #if SEALED_BACKGROUND
+      // Phase چ: the task must be registered before launch ends.
+      SealedBackgroundTask.shared.registerAtLaunch(application)
+    #endif
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -23,6 +27,9 @@ import UniformTypeIdentifiers
     let messenger = engineBridge.applicationRegistrar.messenger()
     photoFallback = PhotoLetterFallbackPicker(messenger: messenger)
     systemDns = SystemDnsReader(messenger: messenger)
+    #if SEALED_BACKGROUND
+      SealedBackgroundTask.shared.attach(messenger: messenger)
+    #endif
   }
 }
 
@@ -639,3 +646,237 @@ enum LetterPcmPlayer {
     }
   }
 }
+
+#if SEALED_BACKGROUND
+  import BackgroundTasks
+  import UserNotifications
+
+  /// Phase چ (docs/ch-background-design.md), compiled only into the flag
+  /// build (SWIFT_ACTIVE_COMPILATION_CONDITIONS=SEALED_BACKGROUND). iOS's
+  /// app-refresh task wakes the app; the handler asks Dart for one bounded
+  /// turn over `channelName`, then resubmits unless the rig window is over.
+  /// When iOS grants the wake is iOS's choice; this only records it.
+  final class SealedBackgroundTask {
+    static let shared = SealedBackgroundTask()
+    /// Must match `SealedBackground.channelName` in sealed_background.dart.
+    static let channelName = "com.tlscodes.reference_app/sealed_background"
+    /// A floor for iOS, never a promise.
+    static let earliest: TimeInterval = 15 * 60
+    /// Dart's turn is bounded at 25 s; this is the native backstop.
+    static let backstop: TimeInterval = 27
+
+    let taskId = (Bundle.main.bundleIdentifier ?? "app") + ".sealed.refresh"
+    private var channel: FlutterMethodChannel?
+    private var ready = false
+    private var held: [[String: Any]] = []
+    private var launchedInBackground = false
+    private var turns = 0
+    private let iso = ISO8601DateFormatter()
+
+    init() { iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds] }
+
+    /// Registering an id the built plist does not list crashes the app; the
+    /// normal build's plist lists none, so this is the guard.
+    private var permitted: Bool {
+      let ids = Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String]
+      return ids?.contains(taskId) ?? false
+    }
+
+    func registerAtLaunch(_ application: UIApplication) {
+      launchedInBackground = application.applicationState == .background
+      if ProcessInfo.processInfo.environment["SEALED_BG_CANCEL"] == "1" {
+        cancelAll()
+        return
+      }
+      guard permitted else {
+        emit("bg_not_permitted", ["id": taskId])
+        return
+      }
+      let ok = BGTaskScheduler.shared.register(forTaskWithIdentifier: taskId, using: nil) {
+        [weak self] task in
+        self?.handle(task)
+      }
+      // Scene app: the app delegate never gets applicationDidEnterBackground.
+      NotificationCenter.default.addObserver(
+        forName: UIScene.didEnterBackgroundNotification, object: nil, queue: .main
+      ) { [weak self] _ in self?.submit("enter_background") }
+      let center = UNUserNotificationCenter.current()
+      center.requestAuthorization(options: [.alert]) { _, _ in
+        center.getNotificationSettings { settings in
+          DispatchQueue.main.async {
+            self.emit("bg_registered", [
+              "id": self.taskId,
+              "registered": ok,
+              "refresh_status": Self.refreshName(application.backgroundRefreshStatus),
+              "low_power": ProcessInfo.processInfo.isLowPowerModeEnabled,
+              "notif_auth": Self.authName(settings.authorizationStatus),
+              "launched_in_background": self.launchedInBackground,
+            ])
+            self.submit()
+          }
+        }
+      }
+    }
+
+    func attach(messenger: FlutterBinaryMessenger) {
+      let ch = FlutterMethodChannel(name: Self.channelName, binaryMessenger: messenger)
+      ch.setMethodCallHandler { [weak self] call, result in
+        guard let self = self else { return result(nil) }
+        switch call.method {
+        case "ready":
+          self.ready = true
+          let lines = self.held
+          self.held.removeAll()
+          for line in lines { self.channel?.invokeMethod("event", arguments: line) }
+          result(nil)
+        case "notify":
+          let a = call.arguments as? [String: Any] ?? [:]
+          self.notify(letterId: a["letter_id"] as? String ?? "", result: result)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+      channel = ch
+    }
+
+    private func emit(_ event: String, _ fields: [String: Any]) {
+      let line: [String: Any] = ["event": event, "fields": fields]
+      if ready, let ch = channel {
+        ch.invokeMethod("event", arguments: line)
+      } else {
+        held.append(line)
+      }
+    }
+
+    private func submit(_ why: String = "launch") {
+      let request = BGAppRefreshTaskRequest(identifier: taskId)
+      let floor = Date().addingTimeInterval(Self.earliest)
+      request.earliestBeginDate = floor
+      do {
+        try BGTaskScheduler.shared.submit(request)
+        emit("bg_submitted", [
+          "id": taskId, "submitted_at": iso.string(from: Date()), "earliest": iso.string(from: floor),
+          "why": why,
+        ])
+      } catch {
+        emit("bg_submit_err", ["id": taskId, "error": "\(error)"])
+      }
+    }
+
+    private func handle(_ task: BGTask) {
+      DispatchQueue.main.async { self.runTurn(task) }
+    }
+
+    private func runTurn(_ task: BGTask) {
+      turns += 1
+      // Chain first: expiry, the backstop, no engine or a Dart error can no
+      // longer break it; an explicit resubmit:false cancels it below.
+      submit("turn_start")
+      let reason = (turns == 1 && launchedInBackground) ? "cold_bg" : "resumed"
+      var done = false
+      let finish: (Bool, String?) -> Void = { success, why in
+        guard !done else { return }
+        done = true
+        if let why = why { self.emit("bg_task_end", ["id": self.taskId, "why": why, "success": success]) }
+        task.setTaskCompleted(success: success)
+      }
+      task.expirationHandler = {
+        DispatchQueue.main.async {
+          self.emit("bg_expired", ["id": self.taskId])
+          finish(false, "expired")
+        }
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + Self.backstop) { finish(false, "backstop") }
+      let app = UIApplication.shared
+      let args: [String: Any] = [
+        "id": taskId,
+        "launch_reason": reason,
+        "app_state": Self.stateName(app.applicationState),
+        "protected_data": app.isProtectedDataAvailable,
+      ]
+      waitForChannel(tries: 50) { ch in
+        guard let ch = ch else {
+          self.emit("bg_turn_no_engine", ["id": self.taskId])
+          return finish(false, "no_engine")
+        }
+        ch.invokeMethod("turn", arguments: args) { reply in
+          let r = reply as? [String: Any]
+          if (r?["resubmit"] as? Bool) == false {
+            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: self.taskId)
+            self.emit("bg_resubmit_cancelled", ["id": self.taskId])
+          }
+          finish((r?["expired"] as? Bool) == false, nil)
+        }
+      }
+    }
+
+    /// A cold background launch attaches the engine during launch; wait
+    /// briefly for Dart's `ready` rather than drop the turn.
+    private func waitForChannel(tries: Int, _ then: @escaping (FlutterMethodChannel?) -> Void) {
+      if ready, let ch = channel { return then(ch) }
+      if tries <= 0 { return then(nil) }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        self.waitForChannel(tries: tries - 1, then)
+      }
+    }
+
+    /// Content-free: no sender, no text — only that a letter arrived.
+    private func notify(letterId: String, result: @escaping FlutterResult) {
+      let center = UNUserNotificationCenter.current()
+      center.getNotificationSettings { settings in
+        let content = UNMutableNotificationContent()
+        content.title = "A sealed letter arrived"
+        let request = UNNotificationRequest(
+          identifier: "sealed.\(letterId)", content: content, trigger: nil)
+        center.add(request) { error in
+          DispatchQueue.main.async {
+            result([
+              "auth": Self.authName(settings.authorizationStatus),
+              "add_err": error.map { "\($0)" } as Any,
+            ])
+          }
+        }
+      }
+    }
+
+    private func cancelAll() {
+      BGTaskScheduler.shared.cancelAllTaskRequests()
+      emit("bg_cancelled", ["id": taskId])
+      UNUserNotificationCenter.current().getDeliveredNotifications { list in
+        let ids = list.map { $0.request.identifier }.filter { $0.hasPrefix("sealed.") }
+        DispatchQueue.main.async {
+          self.emit("delivered", ["count": ids.count, "ids": ids, "delivered": !ids.isEmpty])
+        }
+      }
+    }
+
+    static func refreshName(_ s: UIBackgroundRefreshStatus) -> String {
+      switch s {
+      case .available: return "available"
+      case .denied: return "denied"
+      case .restricted: return "restricted"
+      @unknown default: return "unknown"
+      }
+    }
+
+    static func authName(_ s: UNAuthorizationStatus) -> String {
+      switch s {
+      case .authorized: return "authorized"
+      case .denied: return "denied"
+      case .notDetermined: return "not_determined"
+      case .provisional: return "provisional"
+      case .ephemeral: return "ephemeral"
+      @unknown default: return "unknown"
+      }
+    }
+
+    static func stateName(_ s: UIApplication.State) -> String {
+      switch s {
+      case .active: return "foreground"
+      case .inactive: return "inactive"
+      case .background: return "background"
+      @unknown default: return "unknown"
+      }
+    }
+  }
+#endif

@@ -53,6 +53,7 @@ import 'src/ui/incoming_call_screen.dart';
 import 'src/ui/letter_sheet.dart';
 import 'src/ui/letter_thread.dart';
 import 'src/ui/network_truth.dart';
+import 'src/sealed/sealed_background.dart';
 import 'src/sealed/sealed_letter_service.dart';
 import 'src/sealed/sealed_rig.dart';
 import 'src/ui/sealed_letters_panel.dart';
@@ -74,6 +75,11 @@ Future<void> main() async {
   // is still in flight (identityBootPending). Never throws — a host with no
   // keystore runs without an identity.
   unawaited(bootAppIdentity());
+  // Phase چ, flag builds only: the handler iOS's background task calls must
+  // exist before the first frame — a background launch may never draw one.
+  if (kSealedBackground) {
+    SealedBackground.install(running: () => sealedLetterService.value);
+  }
   // This device's own DNS resolver, from the platform's system API — a
   // read, not a probe; the answer joins the door's candidate list when
   // the letter's lanes open. Not awaited: nothing before the first Send
@@ -366,7 +372,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     _sealed = service;
     sealedLetterService.value = service;
-    unawaited(service.load().then((_) => service.start()));
+    // A failed read (strict store) still starts the loop: each look/flush
+    // retries the load, and no save runs until one read succeeds.
+    unawaited(
+      service.load().catchError((Object _) {}).then((_) => service.start()),
+    );
     if (mounted) setState(() {});
   }
 
@@ -397,7 +407,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) unawaited(_call.hangUp());
     // Back from the background: the network under us may have changed.
-    if (state == AppLifecycleState.resumed) unawaited(systemDns.refresh());
+    // Letters that came while suspended (or locked) are looked for at once,
+    // not on the cold timer's next tick up to 15 min away.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(systemDns.refresh());
+      _sealed?.touch('resume');
+    }
   }
 
   /// Binds a chat thread to the live call's lanes the moment its session

@@ -242,33 +242,42 @@ class SealedLetterService {
     const laneHost = String.fromEnvironment('SEALED_TXT_HOST');
     const laneDomain = String.fromEnvironment('SEALED_TXT_DOMAIN');
     const lanePort = int.fromEnvironment('SEALED_TXT_PORT', defaultValue: 5300);
-    final courier = laneHost.isEmpty || laneDomain.isEmpty
+    // SEALED_TXT_ONLY (phase چ flag build): the TXT lane alone, no HTTPS
+    // fallback, so an arrival can only have come over the lane.
+    const txtOnly = bool.fromEnvironment('SEALED_TXT_ONLY');
+    final txt = laneHost.isEmpty || laneDomain.isEmpty
+        ? null
+        : MeteredTxtTransport(
+            lane: TxtLaneBroadcastTransport.udp(
+              domain: laneDomain,
+              host: laneHost,
+              port: lanePort,
+            ),
+            budget: budget,
+            onCarried: (method, status, bytes, open) =>
+                record('relay_request', <String, Object?>{
+                  'via': 'txt',
+                  'method': method,
+                  'status': status,
+                  'bytes': bytes,
+                  'ms': open.inMilliseconds,
+                }),
+          );
+    final courier = txt == null
         ? https
+        : txtOnly
+        ? txt
         : FallbackBroadcastTransport(
             https: https,
             fallsBackOn: (error) => error is! RequestBudgetSpent,
-            txt: MeteredTxtTransport(
-              lane: TxtLaneBroadcastTransport.udp(
-                domain: laneDomain,
-                host: laneHost,
-                port: lanePort,
-              ),
-              budget: budget,
-              onCarried: (method, status, bytes, open) =>
-                  record('relay_request', <String, Object?>{
-                    'via': 'txt',
-                    'method': method,
-                    'status': status,
-                    'bytes': bytes,
-                    'ms': open.inMilliseconds,
-                  }),
-            ),
+            txt: txt,
           );
     return SealedLetterService(
       identity: identity,
       storage: DiskJsonStorage(
         directoryFactory: intelligenceStorageDirectory,
         fileName: fileName,
+        strict: true,
       ),
       blobs: DiskSealedBlobStore(
         () => Directory('${intelligenceStorageDirectory().path}/sealed_blobs'),
@@ -426,8 +435,10 @@ class SealedLetterService {
 
   Future<void> _load() async {
     if (_loaded) return;
-    _loaded = true;
+    // Loaded only after a good read: a read that throws leaves _save a
+    // no-op, so an unreadable file is never overwritten with empty lists.
     final data = await storage.load();
+    _loaded = true;
     final cursors = data['shelf'];
     if (cursors is Map) {
       cursors.forEach((key, value) {
@@ -467,16 +478,19 @@ class SealedLetterService {
     await _publish();
   }
 
-  Future<void> _save() => storage.save(<String, Object?>{
-    'v': 2,
-    'outbox': [for (final q in _queue) q.toJson()],
-    'inbox': [for (final k in _kept) k.toJson()],
-    'partial': [
-      for (final p in _partial.values)
-        _Kept(id: p.id, box: p.box, at: p.at).toJson(),
-    ],
-    'shelf': shelf.cursors,
-  });
+  Future<void> _save() async {
+    if (!_loaded) return;
+    await storage.save(<String, Object?>{
+      'v': 2,
+      'outbox': [for (final q in _queue) q.toJson()],
+      'inbox': [for (final k in _kept) k.toJson()],
+      'partial': [
+        for (final p in _partial.values)
+          _Kept(id: p.id, box: p.box, at: p.at).toJson(),
+      ],
+      'shelf': shelf.cursors,
+    });
+  }
 
   /// Rebuilds both lists from the sealed copies: what the screen shows is
   /// always what the boxes on disk open to.
@@ -864,10 +878,15 @@ class SealedLetterService {
           }
           // A receipt that was shelved is there to be read, so a second
           // copy of a letter is answered only if its receipt never got
-          // onto the shelf.
+          // onto the shelf — or it has since expired there unread (the
+          // sender re-shelves every 40 h only while it has no receipt).
           final kept = _kept.firstWhere((k) => k.id == opened.letterId);
-          if (!kept.receiptOk) {
+          final stale =
+              _clock().difference(kept.receiptAt ?? kept.at) >
+              _Kept.receiptStale;
+          if (!kept.receiptOk || (seen && stale)) {
             kept.receiptOk = await _receipt(opened, own, duplicate: seen);
+            if (kept.receiptOk) kept.receiptAt = _clock();
             changed = true;
           }
         case SealedKind.chunk:
@@ -1375,6 +1394,7 @@ class _Kept {
     required this.box,
     required this.at,
     this.receiptOk = false,
+    this.receiptAt,
   });
 
   final String id;
@@ -1384,11 +1404,19 @@ class _Kept {
   /// Whether this letter's receipt was handed over.
   bool receiptOk;
 
+  /// When the receipt was shelved; null for files from before this was
+  /// recorded. The shelf keeps a receipt 48 h, so a copy that comes back
+  /// after [receiptStale] means the sender never read it.
+  DateTime? receiptAt;
+
+  static const Duration receiptStale = Duration(hours: 24);
+
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
     'box': base64.encode(box),
     'at': at.toUtc().toIso8601String(),
     'receipt_ok': receiptOk,
+    if (receiptAt != null) 'receipt_at': receiptAt!.toUtc().toIso8601String(),
   };
 
   static _Kept? tryParse(Object? raw) {
@@ -1401,6 +1429,7 @@ class _Kept {
         // A file from before this was recorded: its receipt went out
         // the old way, by answering every copy.
         receiptOk: map['receipt_ok'] as bool? ?? true,
+        receiptAt: DateTime.tryParse(map['receipt_at'] as String? ?? ''),
       );
     } catch (_) {
       return null;
