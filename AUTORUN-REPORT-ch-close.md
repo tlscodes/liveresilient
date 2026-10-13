@@ -63,3 +63,27 @@ That is a worker deploy, so it needs owner approval.
 ## VCS
 Local only, not pushed: `eb7ed51` (empty rebuild marker). No code change beyond the
 already-committed `88280c4`. Evidence under `.autorun/evidence/ch_real/push_w1/`.
+
+## push_w3 — headless-engine build (f2b1bcb + 25eeff1), 2026-10-13 15:25–15:46Z — rc=10, NOT accepted
+
+Run: `CH_LOCKED_START=1 CH_WAKE=push CH_WINDOW_S=900 bash tools/t2/sealed_ch_rig.sh .autorun/evidence/ch_real/push_w3`
+(previous window's markers archived in place to .autorun/archive/*.push_w2 first).
+
+- Lock: lock2.tsv has 21 `locked` rows, 15:25:13Z → end; the phone stayed locked through the window.
+- Letter 5c680312e9d1c7eb601e63d15b32157f sent 15:30:37Z; receipt: none. verdict.txt rc=10.
+- Device syslog (push_w3_syslog.txt), 15:30:40–42Z: dasd opens com.tlscodes.referenceApp with
+  UISHandleRemoteNotificationAction; Runner pid 26087 cold-launches, receives it in scene-create,
+  `engine_attached headless=false`, Reply 66 ms later.
+- Phone journal in the window: engine_attached, bg_registered, bg_submitted, push_registered (15:30:42Z).
+  No push_rx, no bg_turn, no push_token, no ping_*/headless_* line.
+- Acceptance line (bg_turn launch_reason=push, looked=true, fresh=1, receipt) NOT met. No cold_bg accepted.
+
+**Cause, one line:** iOS delivered the push and the Dart engine was alive and journaling, but the Swift
+push handler `didReceiveRemote` was never entered (no push_rx), so no turn ran.
+
+Note: the verdict script's cause text "iOS did not deliver the push" is wrong for this run; delivery is
+proven by the syslog. The headless fallback was not exercised (the scene engine was alive).
+
+Next (not done): find why UIKit/Flutter does not route application(_:didReceiveRemoteNotification:
+fetchCompletionHandler:) to the AppDelegate override on a scene cold launch — check the method in the
+built binary (otool) and whether FlutterSceneDelegate/FlutterAppDelegate consumes it first.

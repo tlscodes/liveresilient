@@ -1,0 +1,7 @@
+letter_id=5c680312e9d1c7eb601e63d15b32157f
+tx_at=2026-10-13T15:30:37.180377+00:00
+window_end=2026-10-13T15:45:37.180377+00:00
+earliest_floor=2026-10-13T15:45:42.765Z
+x=none
+cause: iOS did not deliver the push — no bg_turn(launch_reason=push) in the window
+rc=10

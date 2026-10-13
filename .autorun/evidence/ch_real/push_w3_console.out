@@ -1,0 +1,5 @@
+[2026-10-13T15:25:12Z] locked start: no install, no launch, no Settings; until 2026-10-13T16:25:11Z
+[2026-10-13T15:29:04Z] phone loop quiet for >= 150 s
+[2026-10-13T15:30:47Z] T: letter 5c680312e9d1c7eb601e63d15b32157f sent at 2026-10-13T15:30:37.180377Z; window 900s; no launch inside it
+[2026-10-13T15:45:52Z] window over: SEALED_CH receipt id=5c680312e9d1c7eb601e63d15b32157f none
+[2026-10-13T15:46:15Z] verdict rc=10: cause: iOS did not deliver the push — no bg_turn(launch_reason=push) in the window
