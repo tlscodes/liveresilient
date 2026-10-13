@@ -1,5 +1,17 @@
 # AUTORUN REPORT — ch window close (2026-10-12)
 
+## Night window 2026-10-12 21:29Z → 2026-10-13 06:29Z — NOT PASSED (rc=10)
+Cause, one line: iOS granted no background launch in 9 h — the phone journal is
+byte-identical (590521 B, last line 21:18:30Z) in a fresh copy taken after unlock at 06:35Z.
+
+- Run dir `.autorun/evidence/ch/w_night_20261012T212438Z/`, same DoH build, no install,
+  no launch (`CH_LOCKED_START=1`, new in `tools/t2/sealed_ch_rig.sh`), phone locked
+  on the charger all night (`lock2.tsv`), letter `8eb2b926…` tx 21:29:56Z, receipt none.
+- Fixed before the run: the phone held `sealed_bg_until=21:54Z` from the short window;
+  any later turn would have been `past_until`, `resubmit=false`. Rewritten to 07:24Z.
+- Verdict trap: the window-end copy is skipped while locked, so `verdict.txt` first
+  judged a pre-window copy; re-checked by hand with a fresh copy (same bytes).
+
 Short (15-min) locked-phone window for the sealed-letter ch path, DoH relay build.
 Result: **window FAIL (rc=10)** — iOS granted no background refresh turn inside the
 window, so the locked app never picked up the letter and no receipt returned. This is

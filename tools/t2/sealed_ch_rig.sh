@@ -68,13 +68,23 @@ cleanup() {
 trap cleanup EXIT
 
 # --- 1. install over, 2. bg_until, 3. one launch ------------------------------
+# CH_LOCKED_START=1: the phone stays locked and is never unlocked. The same
+# build is already installed and registered (bg_submitted chain alive), so no
+# install, no launch, no Settings; only bg_until is refreshed. A stale until
+# makes every later turn past_until with resubmit=false (sealed_background.dart).
+LOCKED_START=${CH_LOCKED_START:-0}
+if [ "$LOCKED_START" != 1 ]; then
 xcrun devicectl device install app --device "$PHONE" "$RIG_APP" >"$OUT/install.log" 2>&1 \
   || { say_ "STOPPED install failed"; tail -3 "$OUT/install.log"; exit 3; }
+fi
 date -u -v+"$((WINDOW_S / 3600 + 1))"H +%Y-%m-%dT%H:%M:%SZ >"$OUT/sealed_bg_until"
 xcrun devicectl device copy to --device "$PHONE" --domain-type appDataContainer \
   --domain-identifier "$BUNDLE_ID" --source "$OUT/sealed_bg_until" \
   --destination "$SUPPORT/sealed_bg_until" >"$OUT/until.log" 2>&1 \
   || say_ "bg_until copy failed (the turn then has no end of its own)"
+if [ "$LOCKED_START" = 1 ]; then
+  say_ "locked start: no install, no launch, no Settings; until $(cat "$OUT/sealed_bg_until")"
+else
 phone_on || { say_ "STOPPED the phone app did not launch"; exit 3; }
 for _ in $(seq 1 20); do
   sleep 6
@@ -87,6 +97,7 @@ grep -q '"event":"bg_submitted"' "$OUT/phone_journal_last.jsonl" \
 
 # --- 4. background without a kill, then prove the loop is quiet ---------------
 xcrun devicectl device process launch --device "$PHONE" com.apple.Preferences >>"$LOG" 2>&1
+fi
 # Lock state from passcodeRequired / the 10003 refusal (the old grep matched
 # "unlockedSinceBoot" and read open always). Writes lock2.tsv, stops on ch_device_done.
 tools/t2/ch_lock_probe.sh "$OUT" >/dev/null 2>&1 &
