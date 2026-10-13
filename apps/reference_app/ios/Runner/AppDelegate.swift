@@ -54,6 +54,19 @@ import UniformTypeIdentifiers
     ) {
       SealedBackgroundTask.shared.didReceiveRemote(userInfo, completionHandler)
     }
+
+    // push_w3 root cause (2026-10-13): FlutterAppDelegate answers
+    // respondsToSelector NO for this selector unless a Flutter plugin
+    // registered for it (isSelectorAddedDynamically), so UIKit never called
+    // the override above even though it was compiled in. Claim it here.
+    override func responds(to aSelector: Selector!) -> Bool {
+      if aSelector == #selector(
+        AppDelegate.application(_:didReceiveRemoteNotification:fetchCompletionHandler:))
+      {
+        return true
+      }
+      return super.responds(to: aSelector)
+    }
   #endif
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
