@@ -35,7 +35,7 @@ env:
 jobs:
   gate:
     name: Gate — format · analyze · test · guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Raised from 20: run 33501986639 was cut off at exactly 20:21 once the
     # native codec build and LCOV generation joined the job. Measured need is
     # ~21 min; 35 leaves headroom without hiding a hang.
@@ -338,7 +338,7 @@ jobs:
 
   hygiene:
     name: Hygiene — secret scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
@@ -383,7 +383,10 @@ jobs:
   # built and then inspected. macOS runners only — otool/nm/lipo are Darwin tools.
   packaging:
     name: Packaging — embedded native framework
-    runs-on: macos-latest
+    # Pinned images: the -latest labels raise migration and arm64-capacity
+    # notices on every run. The gate below inspects every slice, so the
+    # universal bundle is checked the same way on Intel.
+    runs-on: macos-15-intel
     # Runs on every push again: the repository is public, so standard runners
     # are free. It was tag-only for one day while the account's minutes were
     # exhausted (2026-09-01) — see the usage analysis in the commit history.
@@ -419,7 +422,7 @@ jobs:
 
   relay:
     name: Border relay — worker bundle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
@@ -473,7 +476,7 @@ jobs:
 
   deps:
     name: Dependency audit — OSV
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
@@ -499,7 +502,7 @@ jobs:
     # the Rust one to six decimals, so the gate executes here. The exit-3 branch
     # stays for the case where neither evaluator is available.
     name: Leak gate — on-wire trace regression
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5

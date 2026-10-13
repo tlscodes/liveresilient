@@ -24,7 +24,7 @@ env:
 jobs:
   linux:
     name: Linux — release bundle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
@@ -66,7 +66,7 @@ jobs:
 
   windows:
     name: Windows — release bundle
-    runs-on: windows-latest
+    runs-on: windows-2025
     # Runs on every push again — public repositories get standard runners for
     # free, so the one-day cost gate of 2026-09-01 no longer applies.
     timeout-minutes: 60
@@ -102,7 +102,7 @@ jobs:
   # a green desktop build from being read as "the native path works there".
   note:
     name: Native core — not present on desktop
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [linux, windows]
     steps:
       - name: State the limitation
