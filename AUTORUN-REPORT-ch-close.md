@@ -1,59 +1,44 @@
-# AUTORUN REPORT — ch window close (2026-10-12)
+# AUTORUN report — phase چ close attempt (silent-push wake, locked phone)
 
-## Night window 2026-10-12 21:29Z → 2026-10-13 06:29Z — NOT PASSED (rc=10)
-Cause, one line: iOS granted no background launch in 9 h — the phone journal is
-byte-identical (590521 B, last line 21:18:30Z) in a fresh copy taken after unlock at 06:35Z.
+_2026-10-13, device window on TLS's iPhone (iPhone 11 Pro Max, iOS 26.0)_
 
-- Run dir `.autorun/evidence/ch/w_night_20261012T212438Z/`, same DoH build, no install,
-  no launch (`CH_LOCKED_START=1`, new in `tools/t2/sealed_ch_rig.sh`), phone locked
-  on the charger all night (`lock2.tsv`), letter `8eb2b926…` tx 21:29:56Z, receipt none.
-- Fixed before the run: the phone held `sealed_bg_until=21:54Z` from the short window;
-  any later turn would have been `past_until`, `resubmit=false`. Rewritten to 07:24Z.
-- Verdict trap: the window-end copy is skipped while locked, so `verdict.txt` first
-  judged a pre-window copy; re-checked by hand with a fresh copy (same bytes).
+## Order
+Build SEALED_BACKGROUND at HEAD (88280c4 content), install over the app (no delete),
+wait for `push_token` with `shelves>=1`, then a 15-min locked window with `CH_WAKE=push`.
+Accept only: letter arrives, silent push wakes the phone, receipt returns. No push to remote.
 
-Short (15-min) locked-phone window for the sealed-letter ch path, DoH relay build.
-Result: **window FAIL (rc=10)** — iOS granted no background refresh turn inside the
-window, so the locked app never picked up the letter and no receipt returned. This is
-the known iOS BGTaskScheduler blocker, not a code regression.
+## What was done and verified
+- Fresh rebuild at HEAD: empty marker commit `eb7ed51` opened the build-gate window;
+  `.autorun/ch_build_check.sh` → **13/13 markers ok**, rig binary 14:47 now carries
+  `push_token` / `push_register_err` (absent in the Oct-12 binary), `aps-environment`
+  signed into `embedded.mobileprovision`, `codesign --verify` ok. Normal build is the
+  negative control (no bg/push strings).
+- Install + registration on the phone (never a delete):
+  `bg_registered notif_auth=authorized registered=true`,
+  `push_registered len=64 tail=fdc42529`,
+  **`push_token len=64 tail=fdc42529 env=sandbox shelves=2`** — the token reached the
+  relay (gate `shelves>=1` passed). Push Notifications is live on the App ID.
+- Mac sent one letter `14caa4cfbb3cf83dd3467204b6e829de` at 2026-10-13T12:54:24Z;
+  window 900 s to 13:09:24Z.
 
-## Run
-- Run dir: `.autorun/evidence/ch/w_short_20261012T205404Z/`
-- Rig: `tools/t2/sealed_ch_rig.sh` (nohup, PID 98776), DoH build on HEAD inputs.
-- Window: 900 s. Phone unlocked by owner → app installed, registered, backgrounded
-  via Settings, then auto-locked (30 s) and stayed locked for the whole window.
+## Result: NOT proven. One-line cause
+**The phone was never locked during the window (owner setting: passcode or auto-lock
+off) — `lock.tsv` recorded no locked sample, so the locked-push condition was never
+exercised.** Verdict rc=11 (`.autorun/evidence/ch_real/push_w1/verdict.txt`).
 
-## Verdict (verbatim, `verdict.txt`)
-```
-letter_id=3827521d72b61470b452d6e4a9673c3b
-tx_at=2026-10-12T20:59:49.347367+00:00
-window_end=2026-10-12T21:14:49.347367+00:00
-earliest_floor=2026-10-12T21:10:17.896Z
-x=none
-cause: iOS did not grant — bg_submitted x25, no bg_turn in the window, settings ok
-rc=10
-```
+Secondary: the only in-window `bg_turn` (13:04:37Z) DID find the letter
+(`looked=true, fresh=1, resubmit=true`) but with `launch_reason=cold_bg`, not `push`.
+So delivery on a backgrounded phone works; the silent-APNs-push wake on a *locked*
+phone remains unproven because the phone stayed unlocked.
 
-## Evidence
-- `bg_registered`: refresh available, notif authorized, launched_in_background.
-- `bg_submitted`: 25 submissions; earliest floor 21:10:17Z (inside the window).
-- `bg_turn` in-window: **0** (the 20 bg_turn lines in `phone_journal_last.jsonl` are
-  cumulative from earlier sessions, all before this window's tx at 20:59:49Z).
-- `lock2.tsv`: `open` through 20:57:37Z, then `locked` 21:13–21:15 — phone was locked
-  across the send window, so the locked state was real.
-- Letter tx at 20:59:49Z (`script.log`), window end 21:14:49Z, receipt **none**.
-- Settings launched (app backgrounded): `script.log` "Launched application with
-  com.apple.Preferences".
+## Exact next action (owner-gated)
+1. On the phone: set a passcode and a short Auto-Lock (Settings → Display & Brightness
+   → Auto-Lock → 30 s) so the window actually locks.
+2. Re-run, phone left to auto-lock, not touched:
+   `CH_WAKE=push CH_WINDOW_S=900 bash tools/t2/sealed_ch_rig.sh .autorun/evidence/ch_real/push_w2`
+3. Accept = a `bg_turn` with `launch_reason=push` inside the window while `lock.tsv`
+   shows locked, letter `fresh=1`, receipt back. Unlock afterwards for the journal copy.
 
-## Read
-The ch path mechanics are proven (relay DoH responder live, build ships DoH, letter
-sent, phone genuinely locked). The remaining gate is iOS itself: within this 15-min
-window BGTaskScheduler never fired `sealed.refresh`, so the locked app got no CPU to
-drain the mailbox. Short windows make a grant unlikely — iOS schedules bg refresh on
-its own heuristics (hours, charging, usage), not on earliest-floor alone.
-
-## Next
-- Do NOT treat this as a code bug; the fix space is iOS scheduling, not the transport.
-- Options to evaluate (consult Fable before editing): longer overnight window on
-  charger; a silent-push wake path instead of pure BGAppRefresh; or widen the
-  acceptance to count a bg_turn-triggered drain in a later window for the same letter.
+## VCS
+Local only, not pushed: `eb7ed51` (empty rebuild marker). No code change beyond the
+already-committed `88280c4`. Evidence under `.autorun/evidence/ch_real/push_w1/`.
