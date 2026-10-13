@@ -228,6 +228,24 @@ class PairShelf implements LetterShelf {
     return authors;
   }
 
+  /// The relay author ids this install writes [peerInstall]'s letters under
+  /// over the next [days] days — the mirror of [inboundAuthors] on the other
+  /// side, so a rig can read the relay's push record (`GET /p/<author>`) for
+  /// the shelf a letter just landed on. Empty when no key is pinned.
+  Future<List<String>> outboundAuthors(
+    String peerInstall, {
+    int days = 2,
+  }) async {
+    final own = _hex(await identity.installId());
+    final today = _day(_clock());
+    final authors = <String>[];
+    for (var i = 0; i < days; i++) {
+      final feed = await _feed(own, peerInstall, today + i);
+      if (feed != null) authors.add(_hex(feed.author));
+    }
+    return authors;
+  }
+
   /// Registers [token] (lowercase hex) for a silent background push against
   /// [author]'s shelf: `PUT /p/<author>` {token, env}. The relay fires one
   /// background push when a box's pointer lands at `a:<author>`. Returns the

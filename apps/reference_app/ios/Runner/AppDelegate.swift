@@ -1,6 +1,7 @@
 import AVFoundation
 import Flutter
 import PhotosUI
+import os
 import UIKit
 import UniformTypeIdentifiers
 
@@ -705,8 +706,82 @@ enum LetterPcmPlayer {
     private var launchedInBackground = false
     private var turns = 0
     private let iso = ISO8601DateFormatter()
+    /// Phase چ: the engine this process starts itself when a background wake
+    /// finds no answering Dart handler — the scene's engine is gone in a
+    /// background process (measured 2026-10-13: push delivered, no turn).
+    private var headless: FlutterEngine?
+    private var channelIsHeadless = false
+    private var headlessBusy = 0
+    private var sceneAlive = false
+    /// Mirrors every journal line to the device syslog (public, else
+    /// `<private>`), so a locked phone can be watched over USB.
+    private let log = Logger(subsystem: "com.tlscodes.reference_app", category: "sealed")
 
     init() { iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds] }
+
+    /// Hands over a channel whose Dart handler answers: the current one when
+    /// a 1 s ping returns true, else the headless engine. A connected scene
+    /// still attaching its engine gets 3 s before the fallback.
+    private func withLiveChannel(_ then: @escaping (FlutterMethodChannel?) -> Void) {
+      if ready, let ch = channel {
+        var answered = false
+        ch.invokeMethod("ping", arguments: nil) { reply in
+          guard !answered else { return }
+          answered = true
+          if (reply as? Bool) == true { return then(ch) }
+          self.emit("ping_dead", ["reply": String(describing: reply)])
+          self.startHeadless(then)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+          guard !answered else { return }
+          answered = true
+          self.emit("ping_timeout", ["headless": self.channelIsHeadless])
+          self.startHeadless(then)
+        }
+        return
+      }
+      if channel != nil, sceneAlive || channelIsHeadless {
+        return waitForChannel(tries: 30) { ch in
+          if let ch = ch { then(ch) } else { self.startHeadless(then) }
+        }
+      }
+      startHeadless(then)
+    }
+
+    private func startHeadless(_ then: @escaping (FlutterMethodChannel?) -> Void) {
+      if let e = headless {
+        if !channelIsHeadless { attach(messenger: e.binaryMessenger, headless: true) }
+        return waitForChannel(tries: 50, then)
+      }
+      channel = nil
+      ready = false
+      let e = FlutterEngine(name: "sealed_headless", project: nil, allowHeadlessExecution: true)
+      let ran = e.run(withEntrypoint: "sealedHeadlessMain", libraryURI: "package:reference_app/main.dart")
+      emit("headless_engine", ["run": ran, "id": taskId])
+      guard ran else { return then(nil) }
+      headless = e
+      GeneratedPluginRegistrant.register(with: e)
+      attach(messenger: e.binaryMessenger, headless: true)
+      waitForChannel(tries: 50, then)
+    }
+
+    /// Order matters: the channel must already point elsewhere, because a
+    /// send on a destroyed engine's relay dereferences a null shell.
+    private func retireHeadless() {
+      guard let e = headless, headlessBusy == 0, !channelIsHeadless else { return }
+      headless = nil
+      e.destroyContext()
+      emit("headless_retired", ["id": taskId])
+    }
+
+    private func beginUse(_ ch: FlutterMethodChannel) {
+      if channelIsHeadless, ch === channel { headlessBusy += 1 }
+    }
+
+    private func endUse() {
+      if headlessBusy > 0 { headlessBusy -= 1 }
+      retireHeadless()
+    }
 
     /// Registering an id the built plist does not list crashes the app; the
     /// normal build's plist lists none, so this is the guard.
@@ -754,16 +829,21 @@ enum LetterPcmPlayer {
       }
     }
 
-    func attach(messenger: FlutterBinaryMessenger) {
+    private var observingScenes = false
+
+    func attach(messenger: FlutterBinaryMessenger, headless isHeadless: Bool = false) {
       let ch = FlutterMethodChannel(name: Self.channelName, binaryMessenger: messenger)
       ch.setMethodCallHandler { [weak self] call, result in
         guard let self = self else { return result(nil) }
         switch call.method {
         case "ready":
+          // Only the engine that owns the current channel may flip it: a
+          // stale engine's late `ready` must not mark the new one live.
+          guard ch === self.channel else { return result(nil) }
           self.ready = true
           let lines = self.held
           self.held.removeAll()
-          for line in lines { self.channel?.invokeMethod("event", arguments: line) }
+          for line in lines { ch.invokeMethod("event", arguments: line) }
           result(nil)
         case "notify":
           let a = call.arguments as? [String: Any] ?? [:]
@@ -772,11 +852,40 @@ enum LetterPcmPlayer {
           result(FlutterMethodNotImplemented)
         }
       }
+      // A new engine has no Dart handler yet: `ready` is its own to earn.
+      ready = false
       channel = ch
+      channelIsHeadless = isHeadless
+      emit("engine_attached", ["headless": isHeadless, "id": taskId])
+      if !isHeadless {
+        sceneAlive = true
+        retireHeadless()
+        if !observingScenes {
+          observingScenes = true
+          // The scene's engine dies with the scene: forget its channel, or a
+          // later wake would talk to a relay that never answers.
+          NotificationCenter.default.addObserver(
+            forName: UIScene.didDisconnectNotification, object: nil, queue: .main
+          ) { [weak self] _ in
+            guard let self = self else { return }
+            self.sceneAlive = false
+            if !self.channelIsHeadless {
+              self.channel = nil
+              self.ready = false
+            }
+            self.emit("scene_disconnected", ["id": self.taskId])
+          }
+        }
+      }
     }
 
     private func emit(_ event: String, _ fields: [String: Any]) {
       let line: [String: Any] = ["event": event, "fields": fields]
+      if let data = try? JSONSerialization.data(withJSONObject: line),
+        let text = String(data: data, encoding: .utf8)
+      {
+        log.info("\(text, privacy: .public)")
+      }
       if ready, let ch = channel {
         ch.invokeMethod("event", arguments: line)
       } else {
@@ -813,6 +922,7 @@ enum LetterPcmPlayer {
       let finish: (Bool, String?) -> Void = { success, why in
         guard !done else { return }
         done = true
+        self.endUse()
         if let why = why { self.emit("bg_task_end", ["id": self.taskId, "why": why, "success": success]) }
         task.setTaskCompleted(success: success)
       }
@@ -830,12 +940,16 @@ enum LetterPcmPlayer {
         "app_state": Self.stateName(app.applicationState),
         "protected_data": app.isProtectedDataAvailable,
       ]
-      waitForChannel(tries: 50) { ch in
+      withLiveChannel { ch in
         guard let ch = ch else {
           self.emit("bg_turn_no_engine", ["id": self.taskId])
           return finish(false, "no_engine")
         }
+        self.beginUse(ch)
         ch.invokeMethod("turn", arguments: args) { reply in
+          if reply is FlutterError || (reply as AnyObject) === FlutterMethodNotImplemented {
+            self.emit("turn_no_handler", ["id": self.taskId, "reply": String(describing: reply)])
+          }
           let r = reply as? [String: Any]
           if (r?["resubmit"] as? Bool) == false {
             BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: self.taskId)
@@ -919,6 +1033,7 @@ enum LetterPcmPlayer {
       let finish: (Bool) -> Void = { any in
         guard !done else { return }
         done = true
+        self.endUse()
         completion(any ? .newData : .noData)
       }
       DispatchQueue.main.asyncAfter(deadline: .now() + Self.backstop) { finish(false) }
@@ -928,12 +1043,16 @@ enum LetterPcmPlayer {
         "app_state": Self.stateName(app.applicationState),
         "protected_data": app.isProtectedDataAvailable,
       ]
-      waitForChannel(tries: 50) { ch in
+      withLiveChannel { ch in
         guard let ch = ch else {
           self.emit("bg_turn_no_engine", ["id": self.taskId, "launch_reason": "push"])
           return finish(false)
         }
+        self.beginUse(ch)
         ch.invokeMethod("turn", arguments: args) { reply in
+          if reply is FlutterError || (reply as AnyObject) === FlutterMethodNotImplemented {
+            self.emit("turn_no_handler", ["id": self.taskId, "launch_reason": "push", "reply": String(describing: reply)])
+          }
           let r = reply as? [String: Any]
           finish((r?["fresh"] as? Int ?? 0) > 0)
         }

@@ -245,6 +245,10 @@ abstract final class SealedBackground {
             appState: '${a['app_state']}',
             protectedData: a['protected_data'] == true,
           );
+        case 'ping':
+          // Swift's liveness probe: a reply at all means this engine's Dart
+          // handler is installed; a dead engine's relay never replies.
+          return true;
       }
       throw MissingPluginException(call.method);
     });

@@ -7,6 +7,7 @@ library;
 
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:call_core/call_core.dart';
 import 'package:flutter/foundation.dart' show compute;
@@ -100,6 +101,22 @@ Future<void> main() async {
   runApp(
     MyApp(intelligence: intelligence, measurementConsent: measurementConsent),
   );
+}
+
+/// Phase چ: the entrypoint of the headless FlutterEngine Swift starts when a
+/// background wake (silent push, app refresh) finds no live Dart handler —
+/// the scene's engine is gone in a background process. No window, no
+/// runApp: only the identity boot and the background channel, whose
+/// `turn`/`push_token` handlers fall back to this install's disk service.
+/// `running` is null on purpose: [sealedLetterService] belongs to the UI
+/// isolate, and this isolate never shares it.
+@pragma('vm:entry-point')
+Future<void> sealedHeadlessMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  if (!kSealedBackground) return;
+  unawaited(bootAppIdentity());
+  SealedBackground.install(running: () => null);
 }
 
 class MyApp extends StatefulWidget {
