@@ -715,7 +715,7 @@ enum LetterPcmPlayer {
     private var sceneAlive = false
     /// Mirrors every journal line to the device syslog (public, else
     /// `<private>`), so a locked phone can be watched over USB.
-    private let log = Logger(subsystem: "com.tlscodes.reference_app", category: "sealed")
+    private let oslog = OSLog(subsystem: "com.tlscodes.reference_app", category: "sealed")
 
     init() { iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds] }
 
@@ -884,7 +884,7 @@ enum LetterPcmPlayer {
       if let data = try? JSONSerialization.data(withJSONObject: line),
         let text = String(data: data, encoding: .utf8)
       {
-        log.info("\(text, privacy: .public)")
+        os_log("%{public}@", log: oslog, type: .info, text)
       }
       if ready, let ch = channel {
         ch.invokeMethod("event", arguments: line)
