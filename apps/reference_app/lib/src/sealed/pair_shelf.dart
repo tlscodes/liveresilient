@@ -209,6 +209,40 @@ class PairShelf implements LetterShelf {
     _feeds.removeWhere((key, _) => old(key));
   }
 
+  /// The relay author ids [peerInstall] writes this install's letters under
+  /// over the next [days] days (today..today+days-1). A silent-push reader
+  /// registers its APNs token against each shelf, so a box landing on one
+  /// wakes it; the author changes daily, so a window that spans midnight
+  /// needs more than one. Empty when no key is pinned for [peerInstall].
+  Future<List<String>> inboundAuthors(
+    String peerInstall, {
+    int days = 2,
+  }) async {
+    final own = _hex(await identity.installId());
+    final today = _day(_clock());
+    final authors = <String>[];
+    for (var i = 0; i < days; i++) {
+      final feed = await _feed(peerInstall, own, today + i);
+      if (feed != null) authors.add(_hex(feed.author));
+    }
+    return authors;
+  }
+
+  /// Registers [token] (lowercase hex) for a silent background push against
+  /// [author]'s shelf: `PUT /p/<author>` {token, env}. The relay fires one
+  /// background push when a box's pointer lands at `a:<author>`. Returns the
+  /// relay status (201 on success); throwing is left to the transport.
+  /// [apnsEnv] is 'sandbox' or 'production'. The body is pure ASCII (hex
+  /// token, fixed env word), so `codeUnits` are its bytes.
+  Future<int> registerPush(String author, String token, String apnsEnv) async {
+    final json = '{"token":"$token","env":"$apnsEnv"}';
+    final resp = await transport.put(
+      origin.replace(path: '/p/$author'),
+      Uint8List.fromList(json.codeUnits),
+    );
+    return resp.statusCode;
+  }
+
   @override
   Future<bool> put(String peerInstall, Uint8List box) async {
     try {

@@ -22,6 +22,39 @@ import UniformTypeIdentifiers
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  #if SEALED_BACKGROUND
+    // Phase چ silent push. APNs hands the device token here; a background
+    // push (content-available) wakes the app and runs one sealed turn. The
+    // token is forwarded to Dart, which registers it on the relay.
+    override func application(
+      _ application: UIApplication,
+      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+      super.application(
+        application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+      SealedBackgroundTask.shared.didRegisterRemote(deviceToken)
+    }
+
+    override func application(
+      _ application: UIApplication,
+      didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+      super.application(
+        application, didFailToRegisterForRemoteNotificationsWithError: error)
+      SealedBackgroundTask.shared.didFailRemote(error)
+    }
+
+    // We own the completion handler (no push plugins in this build), so super
+    // is not called: it would call the handler too.
+    override func application(
+      _ application: UIApplication,
+      didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+      SealedBackgroundTask.shared.didReceiveRemote(userInfo, completionHandler)
+    }
+  #endif
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let messenger = engineBridge.applicationRegistrar.messenger()
@@ -712,6 +745,9 @@ enum LetterPcmPlayer {
               "notif_auth": Self.authName(settings.authorizationStatus),
               "launched_in_background": self.launchedInBackground,
             ])
+            // Silent push needs no alert permission: ask for the APNs token
+            // regardless of what the user granted above.
+            application.registerForRemoteNotifications()
             self.submit()
           }
         }
@@ -835,6 +871,71 @@ enum LetterPcmPlayer {
               "add_err": error.map { "\($0)" } as Any,
             ])
           }
+        }
+      }
+    }
+
+    /// The APNs environment this build registers for. The SEALED_BACKGROUND
+    /// build is always a development signing, so its token is a sandbox one.
+    static let apnsEnv = "sandbox"
+    private var deviceTokenHex: String?
+
+    /// APNs delivered the device token: hex-encode it, record it, and hand it
+    /// to Dart (`push_token`), which registers it on the relay's shelves.
+    func didRegisterRemote(_ deviceToken: Data) {
+      let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+      deviceTokenHex = hex
+      emit("push_registered", ["len": hex.count, "tail": String(hex.suffix(8))])
+      waitForChannel(tries: 50) { ch in
+        guard let ch = ch else {
+          return self.emit("push_token_no_engine", ["id": self.taskId])
+        }
+        ch.invokeMethod("push_token", arguments: ["token": hex, "env": Self.apnsEnv]) {
+          reply in
+          let r = reply as? [String: Any]
+          self.emit("push_token_ack", ["shelves": r?["shelves"] as? Int ?? -1])
+        }
+      }
+    }
+
+    func didFailRemote(_ error: Error) {
+      emit("push_register_err", ["id": taskId, "error": "\(error)"])
+    }
+
+    /// A silent push woke the app: run one bounded sealed turn with
+    /// launch_reason "push", then tell iOS whether anything arrived. A
+    /// backstop calls the completion if the turn never replies.
+    func didReceiveRemote(
+      _ userInfo: [AnyHashable: Any],
+      _ completion: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+      let app = UIApplication.shared
+      emit("push_rx", [
+        "id": taskId,
+        "app_state": Self.stateName(app.applicationState),
+        "protected_data": app.isProtectedDataAvailable,
+      ])
+      var done = false
+      let finish: (Bool) -> Void = { any in
+        guard !done else { return }
+        done = true
+        completion(any ? .newData : .noData)
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + Self.backstop) { finish(false) }
+      let args: [String: Any] = [
+        "id": taskId,
+        "launch_reason": "push",
+        "app_state": Self.stateName(app.applicationState),
+        "protected_data": app.isProtectedDataAvailable,
+      ]
+      waitForChannel(tries: 50) { ch in
+        guard let ch = ch else {
+          self.emit("bg_turn_no_engine", ["id": self.taskId, "launch_reason": "push"])
+          return finish(false)
+        }
+        ch.invokeMethod("turn", arguments: args) { reply in
+          let r = reply as? [String: Any]
+          finish((r?["fresh"] as? Int ?? 0) > 0)
         }
       }
     }

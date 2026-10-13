@@ -170,6 +170,28 @@ abstract final class SealedBackground {
   static void install({required SealedLetterService? Function() running}) {
     if (!kSealedBackground) return;
     SealedLetterService? own;
+    // The service a background turn or a push registration uses: the live one
+    // when the engine was suspended with it, else this install's disk service,
+    // booting the identity first (the key is first-unlock, so a locked cold
+    // launch can still read it). Null on a host with no identity.
+    Future<SealedLetterService?> resolveService() async {
+      final live = running();
+      if (live != null) return live;
+      if (own != null) return own;
+      for (var i = 0; i < 50 && identityBootPending.value; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      if (appIdentity == null && !identityBootPending.value) {
+        await bootAppIdentity();
+      }
+      final identity = appIdentity;
+      if (identity == null) return null;
+      return own = SealedLetterService.disk(
+        identity: identity,
+        relayHost: defaultBorderRelayHost,
+      );
+    }
+
     _channel.setMethodCallHandler((call) async {
       final a = (call.arguments as Map?)?.cast<String, Object?>() ?? const {};
       switch (call.method) {
@@ -181,30 +203,31 @@ abstract final class SealedBackground {
             (a['fields'] as Map?)?.cast<String, Object?>() ?? const {},
           );
           return null;
+        case 'push_token':
+          // The phone's APNs device token (didRegisterForRemoteNotifications
+          // in AppDelegate.swift). Register it against every pinned peer's
+          // shelves so a box landing wakes this install with a silent push.
+          final token = '${a['token'] ?? ''}'.toLowerCase();
+          final env = a['env'] == 'production' ? 'production' : 'sandbox';
+          final service = await resolveService();
+          final shelves = service == null
+              ? 0
+              : await service.registerPush(token, apnsEnv: env);
+          _journal('push_token', <String, Object?>{
+            'len': token.length,
+            'tail': token.length >= 8
+                ? token.substring(token.length - 8)
+                : token,
+            'env': env,
+            'shelves': shelves,
+            'no_service': service == null,
+          });
+          return <String, Object?>{'shelves': shelves};
         case 'turn':
           final turn = SealedBackgroundTurn(
             until: _until(),
             journal: _journal,
-            service: () async {
-              final live = running();
-              if (live != null) return live;
-              if (own != null) return own;
-              // main() boots the identity unawaited; wait for that boot
-              // rather than start a second one (the key is first-unlock,
-              // so a locked cold launch can still read it).
-              for (var i = 0; i < 50 && identityBootPending.value; i++) {
-                await Future<void>.delayed(const Duration(milliseconds: 100));
-              }
-              if (appIdentity == null && !identityBootPending.value) {
-                await bootAppIdentity();
-              }
-              final identity = appIdentity;
-              if (identity == null) return null;
-              return own = SealedLetterService.disk(
-                identity: identity,
-                relayHost: defaultBorderRelayHost,
-              );
-            },
+            service: resolveService,
             notify: (letterId) async {
               final r = await _channel.invokeMapMethod<String, Object?>(
                 'notify',

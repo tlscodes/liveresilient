@@ -22,6 +22,10 @@ RIG_APP=${CH_RIG_APP:-$ROOT/.autorun/evidence/ch/rig/Runner.app}
 RELAY="https://voice-call-relay.tlscodes-com.workers.dev"
 PEER_ID=${SEALED_CH_PEER:-a08887e8c641b475cc4c50722640e68f}
 WINDOW_S=${CH_WINDOW_S:-28800}
+# refresh = BGAppRefresh wake (phase پ); push = silent APNs wake (phase چ).
+# push needs the token registered on the relay before the window (push_token
+# with shelves>=1) and a bg_turn with launch_reason=push inside it.
+WAKE=${CH_WAKE:-refresh}
 STARTED="$ROOT/.autorun/ch_device_started"
 SUPPORT=Documents/voice_call_kit_intelligence
 
@@ -94,6 +98,17 @@ grep '"event":"bg_registered"\|"event":"bg_submitted"\|"event":"bg_not_permitted
   | tail -3 | tee -a "$LOG"
 grep -q '"event":"bg_submitted"' "$OUT/phone_journal_last.jsonl" \
   || { say_ "STOPPED no bg_submitted after launch"; exit 3; }
+if [ "$WAKE" = push ]; then
+  # The token registers right after didRegisterForRemoteNotifications; wait
+  # for push_token (shelves>=1 = the relay took it) while still unlocked.
+  for _ in $(seq 1 20); do
+    phone_journal "$OUT/phone_journal_last.jsonl" && grep -q '"event":"push_token"' "$OUT/phone_journal_last.jsonl" && break
+    sleep 6
+  done
+  grep -o '"event":"push_registered"[^}]*\|"event":"push_token"[^}]*\|"event":"push_register_err"[^}]*' "$OUT/phone_journal_last.jsonl" | tail -3 | tee -a "$LOG"
+  grep -q '"event":"push_token".*"shelves":[1-9]' "$OUT/phone_journal_last.jsonl" \
+    || { say_ "STOPPED no push_token with shelves>=1 (token did not reach the relay)"; exit 3; }
+fi
 
 # --- 4. background without a kill, then prove the loop is quiet ---------------
 xcrun devicectl device process launch --device "$PHONE" com.apple.Preferences >>"$LOG" 2>&1
@@ -132,8 +147,8 @@ tx=$(grep -o "SEALED_CH tx id=[0-9a-f]* at=[^ ]*" "$OUT/mac.log" | head -1)
 [ -n "$tx" ] || { say_ "STOPPED the Mac never sent"; tail -5 "$OUT/mac.log"; verdict; exit 3; }
 lid=$(echo "$tx" | sed 's/.*id=\([0-9a-f]*\).*/\1/') at=$(echo "$tx" | sed 's/.*at=//')
 off=$(date +%z | awk '{s=substr($0,1,1)=="-"?-1:1; print s*(substr($0,2,2)*3600+substr($0,4,2)*60)}')
-python3 -c "import json,sys,datetime as d;t=d.datetime.fromisoformat(sys.argv[2].replace('Z','+00:00'));json.dump({'letter_id':sys.argv[1],'tx_at':t.isoformat(),'window_end':(t+d.timedelta(seconds=int(sys.argv[3]))).isoformat(),'give_utc_offset_s':int(sys.argv[4])},open(sys.argv[5],'w'))" \
-  "$lid" "$at" "$WINDOW_S" "$off" "$OUT/meta.json"
+python3 -c "import json,sys,datetime as d;t=d.datetime.fromisoformat(sys.argv[2].replace('Z','+00:00'));json.dump({'letter_id':sys.argv[1],'tx_at':t.isoformat(),'window_end':(t+d.timedelta(seconds=int(sys.argv[3]))).isoformat(),'give_utc_offset_s':int(sys.argv[4]),'wake':sys.argv[6]},open(sys.argv[5],'w'))" \
+  "$lid" "$at" "$WINDOW_S" "$off" "$OUT/meta.json" "$WAKE"
 say_ "T: letter $lid sent at $at; window ${WINDOW_S}s; no launch inside it"
 
 # --- 6/7. the window: copies only ----------------------------------------------

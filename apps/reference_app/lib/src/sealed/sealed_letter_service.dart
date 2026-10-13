@@ -829,6 +829,30 @@ class SealedLetterService {
     return true;
   }
 
+  /// APNs silent-push registration (phase چ). For each pinned peer, registers
+  /// [token] (lowercase hex) against the relay shelves that peer will write
+  /// this install's letters under over the next two days, so a box landing on
+  /// one wakes a locked phone. No-op (0) unless this service runs on the real
+  /// pair shelf. [apnsEnv] is 'sandbox' or 'production'. Returns how many
+  /// shelves the relay accepted the token for.
+  Future<int> registerPush(String token, {String apnsEnv = 'sandbox'}) async {
+    final pairShelf = shelf;
+    if (pairShelf is! PairShelf) return 0;
+    final authors = <String>{};
+    for (final peer in await _identity.pinnedInstalls()) {
+      authors.addAll(await pairShelf.inboundAuthors(peer));
+    }
+    var ok = 0;
+    for (final author in authors) {
+      try {
+        if (await pairShelf.registerPush(author, token, apnsEnv) == 201) ok++;
+      } catch (_) {
+        // The relay was out of reach; a later registration retries.
+      }
+    }
+    return ok;
+  }
+
   Future<void> _handleBoxes(List<Uint8List> boxes) async {
     final own = await _own();
     var changed = false;

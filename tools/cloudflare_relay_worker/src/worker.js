@@ -32,6 +32,7 @@ import {
 } from './broadcast.js';
 
 import { handleDnsQuery, GiveSession } from './txt_give_doh.js';
+import { handlePushProbe, handlePushShard, parsePushPath } from './apns_push.js';
 
 // The `give` lane's Durable Object must be a named export of the entry
 // module for its binding to resolve; its logic lives in txt_give_doh.js.
@@ -133,6 +134,15 @@ export default {
     // Broadcast is checked before the landing page so a malformed
     // broadcast path falls through to the same ordinary page every other
     // unknown path gets, rather than announcing that the route exists.
+    // Silent-push registration for a shelf author (apns_push.js). Its own
+    // shard `p:<author>`, so the archive's storage never holds a token.
+    const push = parsePushPath(url.pathname);
+    if (push?.kind === 'probe') return handlePushProbe(env);
+    if (push) {
+      const id = env.BROADCAST_ARCHIVE.idFromName(push.shard);
+      return env.BROADCAST_ARCHIVE.get(id).fetch(request);
+    }
+
     const broadcast = parseBroadcastPath(url.pathname);
     if (broadcast) {
       const id = env.BROADCAST_ARCHIVE.idFromName(broadcast.shard);
@@ -174,13 +184,38 @@ export default {
  * that expires what it holds.
  */
 export class BroadcastArchiveObject {
-  constructor(state) {
+  constructor(state, env) {
     this.state = state;
+    this.env = env;
     this.archive = new BroadcastArchive(state.storage);
   }
 
   async fetch(request) {
     const url = new URL(request.url);
+    // A `p:<author>` shard holds only a push registration (apns_push.js);
+    // it returns before the archive, so it never sets the sweep alarm.
+    const push = parsePushPath(url.pathname);
+    if (push?.kind === 'push' || url.pathname === '/__push_fire') {
+      return handlePushShard(request, this.state.storage, this.env);
+    }
+    const response = await this._archiveFetch(request, url);
+    const route = parseBroadcastPath(url.pathname);
+    // A pointer stored for an author wakes its registered reader, if any.
+    // After the response is decided; a failed push never fails the write.
+    if (response.status === 201 && route?.kind === 'descriptor' && this.env) {
+      try {
+        const id = this.env.BROADCAST_ARCHIVE.idFromName(`p:${route.authorId}`);
+        await this.env.BROADCAST_ARCHIVE.get(id).fetch(
+          new Request('https://push.internal/__push_fire', { method: 'POST' }),
+        );
+      } catch {
+        // Evidence lives in the p: shard's push_last; the write stands.
+      }
+    }
+    return response;
+  }
+
+  async _archiveFetch(request, url) {
     if (url.pathname === '/__stats') {
       return new Response(
         `${JSON.stringify(await this.archive.stats(), null, 2)}\n`,

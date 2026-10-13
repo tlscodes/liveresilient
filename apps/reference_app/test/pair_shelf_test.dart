@@ -524,4 +524,33 @@ void main() {
       },
     );
   });
+
+  group('silent-push registration', () {
+    test('inboundAuthors names the shelf the peer writes under, and '
+        'registerPush PUTs the token there', () async {
+      // The Mac writes one letter; its pointer lands at /a/<author>/<seq>.
+      final writing = on(mac);
+      await writing.send(toInstall: phone.id, body: utf8Of('wake me'));
+      await writing.flush();
+      final wrote = relay.requests.firstWhere((r) => r.startsWith('PUT /a/'));
+      final author = wrote.split('/a/')[1].split('/').first;
+
+      // The phone, which reads that shelf, registers against that same id —
+      // today's and tomorrow's, since the author changes at midnight.
+      final authors = await phone.shelf(relay).inboundAuthors(mac.id);
+      expect(authors, contains(author));
+      expect(authors.length, 2);
+
+      // registerPush PUTs the token to /p/<author> for each inbound author.
+      final token = 'ab' * 32; // 64 lowercase hex chars
+      final before = relay.requests.length;
+      await on(phone).registerPush(token);
+      final registrations = relay.requests
+          .skip(before)
+          .where((r) => r.startsWith('PUT /p/'))
+          .toList();
+      expect(registrations, contains('PUT /p/$author'));
+      expect(registrations.length, authors.length);
+    });
+  });
 }
