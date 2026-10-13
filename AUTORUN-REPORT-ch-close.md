@@ -39,6 +39,27 @@ phone remains unproven because the phone stayed unlocked.
 3. Accept = a `bg_turn` with `launch_reason=push` inside the window while `lock.tsv`
    shows locked, letter `fresh=1`, receipt back. Unlock afterwards for the journal copy.
 
+## Window w2 — 2026-10-13, phone locked (passcode + Auto-Lock 30 s)
+- Run: `CH_LOCKED_START=1 CH_WAKE=push CH_WINDOW_S=900 sealed_ch_rig.sh .autorun/evidence/ch_real/push_w2`.
+  LOCKED_START was added because the phone was already locked: same 14:47 binary,
+  same registered token (`push_token_ack shelves=2`, tail fdc42529), no install,
+  no launch, no unlock. `bg_until` refreshed while locked (copy accepted, to 16:03Z).
+- Lock precondition met: `lock2.tsv` has 21 `locked` samples, first 14:03:53Z.
+- Letter `08141e231ff16e9f0162142601be40de` sent 14:09:24Z, window to 14:24:24Z.
+- Verdict, re-run on a fresh journal after the owner unlocked (16:27 local): **rc=10**.
+  No `bg_turn` of any kind inside the window; the letter came in only after
+  unlock, in the foreground (`start → rx → receipt_tx`), which is not accepted.
+- Relay key check: `GET /p/probe` → `400 BadDeviceToken` (sandbox), so the APNs
+  key and JWT are accepted (a bad key gives 403).
+
+**Not proven. One-line cause: no push-woken turn reached the locked phone in the
+window; the APNs key is proven, but there is no relay-side record showing that a
+push was fired for this letter, so relay-side vs iOS-side cannot be told apart yet.**
+
+Next step needed to tell them apart: the relay must log each fire result for
+`/p/<author>` (status, apns_id). Then repeat w2 with `wrangler tail` open.
+That is a worker deploy, so it needs owner approval.
+
 ## VCS
 Local only, not pushed: `eb7ed51` (empty rebuild marker). No code change beyond the
 already-committed `88280c4`. Evidence under `.autorun/evidence/ch_real/push_w1/`.
