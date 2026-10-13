@@ -1,0 +1,10 @@
+letter_id=e79b407705e40623b0bd5d75e0b47052
+tx_at=2026-10-13T16:02:34.845688+00:00
+window_end=2026-10-13T16:17:34.845688+00:00
+earliest_floor=2026-10-13T16:17:41.075Z
+bg_turn begin=2026-10-13T16:02:41.186206+00:00 end=2026-10-13T16:02:55.284469+00:00 x=6s lane=txt protected_data=False expired=False launch_reason=push
+rx=2026-10-13T16:02:48.831501Z
+receipt_tx=2026-10-13T16:02:51.477575Z
+notify_local=2026-10-13T16:02:55.282109Z
+VERDICT ch PASS
+rc=0

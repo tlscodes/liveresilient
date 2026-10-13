@@ -1,0 +1,16 @@
+00:00 +0: loading /Users/behnam/Downloads/voice_call_kit_v3/apps/reference_app/integration_test/sealed_ch_mac_test.dart
+The following plugins do not support Swift Package Manager for macos:
+  - flutter_webrtc
+  - pt_transport_darwin
+This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+Building macOS application...                                   
+ld: warning: building for macOS-10.15, but linking with dylib '@rpath/PtTransport.framework/PtTransport' which was built for newer version 15.0
+✓ Built build/macos/Build/Products/Debug/reference_app.app
+Failed to foreground app; open returned 1
+00:00 +0: sealed letter to a closed phone: the Mac sends one text and waits for its receipt
+SEALED_CH ready=true peer=a08887e8c641b475cc4c50722640e68f wait_s=900
+SEALED_CH authors=5d99421d48121c00876969c9de3c3af8,8770f54a901bcceeea9b711e79201c09
+SEALED_CH tx id=e79b407705e40623b0bd5d75e0b47052 at=2026-10-13T16:02:34.845688Z bytes=54
+SEALED_CH receipt id=e79b407705e40623b0bd5d75e0b47052 at=2026-10-13T16:02:53.461076Z
+00:26 +1: (tearDownAll)
+00:26 +1: All tests passed!

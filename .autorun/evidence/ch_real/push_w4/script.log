@@ -1,0 +1,43 @@
+[2026-10-13T15:57:23Z] locked start: no install, no launch, no Settings; until 2026-10-13T16:57:22Z
+[2026-10-13T16:01:15Z] phone loop quiet for >= 150 s
+[2026-10-13T16:02:43Z] T: letter e79b407705e40623b0bd5d75e0b47052 sent at 2026-10-13T16:02:34.845688Z; window 900s; no launch inside it
+[2026-10-13T16:07:44Z] window over: SEALED_CH receipt id=e79b407705e40623b0bd5d75e0b47052 at=2026-10-13T16:02:53.461076Z
+[2026-10-13T16:08:07Z] verdict rc=12: cause: no give GET inside the turn — phone off the bridge or TXT path down
+[2026-10-13T16:09:24Z] Mac app off: yes — no journal line in 75s; last {"at":"2026-10-13T16:02:56.473021Z","event":"stop","pid":60743,"up_s":21,"req_start":30,"r
+[2026-10-13T16:11:31Z] end: cancel launch failed (try 1): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:12:24Z] end: cancel launch failed (try 2): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:13:17Z] end: cancel launch failed (try 3): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:14:09Z] end: cancel launch failed (try 4): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:15:02Z] end: cancel launch failed (try 5): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:15:54Z] end: cancel launch failed (try 6): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:16:47Z] end: cancel launch failed (try 7): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:17:39Z] end: cancel launch failed (try 8): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:18:31Z] end: cancel launch failed (try 9): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:19:24Z] end: cancel launch failed (try 10): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:20:17Z] end: cancel launch failed (try 11): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:21:09Z] end: cancel launch failed (try 12): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:22:02Z] end: cancel launch failed (try 13): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:22:54Z] end: cancel launch failed (try 14): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:23:47Z] end: cancel launch failed (try 15): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:24:40Z] end: cancel launch failed (try 16): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:25:32Z] end: cancel launch failed (try 17): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:26:25Z] end: cancel launch failed (try 18): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:27:18Z] end: cancel launch failed (try 19): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:28:10Z] end: cancel launch failed (try 20): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:29:03Z] end: cancel launch failed (try 21): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:29:56Z] end: cancel launch failed (try 22): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:30:48Z] end: cancel launch failed (try 23): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:31:41Z] end: cancel launch failed (try 24): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:32:33Z] end: cancel launch failed (try 25): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:33:25Z] end: cancel launch failed (try 26): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:34:17Z] end: cancel launch failed (try 27): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:35:10Z] end: cancel launch failed (try 28): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:36:02Z] end: cancel launch failed (try 29): ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+[2026-10-13T16:36:51Z] end: cancel launch ok (try 30)
+[2026-10-13T16:37:08Z] end: bg_cancelled in the journal
+[2026-10-13T16:38:31Z] end: phone app off (journal unchanged 75s)
+{"at":"2026-10-13T16:36:51.711724Z","event":"bg_cancelled","id":"com.tlscodes.referenceApp.sealed.refresh"}
+{"at":"2026-10-13T16:36:51.714621Z","event":"delivered","count":3,"ids":["sealed.e79b407705e40623b0bd5d75e0b47052","sealed.14caa4cfbb3cf83dd3467204b6e829de","sealed.7accedea90dcda460f218451f0f0f64c"],"delivered":true}
+[2026-10-13T16:38:42Z] end: normal profile build installed over the flag build
+[2026-10-13T16:38:43Z] end: pf status rc=0 ; give pids: 
+[2026-10-13T16:38:44Z] cleanup: Mac app off, end script ran, pf status in pf_after.txt

@@ -21,7 +21,7 @@ Accept only: letter arrives, silent push wakes the phone, receipt returns. No pu
 - Mac sent one letter `14caa4cfbb3cf83dd3467204b6e829de` at 2026-10-13T12:54:24Z;
   window 900 s to 13:09:24Z.
 
-## Result: NOT proven. One-line cause
+## Result (superseded 2026-10-13 by push_w4 below: PROVEN, rc=0): earlier NOT proven. One-line cause
 **The phone was never locked during the window (owner setting: passcode or auto-lock
 off) — `lock.tsv` recorded no locked sample, so the locked-push condition was never
 exercised.** Verdict rc=11 (`.autorun/evidence/ch_real/push_w1/verdict.txt`).
@@ -89,3 +89,31 @@ fetchCompletionHandler:) to the AppDelegate override on a scene cold launch — 
 built binary (otool) and whether FlutterSceneDelegate/FlutterAppDelegate consumes it first.
 
 Post-window, owner unlocked and opened the app (foreground, 15:49Z, outside the window): the letter 5c680312… arrived (rx) and its receipt went out (receipt_tx 15:49:24Z) over the TXT lane, plus two older letters. The letter path works in the foreground; this does NOT meet the acceptance line (no push turn while locked). Evidence: push_w3/phone_journal_after_open.jsonl.
+
+## push_w4 — selector fix (51432dc), 2026-10-13 16:02–16:07Z — VERDICT ch PASS, rc=0
+
+Times here are UTC (chat reports Netherlands local = UTC+2).
+
+- Binary: 51432dc (`responds(to:)` claims the push-fetch selector), ch_build_check 13/13
+  (build_check_w4.out). Installed OVER the locked phone at 15:56Z rc=0 (install_w4.log), no delete,
+  no launch. Window: `CH_LOCKED_START=1 CH_WAKE=push CH_WINDOW_S=900`, dir
+  .autorun/evidence/ch_real/push_w4 (+ push_w4_console.out, push_w4_syslog.txt).
+- Lock: lock2.tsv locked throughout; the phone was never unlocked inside the window.
+- 16:02:34Z Mac tx letter e79b407705e40623b0bd5d75e0b47052 (54 B).
+- 16:02:38Z iOS delivered the content-available push; dasd cold-launched Runner (pid 26126).
+- 16:02:41Z `push_rx` — the Swift handler ENTERED (w3's root cause closed); `engine_attached
+  headless=false` (scene engine alive on the cold launch, the headless fallback was not needed).
+- bg_turn launch_reason=push begin 16:02:41Z end 16:02:55Z, lane=txt, protected_data=false:
+  relay_request PUT x4 (201) then GET over DoH; rx 16:02:48Z; receipt_tx 16:02:51Z deposited;
+  notify_local 16:02:55Z authorized (syslog: notification 1D6E-ABD5 with alert content saved);
+  app suspended 16:02:55Z.
+- 16:02:53Z Mac receipt_rx for e79b4077 (mac.log `SEALED_CH receipt`); the window closed itself
+  at 16:07:44Z on the receipt.
+- Verdict: the first run read rc=12 "no give GET inside the turn" — a stale bridge-era rule:
+  sealed_ch_verdict.py looked for GETs only in the Mac-side give.log, which a DoH run never has.
+  Fixed (txt_gets: the phone's own `relay_request via=txt method=GET` rows are the witness, give.log
+  kept for bridge runs; 15/15 unit tests incl. the two new DoH cases). Re-judged on the untouched
+  evidence: `VERDICT ch PASS`, rc=0 (verdict.txt).
+
+**Acceptance line met:** sealed text letter → locked, closed phone → push wake → TXT lane over DoH to
+the existing relay → local notification → receipt back on the Mac, inside one window, app never opened.

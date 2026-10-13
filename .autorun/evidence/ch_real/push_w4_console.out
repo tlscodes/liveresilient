@@ -1,0 +1,6 @@
+[2026-10-13T15:57:23Z] locked start: no install, no launch, no Settings; until 2026-10-13T16:57:22Z
+[2026-10-13T16:01:15Z] phone loop quiet for >= 150 s
+[2026-10-13T16:02:43Z] T: letter e79b407705e40623b0bd5d75e0b47052 sent at 2026-10-13T16:02:34.845688Z; window 900s; no launch inside it
+[2026-10-13T16:07:44Z] window over: SEALED_CH receipt id=e79b407705e40623b0bd5d75e0b47052 at=2026-10-13T16:02:53.461076Z
+[2026-10-13T16:08:07Z] verdict rc=12: cause: no give GET inside the turn — phone off the bridge or TXT path down
+[2026-10-13T16:38:44Z] cleanup: Mac app off, end script ran, pf status in pf_after.txt

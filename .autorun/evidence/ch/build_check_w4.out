@@ -1,0 +1,13 @@
+ok   normal: no BGTaskSchedulerPermittedIdentifiers
+ok   normal: no fetch background mode
+ok   normal: no task id in Runner/App
+ok   normal: no bg_turn in Runner/App
+ok   normal: no SEALED_BG/TXT_ONLY/RIG strings
+ok   rig: BGTaskSchedulerPermittedIdentifiers
+ok   rig: fetch background mode
+ok   rig: task id in Runner
+ok   rig: bg_turn in App
+ok   rig: relay DoH host baked (not bridge)
+ok   rig: no 192.168.2.1 bridge host
+ok   rig: signature valid
+ok   tracked Info.plist untouched

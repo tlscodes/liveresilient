@@ -7,7 +7,8 @@ Reads a run directory written by sealed_ch_rig.sh:
                         "give_utc_offset_s" (offset of give.log's local clock)}
   phone_journal.jsonl  the phone's sealed_events.jsonl, copied (never launched)
   mac_journal.jsonl    the Mac's sealed_events.jsonl
-  give.log             txt_give.py log ("YYYY-mm-dd HH:MM:SS,mmm give GET ...")
+  give.log             bridge era only: txt_give.py log ("... give GET ..."); DoH
+                       runs have none — the phone's relay_request rows carry the GETs
   lock.tsv             "<UTC ISO>\t<lockState>" every 60 s
 
 Exit codes (docs/ch-background-design.md):
@@ -50,6 +51,7 @@ def rows(path):
 
 
 def give_hits(path, offset_s):
+    """Bridge era: the Mac-side txt_give.py log. Absent in DoH runs."""
     hits = []
     if not path.exists():
         return hits
@@ -60,6 +62,20 @@ def give_hits(path, offset_s):
             t = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
             hits.append((t + timedelta(milliseconds=int(m.group(2))), m.group(3)))
     return hits
+
+
+def txt_gets(run, meta, phone):
+    """Every GET the letter lane made, from either side that saw it.
+
+    DoH runs (phase چ) have no local give.log: the relay answers over
+    /dns-query, so the phone's own journal is the only witness — it logs
+    one relay_request row per call with via/method. The bridge-era give.log
+    stays as the other source for older runs.
+    """
+    gets = [r["_at"] for r in phone
+            if r.get("event") == "relay_request" and r.get("via") == "txt" and r.get("method") == "GET"]
+    gets += [t for t, m in give_hits(run / "give.log", int(meta.get("give_utc_offset_s", 0))) if m == "GET"]
+    return gets
 
 
 def locks(path):
@@ -147,7 +163,7 @@ def judge(run):
         lines.append(f"cause: iOS did not grant — bg_submitted x{len(sub)}, no bg_turn in the window, settings ok")
         return NOT_GRANTED, lines
 
-    gives = give_hits(run / "give.log", int(meta.get("give_utc_offset_s", 0)))
+    gets = txt_gets(run, meta, phone)
     last_cause = None
     for t in turns:
         b, e = when(t.get("begin")), when(t.get("end"))
@@ -162,8 +178,8 @@ def judge(run):
         rx = first(inside, "rx", id=lid)
         rtx = first(inside, "receipt_tx", id=lid)
         note = first(inside, "notify_local", letter_id=lid)
-        if not [g for g in gives if b - SLACK <= g[0] <= e + SLACK and g[1] == "GET"]:
-            last_cause = (NETWORK, "no give GET inside the turn — phone off the bridge or TXT path down")
+        if not any(b - SLACK <= g <= e + SLACK for g in gets):
+            last_cause = (NETWORK, "no txt GET inside the turn — relay unreachable or TXT path down")
             continue
         if t.get("expired"):
             last_cause = (CODE, "bg_turn expired before finishing")
