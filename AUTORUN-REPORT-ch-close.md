@@ -87,3 +87,5 @@ proven by the syslog. The headless fallback was not exercised (the scene engine 
 Next (not done): find why UIKit/Flutter does not route application(_:didReceiveRemoteNotification:
 fetchCompletionHandler:) to the AppDelegate override on a scene cold launch — check the method in the
 built binary (otool) and whether FlutterSceneDelegate/FlutterAppDelegate consumes it first.
+
+Post-window, owner unlocked and opened the app (foreground, 15:49Z, outside the window): the letter 5c680312… arrived (rx) and its receipt went out (receipt_tx 15:49:24Z) over the TXT lane, plus two older letters. The letter path works in the foreground; this does NOT meet the acceptance line (no push turn while locked). Evidence: push_w3/phone_journal_after_open.jsonl.
