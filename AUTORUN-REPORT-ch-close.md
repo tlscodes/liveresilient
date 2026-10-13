@@ -119,3 +119,4 @@ Times here are UTC (chat reports Netherlands local = UTC+2).
 the existing relay → local notification → receipt back on the Mac, inside one window, app never opened.
 
 - Push 2026-10-13 17:48:57Z (19:48 Amsterdam): plan-v4-waves-1-to-6 767afe1..c1b1a7a; CI run 38441795314 six of six jobs success. Runner pin b041b6f pushed after; CI run 38444591288 six of six success, zero annotations.
+- 2026-10-13: phases Alef, Be, Pe and Che closed; Te, Se and Jim not started. Branch ready for continuation after resource confirmation. Tag: ch-phases-alef-to-che-closed
